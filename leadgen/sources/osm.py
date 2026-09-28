@@ -91,18 +91,36 @@ def _pretty(tag_value):
     return tag_value.replace("_", " ").replace(";", ", ").title()
 
 
+_LIFECYCLE = ("disused:", "abandoned:", "was:", "demolished:")
+_USE_KEYS = [k for k in CATEGORY_KEYS if k != "building"]
+
+
+def _only_former_use(tags):
+    """True when a lifecycle prefix (disused:shop=...) records the only use left."""
+    former = any(k.startswith(_LIFECYCLE) and k.split(":", 1)[1] in _USE_KEYS for k in tags)
+    return former and not any(k in tags for k in _USE_KEYS)
+
+
+def _fetched_by_tag(tags):
+    by_key, any_value = _tag_filters()
+    return (any(v in values for k, values in by_key.items() for v in tags.get(k, "").split(";"))
+            or any(k in tags for k in any_value))
+
+
 def parse_element(el):
     tags = el.get("tags", {})
     name = tags.get("name", "").strip()
-    # Skip unnamed features and per-building labels like "B" or "12" inside a complex.
-    if sum(ch.isalpha() for ch in name) < 2:
+    # Skip unnamed features and per-building labels like "B" or "12" inside a
+    # complex (but keep brands like "3M").
+    if len(name) < 2 or not any(ch.isalpha() for ch in name):
         return None
     # Places that no longer operate.
-    if "(historical)" in name.lower() or any(
-            tags.get(k) == "yes" for k in ("disused", "abandoned", "demolished")) or any(
-            k.startswith(("disused:", "abandoned:", "was:", "demolished:")) for k in tags):
+    if "(historical)" in name.lower() or _only_former_use(tags) or any(
+            tags.get(k) == "yes" for k in ("disused", "abandoned", "demolished")):
         return None
-    if any(k in tags for k in _NOT_PLACES):
+    # Roads, rivers, place labels etc. only slip in through the name query; an
+    # element a category-tag query fetched (a rail depot, an apartment node) stays.
+    if any(k in tags for k in _NOT_PLACES) and not _fetched_by_tag(tags):
         return None
     if "lat" in el and "lon" in el:
         lat, lon = el["lat"], el["lon"]

@@ -4,7 +4,7 @@ import re
 from difflib import SequenceMatcher
 
 from .geo import haversine_miles
-from .scoring import normalize
+from .scoring import is_non_prospect_tag, normalize
 
 _STOPWORDS = {"the", "inc", "llc", "co", "corp", "corporation", "company", "ltd", "store",
               "of", "and", "at", "utah", "ut", "slc"}
@@ -17,7 +17,7 @@ _GENERIC = {"apartments", "apartment", "apts", "main", "downtown", "recycling", 
             "avenue", "ave", "road", "rd", "park", "medical", "services", "service", "group"}
 SAME_PLACE_MILES = 0.12      # ~200 m: two listings this close with similar names are one site
 SAME_NAME_MILES = 0.2        # identical cleaned names
-SAME_PHONE_MILES = 0.5
+SAME_PHONE_MILES = 0.5       # the widest merge distance of all rules
 
 
 def clean_name(name):
@@ -25,9 +25,24 @@ def clean_name(name):
     return " ".join(tokens)
 
 
+def _numbers(name):
+    return {t for t in normalize(name).split() if t.isdigit()}
+
+
+def phone_numbers(phone):
+    """Every 10-digit number in a tag like '+1 801-555-0100;+1 801-555-0199 ext. 2'."""
+    nums = set()
+    for part in re.split(r"[;,/]|\bor\b", phone or "", flags=re.I):
+        part = re.split(r"(?:ext\.?|extension|x|#)\s*\d", part, maxsplit=1, flags=re.I)[0]
+        digits = re.sub(r"\D", "", part)
+        if len(digits) >= 10:
+            nums.add(digits[-10:])
+    return nums
+
+
 def phone_digits(phone):
-    digits = re.sub(r"\D", "", phone or "")
-    return digits[-10:] if len(digits) >= 10 else ""
+    nums = sorted(phone_numbers(phone))
+    return nums[0] if nums else ""
 
 
 def names_match(a, b):
@@ -42,36 +57,44 @@ def names_match(a, b):
         return True
     da = " ".join(t for t in ca.split() if t not in _GENERIC)
     db = " ".join(t for t in cb.split() if t not in _GENERIC)
-    return bool(da and db) and SequenceMatcher(None, da, db).ratio() >= 0.85
+    # Both the distinctive part and the full name must be close.
+    return (bool(da and db) and SequenceMatcher(None, da, db).ratio() >= 0.85
+            and SequenceMatcher(None, ca, cb).ratio() >= 0.85)
 
 
 def is_duplicate(a, b):
     if a.source == b.source and a.source_id == b.source_id:
         return True
     dist = haversine_miles(a.lat, a.lon, b.lat, b.lon)
-    pa, pb = phone_digits(a.phone), phone_digits(b.phone)
-    # Big sites: a store's entrance pin and its building outline can be ~300 m apart.
+    if dist > SAME_PHONE_MILES:
+        return False          # every rule below needs the pins within half a mile
+    pa, pb = phone_numbers(a.phone), phone_numbers(b.phone)
+    shared_phone = bool(pa & pb)
+    # "Building 1" / "Building 2", "343 Apartments" / "525 Apartments".
+    na, nb = _numbers(a.name), _numbers(b.name)
+    if na and nb and na.isdisjoint(nb) and not shared_phone:
+        return False
     ca = clean_name(a.name)
-    if ca and ca == clean_name(b.name) and dist <= SAME_NAME_MILES:
+    phones_conflict = pa and pb and not shared_phone
+    # Big sites: a store's entrance pin and its building outline can be ~300 m apart.
+    if (ca and ca == clean_name(b.name) and dist <= SAME_NAME_MILES
+            and (not phones_conflict or set(ca.split()) - _GENERIC)):
         return True
-    if pa and pb and pa != pb:
+    if phones_conflict:
         return False          # different phone numbers: different businesses
     if dist <= SAME_PLACE_MILES and names_match(a.name, b.name):
         return True
-    if not pa or pa != pb:
+    if not shared_phone:
         return False
-    return dist <= 0.05 or (dist <= SAME_PHONE_MILES and names_match(a.name, b.name))
+    return dist <= 0.05 or names_match(a.name, b.name)
 
 
 def _resolve_status(group):
     """A place is closed only if no Google listing in the group says it is open."""
     google = {l.business_status for l in group if l.source == "google" and l.business_status}
-    if "OPERATIONAL" in google:
-        return "OPERATIONAL"
-    if "CLOSED_PERMANENTLY" in google:
-        return "CLOSED_PERMANENTLY"
-    if "CLOSED_TEMPORARILY" in google:
-        return "CLOSED_TEMPORARILY"
+    for status in ("OPERATIONAL", "CLOSED_TEMPORARILY", "CLOSED_PERMANENTLY"):
+        if status in google:
+            return status
     return next((l.business_status for l in group if l.business_status), "")
 
 
@@ -89,8 +112,9 @@ def _merge(group):
             base.rating_count = other.rating_count
         if other.footprint_sqft and (base.footprint_sqft or 0) < other.footprint_sqft:
             base.footprint_sqft = other.footprint_sqft
+        # A merged parking lot or pharmacy tag must not veto the main listing.
         for c in other.raw_categories:
-            if c not in base.raw_categories:
+            if c not in base.raw_categories and not is_non_prospect_tag(c):
                 base.raw_categories.append(c)
         for t in other.search_terms:
             if t not in base.search_terms:
@@ -104,12 +128,21 @@ def _merge(group):
     return base
 
 
+def _pair_rank(a, b):
+    """Merge order: strongest evidence, then the main (most reviewed) listing, then closest."""
+    strength = (0 if clean_name(a.name) == clean_name(b.name)
+                else 1 if phone_numbers(a.phone) & phone_numbers(b.phone) else 2)
+    return (strength, -max(a.rating_count or 0, b.rating_count or 0),
+            haversine_miles(a.lat, a.lon, b.lat, b.lon))
+
+
 def dedupe(leads):
     """Return merged leads.
 
-    Two groups merge only when every member of one is a duplicate of every
-    member of the other, so A~B and B~C never chain A and C together. A
-    spatial grid keeps it fast on thousands of rows.
+    Candidate pairs are merged strongest first, and two groups merge only when
+    every member of one is a duplicate of every member of the other, so A~B and
+    B~C never chain A and C together and the result does not depend on input
+    order. A spatial grid keeps it fast on thousands of rows.
     """
     parent = list(range(len(leads)))
     members = {i: [i] for i in range(len(leads))}
@@ -139,6 +172,7 @@ def dedupe(leads):
     for i, lead in enumerate(leads):
         buckets.setdefault((round(lead.lat, 2), round(lead.lon, 2)), []).append(i)
 
+    pairs = []
     for (bx, by), idxs in buckets.items():
         neighbors = []
         for dx in (-1, 0, 1):
@@ -146,15 +180,50 @@ def dedupe(leads):
                 neighbors += buckets.get((round(bx + dx * 0.01, 2), round(by + dy * 0.01, 2)), [])
         for i in idxs:
             for j in neighbors:
-                if j <= i:
-                    continue
-                ri, rj = find(i), find(j)
-                if ri == rj or not is_duplicate(leads[i], leads[j]):
-                    continue
-                if all(is_duplicate(leads[x], leads[y]) for x in members[ri] for y in members[rj]):
-                    union(ri, rj)
+                if j > i and find(i) != find(j) and is_duplicate(leads[i], leads[j]):
+                    pairs.append((_pair_rank(leads[i], leads[j]), i, j))
+    pairs.sort()
+
+    links = []            # duplicate pairs that complete linkage kept apart
+    rejected = set()      # group pairs already found not to match (groups only grow)
+    for _, i, j in pairs:
+        ri, rj = find(i), find(j)
+        if ri == rj:
+            continue
+        state = (ri, rj, len(members[ri]), len(members[rj]))
+        if state in rejected:
+            links.append((i, j))
+            continue
+        if all(is_duplicate(leads[x], leads[y]) for x in members[ri] for y in members[rj]):
+            union(ri, rj)
+        else:
+            rejected.add(state)
+            links.append((i, j))
 
     groups = {}
     for i in range(len(leads)):
         groups.setdefault(find(i), []).append(leads[i])
-    return [_merge(g) for g in groups.values()]
+
+    # A map-only copy linked to a listing Google reports permanently closed is
+    # closed too, unless it is also linked to one Google reports open.
+    closed, still_open = set(), set()
+    for i, j in links:
+        ri, rj = find(i), find(j)
+        for a, b in ((ri, rj), (rj, ri)):
+            if a == b or any(l.source == "google" for l in groups[b]) or not any(
+                    l.source == "google" for l in groups[a]):
+                continue
+            status = _resolve_status(groups[a])
+            if status == "CLOSED_PERMANENTLY":
+                closed.add(b)
+            elif status == "OPERATIONAL":
+                still_open.add(b)
+    closed -= still_open
+
+    out = []
+    for root, group in groups.items():
+        lead = _merge(group)
+        if root in closed:
+            lead.business_status = "CLOSED_PERMANENTLY"
+        out.append(lead)
+    return out

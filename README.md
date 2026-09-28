@@ -41,6 +41,8 @@ The repo includes `render.yaml`, so Render can set everything up:
 4. Open the `onrender.com` link Render shows.
 
 Always set `APP_PASSWORD` on a public site: every search can spend the Google key.
+Without a password the page only answers on `localhost` or an IP address; to use
+another hostname, list it in `LEADGEN_ALLOWED_HOSTS`.
 The free plan sleeps after 15 idle minutes, so the first visit takes about a minute
 to wake up, and its disk is wiped on each restart (the search cache starts empty).
 To run the production server yourself: `gunicorn wsgi:app --workers 1 --threads 8 --timeout 0`.
@@ -75,8 +77,8 @@ ranking can be traced to a specific rule and fixed in `leadgen/config.py`.
 
 | Signal | Points |
 | --- | --- |
-| Business type: grocery 35, warehouse/distribution 34, big-box 32, food & beverage production 32, recycling/waste 30, manufacturing 28, hospital 28, mall/stadium/airport 28, university 20, hotel 18, mid-size retail (electronics, sporting goods, furniture, discount) 15, apartments 15, government/correctional 15, restaurant 8, other retail 8. What the listing says a place is (Google type / map tag) wins over words in its name | by type |
-| Known high-volume brand (Walmart, Costco, Smith's, Harmons, Home Depot, Amazon, Intermountain, ...) | +20 |
+| Business type: grocery 35, warehouse club/wholesale 34, warehouse/distribution 34, big-box 32, food & beverage production 32, recycling/waste 30, manufacturing 28, hospital 28, mall/stadium/airport 28, university 20, hotel 18, mid-size retail (electronics, sporting goods, furniture, discount) 15, apartments 15, government/correctional 15, restaurant 8, other retail 8. What the listing says a place is (Google type / map tag) wins over words in its name, and vets, clinics, pharmacies, gas stations, parking and the like never count as prospects | by type |
+| Known high-volume brand (Walmart, Costco, Smith's, Harmons, Home Depot, Amazon, Intermountain, ...). Brands that are also surnames or common words (Smith's, Target, UPS) only count when the business type, map brand tag or website backs them up | +20 |
 | Busy site: Google review count ≥100 / ≥500 / ≥2,000 | +5 / +10 / +15 |
 | Big building: approx. footprint ≥15k / ≥40k / ≥100k sq ft (OpenStreetMap outlines) | +5 / +10 / +15 |
 | Matches your keywords | +10 each, max +20 |

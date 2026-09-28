@@ -154,3 +154,75 @@ def test_telling_name_beats_catch_all_industrial_tag():
 def test_brand_non_prospect_gets_no_bonus():
     heli = score_lead(make("Intermountain Medical Center Helipad", ["aeroway=helipad"], source="osm"))
     assert heli.score == 0
+
+
+def test_search_hint_ignored_for_real_but_unlisted_types():
+    storage = make("Public Storage", ["storage", "point_of_interest", "establishment"])
+    storage.search_terms = ["warehouse"]
+    assert score_lead(storage).category_key == ""
+    mover = make("Two Men and a Truck", ["moving_company"])
+    mover.search_terms = ["logistics company"]
+    assert score_lead(mover).score < 20
+
+
+def test_manufacturer_type_and_wholesalers():
+    assert score_lead(make("Acme Co", ["manufacturer", "point_of_interest"])).category_key == "manufacturing"
+    platt = score_lead(make("Platt Electric Supply", ["wholesaler"]))
+    assert platt.category_key == "wholesale"
+    costco = score_lead(make("Costco", ["shop=wholesale", "brand=Costco"], source="osm"))
+    assert costco.category_key == "wholesale" and costco.score >= 54
+
+
+def test_courier_counter_is_not_a_warehouse():
+    ups = score_lead(make("The UPS Store", ["courier_service", "store"]))
+    assert ups.category_key != "distribution" and ups.score < 20
+
+
+def test_specific_tag_beats_catch_all_industrial_building():
+    for tag, expect in (("amenity=pub", "food_service"), ("amenity=veterinary", ""),
+                        ("shop=furniture", "specialty_retail")):
+        lead = score_lead(make("Red Rock Brewing Works", ["building=industrial", tag], source="osm"))
+        assert lead.category_key == expect, tag
+
+
+def test_production_brewery_and_bakery_vs_taproom():
+    assert score_lead(make("Uinta Brewing", ["brewery"])).category_key == "food_production"
+    assert score_lead(make("Bimbo Bakeries USA", ["bakery"])).category_key == "food_production"
+    assert score_lead(make("Kneaders Bakery", ["bakery", "cafe", "store"])).category_key == "food_service"
+
+
+def test_name_rescues_apartments_and_colleges_typed_as_agencies_or_schools():
+    apt = score_lead(make("Liberty Village Apartments", ["real_estate_agency"]))
+    assert apt.category_key == "multifamily"
+    college = score_lead(make("Davis Technical College", ["school"]))
+    assert college.category_key == "education"
+
+
+def test_packing_movers_are_not_food_plants():
+    assert score_lead(make("Wasatch Moving & Packing", [])).category_key != "food_production"
+
+
+def test_keyword_variants():
+    assert score_lead(make("Ace Disposal Services", [])).lead_type.startswith("Industry")
+    assert score_lead(make("Acme Manufacturers", [])).category_key == "manufacturing"
+    assert score_lead(make("Wasatch Recycler", [])).category_key == "recycling"
+
+
+def test_more_surname_brands_need_corroboration():
+    for name, types in (("Marshall's Plumbing & Heating", ["plumber"]),
+                        ("Little Sprouts Daycare", []), ("Kraft Electric", ["electrician"]),
+                        ("Michael's Jewelers", ["jewelry_store", "store"]),
+                        ("Comfort at Home Furniture", ["furniture_store"])):
+        lead = score_lead(make(name, types))
+        assert not any("brand" in r for r in lead.reasons), name
+    site = score_lead(make("Smith's Plumbing", ["plumber"], website="https://smithsplumbing.com"))
+    assert not any("brand" in r for r in site.reasons)
+    for name, types in (("Michaels", ["store"]), ("Marshalls", ["department_store"]),
+                        ("Sprouts Farmers Market", ["grocery_store"]),
+                        ("Kraft Heinz Foods", ["manufacturer"]), ("Pepsi-Cola Bottling Co", [])):
+        assert any("brand" in r for r in score_lead(make(name, types)).reasons), name
+
+
+def test_brand_pharmacy_and_gas_get_nothing():
+    assert score_lead(make("Walmart Pharmacy", ["pharmacy", "drugstore", "health", "store"])).score < 20
+    assert score_lead(make("Costco Gasoline", ["gas_station", "store"], rating_count=900)).score < 20

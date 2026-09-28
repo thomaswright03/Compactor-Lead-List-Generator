@@ -94,12 +94,15 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
         max_requests = len(queries) * len(cells) * MAX_PAGES
     leads, warnings, requests_made = [], [], 0
 
-    chains = []
-    for q in queries:
-        for clat, clon, crad in cells:
+    # Cell-major: every phrase gets its center-cell search before any phrase gets
+    # a second cell, so a cap trims coverage at the edges, never whole phrases.
+    chains, cached_q = [], set()
+    for clat, clon, crad in cells:
+        for q in queries:
             key = _chain_key(q, clat, clon, crad)
             cached = cache_get(key)
             if cached is not None:
+                cached_q.add(q)
                 leads += [lead for lead in (parse_place(p, q) for p in cached)
                           if lead.lat is not None and lead.lon is not None]
                 continue
@@ -114,6 +117,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
             "for full coverage.")
 
     capped = False
+    any_ok = False
     for page in range(MAX_PAGES):
         active = [c for c in chains if not c["failed"] and (page == 0 or c["token"])]
         for n, chain in enumerate(active, start=1):
@@ -142,9 +146,11 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
                                     use_cache=False)
             except HttpError as exc:
                 msg = str(exc)
-                auth_error = "HTTP 401" in msg or "HTTP 403" in msg
-                first_request_rejected = "HTTP 400" in msg and requests_made == 1
-                if auth_error or first_request_rejected:
+                auth_error = ("HTTP 401" in msg or "HTTP 403" in msg
+                              or "API_KEY_INVALID" in msg or "API key not valid" in msg)
+                # A first-page 400 before anything has worked means a bad request or key.
+                first_search_rejected = "HTTP 400" in msg and not any_ok and not chain["token"]
+                if auth_error or first_search_rejected:
                     raise SourceError("Google Places rejected the request. Check the API key and "
                                       f"that 'Places API (New)' is enabled. {msg}")
                 what = "a later results page" if chain["token"] else "the search"
@@ -153,6 +159,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
                 chain["failed"] = True
                 chain["token"] = None
                 continue
+            any_ok = True
             places = data.get("places", [])
             chain["places"] += places
             chain["pages"] += 1
@@ -166,9 +173,12 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
     if capped:
         skipped = sum(1 for c in chains if c["pages"] == 0 and not c["failed"])
         more = sum(1 for c in chains if c["token"])
+        tried = {c["q"] for c in chains if c["pages"] or c["failed"]} | cached_q
+        never = [q for q in queries if q not in tried]
         warnings.append(f"Stopped at the {max_requests}-request Google cap: {skipped} searches "
                         f"not run, {more} had more result pages. Raise --max-requests for "
-                        "more coverage.")
+                        "more coverage."
+                        + (f" Not searched at all: {', '.join(never)}." if never else ""))
 
     for chain in chains:
         complete = not chain["token"] or chain["pages"] >= MAX_PAGES

@@ -233,17 +233,61 @@ def test_osm_escaping_and_skips():
 def test_exports_neutralize_formulas_and_control_chars():
     from leadgen.models import Lead
     evil = Lead(name='=HYPERLINK("http://x","click")', lat=40.7, lon=-111.9, source="osm",
-                source_id="n", address="@SUM(A1)", website="javascript:alert(1)",
+                source_id="n", address="@SUM(A1)", city="\x01=1+41", website="javascript:alert(1)",
                 primary_category="Bad\x07Tag", tier="C", score=20)
     csv_text = to_csv_bytes([evil]).decode("utf-8-sig")
-    assert "'=HYPERLINK" in csv_text and "'@SUM" in csv_text
+    assert "'=HYPERLINK" in csv_text and "'@SUM" in csv_text and "'=1+41" in csv_text
     wb = load_workbook(io.BytesIO(to_xlsx_bytes([evil])))
     ws = wb["Leads"]
     values = [c.value for c in ws[2]]
-    assert values[4].startswith("'=") and "Bad\x07Tag" not in values
+    assert values[4] == '=HYPERLINK("http://x","click")'            # shown as text...
+    assert all(c.data_type != "f" for row in ws.iter_rows() for c in row)   # ...never run
+    assert "Bad\x07Tag" not in values and "BadTag" in values
     assert ws.cell(row=2, column=12).hyperlink is None   # javascript: is never linked
 
 
 def test_http_errors_redact_keys():
     from leadgen.http import redact
     assert "SECRET" not in redact("GET /geocode/json?address=x&key=SECRET failed")
+
+
+def test_google_grid_cap_still_searches_every_phrase(monkeypatch):
+    calls = _fake_google(monkeypatch, pages_per_query=1)
+    google_places.search(40.76, -111.89, 30, list("abcde"), "KEY", grid_cells=7, max_requests=5)
+    assert {c["textQuery"] for c in calls} == set("abcde")
+
+
+def test_google_transient_first_failure_then_bad_key(monkeypatch):
+    from leadgen.http import HttpError
+
+    def fail(body, n):
+        if n == 1:
+            raise HttpError("returned HTTP 503")
+        raise HttpError("returned HTTP 400: API key not valid. API_KEY_INVALID")
+    _fake_google(monkeypatch, fail=fail)
+    with pytest.raises(google_places.SourceError):
+        google_places.search(40.76, -111.89, 30, ["a", "b", "c"], "KEY")
+
+
+def test_closed_google_pin_just_outside_radius_closes_inside_copy(monkeypatch):
+    from leadgen.geo import offset_point
+    from leadgen.models import Lead
+    olat, olon = offset_point(40.7608, -111.8910, 30.02, 90)
+    ilat, ilon = offset_point(40.7608, -111.8910, 29.99, 90)
+    g = Lead(name="Old Mill Foods", lat=olat, lon=olon, source="google", source_id="g",
+             business_status="CLOSED_PERMANENTLY")
+    o = Lead(name="Old Mill Foods", lat=ilat, lon=ilon, source="osm", source_id="n",
+             raw_categories=["industrial=food"])
+    monkeypatch.setattr(google_places, "search", lambda *a, **k: ([g], 1, []))
+    monkeypatch.setattr(osm, "search", lambda *a, **k: ([o], []))
+    assert pipeline.run(SearchParams(source="both", api_key="KEY")).leads == []
+
+
+def test_osm_keeps_live_places_with_history_and_3m():
+    was = {"type": "node", "id": 1, "lat": 40.7, "lon": -111.9,
+           "tags": {"name": "Acme Foods", "industrial": "food", "was:name": "Old Acme"}}
+    three_m = {"type": "node", "id": 2, "lat": 40.7, "lon": -111.9,
+               "tags": {"name": "3M", "man_made": "works"}}
+    depot = {"type": "way", "id": 3, "bounds": {"minlat": 40.7, "minlon": -111.9, "maxlat": 40.701, "maxlon": -111.899},
+             "tags": {"name": "UTA Depot Warehouse", "building": "warehouse", "railway": "yard"}}
+    assert osm.parse_element(was) and osm.parse_element(three_m) and osm.parse_element(depot)

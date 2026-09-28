@@ -71,3 +71,55 @@ def test_dedupe_keeps_competitor_names():
     merged = dedupe([osm_copy, comp])
     assert len(merged) == 1
     assert "Action Compaction Services LLC" in merged[0].alt_names or merged[0].name.startswith("Action")
+
+
+def test_phone_tags_with_several_numbers_still_merge():
+    g = _l("Acme Foods", 40.76, -111.9, "(801) 555-0100", source="google", sid="g")
+    o = _l("Acme Foods", 40.7605, -111.9, "+1 801-555-0100;+1 801-555-0199 ext. 2")
+    assert len(dedupe([g, o])) == 1
+
+
+def test_numbered_buildings_stay_apart():
+    a = _l("Building 1", 40.76, -111.9)
+    b = _l("Building 2", 40.7601, -111.9)
+    assert len(dedupe([a, b])) == 2
+    assert len(dedupe([_l("343 Apartments", 40.76, -111.9), _l("525 Apartments", 40.7601, -111.9)])) == 2
+
+
+def test_dedupe_is_order_independent():
+    import itertools
+    sup = _l("Walmart Supercenter", 40.7600, -111.9, "8015550100", source="google", sid="g1")
+    sup.rating_count = 5000
+    pharm = _l("Walmart Pharmacy", 40.7601, -111.9, "8015550111", source="google", sid="g2")
+    osm_copy = _l("Walmart Supercenter", 40.7605, -111.9)
+    results = set()
+    for perm in itertools.permutations([sup, pharm, osm_copy]):
+        fresh = [Lead(**{**vars(l), "alt_names": [], "raw_categories": [], "search_terms": []}) for l in perm]
+        results.add(tuple(sorted((m.name, tuple(m.sources)) for m in dedupe(fresh))))
+    assert len(results) == 1
+
+
+def test_closed_status_prefers_temporary_and_spreads_to_map_copies():
+    t = _l("Acme Foods", 40.76, -111.9, source="google", sid="t")
+    t.business_status = "CLOSED_TEMPORARILY"
+    p = _l("Acme Foods", 40.7601, -111.9, source="google", sid="p")
+    p.business_status = "CLOSED_PERMANENTLY"
+    assert dedupe([t, p])[0].business_status == "CLOSED_TEMPORARILY"
+
+
+def test_merged_parking_tag_does_not_veto_prospect():
+    from leadgen.scoring import score_lead
+    g = _l("Associated Food Stores Distribution Center", 40.76, -111.9, source="google", sid="g")
+    g.raw_categories = ["point_of_interest"]
+    o = _l("Associated Food Stores Distribution Center", 40.7602, -111.9)
+    o.raw_categories = ["amenity=parking"]
+    merged = dedupe([g, o])
+    assert len(merged) == 1 and score_lead(merged[0]).category_key == "distribution"
+
+
+def test_dedupe_many_copies_is_fast():
+    import time
+    leads = [_l("Acme Foods", 40.76 + (i % 7) * 0.0001, -111.9, sid=f"n{i}") for i in range(300)]
+    start = time.time()
+    dedupe(leads)
+    assert time.time() - start < 5

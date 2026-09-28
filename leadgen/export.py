@@ -58,16 +58,25 @@ _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
 def _safe(value):
-    """Neutralize text a spreadsheet would run as a formula (data comes from the public)."""
+    """CSV: neutralize text a spreadsheet would run as a formula (data comes from the public)."""
+    if isinstance(value, str):
+        value = ILLEGAL_CHARACTERS_RE.sub("", value)
     if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
         return "'" + value
     return value
 
 
 def _xl(value):
-    """Safe for Excel: no formulas, no control characters openpyxl rejects."""
-    value = _safe(value)
+    """Safe for Excel: no control characters openpyxl rejects."""
     return ILLEGAL_CHARACTERS_RE.sub("", value) if isinstance(value, str) else value
+
+
+def _as_text(row):
+    """openpyxl stores strings starting with '=' as formulas; keep them as text."""
+    for cell in row:
+        if cell.data_type == "f":
+            cell.data_type = "s"
+            cell.quotePrefix = True   # stays text even if someone edits the cell
 
 
 def rows(leads):
@@ -95,6 +104,7 @@ def to_xlsx_bytes(leads, run_info=None):
     for lead, r in zip(leads, rows(leads)):
         ws.append([_xl(v) for v in r])
         row = ws.max_row
+        _as_text(ws[row])
         fill = COMPETITOR_FILL if lead.lead_type == "Competitor" else TIER_FILLS.get(lead.tier)
         if fill:
             for col in range(1, 5):
@@ -123,6 +133,7 @@ def to_xlsx_bytes(leads, run_info=None):
     info.append(["Generated", datetime.now().strftime("%Y-%m-%d %H:%M")])
     for k, v in (run_info or {}).items():
         info.append([_xl(k), _xl(v if isinstance(v, (int, float, str)) else str(v))])
+        _as_text(info[info.max_row])
     info.append([])
     info.append(["Tiers", "A >= 60, B >= 40, C >= 20, D below 20"])
     info.append(["Row colors", "Green = stronger lead, orange = competitor"])

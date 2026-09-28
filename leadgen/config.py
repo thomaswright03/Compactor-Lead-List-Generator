@@ -42,9 +42,16 @@ CATEGORIES = [
     Category(
         "grocery", "Grocery / supermarket", 35,
         "Grocery stores bale large volumes of cardboard and compact wet waste",
-        google_types=["supermarket", "grocery_store", "warehouse_store", "wholesaler"],
-        osm_tags=[("shop", "supermarket"), ("shop", "wholesale")],
+        google_types=["supermarket", "grocery_store", "hypermarket", "discount_supermarket"],
+        osm_tags=[("shop", "supermarket")],
         name_keywords=["supermarket", "grocery", "groceries", "food 4 less", "market place"],
+    ),
+    Category(
+        "wholesale", "Warehouse club / wholesale", 34,
+        "Warehouse clubs and wholesalers break down pallets of cardboard-packed goods",
+        google_types=["warehouse_store", "wholesaler"],
+        osm_tags=[("shop", "wholesale")],
+        name_keywords=["wholesale", "wholesalers", "warehouse club"],
     ),
     Category(
         "big_box", "Big-box / department / home improvement", 32,
@@ -67,11 +74,10 @@ CATEGORIES = [
     Category(
         "distribution", "Warehouse / distribution / logistics", 34,
         "Distribution and fulfillment centers generate heavy cardboard and pallet waste",
-        google_types=["courier_service"],
         osm_tags=[("building", "warehouse"), ("industrial", "warehouse"),
                   ("industrial", "logistics"), ("office", "logistics"),
                   ("landuse", "logistics")],
-        name_keywords=["distribution", "distributing", "distributors", "warehouse",
+        name_keywords=["distribution", "distributing", "distributor", "distributors", "warehouse",
                        "warehouses", "warehousing", "logistics", "fulfillment",
                        "cold storage", "freight", "supply chain", "3pl"],
     ),
@@ -82,15 +88,18 @@ CATEGORIES = [
                   ("industrial", "bakery"), ("industrial", "dairy"),
                   ("industrial", "slaughterhouse"), ("craft", "distillery")],
         name_keywords=["foods", "food processing", "meats", "meat packing", "dairy",
-                       "bottling", "beverages", "brewing", "creamery", "packing"],
+                       "bottling", "beverage", "beverages", "brewing", "creamery", "bakeries",
+                       "packing plant", "packing house", "packinghouse", "packing company",
+                       "fruit packing", "produce packing"],
     ),
     Category(
         "manufacturing", "Manufacturing / industrial", 28,
         "Manufacturing sites compact scrap, packaging and production waste",
+        google_types=["manufacturer"],
         osm_tags=[("man_made", "works"), ("building", "industrial"),
                   ("building", "manufacture"), ("industrial", None),
                   ("landuse", "industrial")],
-        name_keywords=["manufacturing", "manufacturer", "mfg", "industries", "fabrication",
+        name_keywords=["manufacturing", "manufacturer", "manufacturers", "mfg", "industries", "fabrication",
                        "plastics", "packaging", "printing", "corrugated", "machining",
                        "assembly plant", "manufacturing plant"],
     ),
@@ -118,7 +127,8 @@ CATEGORIES = [
         osm_tags=[("amenity", "recycling"), ("amenity", "waste_transfer_station"),
                   ("industrial", "scrap_yard"), ("industrial", "auto_wrecker"),
                   ("shop", "scrap"), ("landuse", "landfill"), ("amenity", "waste_disposal")],
-        name_keywords=["recycling", "recyclers", "recycle", "waste", "disposal",
+        name_keywords=["recycling", "recycler", "recyclers", "recycle", "recycled", "waste",
+                       "disposal",
                        "sanitation", "transfer station", "landfill", "scrap", "salvage"],
         lead_type="Waste / recycling facility",
     ),
@@ -169,8 +179,10 @@ CATEGORIES = [
     Category(
         "retail", "Other retail", 8,
         "General retail with some cardboard volume",
-        google_types=["store", "clothing_store", "pet_store", "book_store",
-                      "auto_parts_store", "liquor_store"],
+        # A bare "store" type is handled by the retail fallback in scoring.classify,
+        # after pharmacies, gas stations etc. have been ruled out.
+        google_types=["clothing_store", "pet_store", "book_store", "auto_parts_store",
+                      "liquor_store"],
         osm_tags=[("shop", "clothes"), ("shop", "pet"), ("shop", "car_parts"),
                   ("shop", "general"), ("shop", "books")],
         query_osm=False,
@@ -179,8 +191,8 @@ CATEGORIES = [
         "equipment", "Compactor / baler equipment or service", 10,
         "Name mentions compactors or balers: likely a dealer, servicer, or hauler",
         name_keywords=["compactor", "compactors", "compaction", "baler", "balers", "baling",
-                       "dumpster", "dumpsters", "roll off", "roll-off", "hauling",
-                       "disposal service"],
+                       "dumpster", "dumpsters", "roll off", "roll-off", "roll offs",
+                       "roll-offs", "hauling", "disposal service", "disposal services"],
         lead_type="Industry (equipment / hauler)",
     ),
 ]
@@ -206,10 +218,24 @@ NON_PROSPECT_GOOGLE_TYPES = {
     "drugstore", "church", "place_of_worship", "park", "parking", "gas_station", "library",
     "school", "primary_school", "secondary_school", "bank", "atm", "insurance_agency",
     "lawyer", "real_estate_agency", "beauty_salon", "hair_salon", "barber_shop",
+    "car_repair", "car_wash", "health", "optician",
 }
+# ...except that a name can still rescue these categories from these types
+# ("Liberty Village Apartments" typed real_estate_agency).
+NAME_BEATS_GOOGLE_TYPE = {"real_estate_agency": {"multifamily"}, "school": {"education"}}
+
+# Google types that only say "a place exists". The search phrase that found a
+# place hints at its category only when it has nothing more specific.
+GENERIC_GOOGLE_TYPES = {"point_of_interest", "establishment", "premise", "food", "finance"}
+
+# Google gives production breweries/bakeries and taprooms/cafes the same types;
+# without a service type, a production word in the name decides.
+PRODUCTION_GOOGLE_TYPES = {"bakery", "brewery", "winery"}
+SERVICE_GOOGLE_TYPES = {"brewpub", "pub", "bar", "cafe", "coffee_shop", "meal_takeaway",
+                        "fast_food_restaurant", "ice_cream_shop", "restaurant"}
 
 # The Google search phrase that found a place is a weak category hint for
-# results Google tags only as "point_of_interest".
+# results Google tags only with GENERIC_GOOGLE_TYPES.
 QUERY_CATEGORY = {
     "warehouse": "distribution", "distribution center": "distribution",
     "logistics company": "distribution", "fulfillment center": "distribution",
@@ -223,27 +249,30 @@ QUERY_CATEGORY = {
 # Chains that almost always run a baler or compactor. A match adds points on
 # top of the category weight. Distinctive names match on the name alone.
 HIGH_VOLUME_BRANDS = [
-    "walmart", "sam's club", "sams club", "costco", "winco", "sprouts", "whole foods",
+    "walmart", "wal mart", "sam's club", "sams club", "costco", "winco", "whole foods",
     "trader joe's", "albertsons", "kroger", "fred meyer", "the home depot", "home depot",
-    "ikea", "best buy", "ross dress for less", "tj maxx", "t.j. maxx", "marshalls",
-    "hobby lobby", "dick's sporting goods", "sportsman's warehouse", "scheels",
-    "rc willey", "r.c. willey", "deseret industries", "big lots", "petsmart", "petco",
-    "nordstrom", "jcpenney", "overstock", "intermountain medical center",
-    "intermountain healthcare", "intermountain health", "university of utah hospital",
-    "st. mark's hospital", "lds hospital", "primary children's", "mountainview hospital",
-    "kodiak cakes", "lehi roller mills", "swire coca-cola", "coca-cola", "coca cola",
-    "pepsi", "frito-lay", "frito lay", "nestle", "kraft", "dannon", "sysco", "us foods",
-    "northrop grumman", "l3harris", "boeing", "hill air force base",
+    "ikea", "ross dress for less", "tj maxx", "t.j. maxx", "hobby lobby",
+    "dick's sporting goods", "sportsman's warehouse", "scheels", "rc willey", "r.c. willey",
+    "deseret industries", "big lots", "petsmart", "petco", "nordstrom", "jcpenney",
+    "intermountain medical center", "intermountain healthcare", "intermountain health",
+    "university of utah hospital", "st. mark's hospital", "lds hospital",
+    "primary children's", "mountainview hospital", "kodiak cakes", "lehi roller mills",
+    "swire coca-cola", "coca-cola", "coca cola", "pepsi", "pepsico", "frito-lay", "frito lay",
+    "kraft heinz", "dannon", "sysco", "us foods", "northrop grumman", "l3harris", "boeing",
+    "hill air force base",
 ]
 # Brands that are also surnames or ordinary words ("Smith's Plumbing",
-# "Grown Ups Daycare"). They only count when the category fits, the map's
-# brand tag says so, or the website carries the brand.
+# "Grown Ups Daycare", "Kraft Electric"). They only count when the map's brand
+# tag or the website's name says so, or the category fits (for plain retail,
+# only when the name is the brand alone: "Michaels", not "Michael's Jewelers").
 AMBIGUOUS_BRANDS = {
     **{b: {"grocery"} for b in ("smith's", "smiths", "lin's", "ridley's", "macey's",
-                                "maceys", "harmons", "fresh market")},
+                                "maceys", "harmons", "fresh market", "sprouts")},
     **{b: {"big_box", "specialty_retail", "retail", "grocery"}
        for b in ("target", "lowe's", "lowes", "kohl's", "kohls", "macy's", "dillard's",
-                 "burlington", "michaels", "savers", "at home")},
+                 "burlington", "michaels", "savers", "at home", "marshalls", "best buy",
+                 "overstock")},
+    **{b: {"food_production", "manufacturing"} for b in ("kraft", "nestle")},
     **{b: {"distribution"} for b in ("ups", "fedex", "amazon")},
 }
 BRAND_EXCLUDE = ["the ups store", "fedex office", "ups access point", "amazon hub",

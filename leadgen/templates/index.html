@@ -184,6 +184,10 @@ $("form").addEventListener("submit", async (e) => {
   try {
     const res = await fetch("/search", { method: "POST", body: new FormData($("form")) });
     const body = await res.json().catch(() => ({}));
+    if (res.status === 429 && body.job_id) {
+      $("status").textContent = "Another search is already running. Showing its progress...";
+      return poll(body.job_id);
+    }
     if (!res.ok) return fail(body.error || `Search failed (HTTP ${res.status})`);
     poll(body.job_id);
   } catch (err) {

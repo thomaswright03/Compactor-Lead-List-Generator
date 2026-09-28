@@ -1,6 +1,8 @@
 """Minimal web page: fill in the form, watch progress, preview, download CSV/Excel."""
 
 import hmac
+import ipaddress
+import math
 import os
 import threading
 import uuid
@@ -17,7 +19,6 @@ from .pipeline import GRIDS, SOURCES, PipelineError, SearchParams, run
 from .scoring import TIER_LABELS
 
 MAX_JOBS = 20
-MAX_RUNNING = 1
 MAX_KEYWORDS = 20
 MAX_KEYWORD_LEN = 60
 MAX_REQUESTS_LIMIT = 5000
@@ -44,10 +45,25 @@ def create_app(password=None):
     password = password if password is not None else os.environ.get("APP_PASSWORD", "")
     jobs = OrderedDict()
 
+    allowed_hosts = {"localhost"} | {
+        h.strip().lower() for h in os.environ.get("LEADGEN_ALLOWED_HOSTS", "").split(",")
+        if h.strip()}
+
+    def _host_allowed():
+        """Block DNS rebinding: a foreign site's name that now points at this server."""
+        host = request.host.lower()
+        name = host[1:host.index("]")] if host.startswith("[") else host.rsplit(":", 1)[0]
+        try:
+            ipaddress.ip_address(name)
+            return True           # an IP literal cannot be rebound
+        except ValueError:
+            return name in allowed_hosts
+
     @app.before_request
     def require_login():
         if not password:
-            return None
+            # Without a login only local/IP access is allowed (see LEADGEN_ALLOWED_HOSTS).
+            return None if _host_allowed() else abort(403)
         auth = request.authorization
         supplied = (auth.password or "") if auth else ""
         if hmac.compare_digest(supplied.encode(), password.encode()):
@@ -64,9 +80,13 @@ def create_app(password=None):
             if not raw:
                 return default
             try:
-                value = cast(raw)
+                value = float(raw)
             except ValueError:
                 raise ValueError(f"{label} must be a number")
+            if cast is int:
+                if not math.isfinite(value) or not value.is_integer():
+                    raise ValueError(f"{label} must be a whole number")
+                value = int(value)
             if not lo <= value <= hi:
                 raise ValueError(f"{label} must be between {lo} and {hi}")
             return value
@@ -133,8 +153,10 @@ def create_app(password=None):
         job_id = uuid.uuid4().hex[:12]
         job = {"state": "running", "message": "Starting", "params": params}
         with lock:
-            if sum(j["state"] == "running" for j in jobs.values()) >= MAX_RUNNING:
-                return jsonify({"error": "A search is already running. Wait for it to finish."}), 429
+            running = next((k for k, j in jobs.items() if j["state"] == "running"), None)
+            if running is not None:
+                # The page attaches to it (e.g. after a reload) instead of starting another.
+                return jsonify({"error": "A search is already running.", "job_id": running}), 429
             jobs[job_id] = job
             # Evict the oldest finished jobs; never a running one.
             while len(jobs) > MAX_JOBS:
@@ -142,7 +164,12 @@ def create_app(password=None):
                 if old is None:
                     break
                 del jobs[old]
-        threading.Thread(target=_worker, args=(job, params), daemon=True).start()
+        try:
+            threading.Thread(target=_worker, args=(job, params), daemon=True).start()
+        except RuntimeError:
+            with lock:
+                jobs.pop(job_id, None)
+            return jsonify({"error": "Could not start the search. Try again."}), 503
         return jsonify({"job_id": job_id})
 
     @app.get("/status/<job_id>")

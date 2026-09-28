@@ -56,8 +56,28 @@ def test_web_allows_one_running_search(monkeypatch):
     client, gate = _client(monkeypatch, block=True)
     first = client.post("/search", data={})
     assert first.status_code == 200
-    assert client.post("/search", data={}).status_code == 429
+    second = client.post("/search", data={})
+    assert second.status_code == 429
+    assert second.get_json()["job_id"] == first.get_json()["job_id"]
     gate.set()
+
+
+def test_web_blocks_dns_rebinding_without_password(monkeypatch):
+    monkeypatch.delenv("APP_PASSWORD", raising=False)
+    client, _ = _client(monkeypatch)
+    res = client.post("/search", data={}, base_url="http://rebind.attacker.example:5000",
+                      headers={"Origin": "http://rebind.attacker.example:5000",
+                               "Sec-Fetch-Site": "same-origin"})
+    assert res.status_code == 403
+    for host in ("http://localhost:5000", "http://127.0.0.1:5000", "http://[::1]:5000"):
+        assert client.get("/", base_url=host).status_code == 200
+
+
+def test_web_accepts_browser_number_formats(monkeypatch):
+    client, gate = _client(monkeypatch)
+    res = client.post("/search", data={"min_score": "20.0", "max_requests": "1e3", "radius": "30"})
+    assert res.status_code == 200
+    assert client.post("/search", data={"min_score": "20.5"}).status_code in (400, 429)
 
 
 def test_password_protects_every_route():

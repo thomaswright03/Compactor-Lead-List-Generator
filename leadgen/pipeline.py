@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Optional
 
 from . import config
-from .dedupe import dedupe
+from .dedupe import SAME_PHONE_MILES, dedupe
 from .geo import geocode, haversine_miles
 from .scoring import score_lead
 from .sources import SourceError, google_places, osm
@@ -112,22 +112,24 @@ def run(params: SearchParams, progress=None):
     warnings += errors
 
     say(f"Filtering {len(raw)} raw results to {params.radius_miles:g} miles")
-    in_range = []
-    for lead in raw:
-        lead.distance_miles = round(haversine_miles(lat, lon, lead.lat, lead.lon), 2)
-        if lead.distance_miles > params.radius_miles:
-            continue
-        in_range.append(lead)
+    # Keep a margin while merging, so a listing just outside the radius can still
+    # merge with (and e.g. mark closed) its copy just inside; the exact radius
+    # is applied afterwards.
+    margin = params.radius_miles + SAME_PHONE_MILES
+    near = [l for l in raw if haversine_miles(lat, lon, l.lat, l.lon) <= margin]
+    n_in_radius = sum(haversine_miles(lat, lon, l.lat, l.lon) <= params.radius_miles for l in near)
 
     say("Merging duplicates")
+    merged = dedupe(near)
+    for lead in merged:
+        lead.distance_miles = round(haversine_miles(lat, lon, lead.lat, lead.lon), 2)
+    merged = [l for l in merged if l.distance_miles <= params.radius_miles]
+    n_merged = len(merged)
     # Closed places are dropped after merging, so an old map copy of a place
     # Google reports closed cannot slip through on its own.
-    merged = dedupe(in_range)
-    n_merged = len(merged)
     if not params.include_closed:
         merged = [l for l in merged if l.business_status != "CLOSED_PERMANENTLY"]
     for lead in merged:
-        lead.distance_miles = round(haversine_miles(lat, lon, lead.lat, lead.lon), 2)
         score_lead(lead, keywords)
 
     kept = []
@@ -147,7 +149,7 @@ def run(params: SearchParams, progress=None):
         kept = sorted(prospects + [l for l in kept if l.lead_type in EXEMPT_TYPES], key=sort_key)
 
     stats.update({
-        "results in radius": len(in_range),
+        "results in radius": n_in_radius,
         "after dedupe": n_merged,
         "leads kept": len(kept),
         "tier A": sum(l.tier == "A" for l in kept),
