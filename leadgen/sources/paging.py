@@ -3,8 +3,9 @@
 Every (phrase, grid cell) pair is one search that can span several result
 pages. The request budget is spent so that a cap trims depth, never whole
 phrases: cell by cell (center first), every phrase gets page 1 before any
-search gets page 2. A search's pages are cached together only once complete,
-so a re-run never replays a stale page token.
+search gets page 2. A search's pages are cached together once complete, so a
+re-run never replays a stale page token. Sources that page by offset (Yelp)
+also cache unfinished searches, and a re-run continues where they stopped.
 """
 
 import json
@@ -16,13 +17,15 @@ from . import SourceError
 
 def run_searches(source, queries, cells, fetch_page, parse, *, max_pages, max_requests,
                  cache_version, progress=None, token_delay=0.0, key_errors=(),
-                 cache_ttl=None, stop_check=None):
+                 cache_ttl=None, stop_check=None, cache_key=None, cache_partial=False):
     """Return (leads, requests_made, warnings).
 
     fetch_page(query, cell, token) -> (items, next_token); token is None for page 1.
     parse(item, query) -> Lead or None.
     key_errors: extra text that marks a bad key in an error message.
     stop_check() -> a reason to stop early (e.g. the daily quota is nearly spent), or None.
+    cache_key(query, cell) -> the cache key of one search (default: built from cache_version).
+    cache_partial: also cache unfinished searches and resume them (offset paging only).
     """
     leads, warnings, requests_made = [], [], 0
 
@@ -33,27 +36,41 @@ def run_searches(source, queries, cells, fetch_page, parse, *, max_pages, max_re
     chains, cached_q = [], set()
     for cell in cells:
         for q in queries:
-            key = json.dumps([cache_version, q] + [round(x, 5) for x in cell])
+            key = (cache_key(q, cell) if cache_key
+                   else json.dumps([cache_version, q] + [round(x, 5) for x in cell]))
             cached = cache_get(key, cache_ttl)
-            if cached is not None:
+            chain = {"q": q, "cell": cell, "key": key, "items": [], "token": None,
+                     "token_at": 0.0, "pages": 0, "failed": False}
+            if isinstance(cached, list):          # a complete search
                 cached_q.add(q)
                 leads += keep(cached, q)
                 continue
-            chains.append({"q": q, "cell": cell, "key": key, "items": [], "token": None,
-                           "token_at": 0.0, "pages": 0, "failed": False})
+            if cache_partial and isinstance(cached, dict) and cached.get("items"):
+                # An unfinished search: keep its pages and continue from where it stopped.
+                cached_q.add(q)
+                leads += keep(cached["items"], q)
+                chain.update(items=cached["items"], token=cached.get("token"),
+                             pages=int(cached.get("pages") or 1))
+                if chain["token"] is None or chain["pages"] >= max_pages:
+                    continue
+            chains.append(chain)
 
-    if len(chains) > max_requests:
+    fresh = sum(1 for c in chains if c["pages"] == 0)
+    if fresh > max_requests:
         warnings.append(
-            f"{source} request cap ({max_requests}) is below the {len(chains)} searches needed "
-            f"({len(queries)} phrases x {len(cells)} areas); the last {len(chains) - max_requests} "
-            f"searches were skipped. Raise --max-requests to about {len(chains) * max_pages} "
+            f"{source} request cap ({max_requests}) is below the {fresh} searches needed "
+            f"({len(queries)} phrases x {len(cells)} areas); the last {fresh - max_requests} "
+            f"searches were skipped. Raise --max-requests to about {fresh * max_pages} "
             "for full coverage.")
 
     capped = False
     stopped = None
     any_ok = False
     for page in range(max_pages):
-        active = [c for c in chains if not c["failed"] and (page == 0 or c["token"] is not None)]
+        # Round `page` fetches each search's (page + 1)-th page, so resumed searches wait
+        # until every fresh search has its first page.
+        active = [c for c in chains if not c["failed"] and c["pages"] == page
+                  and (page == 0 or c["token"] is not None)]
         for n, chain in enumerate(active, start=1):
             if requests_made >= max_requests:
                 capped = True
@@ -108,6 +125,11 @@ def run_searches(source, queries, cells, fetch_page, parse, *, max_pages, max_re
 
     for chain in chains:
         complete = chain["token"] is None or chain["pages"] >= max_pages
-        if chain["pages"] and complete and not chain["failed"]:
+        if not chain["pages"] or chain["failed"]:
+            continue
+        if complete:
             cache_put(chain["key"], chain["items"])
+        elif cache_partial:
+            cache_put(chain["key"], {"items": chain["items"], "token": chain["token"],
+                                     "pages": chain["pages"]})
     return leads, requests_made, warnings

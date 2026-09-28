@@ -5,6 +5,7 @@ Each search phrase is run in every grid cell, following up to 3 result pages
 later by the pipeline.
 """
 
+import json
 import re
 
 from ..geo import METERS_PER_MILE, search_grid
@@ -95,8 +96,14 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
         data = request_json("POST", SEARCH_URL, json_body=body, headers=headers, use_cache=False)
         return data.get("places", []), data.get("nextPageToken")
 
+    def chain_key(query, cell):
+        clat, clon, crad = cell
+        return json.dumps(["google-chain-v1", FIELD_MASK, query, round(clat, 5), round(clon, 5),
+                           round(crad, 3)])
+
     return run_searches("Google", queries, cells, fetch_page, parse_place,
                         max_pages=MAX_PAGES, max_requests=max_requests,
-                        cache_version=["google-chain-v1", FIELD_MASK], progress=progress,
+                        cache_version=["google-chain-v1", FIELD_MASK], cache_key=chain_key,
+                        progress=progress,
                         token_delay=TOKEN_DELAY_SECONDS,
                         key_errors=("API_KEY_INVALID", "API key not valid"))

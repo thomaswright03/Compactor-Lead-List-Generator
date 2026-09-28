@@ -103,7 +103,8 @@ def geocode(location, api_key=None):
         except (HttpError, KeyError, IndexError, ValueError) as exc:
             errors.append(str(exc))
 
-    api_key = api_key or os.environ.get("GOOGLE_PLACES_API_KEY")
+    if api_key is None:        # "" means the caller resolved that there is no Google key
+        api_key = os.environ.get("GOOGLE_PLACES_API_KEY", "")
     if api_key:
         try:
             data = request_json("GET", "https://maps.googleapis.com/maps/api/geocode/json",

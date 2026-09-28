@@ -132,12 +132,38 @@ def test_complete_searches_are_cached(monkeypatch):
 
 
 def test_yelp_key_in_google_setting_is_used_for_yelp(monkeypatch):
-    google, yelp_key, notes = SearchParams(api_key=YELP_KEY).resolved_keys()
-    assert (google, yelp_key) == ("", YELP_KEY) and notes
+    assert SearchParams(api_key=YELP_KEY).resolved_keys() == ("", YELP_KEY, True)
     real_google = "AIza" + "x" * 35
-    assert SearchParams(api_key=real_google).resolved_keys() == (real_google, "", [])
+    assert SearchParams(api_key=real_google).resolved_keys() == (real_google, "", False)
     monkeypatch.setenv("YELP_API_KEY", YELP_KEY)
-    assert SearchParams().resolved_keys() == ("", YELP_KEY, [])
+    assert SearchParams().resolved_keys() == ("", YELP_KEY, False)
+
+
+def test_yelp_key_in_google_setting_never_reaches_google(monkeypatch):
+    sent = []
+
+    class Resp:
+        status_code, text, headers = 200, "{}", {}
+
+        def json(self):
+            return {"status": "REQUEST_DENIED"} if "googleapis" in self.url else [
+                {"lat": "39.74", "lon": "-104.99", "display_name": "Denver"}]
+
+    def fake_request(method, url, params=None, **kw):
+        sent.append((url, params))
+        r = Resp()
+        r.url = url
+        return r
+    monkeypatch.setattr("leadgen.http.requests.request", fake_request)
+    monkeypatch.setattr(yelp, "search", lambda *a, **k: ([], 0, []))
+    monkeypatch.setattr(osm, "search", lambda *a, **k: ([], []))
+    monkeypatch.setenv("GOOGLE_PLACES_API_KEY", YELP_KEY)
+    res = pipeline.run(SearchParams(location="Denver, CO"))
+    assert not any("googleapis" in url for url, _ in sent)
+    assert YELP_KEY not in repr(sent)
+    assert any("holds a Yelp key; it was used for Yelp" in w for w in res.warnings)
+    with pytest.raises(pipeline.PipelineError, match="holds a Yelp key"):
+        pipeline.run(SearchParams(source="google"))
 
 
 def _yelp_lead(name, cats, reviews=0, **kw):
@@ -208,3 +234,59 @@ def test_pipeline_auto_uses_yelp_key_and_hides_it(monkeypatch):
 def test_pipeline_yelp_source_needs_key():
     with pytest.raises(pipeline.PipelineError):
         pipeline.run(SearchParams(source="yelp"))
+
+
+def test_quota_header_is_read_in_any_case(monkeypatch):
+    calls = []
+
+    def fake(method, url, *, params=None, response_headers=None, **kw):
+        calls.append(params)
+        response_headers["ratelimit-remaining"] = str(8 - len(calls))
+        return {"total": 1, "businesses": [_biz(len(calls))]}
+    monkeypatch.setattr(yelp, "request_json", fake)
+    _, n, warnings = yelp.search(40.76, -111.89, 20, list("abcdef"), YELP_KEY)
+    assert n == 3 and any("almost used up" in w for w in warnings)
+
+
+def test_rerun_continues_unfinished_searches(monkeypatch):
+    calls = _fake_yelp(monkeypatch, total=240)
+    leads, n, _ = yelp.search(40.76, -111.89, 20, ["a", "b"], YELP_KEY, max_requests=3)
+    assert n == 3 and len(leads) == 150
+    calls.clear()
+    leads, n, _ = yelp.search(40.76, -111.89, 20, ["a", "b"], YELP_KEY, max_requests=3)
+    # b resumes at page 2, then a and b continue; nothing already fetched is fetched again
+    assert [(c["term"], c["offset"]) for c in calls] == [("b", 50), ("a", 100), ("b", 100)]
+    assert len(leads) == 150 + 150
+    assert len({l.source_id for l in leads}) == 300
+
+
+def test_expired_cache_files_are_deleted(tmp_path, monkeypatch):
+    import os
+    import time
+    from leadgen import http
+    monkeypatch.setattr(http, "CACHE_DIR", tmp_path)
+    http.cache_put("k", [1])
+    path = http._cache_path("k")
+    old = time.time() - 2 * 86400
+    os.utime(path, (old, old))
+    assert http.cache_get("k", ttl=86400) is None and not path.exists()
+
+
+def test_closed_on_google_closes_linked_yelp_group():
+    g = Lead(name="Kmart", lat=40.7608, lon=-111.8900, source="google", source_id="g",
+             business_status="CLOSED_PERMANENTLY", rating_count=300)
+    y = _yelp_lead("Kmart", ["deptstores"], 400, business_status="OPERATIONAL")
+    y.lat, y.lon = 40.7608, -111.8933
+    x = Lead(name="Kmart", lat=40.7608, lon=-111.8962, source="osm", source_id="n")
+    out = dedupe([g, y, x])
+    assert all(l.business_status == "CLOSED_PERMANENTLY" for l in out)
+
+
+def test_yelp_doctors_and_event_rooms_are_not_prospects():
+    clinic = score_lead(_yelp_lead("Valley Medical Center", ["familydr", "internalmed"], 45))
+    assert clinic.category_key == ""
+    restaurant = score_lead(_yelp_lead("The Garden", ["newamerican", "venues"], 450))
+    assert restaurant.category_key == "food_service"
+    shop = Lead(name="Cahoots", lat=0, lon=0, source="yelp", source_id="c",
+                raw_categories=["yelp:giftshops", "shop=gift"])
+    assert "(by map tag)" in score_lead(shop).reasons[0]

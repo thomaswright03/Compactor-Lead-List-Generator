@@ -129,7 +129,7 @@ CATEGORIES = [
                   ("amenity", "conference_centre"), ("amenity", "exhibition_centre"),
                   ("tourism", "theme_park")],
         yelp_categories=["shoppingcenters", "stadiumsarenas", "airports", "airportterminals",
-                         "amusementparks", "waterparks", "venues", "civiccenter"],
+                         "amusementparks", "waterparks", "civiccenter"],
         name_keywords=["mall", "stadium", "arena", "international airport",
                        "convention center", "expo center", "fashion place", "town center"],
     ),
@@ -220,7 +220,8 @@ CATEGORIES = [
     ),
     Category(
         "equipment", "Compactor / baler equipment or service", 10,
-        "Name mentions compactors or balers: likely a dealer, servicer, or hauler",
+        "Compactor/baler equipment, dumpster or hauling business: likely a dealer, servicer, "
+        "or hauler",
         name_keywords=["compactor", "compactors", "compaction", "baler", "balers", "baling",
                        "dumpster", "dumpsters", "roll off", "roll-off", "roll offs",
                        "roll-offs", "hauling", "disposal service", "disposal services"],
@@ -260,6 +261,18 @@ NON_PROSPECT_YELP_CATEGORIES = {
     "libraries", "elementaryschools", "highschools", "preschools", "privateschools",
     "montessori", "childcare", "banks", "insurance", "lawyers", "realestateagents",
     "apartmentagents", "hair", "barbers", "othersalons", "beautysvc", "selfstorage", "movers",
+} | {  # Yelp's doctor specialties (children of "physicians")
+    "addictionmedicine", "allergist", "anesthesiologists", "audiologist", "cardiology",
+    "cosmeticsurgeons", "dermatology", "earnosethroat", "emergencymedicine",
+    "endocrinologists", "familydr", "fertility", "gastroenterologist", "geneticists",
+    "gerontologist", "hepatologists", "hospitalists", "immunodermatologists",
+    "infectiousdisease", "internalmed", "naturopathic", "nephrologists", "neurologist",
+    "neuropathologists", "neurotologists", "obgyn", "oncologist", "opthamalogists",
+    "orthopedists", "osteopathicphysicians", "otologists", "painmanagement", "pathologists",
+    "pediatricians", "phlebologists", "plasticsurgeons", "podiatrists",
+    "preventivemedicine", "proctologist", "psychiatrists", "pulmonologist", "radiologists",
+    "rhematologists", "spinesurgeons", "sportsmed", "surgeons", "tattooremoval",
+    "toxicologists", "underseamedicine", "urologists", "vascularmedicine",
 }
 # ...except that a name can still rescue these categories from these types
 # ("Liberty Village Apartments" typed real_estate_agency).
@@ -353,7 +366,8 @@ YELP_SEARCHES = {
     "home improvement and building supplies": ["buildingsupplies", "hardware"],
     "hospitals": ["hospitals"],
     "shopping centers": ["shoppingcenters"],
-    "stadiums, venues and airports": ["stadiumsarenas", "venues", "civiccenter", "airports",
+    # Not "venues": Yelp gives that to restaurants and hotels with an event room.
+    "stadiums, arenas and airports": ["stadiumsarenas", "civiccenter", "airports",
                                       "amusementparks", "waterparks"],
     "recycling and scrap": ["recyclingcenter", "junkyards", "hazardouswastedisposal"],
     "hotels and resorts": ["hotels", "resorts", "casinos", "skiresorts"],

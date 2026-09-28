@@ -38,6 +38,7 @@ def cache_get(key: str, ttl=None):
     path = _cache_path(key)
     try:
         if time.time() - path.stat().st_mtime > (ttl or config.CACHE_TTL_SECONDS):
+            path.unlink(missing_ok=True)      # expired data is deleted, not just ignored
             return None
         return json.loads(path.read_text())
     except (OSError, ValueError):

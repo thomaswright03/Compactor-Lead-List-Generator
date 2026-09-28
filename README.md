@@ -145,7 +145,9 @@ requests by 7 or 19 (up to about 700 or 1,900), so set `--max-requests` if cost 
 
 - A Yelp trial allows about 300 calls a day (5,000 over 30 days). A default
   30-mile run uses up to 200; the run stops early, keeping what it found, when
-  Yelp says fewer than 5 calls are left today. The quota resets at midnight UTC.
+  Yelp says 5 or fewer calls are left today. The quota resets at midnight UTC.
+  Re-running within 24 hours reuses what was fetched and continues where the
+  last run stopped (on Render's free plan the cache is lost when it restarts).
 - Yelp returns no business websites and only lists places with at least one
   review, so warehouses and plants are thin; OpenStreetMap fills those in.
 - Yelp's trial is for evaluation, and its terms restrict commercial use and

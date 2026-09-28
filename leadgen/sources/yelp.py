@@ -9,6 +9,8 @@ covered with the 7- or 19-cell grid.
 
 import re
 
+from requests.structures import CaseInsensitiveDict
+
 from .. import config
 from ..geo import METERS_PER_MILE, search_grid
 from ..http import HttpError, request_json
@@ -103,7 +105,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
                           sort_by="review_count")
         else:
             params["term"] = query
-        got = {}
+        got = CaseInsensitiveDict()       # header names may arrive in any case
         try:
             data = request_json("GET", SEARCH_URL, params=params, headers=headers,
                                 use_cache=False, no_retry=(QUOTA_ERROR,), response_headers=got)
@@ -130,7 +132,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
         "Yelp", queries, cells, fetch_page, parse_business,
         max_pages=MAX_PAGES, max_requests=max_requests, progress=progress,
         cache_version=["yelp-chain-v1", config.YELP_SEARCHES],
-        cache_ttl=config.YELP_CACHE_TTL_SECONDS, stop_check=stop_check,
+        cache_ttl=config.YELP_CACHE_TTL_SECONDS, cache_partial=True, stop_check=stop_check,
         key_errors=KEY_ERRORS)
     if any(QUOTA_ERROR in x for x in w):
         w = [x for x in w if QUOTA_ERROR not in x]

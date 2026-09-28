@@ -41,20 +41,19 @@ class SearchParams:
         return self.resolved_keys()[0]
 
     def resolved_keys(self):
-        """Return (google key, yelp key, notes), from the params or the environment.
+        """Return (google key, yelp key, misplaced) from the params or the environment.
 
-        A Yelp key pasted into the Google setting is recognized and used for Yelp.
+        A Yelp key pasted into the Google setting is recognized and never sent to
+        Google; misplaced is True then (and it is used for Yelp if no Yelp key is set).
         """
         google = (self.api_key or os.environ.get("GOOGLE_PLACES_API_KEY", "")).strip()
         yelp_key = (self.yelp_api_key or os.environ.get("YELP_API_KEY", "")).strip()
-        notes = []
-        if google and yelp.looks_like_yelp_key(google) and not yelp.looks_like_google_key(google):
-            if not yelp_key:
-                yelp_key = google
+        misplaced = bool(google) and yelp.looks_like_yelp_key(google) and \
+            not yelp.looks_like_google_key(google)
+        if misplaced:
+            yelp_key = yelp_key or google
             google = ""
-            notes.append("The Google key setting holds a Yelp key; it was used for Yelp. "
-                         "Move it to YELP_API_KEY to silence this note.")
-        return google, yelp_key, notes
+        return google, yelp_key, misplaced
 
 
 @dataclass
@@ -86,12 +85,15 @@ def run(params: SearchParams, progress=None):
     if params.max_requests is not None and params.max_requests < 1:
         raise PipelineError("max_requests must be at least 1")
     keywords = [k.strip() for k in params.keywords if k and k.strip()]
-    api_key, yelp_key, key_notes = params.resolved_keys()
+    api_key, yelp_key, misplaced = params.resolved_keys()
 
     use_google = params.source in ("google", "both") or (params.source == "auto" and api_key)
     use_yelp = params.source == "yelp" or (params.source == "auto" and yelp_key)
     use_osm = params.source in ("osm", "both", "auto")
     if params.source in ("google", "both") and not api_key:
+        if misplaced:
+            raise PipelineError("GOOGLE_PLACES_API_KEY holds a Yelp key, not a Google key. "
+                                "Put it in YELP_API_KEY and use source 'auto' or 'yelp'.")
         raise PipelineError(f"Source '{params.source}' needs GOOGLE_PLACES_API_KEY "
                             "(or use --source osm)")
     if params.source == "yelp" and not yelp_key:
@@ -99,9 +101,15 @@ def run(params: SearchParams, progress=None):
 
     say = progress or (lambda msg: None)
     say(f"Locating '{params.location}'")
-    lat, lon, label = geocode(params.location, api_key or None)
+    lat, lon, label = geocode(params.location, api_key)
 
-    raw, warnings, stats, errors = [], list(key_notes), {}, []
+    raw, warnings, stats, errors = [], [], {}, []
+    if misplaced:
+        used = ("it was used for Yelp" if use_yelp and not
+                (params.yelp_api_key or os.environ.get("YELP_API_KEY", "")).strip()
+                else "it was not used")
+        warnings.append(f"The Google key setting holds a Yelp key; {used}. "
+                        "Move it to YELP_API_KEY.")
     if params.source == "auto" and not (api_key or yelp_key):
         warnings.append("No Google Places or Yelp API key set: using free OpenStreetMap data "
                         "only. Add a key for much better phone coverage.")

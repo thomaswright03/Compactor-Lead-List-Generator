@@ -92,10 +92,6 @@ def is_duplicate(a, b):
     return dist <= 0.05 or names_match(a.name, b.name)
 
 
-def _has_paid(group):
-    return any(l.source in PAID_SOURCES for l in group)
-
-
 def _resolve_status(group):
     """Google's word wins, then Yelp's: closed only if none of that source's listings is open."""
     for source in PAID_SOURCES:
@@ -220,13 +216,17 @@ def dedupe(leads):
     for i in range(len(leads)):
         groups.setdefault(find(i), []).append(leads[i])
 
-    # A map-only copy linked to a listing Google or Yelp reports permanently
-    # closed is closed too, unless it is also linked to one reported open.
+    # A copy linked to a listing from a more trusted source (Google over Yelp over
+    # the map) that reports it permanently closed is closed too, unless it is also
+    # linked to one such listing that reports it open.
+    def trust(group):
+        return min(_source_rank(l) for l in group)
+
     closed, still_open = set(), set()
     for i, j in links:
         ri, rj = find(i), find(j)
         for a, b in ((ri, rj), (rj, ri)):
-            if a == b or _has_paid(groups[b]) or not _has_paid(groups[a]):
+            if a == b or trust(groups[a]) >= trust(groups[b]):
                 continue
             status = _resolve_status(groups[a])
             if status == "CLOSED_PERMANENTLY":

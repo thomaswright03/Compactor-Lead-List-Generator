@@ -151,7 +151,7 @@ def classify(lead):
     # Any other shop is retail, whatever its name says ("Sportsman's Warehouse").
     if any(c.startswith("shop=") for c in lead.raw_categories) or "store" in types:
         retail = (config.CATEGORY_BY_KEY["retail"],
-                  "map tag" if lead.source == "osm" else "Google category")
+                  "Google category" if "store" in gtypes else "map tag")
         return retail, matched + [retail]
 
     if tagged or by_name:
