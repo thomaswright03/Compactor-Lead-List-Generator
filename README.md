@@ -31,6 +31,20 @@ cp .env.example .env     # then paste your key into .env
 To get a key: Google Cloud Console → create a project → enable
 **Places API (New)** → Credentials → Create API key.
 
+## Put it online (Render)
+
+The repo includes `render.yaml`, so Render can set everything up:
+
+1. Sign in at https://render.com with GitHub.
+2. **New** > **Blueprint**, pick this repo, and click **Apply**.
+3. When asked, set **APP_PASSWORD** (the page asks for it; any username works) and, optionally, **GOOGLE_PLACES_API_KEY**.
+4. Open the `onrender.com` link Render shows.
+
+Always set `APP_PASSWORD` on a public site: every search can spend the Google key.
+The free plan sleeps after 15 idle minutes, so the first visit takes about a minute
+to wake up, and its disk is wiped on each restart (the search cache starts empty).
+To run the production server yourself: `gunicorn wsgi:app --workers 1 --threads 8 --timeout 0`.
+
 ## Command line options
 
 ```bash

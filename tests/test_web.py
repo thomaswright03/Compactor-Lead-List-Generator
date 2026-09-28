@@ -58,3 +58,19 @@ def test_web_allows_one_running_search(monkeypatch):
     assert first.status_code == 200
     assert client.post("/search", data={}).status_code == 429
     gate.set()
+
+
+def test_password_protects_every_route():
+    import base64
+    client = web.create_app(password="s3cret").test_client()
+    assert client.get("/").status_code == 401
+    assert client.post("/search", data={}).status_code == 401
+    bad = base64.b64encode(b"any:wrong").decode()
+    assert client.get("/", headers={"Authorization": f"Basic {bad}"}).status_code == 401
+    good = base64.b64encode(b"arco:s3cret").decode()
+    assert client.get("/", headers={"Authorization": f"Basic {good}"}).status_code == 200
+
+
+def test_no_password_means_open(monkeypatch):
+    monkeypatch.delenv("APP_PASSWORD", raising=False)
+    assert web.create_app().test_client().get("/").status_code == 200

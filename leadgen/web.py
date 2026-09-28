@@ -1,5 +1,7 @@
 """Minimal web page: fill in the form, watch progress, preview, download CSV/Excel."""
 
+import hmac
+import os
 import threading
 import uuid
 from collections import OrderedDict
@@ -32,9 +34,27 @@ def _lead_json(lead):
     }
 
 
-def create_app():
+def create_app(password=None):
+    """password (or the APP_PASSWORD env var) puts the whole site behind a login.
+
+    Always set one when the page is reachable from the internet: every search
+    can spend the Google API key.
+    """
     app = Flask(__name__)
+    password = password if password is not None else os.environ.get("APP_PASSWORD", "")
     jobs = OrderedDict()
+
+    @app.before_request
+    def require_login():
+        if not password:
+            return None
+        auth = request.authorization
+        supplied = (auth.password or "") if auth else ""
+        if hmac.compare_digest(supplied.encode(), password.encode()):
+            return None
+        return Response("Login required", 401,
+                        {"WWW-Authenticate": 'Basic realm="Lead Finder", charset="UTF-8"'})
+
     lock = threading.Lock()
 
     def _parse_form(form):
