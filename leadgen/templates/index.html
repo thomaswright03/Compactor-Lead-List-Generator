@@ -33,6 +33,7 @@
   tr.A td:first-child { background:var(--a); } tr.B td:first-child { background:var(--b); }
   tr.C td:first-child { background:var(--c); } tr.D td:first-child { background:var(--d); }
   tr.competitor td { background:var(--comp); }
+  .nowrap { white-space:nowrap; }
   .flag { color:#b42318; font-weight:600; font-size:12px; }
   .why { color:var(--muted); font-size:12px; }
   details summary { cursor:pointer; color:var(--accent); font-size:12px; }
@@ -68,7 +69,7 @@
         <option value="19">Max (19 areas)</option>
       </select></label>
     <label>Google request cap
-      <input name="max_requests" type="number" min="1" value="150"></label>
+      <input name="max_requests" type="number" min="1" max="5000" placeholder="Auto"></label>
     <label class="check"><input type="checkbox" name="only_keyword_matches"> Only keyword matches</label>
     <button id="go" type="submit">Find leads</button>
   </form>
@@ -132,7 +133,7 @@ function render() {
     const addr = el("td", [l.address, l.city, l.zip].filter(Boolean).join(", "));
     if (l.map_url) { addr.append(document.createElement("br")); addr.append(link(l.map_url, "map")); }
     tr.append(addr);
-    tr.append(el("td", l.phone));
+    tr.append(el("td", l.phone, "nowrap"));
     const site = el("td"); site.append(link(l.website)); tr.append(site);
     tr.append(el("td", l.distance));
     const why = el("td");
@@ -143,13 +144,25 @@ function render() {
   }
 }
 
+function fail(msg) {
+  $("go").disabled = false;
+  $("status").className = "error";
+  $("status").textContent = msg;
+}
+
 async function poll(jobId) {
-  const res = await fetch(`/status/${jobId}`);
-  const job = await res.json();
+  let job;
+  try {
+    const res = await fetch(`/status/${jobId}`);
+    if (!res.ok) return fail("This search is no longer available. Please run it again.");
+    job = await res.json();
+  } catch (err) {
+    return fail("Lost contact with the server. Is it still running?");
+  }
   $("status").textContent = job.message;
   if (job.state === "running") { setTimeout(() => poll(jobId), 1500); return; }
   $("go").disabled = false;
-  if (job.state === "error") { $("status").className = "error"; return; }
+  if (job.state === "error") return fail(job.message);
   leads = job.leads;
   $("status").textContent = `${leads.length} leads near ${job.location}`;
   for (const w of job.warnings) $("warnings").append(el("div", w, "warn"));
@@ -168,9 +181,14 @@ $("form").addEventListener("submit", async (e) => {
   $("status").textContent = "Starting...";
   $("warnings").replaceChildren();
   $("results").hidden = true;
-  const res = await fetch("/search", { method: "POST", body: new FormData($("form")) });
-  const { job_id } = await res.json();
-  poll(job_id);
+  try {
+    const res = await fetch("/search", { method: "POST", body: new FormData($("form")) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return fail(body.error || `Search failed (HTTP ${res.status})`);
+    poll(body.job_id);
+  } catch (err) {
+    fail("Could not reach the server.");
+  }
 });
 $("filter").addEventListener("input", render);
 $("tier").addEventListener("change", render);

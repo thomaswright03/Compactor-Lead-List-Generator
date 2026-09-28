@@ -3,16 +3,22 @@
 import threading
 import uuid
 from collections import OrderedDict
+from urllib.parse import urlparse
 
 from flask import Flask, Response, abort, jsonify, render_template, request
 
 from . import config
 from .export import format_phone, to_csv_bytes, to_xlsx_bytes
 from .geo import GeocodeError
-from .pipeline import PipelineError, SearchParams, run
+from .http import redact
+from .pipeline import GRIDS, SOURCES, PipelineError, SearchParams, run
 from .scoring import TIER_LABELS
 
 MAX_JOBS = 20
+MAX_RUNNING = 1
+MAX_KEYWORDS = 20
+MAX_KEYWORD_LEN = 60
+MAX_REQUESTS_LIMIT = 5000
 
 
 def _lead_json(lead):
@@ -32,26 +38,44 @@ def create_app():
     lock = threading.Lock()
 
     def _parse_form(form):
-        def num(name, default, cast=float):
-            try:
-                return cast(form.get(name, "") or default)
-            except ValueError:
+        """Validate the form strictly; raise ValueError with a message for the page."""
+        def number(name, default, cast, lo, hi, label):
+            raw = (form.get(name) or "").strip()
+            if not raw:
                 return default
+            try:
+                value = cast(raw)
+            except ValueError:
+                raise ValueError(f"{label} must be a number")
+            if not lo <= value <= hi:
+                raise ValueError(f"{label} must be between {lo} and {hi}")
+            return value
+
         keywords = [k.strip() for k in form.get("keywords", "").split(",") if k.strip()]
+        if len(keywords) > MAX_KEYWORDS or any(len(k) > MAX_KEYWORD_LEN for k in keywords):
+            raise ValueError(f"Use at most {MAX_KEYWORDS} keywords of up to "
+                             f"{MAX_KEYWORD_LEN} characters")
+        source = form.get("source", "auto")
+        if source not in SOURCES:
+            raise ValueError("Unknown data source")
+        grid = number("grid", 1, int, 1, 19, "Google coverage")
+        if grid not in GRIDS:
+            raise ValueError("Google coverage must be 1, 7 or 19 areas")
         return SearchParams(
-            location=form.get("location", "").strip() or config.DEFAULT_LOCATION,
-            radius_miles=num("radius", config.DEFAULT_RADIUS_MILES),
+            location=(form.get("location", "").strip() or config.DEFAULT_LOCATION)[:200],
+            radius_miles=number("radius", config.DEFAULT_RADIUS_MILES, float, 1, 100,
+                                "Radius"),
             keywords=keywords,
-            source=form.get("source", "auto"),
-            min_score=num("min_score", config.DEFAULT_MIN_SCORE, int),
-            grid=num("grid", 1, int),
-            max_requests=num("max_requests", 150, int),
+            source=source,
+            min_score=number("min_score", config.DEFAULT_MIN_SCORE, int, 0, 100,
+                             "Minimum score"),
+            grid=grid,
+            max_requests=number("max_requests", None, int, 1, MAX_REQUESTS_LIMIT,
+                                "Google request cap"),
             only_keyword_matches=form.get("only_keyword_matches") == "on",
         )
 
-    def _worker(job_id, params):
-        job = jobs[job_id]
-
+    def _worker(job, params):
         def progress(msg):
             job["message"] = msg
 
@@ -61,7 +85,15 @@ def create_app():
         except (PipelineError, GeocodeError) as exc:
             job.update(state="error", message=str(exc))
         except Exception as exc:  # show unexpected failures instead of spinning forever
-            job.update(state="error", message=f"Unexpected error: {exc}")
+            job.update(state="error", message=f"Unexpected error: {redact(exc)}")
+
+    def _same_origin():
+        """Stop other websites from starting (billed) searches through this server."""
+        site = request.headers.get("Sec-Fetch-Site")
+        if site not in (None, "same-origin", "none"):
+            return False
+        origin = request.headers.get("Origin") or request.headers.get("Referer")
+        return not origin or urlparse(origin).netloc == request.host
 
     @app.get("/")
     def index():
@@ -72,13 +104,25 @@ def create_app():
 
     @app.post("/search")
     def search():
-        params = _parse_form(request.form)
+        if not _same_origin():
+            abort(403)
+        try:
+            params = _parse_form(request.form)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
         job_id = uuid.uuid4().hex[:12]
+        job = {"state": "running", "message": "Starting", "params": params}
         with lock:
-            jobs[job_id] = {"state": "running", "message": "Starting", "params": params}
+            if sum(j["state"] == "running" for j in jobs.values()) >= MAX_RUNNING:
+                return jsonify({"error": "A search is already running. Wait for it to finish."}), 429
+            jobs[job_id] = job
+            # Evict the oldest finished jobs; never a running one.
             while len(jobs) > MAX_JOBS:
-                jobs.popitem(last=False)
-        threading.Thread(target=_worker, args=(job_id, params), daemon=True).start()
+                old = next((k for k, v in jobs.items() if v["state"] != "running"), None)
+                if old is None:
+                    break
+                del jobs[old]
+        threading.Thread(target=_worker, args=(job, params), daemon=True).start()
         return jsonify({"job_id": job_id})
 
     @app.get("/status/<job_id>")

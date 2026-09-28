@@ -7,6 +7,7 @@ and does not hammer the free OpenStreetMap servers.
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -21,11 +22,19 @@ class HttpError(RuntimeError):
     pass
 
 
+_SECRET_PARAM = re.compile(r"(?i)([?&](?:key|api_key)=)[^&\s)'\"]+")
+
+
+def redact(text) -> str:
+    """Hide API keys that request libraries echo back inside URLs."""
+    return _SECRET_PARAM.sub(r"\1REDACTED", str(text))
+
+
 def _cache_path(key: str) -> Path:
     return CACHE_DIR / (hashlib.sha256(key.encode()).hexdigest() + ".json")
 
 
-def _cache_get(key: str):
+def cache_get(key: str):
     path = _cache_path(key)
     try:
         if time.time() - path.stat().st_mtime > config.CACHE_TTL_SECONDS:
@@ -35,7 +44,7 @@ def _cache_get(key: str):
         return None
 
 
-def _cache_put(key: str, value) -> None:
+def cache_put(key: str, value) -> None:
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         _cache_path(key).write_text(json.dumps(value))
@@ -52,7 +61,7 @@ def request_json(method, url, *, params=None, data=None, json_body=None, headers
     """
     key = json.dumps([method, url, params, data, json_body, cache_key_extra], sort_keys=True)
     if use_cache:
-        cached = _cache_get(key)
+        cached = cache_get(key)
         if cached is not None:
             return cached
 
@@ -66,7 +75,7 @@ def request_json(method, url, *, params=None, data=None, json_body=None, headers
             if resp.status_code == 429 or resp.status_code >= 500:
                 last_error = HttpError(f"{url} returned HTTP {resp.status_code}")
             elif resp.status_code >= 400:
-                raise HttpError(f"{url} returned HTTP {resp.status_code}: {resp.text[:300]}")
+                raise HttpError(f"{url} returned HTTP {resp.status_code}: {redact(resp.text[:300])}")
             else:
                 try:
                     value = resp.json()
@@ -75,10 +84,10 @@ def request_json(method, url, *, params=None, data=None, json_body=None, headers
                     last_error = HttpError(f"{url} returned a non-JSON response")
                 else:
                     if use_cache and (cacheable is None or cacheable(value)):
-                        _cache_put(key, value)
+                        cache_put(key, value)
                     return value
         except requests.RequestException as exc:
-            last_error = HttpError(f"{url}: {exc}")
+            last_error = HttpError(f"{url}: {redact(exc)}")
         if attempt < retries - 1:
             time.sleep(2 ** (attempt + 1))
     raise last_error

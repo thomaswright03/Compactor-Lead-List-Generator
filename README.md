@@ -36,8 +36,9 @@ To get a key: Google Cloud Console → create a project → enable
 ```bash
 python -m leadgen run --location 84101 --radius 30 --keywords compactor baler recycling --out leads.xlsx
 python -m leadgen run --location "Ogden, UT" --radius 15 --out ogden.csv
-python -m leadgen run --source google --grid 7 --max-requests 400   # wider Google coverage
-python -m leadgen run --min-score 40 --limit 200                     # only strong leads
+python -m leadgen run --source google --grid 7                        # wider Google coverage
+python -m leadgen run --grid 7 --max-requests 300                     # wider, but capped spend
+python -m leadgen run --min-score 40 --limit 200                      # only strong leads
 ```
 
 | Option | Default | What it does |
@@ -48,9 +49,9 @@ python -m leadgen run --min-score 40 --limit 200                     # only stro
 | `--source` | auto | `auto` = Google + OpenStreetMap if a key is set, else OpenStreetMap. Also `google`, `osm`, `both` |
 | `--min-score` | 20 | Drop leads below this score (competitors are always kept) |
 | `--grid` | 1 | Google only. 1, 7 or 19 search cells. Google caps each search at 60 results, so more cells find more businesses (and cost more) |
-| `--max-requests` | 150 | Google only. Hard cap on API calls per run |
+| `--max-requests` | auto | Google only. Hard cap on API calls per run. Auto = enough for every search (about 100 at `--grid 1`). Under a cap, every search gets its first page before any gets a second, and your keywords and the competitor names are searched first |
 | `--only-keyword-matches` | off | Keep only leads matching a keyword |
-| `--limit` | 0 (all) | Keep the top N |
+| `--limit` | 0 (all) | Keep the top N prospects (competitors are always kept) |
 | `--out` | output/leads.xlsx | `.xlsx` or `.csv` |
 
 ## How leads are scored (0 to 100)
@@ -60,7 +61,7 @@ ranking can be traced to a specific rule and fixed in `leadgen/config.py`.
 
 | Signal | Points |
 | --- | --- |
-| Business type: grocery 35, warehouse/distribution 34, big-box 32, food & beverage production 32, recycling/waste 30, manufacturing 28, hospital 28, mall/stadium/airport 28, university 20, hotel 18, apartments 15, government/correctional 15, restaurant 8, other retail 8 | by type |
+| Business type: grocery 35, warehouse/distribution 34, big-box 32, food & beverage production 32, recycling/waste 30, manufacturing 28, hospital 28, mall/stadium/airport 28, university 20, hotel 18, mid-size retail (electronics, sporting goods, furniture, discount) 15, apartments 15, government/correctional 15, restaurant 8, other retail 8. What the listing says a place is (Google type / map tag) wins over words in its name | by type |
 | Known high-volume brand (Walmart, Costco, Smith's, Harmons, Home Depot, Amazon, Intermountain, ...) | +20 |
 | Busy site: Google review count ≥100 / ≥500 / ≥2,000 | +5 / +10 / +15 |
 | Big building: approx. footprint ≥15k / ≥40k / ≥100k sq ft (OpenStreetMap outlines) | +5 / +10 / +15 |
@@ -95,9 +96,9 @@ Everything adjustable is in `leadgen/config.py`:
 ## How it works
 
 1. **Geocode** the location (built-in table for SLC-area cities, then ZIP lookup, Google, or OpenStreetMap Nominatim).
-2. **Search**: Google Places text search for ~27 business-type phrases plus your keywords and the competitor names, across 1/7/19 grid cells; and/or one OpenStreetMap Overpass query for matching tags and name words (several mirror servers are tried).
-3. **Filter** to the exact radius (Haversine distance) and drop permanently closed places.
-4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's contact details and OpenStreetMap's building size.
+2. **Search**: Google Places text search for your keywords, the competitor names, then ~27 business-type phrases, across 1/7/19 grid cells; and/or one OpenStreetMap Overpass query for matching tags and name words (several mirror servers are tried).
+3. **Filter** to the exact radius (Haversine distance).
+4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's contact details and OpenStreetMap's building size. Different phone numbers or names that only share generic words ("Inn & Suites Airport") are kept apart. Places Google reports permanently closed are then dropped.
 5. **Score**, sort by score then distance, and **export**.
 
 API responses are cached in `.cache/` for 7 days, so re-running the same search
@@ -105,12 +106,13 @@ is instant and doesn't re-bill Google.
 
 ## Cost notes (Google)
 
-With the default `--grid 1`, a run makes at most ~90 requests (about 30 phrases ×
-up to 3 pages), capped by `--max-requests 150`. Google's pricing for Text Search
+With the default `--grid 1`, a run makes at most about 100 requests (about 33
+phrases × up to 3 pages). The command prints the maximum before it starts, and
+`--max-requests` caps it. Google's pricing for Text Search
 with phone/website fields falls under the Enterprise SKU (roughly $35 per 1,000
 requests after the monthly free allowance), so a default run costs a few
 dollars at most, and cached re-runs are free. `--grid 7` or `--grid 19` multiplies
-requests by 7 or 19.
+requests by 7 or 19 (up to about 700 or 1,900), so set `--max-requests` if cost matters.
 
 ## Limits and next steps
 

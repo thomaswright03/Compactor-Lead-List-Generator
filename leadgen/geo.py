@@ -108,18 +108,24 @@ def geocode(location, api_key=None):
         try:
             data = request_json("GET", "https://maps.googleapis.com/maps/api/geocode/json",
                                 params={"address": location, "key": api_key}, retries=2,
-                                cache_key_extra="google")
-            if data.get("results"):
+                                cache_key_extra="google",
+                                cacheable=lambda v: isinstance(v, dict)
+                                and v.get("status") in ("OK", "ZERO_RESULTS"))
+            status = data.get("status", "")
+            if status == "OK" and data.get("results"):
                 r = data["results"][0]
                 loc = r["geometry"]["location"]
                 return loc["lat"], loc["lng"], r.get("formatted_address", location)
+            if status not in ("OK", "ZERO_RESULTS"):
+                errors.append(f"Google geocoding: {status} {data.get('error_message', '')}".strip())
         except (HttpError, KeyError) as exc:
             errors.append(str(exc))
 
     try:
         data = request_json("GET", "https://nominatim.openstreetmap.org/search",
                             params={"q": location, "format": "json", "limit": 1,
-                                    "countrycodes": "us"}, retries=2)
+                                    "countrycodes": "us"}, retries=2,
+                            cacheable=lambda v: isinstance(v, list))
         if data:
             return float(data[0]["lat"]), float(data[0]["lon"]), data[0].get("display_name", location)
     except (HttpError, KeyError, ValueError) as exc:

@@ -28,12 +28,17 @@ _NAME_TERMS = [
     "university", "college", "apartments",
 ]
 SQFT_PER_M2 = 10.7639
+_NOT_PLACES = ["highway", "waterway", "railway", "route", "boundary", "natural",
+               "public_transport", "place", "power"]
+MAX_BUILDING_SQFT = 3_000_000   # bigger bounding boxes are campuses/resorts, not buildings
 
 
 def _tag_filters():
     """Group category tags into Overpass filters: {key: [values]} and bare keys."""
     by_key, any_value = {}, set()
     for cat in config.CATEGORIES:
+        if not cat.query_osm:
+            continue
         for key, value in cat.osm_tags:
             if (key, value) in _SKIP_QUERY:
                 continue
@@ -42,6 +47,11 @@ def _tag_filters():
             else:
                 by_key.setdefault(key, set()).add(value)
     return by_key, any_value
+
+
+def _ql_string(text):
+    return (text.replace("\\", "\\\\").replace('"', '\\"')
+            .replace("\n", "\\n").replace("\t", "\\t"))
 
 
 def build_query(lat, lon, radius_miles, keywords=()):
@@ -55,8 +65,12 @@ def build_query(lat, lon, radius_miles, keywords=()):
     for key in sorted(any_value):
         parts.append(f'nwr["{key}"]["name"]{around};')
     terms = list(_NAME_TERMS) + [k.lower() for k in keywords if k.strip()]
-    regex = "|".join(sorted({re.escape(t).replace('"', "") for t in terms}))
-    parts.append(f'nwr["name"~"{regex}",i]{around};')
+    # Escape twice: once for the regex, once for the Overpass QL string literal
+    # (which would otherwise eat the regex backslashes).
+    regex = "|".join(sorted({_ql_string(re.escape(t)) for t in terms}))
+    # Name matches skip roads, canals, routes etc. ("University Pkwy", "Waste Ditch").
+    not_places = "".join(f'[!"{k}"]' for k in _NOT_PLACES)
+    parts.append(f'nwr["name"~"{regex}",i]{not_places}{around};')
     body = "\n  ".join(parts)
     return (f"[out:json][timeout:180];\n(\n  {body}\n)->.all;\n"
             "node.all->.n;\n.n out body;\n"
@@ -80,7 +94,15 @@ def _pretty(tag_value):
 def parse_element(el):
     tags = el.get("tags", {})
     name = tags.get("name", "").strip()
-    if not name:
+    # Skip unnamed features and per-building labels like "B" or "12" inside a complex.
+    if sum(ch.isalpha() for ch in name) < 2:
+        return None
+    # Places that no longer operate.
+    if "(historical)" in name.lower() or any(
+            tags.get(k) == "yes" for k in ("disused", "abandoned", "demolished")) or any(
+            k.startswith(("disused:", "abandoned:", "was:", "demolished:")) for k in tags):
+        return None
+    if any(k in tags for k in _NOT_PLACES):
         return None
     if "lat" in el and "lon" in el:
         lat, lon = el["lat"], el["lon"]
@@ -101,9 +123,10 @@ def parse_element(el):
     street = " ".join(x for x in [tags.get("addr:housenumber", ""), tags.get("addr:street", "")] if x)
     etype = el.get("type", "node")
     footprint = None
-    if etype in ("way", "relation") and ("building" in tags or "shop" in tags
-                                         or "amenity" in tags or "industrial" in tags):
+    if etype in ("way", "relation") and ("building" in tags or "shop" in tags):
         footprint = _footprint_sqft(el.get("bounds"))
+        if footprint and footprint > MAX_BUILDING_SQFT:
+            footprint = None
     return Lead(
         name=name,
         lat=lat,

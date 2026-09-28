@@ -24,6 +24,7 @@ class Lead:
     business_status: str = ""
     map_url: str = ""
     search_terms: list = field(default_factory=list)     # queries that found it
+    alt_names: list = field(default_factory=list)        # names/sites of merged duplicates
 
     # Filled in by scoring
     score: int = 0

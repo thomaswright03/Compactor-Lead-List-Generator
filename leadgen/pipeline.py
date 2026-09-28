@@ -3,6 +3,7 @@
 import os
 import time
 from dataclasses import asdict, dataclass, field
+from typing import Optional
 
 from . import config
 from .dedupe import dedupe
@@ -11,6 +12,8 @@ from .scoring import score_lead
 from .sources import SourceError, google_places, osm
 
 SOURCES = ("auto", "google", "osm", "both")
+GRIDS = (1, 7, 19)
+EXEMPT_TYPES = ("Competitor", "Own company")   # always kept and flagged, never filtered
 
 
 class PipelineError(RuntimeError):
@@ -25,7 +28,7 @@ class SearchParams:
     source: str = "auto"
     min_score: int = config.DEFAULT_MIN_SCORE
     grid: int = 1
-    max_requests: int = 150
+    max_requests: Optional[int] = None     # None: enough for every search and page
     only_keyword_matches: bool = False
     include_closed: bool = False
     limit: int = 0
@@ -59,6 +62,10 @@ def run(params: SearchParams, progress=None):
         raise PipelineError(f"Unknown source '{params.source}'. Use one of {', '.join(SOURCES)}")
     if not 0 < params.radius_miles <= 100:
         raise PipelineError("Radius must be between 0 and 100 miles")
+    if params.grid not in GRIDS:
+        raise PipelineError(f"Grid must be one of {', '.join(map(str, GRIDS))}")
+    if params.max_requests is not None and params.max_requests < 1:
+        raise PipelineError("max_requests must be at least 1")
     keywords = [k.strip() for k in params.keywords if k and k.strip()]
     api_key = params.resolved_key()
 
@@ -76,8 +83,11 @@ def run(params: SearchParams, progress=None):
         warnings.append("No Google Places API key set: using free OpenStreetMap data only. "
                         "Add a key for much better phone/website coverage.")
     if use_google:
-        # Competitor names are searched too, so they show up flagged in the list.
-        queries = list(dict.fromkeys(config.GOOGLE_QUERIES + keywords + list(config.COMPETITORS)))
+        # Most specific first, so a request cap trims generic phrases, never the user's
+        # keywords or the competitor names (searched so they show up flagged).
+        queries = list(dict.fromkeys(keywords + list(config.COMPETITORS) + config.GOOGLE_QUERIES))
+        cap = params.max_requests or google_places.estimate_requests(queries, params.grid)
+        say(f"Google: {len(queries)} phrases x {params.grid} area(s), up to {cap} requests")
         try:
             found, n_requests, w = google_places.search(
                 lat, lon, params.radius_miles, queries, api_key, params.grid,
@@ -107,32 +117,38 @@ def run(params: SearchParams, progress=None):
         lead.distance_miles = round(haversine_miles(lat, lon, lead.lat, lead.lon), 2)
         if lead.distance_miles > params.radius_miles:
             continue
-        if lead.business_status == "CLOSED_PERMANENTLY" and not params.include_closed:
-            continue
         in_range.append(lead)
 
     say("Merging duplicates")
+    # Closed places are dropped after merging, so an old map copy of a place
+    # Google reports closed cannot slip through on its own.
     merged = dedupe(in_range)
+    n_merged = len(merged)
+    if not params.include_closed:
+        merged = [l for l in merged if l.business_status != "CLOSED_PERMANENTLY"]
     for lead in merged:
         lead.distance_miles = round(haversine_miles(lat, lon, lead.lat, lead.lon), 2)
         score_lead(lead, keywords)
 
     kept = []
     for lead in merged:
-        is_competitor = lead.lead_type in ("Competitor", "Own company")
-        if not is_competitor:   # competitors are always kept and flagged, never filtered out
+        if lead.lead_type not in EXEMPT_TYPES:
             if lead.score < params.min_score:
                 continue
             if params.only_keyword_matches and not lead.matched_keywords:
                 continue
         kept.append(lead)
-    kept.sort(key=lambda l: (-l.score, l.distance_miles, l.name.lower()))
+    def sort_key(l):
+        return (-l.score, l.distance_miles, l.name.lower())
+
+    kept.sort(key=sort_key)
     if params.limit and params.limit > 0:
-        kept = kept[:params.limit]
+        prospects = [l for l in kept if l.lead_type not in EXEMPT_TYPES][:params.limit]
+        kept = sorted(prospects + [l for l in kept if l.lead_type in EXEMPT_TYPES], key=sort_key)
 
     stats.update({
         "results in radius": len(in_range),
-        "after dedupe": len(merged),
+        "after dedupe": n_merged,
         "leads kept": len(kept),
         "tier A": sum(l.tier == "A" for l in kept),
         "tier B": sum(l.tier == "B" for l in kept),

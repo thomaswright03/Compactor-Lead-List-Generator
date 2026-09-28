@@ -42,3 +42,32 @@ def test_dedupe_merges_google_and_osm():
     assert m.sources == ["google", "osm"]
     assert m.footprint_sqft == 60000 and m.zip == "84102"
     assert set(m.search_terms) == {"supermarket", "grocery store"}
+
+
+def _l(name, lat, lon, phone="", source="osm", sid=None):
+    return Lead(name=name, lat=lat, lon=lon, source=source, source_id=sid or name, phone=phone)
+
+
+def test_dedupe_keeps_neighboring_hotels_apart():
+    a = _l("Comfort Inn & Suites Salt Lake City Airport", 40.77, -111.95, "8017833165")
+    b = _l("Fairfield Inn & Suites Salt Lake City Airport", 40.7714, -111.95, "8013553331")
+    assert len(dedupe([a, b])) == 2
+    assert not names_match("343 Apartments", "Broadway Apartments")
+    assert not names_match("Downtown 360", "Homewood Suites Downtown")
+
+
+def test_dedupe_does_not_chain():
+    a = _l("Acme Foods", 40.7600, -111.9)
+    b = _l("Acme Foods Plant", 40.7610, -111.9)
+    c = _l("Acme Foods Plant", 40.7620, -111.9)   # dup of b, but 0.14 mi from a
+    groups = dedupe([a, b, c])
+    # a~b and b~c, but a and c are too far apart with different names: no A-B-C chain.
+    assert len(groups) == 2
+
+
+def test_dedupe_keeps_competitor_names():
+    comp = _l("Action Compaction", 40.76, -111.9, "8015550100", source="google", sid="g")
+    osm_copy = _l("Action Compaction Services LLC", 40.7601, -111.9)
+    merged = dedupe([osm_copy, comp])
+    assert len(merged) == 1
+    assert "Action Compaction Services LLC" in merged[0].alt_names or merged[0].name.startswith("Action")

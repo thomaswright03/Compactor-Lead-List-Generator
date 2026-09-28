@@ -25,22 +25,94 @@ def test_parse_google_place():
     assert lead.name == "Smith's Marketplace"
     assert (lead.address, lead.city, lead.state, lead.zip) == ("455 S 500 E", "Salt Lake City", "UT", "84102")
     assert lead.rating_count == 2450 and lead.search_terms == ["supermarket"]
+    bare = google_places.parse_place(data["places"][1])
+    assert (bare.address, bare.city, bare.state, bare.zip) == ("1 Industrial Way", "Salt Lake City", "UT", "84104")
 
 
-def test_google_search_paginates_and_respects_cap(monkeypatch):
-    page = json.loads((FIX / "google_page.json").read_text())
+def _fake_google(monkeypatch, pages_per_query=3, fail=None):
+    """Each query returns `pages_per_query` pages; fail(body, n) may raise HttpError."""
     calls = []
 
     def fake(method, url, **kw):
-        calls.append(kw["json_body"])
-        return page if len(calls) % 3 else {"places": []}
+        body = kw["json_body"]
+        calls.append(body)
+        if fail:
+            fail(body, len(calls))
+        page = int(body.get("pageToken", "t0")[1:]) + 1
+        place = {"id": f"{body['textQuery']}-{page}", "displayName": {"text": body["textQuery"]},
+                 "location": {"latitude": 40.76, "longitude": -111.89}, "types": ["store"]}
+        out = {"places": [place]}
+        if page < pages_per_query:
+            out["nextPageToken"] = f"t{page}"
+        return out
 
     monkeypatch.setattr(google_places, "request_json", fake)
+    monkeypatch.setattr(google_places, "TOKEN_DELAY_SECONDS", 0)
+    return calls
+
+
+def test_google_budget_is_spent_breadth_first(monkeypatch):
+    calls = _fake_google(monkeypatch)
     leads, n, warnings = google_places.search(40.76, -111.89, 30, ["a", "b"], "KEY",
-                                              grid_cells=1, max_requests=4)
-    assert n == 4 and warnings  # hit the cap
-    assert calls[1]["pageToken"] == "abc"
+                                              grid_cells=1, max_requests=3)
+    assert n == 3
+    assert [(c["textQuery"], c.get("pageToken")) for c in calls] == [("a", None), ("b", None), ("a", "t1")]
+    assert any("cap" in w for w in warnings)
     assert calls[0]["locationBias"]["circle"]["radius"] == 48280.32
+
+
+def test_google_warns_when_cap_cannot_cover_every_search(monkeypatch):
+    _fake_google(monkeypatch, pages_per_query=1)
+    _, n, warnings = google_places.search(40.76, -111.89, 30, list("abcde"), "KEY",
+                                          grid_cells=7, max_requests=10)
+    assert n == 10
+    assert any("35 searches needed" in w for w in warnings)
+
+
+def test_google_page_token_error_keeps_results(monkeypatch):
+    from leadgen.http import HttpError
+
+    def fail(body, n):
+        if body.get("pageToken"):
+            raise HttpError("returned HTTP 400: INVALID_ARGUMENT")
+    _fake_google(monkeypatch, fail=fail)
+    leads, _, warnings = google_places.search(40.76, -111.89, 30, ["a", "b"], "KEY")
+    assert len(leads) == 2
+    assert any("later results page failed" in w for w in warnings)
+
+
+def test_google_bad_key_raises(monkeypatch):
+    from leadgen.http import HttpError
+
+    def fail(body, n):
+        raise HttpError("returned HTTP 400: API key not valid")
+    _fake_google(monkeypatch, fail=fail)
+    with pytest.raises(google_places.SourceError):
+        google_places.search(40.76, -111.89, 30, ["a"], "KEY")
+
+
+def test_google_caches_complete_chains_only(monkeypatch):
+    calls = _fake_google(monkeypatch)
+    google_places.search(40.76, -111.89, 30, ["a", "b"], "KEY", max_requests=4)
+    assert len(calls) == 4          # a: 2 of 3 pages, b: 2 of 3 pages -> neither complete
+    calls.clear()
+    leads, n, _ = google_places.search(40.76, -111.89, 30, ["a", "b"], "KEY")
+    assert n == 6 and len(leads) == 6   # re-fetched from page 1, no stale tokens
+    calls.clear()
+    leads, n, _ = google_places.search(40.76, -111.89, 30, ["a", "b"], "KEY")
+    assert n == 0 and len(calls) == 0 and len(leads) == 6   # served from cache
+
+
+def test_pipeline_searches_keywords_and_competitors_first(monkeypatch):
+    seen = {}
+
+    def fake_search(lat, lon, radius, queries, *a, **k):
+        seen["queries"] = queries
+        return [], 0, []
+    monkeypatch.setattr(google_places, "search", fake_search)
+    monkeypatch.setattr(osm, "search", lambda *a, **k: ([], []))
+    pipeline.run(SearchParams(source="both", api_key="KEY", keywords=["baler", "compactor"]))
+    assert seen["queries"][:4] == ["baler", "compactor", "Pro Baler", "Action Compaction"]
 
 
 def test_osm_query_and_parse():
@@ -105,3 +177,73 @@ def test_exports(monkeypatch):
 def test_format_phone():
     assert format_phone("+1 801-555-0100") == "(801) 555-0100"
     assert format_phone("ext 12") == "ext 12"
+
+
+def test_osm_skips_roads_labels_and_campus_footprints():
+    road = {"type": "way", "id": 1, "bounds": {"minlat": 40, "minlon": -112, "maxlat": 40.01, "maxlon": -111.99},
+            "tags": {"name": "University Pkwy N", "highway": "primary"}}
+    label = {"type": "way", "id": 2, "bounds": {"minlat": 40, "minlon": -112, "maxlat": 40.001, "maxlon": -111.999},
+             "tags": {"name": "B", "building": "apartments"}}
+    resort = {"type": "relation", "id": 3,
+              "bounds": {"minlat": 40.6, "minlon": -111.6, "maxlat": 40.65, "maxlon": -111.5},
+              "tags": {"name": "Big Resort", "building": "hotel", "tourism": "hotel"}}
+    assert osm.parse_element(road) is None
+    assert osm.parse_element(label) is None
+    assert osm.parse_element(resort).footprint_sqft is None
+    q = osm.build_query(40.76, -111.89, 30)
+    assert '[!"highway"]' in q and '[!"type"]' not in q
+
+
+def test_pipeline_limit_keeps_competitors(monkeypatch):
+    _fake_sources(monkeypatch)
+    res = pipeline.run(SearchParams(source="both", api_key="KEY", limit=1))
+    types = sorted(l.lead_type for l in res.leads)
+    assert types == ["Competitor", "Competitor", "Prospect"]
+
+
+def test_pipeline_drops_place_google_says_closed_even_with_osm_copy(monkeypatch):
+    from leadgen.models import Lead
+    g = Lead(name="Old Mill Foods", lat=40.75, lon=-111.9, source="google", source_id="g",
+             raw_categories=["point_of_interest"], business_status="CLOSED_PERMANENTLY")
+    o = Lead(name="Old Mill Foods", lat=40.7501, lon=-111.9001, source="osm", source_id="n",
+             raw_categories=["industrial=food"])
+    monkeypatch.setattr(google_places, "search", lambda *a, **k: ([g], 1, []))
+    monkeypatch.setattr(osm, "search", lambda *a, **k: ([o], []))
+    assert pipeline.run(SearchParams(source="both", api_key="KEY")).leads == []
+    kept = pipeline.run(SearchParams(source="both", api_key="KEY", include_closed=True)).leads
+    assert len(kept) == 1
+
+
+def test_pipeline_rejects_bad_grid():
+    with pytest.raises(PipelineError):
+        pipeline.run(SearchParams(grid=2))
+
+
+def test_osm_escaping_and_skips():
+    q = osm.build_query(40.76, -111.89, 30, ["c++", 'say "hi"', "a.b"])
+    assert r"c\\+\\+" in q and r'say\\ \"hi\"' in q and r"a\\.b" in q
+    assert "restaurant" not in q and "clothes" not in q   # classify-only tags are not fetched
+    hist = {"type": "node", "id": 9, "lat": 40.7, "lon": -111.9,
+            "tags": {"name": "Saint Marks Hospital (historical)", "amenity": "hospital"}}
+    gone = {"type": "node", "id": 10, "lat": 40.7, "lon": -111.9,
+            "tags": {"name": "Old Market", "disused:shop": "supermarket"}}
+    assert osm.parse_element(hist) is None and osm.parse_element(gone) is None
+
+
+def test_exports_neutralize_formulas_and_control_chars():
+    from leadgen.models import Lead
+    evil = Lead(name='=HYPERLINK("http://x","click")', lat=40.7, lon=-111.9, source="osm",
+                source_id="n", address="@SUM(A1)", website="javascript:alert(1)",
+                primary_category="Bad\x07Tag", tier="C", score=20)
+    csv_text = to_csv_bytes([evil]).decode("utf-8-sig")
+    assert "'=HYPERLINK" in csv_text and "'@SUM" in csv_text
+    wb = load_workbook(io.BytesIO(to_xlsx_bytes([evil])))
+    ws = wb["Leads"]
+    values = [c.value for c in ws[2]]
+    assert values[4].startswith("'=") and "Bad\x07Tag" not in values
+    assert ws.cell(row=2, column=12).hyperlink is None   # javascript: is never linked
+
+
+def test_http_errors_redact_keys():
+    from leadgen.http import redact
+    assert "SECRET" not in redact("GET /geocode/json?address=x&key=SECRET failed")

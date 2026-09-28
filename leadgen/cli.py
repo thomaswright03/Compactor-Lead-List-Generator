@@ -42,12 +42,14 @@ def build_parser():
                    help="Drop leads scoring below this (competitors are always kept)")
     r.add_argument("--grid", type=int, choices=[1, 7, 19], default=1,
                    help="Google only: split the area into 1, 7, or 19 search cells for more results")
-    r.add_argument("--max-requests", type=int, default=150,
-                   help="Google only: cap on API requests per run (cost control)")
+    r.add_argument("--max-requests", type=int, default=None,
+                   help="Google only: cap on API requests per run (cost control). Default: "
+                        "enough for every search, about 100 with --grid 1")
     r.add_argument("--only-keyword-matches", action="store_true",
                    help="Keep only leads that match one of the keywords")
     r.add_argument("--include-closed", action="store_true", help="Keep permanently closed places")
-    r.add_argument("--limit", type=int, default=0, help="Keep only the top N leads")
+    r.add_argument("--limit", type=int, default=0,
+                   help="Keep only the top N prospects (competitors are always kept)")
     r.add_argument("--out", "-o", default="output/leads.xlsx",
                    help="Output file (.xlsx or .csv). Default output/leads.xlsx")
     r.add_argument("--api-key", default="", help="Google Places API key (or set GOOGLE_PLACES_API_KEY)")

@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 
 from openpyxl import Workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -26,7 +27,7 @@ COLUMNS = [
     ("Phone", lambda l: format_phone(l.phone), 16),
     ("Website", lambda l: l.website, 32),
     ("Distance (mi)", lambda l: l.distance_miles, 12),
-    ("Why This Score", lambda l: " | ".join(l.reasons), 60),
+    ("Why This Score", lambda l: "Points: " + " | ".join(l.reasons) if l.reasons else "", 60),
     ("Matched Keywords", lambda l: ", ".join(l.matched_keywords), 18),
     ("Google Reviews", lambda l: l.rating_count, 10),
     ("Approx. Footprint (sq ft)", lambda l: l.footprint_sqft, 14),
@@ -53,6 +54,22 @@ def format_phone(phone):
     return (phone or "").strip()
 
 
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _safe(value):
+    """Neutralize text a spreadsheet would run as a formula (data comes from the public)."""
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
+def _xl(value):
+    """Safe for Excel: no formulas, no control characters openpyxl rejects."""
+    value = _safe(value)
+    return ILLEGAL_CHARACTERS_RE.sub("", value) if isinstance(value, str) else value
+
+
 def rows(leads):
     return [[fn(l) for _, fn, _ in COLUMNS] for l in leads]
 
@@ -62,7 +79,7 @@ def to_csv_bytes(leads):
     w = csv.writer(buf)
     w.writerow([c for c, _, _ in COLUMNS])
     for r in rows(leads):
-        w.writerow(["" if v is None else v for v in r])
+        w.writerow(["" if v is None else _safe(v) for v in r])
     return buf.getvalue().encode("utf-8-sig")   # BOM so Excel opens it cleanly
 
 
@@ -76,19 +93,19 @@ def to_xlsx_bytes(leads, run_info=None):
         cell.fill = PatternFill("solid", fgColor="1F4E78")
         cell.alignment = Alignment(vertical="center", wrap_text=True)
     for lead, r in zip(leads, rows(leads)):
-        ws.append(r)
+        ws.append([_xl(v) for v in r])
         row = ws.max_row
         fill = COMPETITOR_FILL if lead.lead_type == "Competitor" else TIER_FILLS.get(lead.tier)
         if fill:
             for col in range(1, 5):
                 ws.cell(row=row, column=col).fill = PatternFill("solid", fgColor=fill)
         site = ws.cell(row=row, column=_col("Website"))
-        if lead.website:
-            site.hyperlink = lead.website
+        if re.match(r"https?://", lead.website or "", re.I):
+            site.hyperlink = ILLEGAL_CHARACTERS_RE.sub("", lead.website)
             site.font = Font(color="0563C1", underline="single")
         link = ws.cell(row=row, column=_col("Map Link"))
-        if lead.map_url:
-            link.hyperlink = lead.map_url
+        if re.match(r"https?://", lead.map_url or "", re.I):
+            link.hyperlink = ILLEGAL_CHARACTERS_RE.sub("", lead.map_url)
             link.value = "Open map"
             link.font = Font(color="0563C1", underline="single")
     for i, (_, _, width) in enumerate(COLUMNS, start=1):
@@ -105,7 +122,7 @@ def to_xlsx_bytes(leads, run_info=None):
     info = wb.create_sheet("Run Info")
     info.append(["Generated", datetime.now().strftime("%Y-%m-%d %H:%M")])
     for k, v in (run_info or {}).items():
-        info.append([k, v if isinstance(v, (int, float, str)) else str(v)])
+        info.append([_xl(k), _xl(v if isinstance(v, (int, float, str)) else str(v))])
     info.append([])
     info.append(["Tiers", "A >= 60, B >= 40, C >= 20, D below 20"])
     info.append(["Row colors", "Green = stronger lead, orange = competitor"])
