@@ -34,10 +34,10 @@ def _cache_path(key: str) -> Path:
     return CACHE_DIR / (hashlib.sha256(key.encode()).hexdigest() + ".json")
 
 
-def cache_get(key: str):
+def cache_get(key: str, ttl=None):
     path = _cache_path(key)
     try:
-        if time.time() - path.stat().st_mtime > config.CACHE_TTL_SECONDS:
+        if time.time() - path.stat().st_mtime > (ttl or config.CACHE_TTL_SECONDS):
             return None
         return json.loads(path.read_text())
     except (OSError, ValueError):
@@ -54,10 +54,12 @@ def cache_put(key: str, value) -> None:
 
 def request_json(method, url, *, params=None, data=None, json_body=None, headers=None,
                  timeout=60, retries=3, use_cache=True, cache_key_extra="",
-                 cacheable=None):
+                 cacheable=None, no_retry=(), response_headers=None):
     """Return parsed JSON, retrying on network errors, 429 and 5xx.
 
     cacheable(value) -> bool can veto caching a response (e.g. a timeout notice).
+    no_retry: error-body text that makes retrying pointless (e.g. a used-up daily quota).
+    response_headers: a dict that receives the response's headers.
     """
     key = json.dumps([method, url, params, data, json_body, cache_key_extra], sort_keys=True)
     if use_cache:
@@ -72,8 +74,14 @@ def request_json(method, url, *, params=None, data=None, json_body=None, headers
         try:
             resp = requests.request(method, url, params=params, data=data, json=json_body,
                                     headers=hdrs, timeout=timeout)
+            if response_headers is not None:
+                response_headers.clear()
+                response_headers.update(resp.headers)
             if resp.status_code == 429 or resp.status_code >= 500:
-                last_error = HttpError(f"{url} returned HTTP {resp.status_code}")
+                last_error = HttpError(f"{url} returned HTTP {resp.status_code}: "
+                                       f"{redact(resp.text[:300])}")
+                if any(t in resp.text for t in no_retry):
+                    raise last_error
             elif resp.status_code >= 400:
                 raise HttpError(f"{url} returned HTTP {resp.status_code}: {redact(resp.text[:300])}")
             else:

@@ -33,6 +33,7 @@ class Category:
     why: str                 # human-readable reason shown in the export
     google_types: list = field(default_factory=list)
     osm_tags: list = field(default_factory=list)   # (key, value or None for "any")
+    yelp_categories: list = field(default_factory=list)   # Yelp category aliases
     name_keywords: list = field(default_factory=list)   # whole words/phrases in the name
     lead_type: str = "Prospect"
     query_osm: bool = True   # False: tags classify results but are not fetched (too many)
@@ -44,6 +45,7 @@ CATEGORIES = [
         "Grocery stores bale large volumes of cardboard and compact wet waste",
         google_types=["supermarket", "grocery_store", "hypermarket", "discount_supermarket"],
         osm_tags=[("shop", "supermarket")],
+        yelp_categories=["grocery", "intlgrocery", "organic_stores", "healthmarkets"],
         name_keywords=["supermarket", "grocery", "groceries", "food 4 less", "market place"],
     ),
     Category(
@@ -51,6 +53,7 @@ CATEGORIES = [
         "Warehouse clubs and wholesalers break down pallets of cardboard-packed goods",
         google_types=["warehouse_store", "wholesaler"],
         osm_tags=[("shop", "wholesale")],
+        yelp_categories=["wholesale_stores", "wholesalers", "suppliesrestaurant"],
         name_keywords=["wholesale", "wholesalers", "warehouse club"],
     ),
     Category(
@@ -58,6 +61,7 @@ CATEGORIES = [
         "Big-box retail runs cardboard balers and trash compactors at the dock",
         google_types=["department_store", "home_improvement_store"],
         osm_tags=[("shop", "department_store"), ("shop", "doityourself")],
+        yelp_categories=["deptstores", "buildingsupplies"],
         name_keywords=["supercenter", "home improvement"],
     ),
     Category(
@@ -70,6 +74,10 @@ CATEGORIES = [
                   ("shop", "electronics"), ("shop", "sports"), ("shop", "outdoor"),
                   ("shop", "second_hand"), ("shop", "charity"), ("shop", "appliance"),
                   ("shop", "craft")],
+        yelp_categories=["discountstore", "hardware", "homeandgarden", "gardening", "furniture",
+                         "mattresses", "homedecor", "electronics", "computers", "appliances",
+                         "sportgoods", "outdoorgear", "thrift_stores", "artsandcrafts",
+                         "fabricstores", "hobbyshops", "officeequipment"],
     ),
     Category(
         "distribution", "Warehouse / distribution / logistics", 34,
@@ -96,6 +104,7 @@ CATEGORIES = [
         "manufacturing", "Manufacturing / industrial", 28,
         "Manufacturing sites compact scrap, packaging and production waste",
         google_types=["manufacturer"],
+        yelp_categories=["machineshops", "metalfabricators"],
         osm_tags=[("man_made", "works"), ("building", "industrial"),
                   ("building", "manufacture"), ("industrial", None),
                   ("landuse", "industrial")],
@@ -108,6 +117,7 @@ CATEGORIES = [
         "Hospitals run compactors for general waste and balers for cardboard",
         google_types=["hospital", "general_hospital"],
         osm_tags=[("amenity", "hospital"), ("healthcare", "hospital")],
+        yelp_categories=["hospitals"],
         name_keywords=["hospital", "medical center", "regional medical"],
     ),
     Category(
@@ -118,6 +128,8 @@ CATEGORIES = [
         osm_tags=[("shop", "mall"), ("leisure", "stadium"), ("aeroway", "aerodrome"),
                   ("amenity", "conference_centre"), ("amenity", "exhibition_centre"),
                   ("tourism", "theme_park")],
+        yelp_categories=["shoppingcenters", "stadiumsarenas", "airports", "airportterminals",
+                         "amusementparks", "waterparks", "venues", "civiccenter"],
         name_keywords=["mall", "stadium", "arena", "international airport",
                        "convention center", "expo center", "fashion place", "town center"],
     ),
@@ -127,6 +139,7 @@ CATEGORIES = [
         osm_tags=[("amenity", "recycling"), ("amenity", "waste_transfer_station"),
                   ("industrial", "scrap_yard"), ("industrial", "auto_wrecker"),
                   ("shop", "scrap"), ("landuse", "landfill"), ("amenity", "waste_disposal")],
+        yelp_categories=["recyclingcenter", "junkyards", "hazardouswastedisposal"],
         name_keywords=["recycling", "recycler", "recyclers", "recycle", "recycled", "waste",
                        "disposal",
                        "sanitation", "transfer station", "landfill", "scrap", "salvage"],
@@ -137,6 +150,7 @@ CATEGORIES = [
         "Campuses run compactors at dining halls, dorms and loading docks",
         google_types=["university"],
         osm_tags=[("amenity", "university"), ("amenity", "college")],
+        yelp_categories=["collegeuniv"],
         name_keywords=["university", "college", "community college"],
     ),
     Category(
@@ -144,6 +158,7 @@ CATEGORIES = [
         "Larger hotels and resorts use compactors for guest and kitchen waste",
         google_types=["hotel", "resort_hotel", "lodging", "casino"],
         osm_tags=[("tourism", "hotel")],
+        yelp_categories=["hotels", "resorts", "casinos", "skiresorts"],
         name_keywords=["hotel", "resort", "marriott", "hilton", "hyatt", "sheraton"],
     ),
     Category(
@@ -152,6 +167,7 @@ CATEGORIES = [
         google_types=["apartment_complex", "apartment_building", "housing_complex",
                       "condominium_complex"],
         osm_tags=[("building", "apartments"), ("landuse", "residential")],
+        yelp_categories=["apartments", "condominiums", "university_housing"],
         name_keywords=["apartments", "apartment homes", "residences", "lofts",
                        "property management"],
     ),
@@ -161,6 +177,7 @@ CATEGORIES = [
         google_types=["city_hall", "courthouse", "local_government_office"],
         osm_tags=[("amenity", "prison"), ("landuse", "military"),
                   ("military", None)],
+        yelp_categories=["jailsandprisons", "courthouses", "townhall"],
         name_keywords=["correctional", "prison", "detention", "air force base",
                        "county complex"],
     ),
@@ -173,6 +190,17 @@ CATEGORIES = [
         osm_tags=[("amenity", "restaurant"), ("amenity", "food_court"),
                   ("amenity", "fast_food"), ("amenity", "pub"), ("amenity", "bar"),
                   ("amenity", "cafe"), ("amenity", "ice_cream"), ("shop", "bakery")],
+        yelp_categories=[
+            "restaurants", "hotdogs", "hotdog", "food_court", "cafeteria", "catering", "buffets",
+            "foodtrucks", "foodstands", "cafes", "coffee", "icecream", "desserts", "donuts",
+            "bagels", "juicebars", "bubbletea", "tea", "sandwiches", "delis", "pizza", "burgers",
+            "chicken_wings", "breakfast_brunch", "diners", "tradamerican", "newamerican",
+            "mexican", "tacos", "chinese", "italian", "sushi", "seafood", "steak",
+            "bars", "pubs", "sportsbars", "divebars", "cocktailbars", "wine_bars", "beerbar",
+            "lounges", "gastropubs", "beergardens", "brewpubs",
+            # production words: see YELP_PRODUCTION below
+            "bakeries", "breweries", "distilleries", "wineries", "cideries", "meaderies",
+            "coffeeroasteries"],
         name_keywords=["catering", "commissary", "food service"],
         query_osm=False,
     ),
@@ -185,6 +213,9 @@ CATEGORIES = [
                       "liquor_store"],
         osm_tags=[("shop", "clothes"), ("shop", "pet"), ("shop", "car_parts"),
                   ("shop", "general"), ("shop", "books")],
+        yelp_categories=["fashion", "womenscloth", "menscloth", "childcloth", "shoes", "sportswear",
+                         "outlet_stores", "petstore", "bookstores", "media", "autopartssupplies",
+                         "beer_and_wine", "toys"],
         query_osm=False,
     ),
     Category(
@@ -193,6 +224,7 @@ CATEGORIES = [
         name_keywords=["compactor", "compactors", "compaction", "baler", "balers", "baling",
                        "dumpster", "dumpsters", "roll off", "roll-off", "roll offs",
                        "roll-offs", "hauling", "disposal service", "disposal services"],
+        yelp_categories=["junkremovalandhauling", "dumpsterrental"],
         lead_type="Industry (equipment / hauler)",
     ),
 ]
@@ -220,6 +252,15 @@ NON_PROSPECT_GOOGLE_TYPES = {
     "lawyer", "real_estate_agency", "beauty_salon", "hair_salon", "barber_shop",
     "car_repair", "car_wash", "health", "optician",
 }
+NON_PROSPECT_YELP_CATEGORIES = {
+    "vet", "emergencypethospital", "pharmacy", "drugstores", "dentists", "generaldentistry",
+    "cosmeticdentists", "pediatric_dentists", "orthodontists", "physicians", "urgent_care",
+    "walkinclinics", "optometrists", "opticians", "churches", "religiousorgs", "parks",
+    "dog_parks", "parking", "servicestations", "autorepair", "carwash", "oilchange",
+    "libraries", "elementaryschools", "highschools", "preschools", "privateschools",
+    "montessori", "childcare", "banks", "insurance", "lawyers", "realestateagents",
+    "apartmentagents", "hair", "barbers", "othersalons", "beautysvc", "selfstorage", "movers",
+}
 # ...except that a name can still rescue these categories from these types
 # ("Liberty Village Apartments" typed real_estate_agency).
 NAME_BEATS_GOOGLE_TYPE = {"real_estate_agency": {"multifamily"}, "school": {"education"}}
@@ -233,6 +274,10 @@ GENERIC_GOOGLE_TYPES = {"point_of_interest", "establishment", "premise", "food",
 PRODUCTION_GOOGLE_TYPES = {"bakery", "brewery", "winery"}
 SERVICE_GOOGLE_TYPES = {"brewpub", "pub", "bar", "cafe", "coffee_shop", "meal_takeaway",
                         "fast_food_restaurant", "ice_cream_shop", "restaurant"}
+# Same for Yelp: "Breweries" alone may be a plant or a taproom.
+YELP_PRODUCTION = {"bakeries", "breweries", "distilleries", "wineries", "cideries", "meaderies",
+                   "coffeeroasteries"}
+YELP_SERVICE = (set(CATEGORY_BY_KEY["food_service"].yelp_categories) - YELP_PRODUCTION)
 
 # The Google search phrase that found a place is a weak category hint for
 # results Google tags only with GENERIC_GOOGLE_TYPES.
@@ -278,6 +323,13 @@ AMBIGUOUS_BRANDS = {
 BRAND_EXCLUDE = ["the ups store", "fedex office", "ups access point", "amazon hub",
                  "amazon locker"]
 
+# Review counts as a sign of a busy site: (at least this many reviews, points).
+# Yelp counts run far lower than Google's for the same store.
+REVIEW_BONUS = {
+    "Google": [(2000, 15), (500, 10), (100, 5)],
+    "Yelp": [(400, 15), (150, 10), (40, 5)],
+}
+
 # Search phrases used with the Google Places text search. The user's keywords
 # are appended to this list at run time.
 GOOGLE_QUERIES = [
@@ -290,6 +342,31 @@ GOOGLE_QUERIES = [
     "recycling center", "waste transfer station", "university", "hotel",
     "apartment complex",
 ]
+
+# Yelp searches by category (more precise than words for Yelp), most useful
+# first; the user's keywords and the competitor names are searched as words.
+# Label (shown in "Found By") -> Yelp category aliases, matched as "any of".
+YELP_SEARCHES = {
+    "grocery stores": ["grocery", "intlgrocery", "organic_stores"],
+    "warehouse clubs and wholesalers": ["wholesale_stores", "wholesalers", "suppliesrestaurant"],
+    "department and discount stores": ["deptstores", "discountstore"],
+    "home improvement and building supplies": ["buildingsupplies", "hardware"],
+    "hospitals": ["hospitals"],
+    "shopping centers": ["shoppingcenters"],
+    "stadiums, venues and airports": ["stadiumsarenas", "venues", "civiccenter", "airports",
+                                      "amusementparks", "waterparks"],
+    "recycling and scrap": ["recyclingcenter", "junkyards", "hazardouswastedisposal"],
+    "hotels and resorts": ["hotels", "resorts", "casinos", "skiresorts"],
+    "colleges, universities and jails": ["collegeuniv", "jailsandprisons"],
+    "apartments": ["apartments", "condominiums", "university_housing"],
+    "furniture, electronics and sporting goods": ["furniture", "electronics", "appliances",
+                                                  "sportgoods", "thrift_stores"],
+    "machine shops and fabricators": ["machineshops", "metalfabricators"],
+}
+# Yelp's trial allows about 300 calls a day, so a run stops here unless a
+# request cap is given. Yelp's terms allow caching its data for 24 hours only.
+YELP_DEFAULT_MAX_REQUESTS = 200
+YELP_CACHE_TTL_SECONDS = 24 * 3600
 
 # Overpass mirrors tried in order when the free OpenStreetMap source is used.
 OVERPASS_ENDPOINTS = [

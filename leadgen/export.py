@@ -30,6 +30,7 @@ COLUMNS = [
     ("Why This Score", lambda l: "Points: " + " | ".join(l.reasons) if l.reasons else "", 60),
     ("Matched Keywords", lambda l: ", ".join(l.matched_keywords), 18),
     ("Google Reviews", lambda l: l.rating_count, 10),
+    ("Yelp Reviews", lambda l: l.yelp_reviews, 10),
     ("Approx. Footprint (sq ft)", lambda l: l.footprint_sqft, 14),
     ("Source Category", lambda l: l.primary_category, 22),
     ("Found By", lambda l: ", ".join(l.search_terms), 24),

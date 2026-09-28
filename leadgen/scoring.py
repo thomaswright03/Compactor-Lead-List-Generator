@@ -1,6 +1,6 @@
 """Relevance scoring: how likely is this location to run a large compactor or baler?
 
-Score (0-100) = category weight + brand bonus + size bonus + keyword bonus.
+Score (0-100) = category weight + brand bonus + size bonus (reviews, footprint) + keyword bonus.
 Every point is explained in `lead.reasons` so the client can see why a lead
 ranked where it did and tell us which rules to adjust.
 """
@@ -37,6 +37,16 @@ def _contains_term(haystack, term, whole=False):
     return re.search(rf"(?<![a-z0-9]){re.escape(term)}{end}", haystack) is not None
 
 
+def yelp_categories(lead):
+    """Yelp category aliases on a lead (stored as "yelp:alias")."""
+    return {c[5:] for c in lead.raw_categories if c.startswith("yelp:")}
+
+
+def google_types(lead):
+    """Google types on a lead: anything that is not an OSM "k=v" tag or a Yelp category."""
+    return {c for c in lead.raw_categories if "=" not in c and not c.startswith("yelp:")}
+
+
 def _osm_tag_matches(lead, key, value):
     for c in lead.raw_categories:
         k, _, v = c.partition("=")
@@ -49,19 +59,24 @@ def _only_generic_tags(lead, cat):
     """True if the category matched only through catch-all tags like industrial=*."""
     if set(lead.raw_categories) & set(cat.google_types):
         return False
+    if yelp_categories(lead) & set(cat.yelp_categories):
+        return False
     specific = [(k, v) for k, v in cat.osm_tags if (k, v) not in config.GENERIC_OSM_TAGS]
     return not any(_osm_tag_matches(lead, k, v) for k, v in specific)
 
 
 def _is_non_prospect(lead, types):
-    return bool(types & config.NON_PROSPECT_GOOGLE_TYPES) or any(
-        _osm_tag_matches(lead, k, v) for k, v in config.NON_PROSPECT_OSM_TAGS)
+    return (bool(types & config.NON_PROSPECT_GOOGLE_TYPES)
+            or bool(yelp_categories(lead) & config.NON_PROSPECT_YELP_CATEGORIES)
+            or any(_osm_tag_matches(lead, k, v) for k, v in config.NON_PROSPECT_OSM_TAGS))
 
 
 def is_non_prospect_tag(tag):
-    """True for a single Google type or OSM tag that marks a non-prospect place."""
+    """True for a single Google type, Yelp category or OSM tag that marks a non-prospect place."""
     if tag in config.NON_PROSPECT_GOOGLE_TYPES:
         return True
+    if tag.startswith("yelp:"):
+        return tag[5:] in config.NON_PROSPECT_YELP_CATEGORIES
     k, sep, v = tag.partition("=")
     return bool(sep) and any(k == nk and (nv is None or nv in v.split(";"))
                              for nk, nv in config.NON_PROSPECT_OSM_TAGS)
@@ -70,20 +85,24 @@ def is_non_prospect_tag(tag):
 def classify(lead):
     """Return (best category, list of matched categories) as (Category, how) pairs.
 
-    Order of authority: an equipment/hauler name; a specific Google type or map
-    tag; a non-prospect type/tag (vet, clinic, gas station: no category); the
-    retail fallback for shops; a catch-all industrial tag or words in the name;
-    and last, the search phrase that found a generically typed Google result.
+    Order of authority: an equipment/hauler name; a specific Google type, Yelp
+    category or map tag; a non-prospect type/tag (vet, clinic, gas station: no
+    category); the retail fallback for shops; a catch-all industrial tag or
+    words in the name; and last, the search phrase that found a generically
+    typed Google result.
     """
     name = normalize(lead.name)
     types = set(lead.raw_categories)
-    google_types = {t for t in types if "=" not in t}      # OSM tags contain "="
-    use_hint = not (google_types - config.GENERIC_GOOGLE_TYPES)
+    gtypes = google_types(lead)
+    yelp = yelp_categories(lead)
+    use_hint = not (gtypes - config.GENERIC_GOOGLE_TYPES) and not yelp
     matched = []
     for cat in config.CATEGORIES:
         hit = None
-        if types.intersection(cat.google_types):
+        if gtypes.intersection(cat.google_types):
             hit = "Google category"
+        elif yelp.intersection(cat.yelp_categories):
+            hit = "Yelp category"
         elif any(_osm_tag_matches(lead, k, v) for k, v in cat.osm_tags):
             hit = "map tag"
         elif any(_contains_term(name, kw, whole=True) for kw in cat.name_keywords):
@@ -101,15 +120,16 @@ def classify(lead):
     def best_of(options):
         return max(options, key=lambda m: m[0].weight)
 
-    tagged = [m for m in matched if m[1] in ("Google category", "map tag")]
+    tagged = [m for m in matched if m[1] in ("Google category", "Yelp category", "map tag")]
     by_name = [m for m in matched if m[1] == "name"]
     # A catch-all industrial tag describes the building, not the business.
     specific = [m for m in tagged if not _only_generic_tags(lead, m[0])]
     if specific:
         best = best_of(specific)
-        # Google types production breweries/bakeries like taprooms and cafes.
-        if (best[0].key == "food_service" and google_types & config.PRODUCTION_GOOGLE_TYPES
-                and not google_types & config.SERVICE_GOOGLE_TYPES):
+        # Google and Yelp label production breweries/bakeries like taprooms and cafes.
+        production = (gtypes & config.PRODUCTION_GOOGLE_TYPES) or (yelp & config.YELP_PRODUCTION)
+        service = (gtypes & config.SERVICE_GOOGLE_TYPES) or (yelp & config.YELP_SERVICE)
+        if best[0].key == "food_service" and production and not service:
             prod = [m for m in matched if m[0].key == "food_production"]
             if prod:
                 return prod[0], matched
@@ -118,12 +138,13 @@ def classify(lead):
     # The place's own tag says it is a vet, clinic, park, gas station...: its
     # name ("Animal Hospital", "University Parking") does not make it a prospect.
     if _is_non_prospect(lead, types):
-        blockers = google_types & config.NON_PROSPECT_GOOGLE_TYPES
+        blockers = gtypes & config.NON_PROSPECT_GOOGLE_TYPES
         allowed = (set.intersection(*(config.NAME_BEATS_GOOGLE_TYPE.get(t, set())
                                       for t in blockers)) if blockers else set())
-        osm_blocked = any(_osm_tag_matches(lead, k, v) for k, v in config.NON_PROSPECT_OSM_TAGS)
+        other_blocked = (bool(yelp & config.NON_PROSPECT_YELP_CATEGORIES) or any(
+            _osm_tag_matches(lead, k, v) for k, v in config.NON_PROSPECT_OSM_TAGS))
         rescued = [m for m in by_name if m[0].key in allowed]
-        if rescued and not osm_blocked:
+        if rescued and not other_blocked:
             return best_of(rescued), matched
         return None, matched
 
@@ -214,18 +235,15 @@ def score_lead(lead: Lead, keywords=()):
         score += 20
         reasons.append(f"+20 known high-volume brand ({brand})")
 
-    if lead.rating_count:
-        if lead.rating_count >= 2000:
-            bonus = 15
-        elif lead.rating_count >= 500:
-            bonus = 10
-        elif lead.rating_count >= 100:
-            bonus = 5
-        else:
-            bonus = 0
-        if bonus:
-            score += bonus
-            reasons.append(f"+{bonus} busy site ({lead.rating_count:,} Google reviews)")
+    # Busy site: the stronger of the Google and Yelp review signals (never both).
+    busy = max(((pts, count, src) for src, count in (("Google", lead.rating_count),
+                                                      ("Yelp", lead.yelp_reviews)) if count
+                for threshold, pts in config.REVIEW_BONUS[src]
+                if count >= threshold), default=None)
+    if busy:
+        bonus, count, src = busy
+        score += bonus
+        reasons.append(f"+{bonus} busy site ({count:,} {src} reviews)")
 
     if lead.footprint_sqft:
         if lead.footprint_sqft >= 100_000:
@@ -241,7 +259,8 @@ def score_lead(lead: Lead, keywords=()):
             reasons.append(f"+{bonus} large footprint (~{lead.footprint_sqft:,} sq ft)")
 
     hay = normalize(" ".join([lead.name, lead.primary_category, lead.website]
-                             + [c.replace("_", " ").replace("=", " ") for c in lead.raw_categories]))
+                             + [c.removeprefix("yelp:").replace("_", " ").replace("=", " ")
+                                for c in lead.raw_categories]))
     kw_hits = [k for k in keywords if k.strip() and _contains_term(hay, k)]
     if kw_hits:
         bonus = min(10 * len(kw_hits), 20)

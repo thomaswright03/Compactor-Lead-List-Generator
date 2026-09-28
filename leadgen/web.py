@@ -39,7 +39,7 @@ def create_app(password=None):
     """password (or the APP_PASSWORD env var) puts the whole site behind a login.
 
     Always set one when the page is reachable from the internet: every search
-    can spend the Google API key.
+    can spend the Google or Yelp API key.
     """
     app = Flask(__name__)
     password = password if password is not None else os.environ.get("APP_PASSWORD", "")
@@ -98,9 +98,9 @@ def create_app(password=None):
         source = form.get("source", "auto")
         if source not in SOURCES:
             raise ValueError("Unknown data source")
-        grid = number("grid", 1, int, 1, 19, "Google coverage")
+        grid = number("grid", 1, int, 1, 19, "Coverage")
         if grid not in GRIDS:
-            raise ValueError("Google coverage must be 1, 7 or 19 areas")
+            raise ValueError("Coverage must be 1, 7 or 19 areas")
         return SearchParams(
             location=(form.get("location", "").strip() or config.DEFAULT_LOCATION)[:200],
             radius_miles=number("radius", config.DEFAULT_RADIUS_MILES, float, 1, 100,
@@ -111,7 +111,7 @@ def create_app(password=None):
                              "Minimum score"),
             grid=grid,
             max_requests=number("max_requests", None, int, 1, MAX_REQUESTS_LIMIT,
-                                "Google request cap"),
+                                "Request cap"),
             only_keyword_matches=form.get("only_keyword_matches") == "on",
         )
 

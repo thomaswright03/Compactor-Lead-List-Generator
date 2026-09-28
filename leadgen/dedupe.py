@@ -18,6 +18,9 @@ _GENERIC = {"apartments", "apartment", "apts", "main", "downtown", "recycling", 
 SAME_PLACE_MILES = 0.12      # ~200 m: two listings this close with similar names are one site
 SAME_NAME_MILES = 0.2        # identical cleaned names
 SAME_PHONE_MILES = 0.5       # the widest merge distance of all rules
+# Sources that report whether a place is open, most trusted first. The merged
+# record is built on the first of these (best phone/website coverage).
+PAID_SOURCES = ("google", "yelp")
 
 
 def clean_name(name):
@@ -89,18 +92,28 @@ def is_duplicate(a, b):
     return dist <= 0.05 or names_match(a.name, b.name)
 
 
+def _has_paid(group):
+    return any(l.source in PAID_SOURCES for l in group)
+
+
 def _resolve_status(group):
-    """A place is closed only if no Google listing in the group says it is open."""
-    google = {l.business_status for l in group if l.source == "google" and l.business_status}
-    for status in ("OPERATIONAL", "CLOSED_TEMPORARILY", "CLOSED_PERMANENTLY"):
-        if status in google:
-            return status
+    """Google's word wins, then Yelp's: closed only if none of that source's listings is open."""
+    for source in PAID_SOURCES:
+        said = {l.business_status for l in group if l.source == source and l.business_status}
+        for status in ("OPERATIONAL", "CLOSED_TEMPORARILY", "CLOSED_PERMANENTLY"):
+            if status in said:
+                return status
     return next((l.business_status for l in group if l.business_status), "")
 
 
+def _source_rank(lead):
+    return PAID_SOURCES.index(lead.source) if lead.source in PAID_SOURCES else len(PAID_SOURCES)
+
+
 def _merge(group):
-    # Open listings first, then Google records (phone/website coverage), then the richest.
-    group.sort(key=lambda l: (l.business_status == "CLOSED_PERMANENTLY", l.source != "google",
+    # Open listings first, then Google, then Yelp records (phone/website coverage),
+    # then the richest.
+    group.sort(key=lambda l: (l.business_status == "CLOSED_PERMANENTLY", _source_rank(l),
                               -sum(bool(x) for x in (l.phone, l.website, l.address, l.zip))))
     base = group[0]
     for other in group[1:]:
@@ -110,6 +123,8 @@ def _merge(group):
                 setattr(base, attr, getattr(other, attr))
         if other.rating_count and (base.rating_count or 0) < other.rating_count:
             base.rating_count = other.rating_count
+        if other.yelp_reviews and (base.yelp_reviews or 0) < other.yelp_reviews:
+            base.yelp_reviews = other.yelp_reviews
         if other.footprint_sqft and (base.footprint_sqft or 0) < other.footprint_sqft:
             base.footprint_sqft = other.footprint_sqft
         # A merged parking lot or pharmacy tag must not veto the main listing.
@@ -132,7 +147,8 @@ def _pair_rank(a, b):
     """Merge order: strongest evidence, then the main (most reviewed) listing, then closest."""
     strength = (0 if clean_name(a.name) == clean_name(b.name)
                 else 1 if phone_numbers(a.phone) & phone_numbers(b.phone) else 2)
-    return (strength, -max(a.rating_count or 0, b.rating_count or 0),
+    return (strength, -max(a.rating_count or 0, b.rating_count or 0,
+                           a.yelp_reviews or 0, b.yelp_reviews or 0),
             haversine_miles(a.lat, a.lon, b.lat, b.lon))
 
 
@@ -204,14 +220,13 @@ def dedupe(leads):
     for i in range(len(leads)):
         groups.setdefault(find(i), []).append(leads[i])
 
-    # A map-only copy linked to a listing Google reports permanently closed is
-    # closed too, unless it is also linked to one Google reports open.
+    # A map-only copy linked to a listing Google or Yelp reports permanently
+    # closed is closed too, unless it is also linked to one reported open.
     closed, still_open = set(), set()
     for i, j in links:
         ri, rj = find(i), find(j)
         for a, b in ((ri, rj), (rj, ri)):
-            if a == b or any(l.source == "google" for l in groups[b]) or not any(
-                    l.source == "google" for l in groups[a]):
+            if a == b or _has_paid(groups[b]) or not _has_paid(groups[a]):
                 continue
             status = _resolve_status(groups[a])
             if status == "CLOSED_PERMANENTLY":

@@ -9,7 +9,7 @@ class Lead:
     name: str
     lat: float
     lon: float
-    source: str                      # "google" or "osm"
+    source: str                      # "google", "yelp" or "osm"
     source_id: str
     address: str = ""
     city: str = ""
@@ -17,9 +17,10 @@ class Lead:
     zip: str = ""
     phone: str = ""
     website: str = ""
-    raw_categories: list = field(default_factory=list)   # google types / osm "key=value" tags
+    raw_categories: list = field(default_factory=list)   # google types, "yelp:alias", osm "k=v"
     primary_category: str = ""       # source's own label, e.g. "Supermarket"
-    rating_count: Optional[int] = None
+    rating_count: Optional[int] = None          # Google review count
+    yelp_reviews: Optional[int] = None
     footprint_sqft: Optional[int] = None
     business_status: str = ""
     map_url: str = ""

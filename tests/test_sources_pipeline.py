@@ -152,7 +152,7 @@ def test_pipeline_osm_only_without_key(monkeypatch):
     _fake_sources(monkeypatch)
     res = pipeline.run(SearchParams())
     assert all("osm" in l.sources for l in res.leads)
-    assert any("No Google Places API key" in w for w in res.warnings)
+    assert any("No Google Places or Yelp API key" in w for w in res.warnings)
 
 
 def test_pipeline_google_without_key_errors():

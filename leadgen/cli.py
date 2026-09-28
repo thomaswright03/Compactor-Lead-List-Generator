@@ -37,14 +37,17 @@ def build_parser():
                    help="Extra keywords to search for and boost, e.g. compactor baler "
                         f"(default: {' '.join(config.DEFAULT_KEYWORDS)})")
     r.add_argument("--source", choices=SOURCES, default="auto",
-                   help="auto = Google + OpenStreetMap when a key is set, else OpenStreetMap only")
+                   help="auto = OpenStreetMap plus Google and/or Yelp when their key is set; "
+                        "both = Google + OpenStreetMap")
     r.add_argument("--min-score", type=int, default=config.DEFAULT_MIN_SCORE,
                    help="Drop leads scoring below this (competitors are always kept)")
     r.add_argument("--grid", type=int, choices=[1, 7, 19], default=1,
-                   help="Google only: split the area into 1, 7, or 19 search cells for more results")
+                   help="Google/Yelp: split the area into 1, 7, or 19 search cells for more "
+                        "results (Yelp uses at least 7 past 25 miles)")
     r.add_argument("--max-requests", type=int, default=None,
-                   help="Google only: cap on API requests per run (cost control). Default: "
-                        "enough for every search, about 100 with --grid 1")
+                   help="Cap on Google and on Yelp API requests per run (cost control). "
+                        "Default: Google, enough for every search (about 100 with --grid 1); "
+                        f"Yelp, {config.YELP_DEFAULT_MAX_REQUESTS}")
     r.add_argument("--only-keyword-matches", action="store_true",
                    help="Keep only leads that match one of the keywords")
     r.add_argument("--include-closed", action="store_true", help="Keep permanently closed places")
@@ -53,6 +56,7 @@ def build_parser():
     r.add_argument("--out", "-o", default="output/leads.xlsx",
                    help="Output file (.xlsx or .csv). Default output/leads.xlsx")
     r.add_argument("--api-key", default="", help="Google Places API key (or set GOOGLE_PLACES_API_KEY)")
+    r.add_argument("--yelp-api-key", default="", help="Yelp API key (or set YELP_API_KEY)")
     r.add_argument("--quiet", "-q", action="store_true")
 
     w = sub.add_parser("web", help="Start the web page")
@@ -69,6 +73,7 @@ def cmd_run(args):
         source=args.source, min_score=args.min_score, grid=args.grid,
         max_requests=args.max_requests, only_keyword_matches=args.only_keyword_matches,
         include_closed=args.include_closed, limit=args.limit, api_key=args.api_key,
+        yelp_api_key=args.yelp_api_key,
     )
     progress = None if args.quiet else (lambda m: print(f"  {m}", file=sys.stderr))
     try:

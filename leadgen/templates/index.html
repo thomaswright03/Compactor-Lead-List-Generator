@@ -55,20 +55,21 @@
       <input name="keywords" value="{{ defaults.keywords }}"></label>
     <label>Data source
       <select name="source">
-        <option value="auto">Auto (Google if key, plus OpenStreetMap)</option>
+        <option value="auto">Auto (Google and/or Yelp if a key is set, plus OpenStreetMap)</option>
         <option value="osm">OpenStreetMap only (free)</option>
+        <option value="yelp">Yelp only</option>
         <option value="google">Google Places only</option>
         <option value="both">Google + OpenStreetMap</option>
       </select></label>
     <label>Minimum score
       <input name="min_score" type="number" min="0" max="100" value="{{ defaults.min_score }}"></label>
-    <label>Google coverage
+    <label>Google / Yelp coverage
       <select name="grid">
         <option value="1">Standard (1 search area)</option>
         <option value="7">Wide (7 areas, more results, more cost)</option>
         <option value="19">Max (19 areas)</option>
       </select></label>
-    <label>Google request cap
+    <label>Request cap (Google / Yelp, each)
       <input name="max_requests" type="number" min="1" max="5000" placeholder="Auto"></label>
     <label class="check"><input type="checkbox" name="only_keyword_matches"> Only keyword matches</label>
     <button id="go" type="submit">Find leads</button>
