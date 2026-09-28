@@ -1,0 +1,38 @@
+from dataclasses import dataclass, field
+from typing import Optional
+
+
+@dataclass
+class Lead:
+    """One business location, as returned by a source and later scored."""
+
+    name: str
+    lat: float
+    lon: float
+    source: str                      # "google" or "osm"
+    source_id: str
+    address: str = ""
+    city: str = ""
+    state: str = ""
+    zip: str = ""
+    phone: str = ""
+    website: str = ""
+    raw_categories: list = field(default_factory=list)   # google types / osm "key=value" tags
+    primary_category: str = ""       # source's own label, e.g. "Supermarket"
+    rating_count: Optional[int] = None
+    footprint_sqft: Optional[int] = None
+    business_status: str = ""
+    map_url: str = ""
+    search_terms: list = field(default_factory=list)     # queries that found it
+
+    # Filled in by scoring
+    score: int = 0
+    tier: str = ""
+    category: str = ""
+    category_key: str = ""
+    lead_type: str = "Prospect"
+    flags: list = field(default_factory=list)
+    reasons: list = field(default_factory=list)
+    matched_keywords: list = field(default_factory=list)
+    distance_miles: Optional[float] = None
+    sources: list = field(default_factory=list)

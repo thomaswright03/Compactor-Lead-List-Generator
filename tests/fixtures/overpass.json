@@ -1,0 +1,15 @@
+{
+  "elements": [
+    {"type": "node", "id": 101, "lat": 40.75905, "lon": -111.87702,
+     "tags": {"name": "Smith's", "shop": "supermarket", "brand": "Smith's",
+              "addr:housenumber": "455", "addr:street": "South 500 East", "addr:postcode": "84102"}},
+    {"type": "way", "id": 202,
+     "bounds": {"minlat": 40.7000, "minlon": -111.9800, "maxlat": 40.7020, "maxlon": -111.9760},
+     "tags": {"name": "Acme Distribution Center", "building": "warehouse"}},
+    {"type": "node", "id": 303, "lat": 40.72, "lon": -111.93,
+     "tags": {"name": "Action Compaction Services", "office": "company"}},
+    {"type": "node", "id": 404, "lat": 40.76, "lon": -111.89, "tags": {"shop": "supermarket"}},
+    {"type": "node", "id": 505, "lat": 41.9, "lon": -111.89,
+     "tags": {"name": "Far Away Foods", "industrial": "food"}}
+  ]
+}

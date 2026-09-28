@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compactor Lead Finder</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2433; --muted:#667085; --line:#e4e7ec;
+          --accent:#1f4e78; --a:#c6efce; --b:#e2efda; --c:#fff2cc; --d:#f2f2f2; --comp:#f8cbad; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--accent); color:#fff; padding:16px 24px; }
+  header h1 { margin:0; font-size:20px; }
+  header p { margin:4px 0 0; opacity:.85; }
+  main { padding:20px 24px; max-width:1400px; margin:0 auto; }
+  form { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px;
+         display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; align-items:end; }
+  label { display:flex; flex-direction:column; gap:4px; font-weight:600; font-size:12px; color:var(--muted); }
+  input, select { font:inherit; padding:8px; border:1px solid var(--line); border-radius:6px; color:var(--ink); }
+  label.check { flex-direction:row; align-items:center; gap:6px; }
+  button, .btn { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 14px;
+                 font:inherit; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
+  button:disabled { opacity:.5; cursor:wait; }
+  #status { margin:16px 0 8px; color:var(--muted); min-height:20px; }
+  #status.error { color:#b42318; font-weight:600; }
+  .warn { background:#fffaeb; border:1px solid #fedf89; padding:8px 12px; border-radius:6px; margin:6px 0; }
+  .bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:10px 0; }
+  .stats span { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 10px; margin-right:6px; font-size:12px; }
+  .table-wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; }
+  table { border-collapse:collapse; width:100%; min-width:1000px; }
+  th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:#eef2f6; position:sticky; top:0; font-size:12px; }
+  tr.A td:first-child { background:var(--a); } tr.B td:first-child { background:var(--b); }
+  tr.C td:first-child { background:var(--c); } tr.D td:first-child { background:var(--d); }
+  tr.competitor td { background:var(--comp); }
+  .flag { color:#b42318; font-weight:600; font-size:12px; }
+  .why { color:var(--muted); font-size:12px; }
+  details summary { cursor:pointer; color:var(--accent); font-size:12px; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Compactor &amp; Baler Lead Finder</h1>
+  <p>Businesses likely to run large commercial compactors or balers. Built for Arco Compactor.</p>
+</header>
+<main>
+  <form id="form">
+    <label>Location (ZIP, city, or lat,lon)
+      <input name="location" value="{{ defaults.location }}"></label>
+    <label>Radius (miles)
+      <input name="radius" type="number" min="1" max="100" step="1" value="{{ defaults.radius|int }}"></label>
+    <label>Keywords (comma separated)
+      <input name="keywords" value="{{ defaults.keywords }}"></label>
+    <label>Data source
+      <select name="source">
+        <option value="auto">Auto (Google if key, plus OpenStreetMap)</option>
+        <option value="osm">OpenStreetMap only (free)</option>
+        <option value="google">Google Places only</option>
+        <option value="both">Google + OpenStreetMap</option>
+      </select></label>
+    <label>Minimum score
+      <input name="min_score" type="number" min="0" max="100" value="{{ defaults.min_score }}"></label>
+    <label>Google coverage
+      <select name="grid">
+        <option value="1">Standard (1 search area)</option>
+        <option value="7">Wide (7 areas, more results, more cost)</option>
+        <option value="19">Max (19 areas)</option>
+      </select></label>
+    <label>Google request cap
+      <input name="max_requests" type="number" min="1" value="150"></label>
+    <label class="check"><input type="checkbox" name="only_keyword_matches"> Only keyword matches</label>
+    <button id="go" type="submit">Find leads</button>
+  </form>
+
+  <div id="status"></div>
+  <div id="warnings"></div>
+  <div id="results" hidden>
+    <div class="bar">
+      <a class="btn" id="dl-xlsx" href="#">Download Excel</a>
+      <a class="btn" id="dl-csv" href="#">Download CSV</a>
+      <input id="filter" placeholder="Filter by name, city, category..." style="flex:1;min-width:200px">
+      <select id="tier">
+        <option value="">All tiers</option><option>A</option><option>B</option><option>C</option><option>D</option>
+      </select>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="table-wrap" style="margin-top:10px">
+      <table>
+        <thead><tr><th>Score</th><th>Business</th><th>Category</th><th>Address</th>
+          <th>Phone</th><th>Website</th><th>Miles</th><th>Why</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let leads = [];
+
+function el(tag, text, cls) {
+  const e = document.createElement(tag);
+  if (text !== undefined && text !== null) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+}
+function link(href, text) {
+  if (!href || !/^https?:\/\//i.test(href)) return el("span", "");
+  const a = el("a", text || href.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, ""));
+  a.href = href; a.target = "_blank"; a.rel = "noopener";
+  return a;
+}
+
+function render() {
+  const q = $("filter").value.toLowerCase();
+  const tier = $("tier").value;
+  const body = $("rows");
+  body.replaceChildren();
+  for (const l of leads) {
+    const hay = [l.name, l.city, l.category, l.address, l.lead_type, l.flags.join(" ")].join(" ").toLowerCase();
+    if (q && !hay.includes(q)) continue;
+    if (tier && l.tier !== tier) continue;
+    const tr = el("tr");
+    tr.className = l.tier + (l.lead_type === "Competitor" ? " competitor" : "");
+    tr.append(el("td", `${l.score} (${l.tier})`));
+    const name = el("td");
+    name.append(el("strong", l.name));
+    if (l.lead_type !== "Prospect") name.append(el("div", l.lead_type, "why"));
+    for (const f of l.flags) name.append(el("div", f, "flag"));
+    tr.append(name);
+    tr.append(el("td", l.category));
+    const addr = el("td", [l.address, l.city, l.zip].filter(Boolean).join(", "));
+    if (l.map_url) { addr.append(document.createElement("br")); addr.append(link(l.map_url, "map")); }
+    tr.append(addr);
+    tr.append(el("td", l.phone));
+    const site = el("td"); site.append(link(l.website)); tr.append(site);
+    tr.append(el("td", l.distance));
+    const why = el("td");
+    const d = el("details"); d.append(el("summary", "details"));
+    for (const r of l.reasons) d.append(el("div", r, "why"));
+    why.append(d); tr.append(why);
+    body.append(tr);
+  }
+}
+
+async function poll(jobId) {
+  const res = await fetch(`/status/${jobId}`);
+  const job = await res.json();
+  $("status").textContent = job.message;
+  if (job.state === "running") { setTimeout(() => poll(jobId), 1500); return; }
+  $("go").disabled = false;
+  if (job.state === "error") { $("status").className = "error"; return; }
+  leads = job.leads;
+  $("status").textContent = `${leads.length} leads near ${job.location}`;
+  for (const w of job.warnings) $("warnings").append(el("div", w, "warn"));
+  const stats = $("stats"); stats.replaceChildren();
+  for (const [k, v] of Object.entries(job.stats)) stats.append(el("span", `${k}: ${v}`));
+  $("dl-xlsx").href = `/download/${jobId}.xlsx`;
+  $("dl-csv").href = `/download/${jobId}.csv`;
+  $("results").hidden = false;
+  render();
+}
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("go").disabled = true;
+  $("status").className = "";
+  $("status").textContent = "Starting...";
+  $("warnings").replaceChildren();
+  $("results").hidden = true;
+  const res = await fetch("/search", { method: "POST", body: new FormData($("form")) });
+  const { job_id } = await res.json();
+  poll(job_id);
+});
+$("filter").addEventListener("input", render);
+$("tier").addEventListener("change", render);
+</script>
+</body>
+</html>

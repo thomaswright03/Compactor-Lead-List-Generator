@@ -1,0 +1,27 @@
+{
+  "places": [
+    {"id": "g1", "displayName": {"text": "Smith's Marketplace"},
+     "formattedAddress": "455 S 500 E, Salt Lake City, UT 84102, USA",
+     "addressComponents": [
+       {"longText": "455", "shortText": "455", "types": ["street_number"]},
+       {"longText": "South 500 East", "shortText": "S 500 E", "types": ["route"]},
+       {"longText": "Salt Lake City", "shortText": "Salt Lake City", "types": ["locality", "political"]},
+       {"longText": "Utah", "shortText": "UT", "types": ["administrative_area_level_1", "political"]},
+       {"longText": "84102", "shortText": "84102", "types": ["postal_code"]}],
+     "location": {"latitude": 40.7590, "longitude": -111.8770},
+     "types": ["supermarket", "grocery_store", "store", "point_of_interest"],
+     "primaryType": "supermarket", "primaryTypeDisplayName": {"text": "Supermarket"},
+     "nationalPhoneNumber": "(801) 328-1683", "websiteUri": "https://www.smithsfoodanddrug.com/",
+     "userRatingCount": 2450, "businessStatus": "OPERATIONAL",
+     "googleMapsUri": "https://maps.google.com/?cid=1"},
+    {"id": "g2", "displayName": {"text": "Pro Baler"},
+     "formattedAddress": "1 Industrial Way, Salt Lake City, UT 84104, USA",
+     "location": {"latitude": 40.74, "longitude": -111.95},
+     "types": ["point_of_interest", "establishment"],
+     "nationalPhoneNumber": "801-555-0100", "businessStatus": "OPERATIONAL"},
+    {"id": "g3", "displayName": {"text": "Old Closed Warehouse"},
+     "location": {"latitude": 40.75, "longitude": -111.9},
+     "types": ["storage"], "businessStatus": "CLOSED_PERMANENTLY"}
+  ],
+  "nextPageToken": "abc"
+}

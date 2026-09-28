@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.cache/
+output/
+*.xlsx
+*.csv
+!tests/fixtures/*.csv
+.pytest_cache/
