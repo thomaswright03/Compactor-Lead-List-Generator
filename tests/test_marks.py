@@ -16,6 +16,10 @@ def _lead(name="Smith's Marketplace", source="yelp", source_id="y1", **kw):
     return Lead(name=name, source=source, source_id=source_id, **base)
 
 
+def test_saved_leads_are_kept_by_default():
+    assert config.SAVED_SOURCE_KEEP_SECONDS == {}
+
+
 def test_searches_merge_into_one_saved_row_and_keep_the_mark():
     first = _lead()
     assert saved.save_search([first], []) == (1, 0)
@@ -36,6 +40,7 @@ def test_searches_merge_into_one_saved_row_and_keep_the_mark():
 
 
 def test_yelp_details_expire_but_the_mark_comes_back(monkeypatch):
+    monkeypatch.setattr(config, "SAVED_SOURCE_KEEP_SECONDS", {"yelp": 12 * 3600})
     lead = _lead()
     saved.save_search([lead], [])
     marks.set_mark(lead.uid, "no")
@@ -52,6 +57,7 @@ def test_yelp_details_expire_but_the_mark_comes_back(monkeypatch):
 
 
 def test_merged_lead_drops_only_the_yelp_part(monkeypatch):
+    monkeypatch.setattr(config, "SAVED_SOURCE_KEEP_SECONDS", {"yelp": 12 * 3600})
     both = dedupe([_lead(), _lead(source="osm", source_id="way/9", phone="", footprint_sqft=50000,
                                  raw_categories=["shop=supermarket"], yelp_reviews=None)])[0]
     assert len(both.parts) == 2

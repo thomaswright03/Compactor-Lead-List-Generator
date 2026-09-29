@@ -66,10 +66,10 @@ kept). Off Render, a SQLite file in `.cache/` is used instead.
 **Saved leads.** Every search merges into one saved list: a business found again
 (the same listing, or the duplicate rules below) updates its row instead of
 adding one. The page shows the saved list when it opens, and the downloads
-contain all of it. Yelp's terms allow keeping its data for 24 hours, so Yelp's
-details are dropped from saved leads 12 hours after the search that found them
-(Yelp searches themselves are reused for 12 hours); a lead only Yelp found then
-leaves the list until a search finds it again. OpenStreetMap data is kept.
+contain all of it. Everything is kept, including Yelp's details, although
+Yelp's terms allow keeping its data for 24 hours (and Google's for 30 days);
+`SAVED_SOURCE_KEEP_SECONDS` in `leadgen/config.py` drops a source's details
+after a set time instead, keeping the business's id so its mark comes back.
 
 **Baler marks.** Each row has **Yes** / **No** buttons for "has a baler"; the
 tabs above the table show Not checked, Has baler and No baler. Marks belong to
@@ -157,8 +157,8 @@ Everything adjustable is in `leadgen/config.py`:
 4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's (then Yelp's) contact details and OpenStreetMap's building size. Different phone numbers or names that only share generic words ("Inn & Suites Airport") are kept apart. Places Google or Yelp report permanently closed are then dropped.
 5. **Score**, sort by score then distance, and **export**.
 
-API responses are cached (7 days in `.cache/`; Yelp searches 12 hours, in the
-database), so re-running the same search is instant and doesn't re-bill.
+API responses are cached for 7 days (Yelp searches in the database), so
+re-running the same search is instant and doesn't re-bill.
 
 ## Cost notes (Google)
 
@@ -183,8 +183,8 @@ requests by 7 or 19 (up to about 700 or 1,900), so set `--max-requests` if cost 
   the center, Yelp's reach) unless you pick a wider coverage; OpenStreetMap
   still covers the full radius. A run also stops early, keeping what it found,
   when Yelp says 5 or fewer calls are left on the key today.
-- Re-running within 12 hours reuses what was fetched and continues where the
-  last run stopped, at no cost.
+- Re-running within 7 days reuses what was fetched and spends calls only on
+  continuing searches deeper where the last run stopped.
 - Yelp returns no business websites and only lists places with at least one
   review, so warehouses and plants are thin; OpenStreetMap fills those in.
 - Yelp's trial is for evaluation, and its terms restrict commercial use and
