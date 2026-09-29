@@ -95,7 +95,8 @@ def test_login_page_protects_every_route():
     assert _login(client, password="wrong").status_code == 401
     assert _login(client, username="Bob").status_code == 401
     assert client.get("/leads").status_code == 401
-    res = _login(client, username="matt")                  # the name is not case-sensitive
+    assert _login(client, username="matt").status_code == 401    # case-sensitive
+    res = _login(client)
     assert res.status_code == 302 and res.headers["Location"] == "/"
     home = client.get("/")
     assert home.status_code == 200 and b"Wright AI Solutions" in home.data

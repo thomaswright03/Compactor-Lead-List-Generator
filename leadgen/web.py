@@ -198,8 +198,7 @@ def create_app(password=None, username=None):
                                    "and try again."), 429
         name = (request.form.get("username") or "").strip()
         supplied = request.form.get("password") or ""
-        name_ok = not username or hmac.compare_digest(name.lower().encode(),
-                                                      username.lower().encode())
+        name_ok = not username or hmac.compare_digest(name.encode(), username.encode())
         if name_ok and hmac.compare_digest(supplied.encode(), password.encode()):
             failures.pop(who, None)
             session.clear()

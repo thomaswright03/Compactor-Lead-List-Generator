@@ -44,7 +44,7 @@ The repo includes `render.yaml`, so Render can set everything up:
 
 1. Sign in at https://render.com with GitHub.
 2. **New** > **Blueprint**, pick this repo, and click **Apply**.
-3. When asked, set **APP_USERNAME** and **APP_PASSWORD** (the login page asks for them; the username is not case-sensitive) and, optionally, **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
+3. When asked, set **APP_USERNAME** and **APP_PASSWORD** (the login page asks for them; both are case-sensitive) and, optionally, **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
 4. Open the `onrender.com` link Render shows.
 
 ### The database (saved leads, marks, calls, the Yelp count)
