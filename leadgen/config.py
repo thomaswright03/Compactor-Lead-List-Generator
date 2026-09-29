@@ -387,9 +387,13 @@ YELP_SEARCHES = {
 # resets at midnight UTC. Nothing in the form can raise it.
 YELP_DAILY_LIMIT = 50
 # A run stops here unless a (smaller) request cap is given.
-# Yelp's terms allow caching its data for 24 hours only.
 YELP_DEFAULT_MAX_REQUESTS = YELP_DAILY_LIMIT
-YELP_CACHE_TTL_SECONDS = 24 * 3600
+# Yelp's terms allow keeping its data for 24 hours only. A Yelp search is
+# reused for 12 hours, and saved leads keep Yelp's details for 12 hours after
+# the search, so nothing Yelp sent is kept past 24 hours. Google's terms allow
+# 30 days (its searches are cached for CACHE_TTL_SECONDS, 7 days).
+YELP_CACHE_TTL_SECONDS = 12 * 3600
+SAVED_SOURCE_KEEP_SECONDS = {"yelp": 12 * 3600, "google": 23 * 86400}
 
 # Overpass mirrors tried in order when the free OpenStreetMap source is used.
 OVERPASS_ENDPOINTS = [

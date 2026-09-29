@@ -172,11 +172,8 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
             raise
         finally:
             left_now = str(got.get("RateLimit-Remaining", "")).strip()
-            daily = str(got.get("RateLimit-DailyLimit", "")).strip()
             if left_now.isdigit() and quota["left"] != 0:
                 quota["left"] = int(left_now)
-            if left_now.isdigit() and daily.isdigit():
-                budget.observe(int(daily) - int(left_now))
         items = data.get("businesses") or []
         nxt = offset + len(items)
         more = len(items) == params["limit"] and nxt < min(data.get("total") or 0, MAX_RESULTS)

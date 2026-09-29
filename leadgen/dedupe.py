@@ -1,6 +1,7 @@
 """Merge duplicate listings (same business found by several queries or sources)."""
 
 import re
+from dataclasses import asdict
 from difflib import SequenceMatcher
 
 from .geo import haversine_miles
@@ -106,7 +107,13 @@ def _source_rank(lead):
     return PAID_SOURCES.index(lead.source) if lead.source in PAID_SOURCES else len(PAID_SOURCES)
 
 
+def snapshot(lead):
+    """The listing as its source sent it (the parts a merged lead is made of)."""
+    return lead.parts or [{k: v for k, v in asdict(lead).items() if k != "parts"}]
+
+
 def _merge(group):
+    parts = [p for lead in group for p in snapshot(lead)]
     # Open listings first, then Google, then Yelp records (phone/website coverage),
     # then the richest.
     group.sort(key=lambda l: (l.business_status == "CLOSED_PERMANENTLY", _source_rank(l),
@@ -136,6 +143,7 @@ def _merge(group):
                 base.alt_names.append(extra)
     base.business_status = _resolve_status(group)
     base.sources = sorted({l.source for l in group})
+    base.parts = parts if len(parts) > 1 else []
     return base
 
 

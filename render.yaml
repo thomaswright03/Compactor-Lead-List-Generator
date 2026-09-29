@@ -14,17 +14,5 @@ services:
         sync: false
       - key: YELP_API_KEY            # optional
         sync: false
-      - key: REDIS_URL               # the daily Yelp call counter (see below)
-        fromService:
-          type: keyvalue
-          name: lead-finder-counter
-          property: connectionString
-
-  # Keeps the count of today's Yelp calls (at most 50 a day) and 24 hours of
-  # Yelp results. The web service's own disk is wiped when it sleeps or
-  # redeploys, so the count lives here. Reachable only from this Render account.
-  - type: keyvalue
-    name: lead-finder-counter
-    plan: free
-    maxmemoryPolicy: noeviction
-    ipAllowList: []
+      - key: DATABASE_URL            # the permanent database (e.g. a free Neon Postgres):
+        sync: false                  # saved leads, baler marks, the daily Yelp count

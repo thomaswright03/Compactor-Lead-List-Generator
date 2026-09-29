@@ -47,24 +47,40 @@ The repo includes `render.yaml`, so Render can set everything up:
 3. When asked, set **APP_PASSWORD** (the page asks for it; any username works) and, optionally, **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
 4. Open the `onrender.com` link Render shows.
 
-The Blueprint also creates a free Render Key Value store (`lead-finder-counter`)
-and sets `REDIS_URL` from it. It holds the count of today's Yelp calls (see the
-Yelp notes) and 24 hours of Yelp results, which the web service's own disk
-cannot keep. On Render, Yelp stays paused until `REDIS_URL` is set.
+### The database (saved leads, baler marks, the Yelp count)
 
-Each result row has **Yes** / **No** buttons for "has a baler"; the tabs above
-the table show Not checked, Has baler and No baler. Marks are saved per business
-(name plus phone, or ZIP) in the same store, so they come back on later searches,
-and they appear in the "Has Baler?" column of the Excel and CSV downloads.
-Render's free Key Value store keeps its data in memory only, so a restart of it
-by Render would clear the marks; download the Excel file now and then as a
-backup, or move the store to a paid plan with disk persistence.
+Render's disk is wiped on every redeploy, so the site keeps its data in a
+Postgres database named by `DATABASE_URL`. A free Neon database works and does
+not expire (Render's free Postgres is deleted after 30 days):
+
+1. Sign up at https://neon.tech (GitHub login works) and create a project
+   (region US West (Oregon), near Render's servers).
+2. Click **Connect** and copy the connection string (`postgresql://...`).
+3. In Render, open the service, **Environment**, add `DATABASE_URL` with that
+   string, and save (the service restarts).
+
+The tables are created on first use. Without `DATABASE_URL` on Render, searches
+still run, but nothing is saved and Yelp is paused (its daily limit could not be
+kept). Off Render, a SQLite file in `.cache/` is used instead.
+
+**Saved leads.** Every search merges into one saved list: a business found again
+(the same listing, or the duplicate rules below) updates its row instead of
+adding one. The page shows the saved list when it opens, and the downloads
+contain all of it. Yelp's terms allow keeping its data for 24 hours, so Yelp's
+details are dropped from saved leads 12 hours after the search that found them
+(Yelp searches themselves are reused for 12 hours); a lead only Yelp found then
+leaves the list until a search finds it again. OpenStreetMap data is kept.
+
+**Baler marks.** Each row has **Yes** / **No** buttons for "has a baler"; the
+tabs above the table show Not checked, Has baler and No baler. Marks belong to
+the saved business, so they come back on later searches, and they appear in the
+"Has Baler?" column of the downloads.
 
 Always set `APP_PASSWORD` on a public site: every search can spend your API keys.
 Without a password the page only answers on `localhost` or an IP address; to use
 another hostname, list it in `LEADGEN_ALLOWED_HOSTS`.
 The free plan sleeps after 15 idle minutes, so the first visit takes about a minute
-to wake up, and its disk is wiped on each restart (the search cache starts empty).
+to wake up, and its disk is wiped on each restart (which is why data lives in the database).
 To run the production server yourself: `gunicorn wsgi:app --workers 1 --threads 8 --timeout 0`.
 
 ## Command line options
@@ -141,8 +157,8 @@ Everything adjustable is in `leadgen/config.py`:
 4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's (then Yelp's) contact details and OpenStreetMap's building size. Different phone numbers or names that only share generic words ("Inn & Suites Airport") are kept apart. Places Google or Yelp report permanently closed are then dropped.
 5. **Score**, sort by score then distance, and **export**.
 
-API responses are cached in `.cache/` (7 days; Yelp 24 hours, as its terms
-require), so re-running the same search is instant and doesn't re-bill.
+API responses are cached (7 days in `.cache/`; Yelp searches 12 hours, in the
+database), so re-running the same search is instant and doesn't re-bill.
 
 ## Cost notes (Google)
 
@@ -161,17 +177,14 @@ requests by 7 or 19 (up to about 700 or 1,900), so set `--max-requests` if cost 
   retries included; nothing in the form or on the command line raises it. The
   day is Yelp's own: it resets at midnight UTC (6 pm Utah time in summer, 5 pm
   in winter), and the page shows how many calls are left.
-- The count lives in Redis when `REDIS_URL` is set (on Render, the Key Value
-  store from the Blueprint), otherwise in `.cache/yelp-usage.json`. A free
-  Render Key Value store loses its data if Render restarts it, so on a day the
-  store started fresh the tool also counts every Yelp call your key made that
-  day (Yelp reports it with each response) toward the 50.
+- The count lives in the database, so restarts and redeploys don't reset it.
+  If the database can't be reached, Yelp is paused rather than risk going over.
 - With 50 calls, a 30-mile search uses one Yelp search area (25 miles around
   the center, Yelp's reach) unless you pick a wider coverage; OpenStreetMap
   still covers the full radius. A run also stops early, keeping what it found,
   when Yelp says 5 or fewer calls are left on the key today.
-- Re-running within 24 hours reuses what was fetched (on Render it is kept in
-  the Key Value store) and continues where the last run stopped, at no cost.
+- Re-running within 12 hours reuses what was fetched and continues where the
+  last run stopped, at no cost.
 - Yelp returns no business websites and only lists places with at least one
   review, so warehouses and plants are thin; OpenStreetMap fills those in.
 - Yelp's trial is for evaluation, and its terms restrict commercial use and

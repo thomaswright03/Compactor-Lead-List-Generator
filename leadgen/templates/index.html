@@ -197,7 +197,7 @@ async function setBaler(lead, value) {
   render();
   try {
     const res = await fetch("/mark", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: lead.key, value, name: lead.name }) });
+      body: JSON.stringify({ key: lead.key, value }) });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
   } catch (err) {
     lead.has_baler = before;
@@ -213,6 +213,7 @@ function balerCell(lead) {
   for (const [value, label] of [["yes", "Yes"], ["no", "No"]]) {
     const b = el("button", label, value + (lead.has_baler === value ? " on" : ""));
     b.type = "button";
+    if (!lead.key) { b.disabled = true; b.title = "Not saved, so it can't be marked"; box.append(b); continue; }
     b.title = lead.has_baler === value ? "Click again to clear" : `Mark: ${label.toLowerCase()}, it ${value === "yes" ? "has" : "does not have"} a baler`;
     b.addEventListener("click", () => setBaler(lead, value));
     box.append(b);
@@ -275,21 +276,39 @@ async function poll(jobId) {
   if (job.state === "running") { setTimeout(() => poll(jobId), 1500); return; }
   $("go").disabled = false;
   if (job.state === "error") return fail(job.message);
-  leads = job.leads;
-  view = "";
-  $("status").textContent = `${leads.length} leads near ${job.location}`;
   for (const w of job.warnings) $("warnings").append(el("div", w, "warn"));
-  const stats = $("stats"); stats.replaceChildren();
-  for (const [k, v] of Object.entries(job.stats)) stats.append(el("span", `${k}: ${v}`));
   if (job.yelp && $("yelp-quota")) {
     $("yelp-quota").textContent = job.yelp.text;
     $("yelp-quota").className = "quota" + (job.yelp.paused ? " paused" : "");
   }
-  $("dl-xlsx").href = `/download/${jobId}.xlsx`;
-  $("dl-csv").href = `/download/${jobId}.csv`;
+  show(job.leads, job.stats, job.saved ? "saved" : jobId,
+       job.saved ? `${job.leads.length} saved leads (${job.stats["new leads saved"]} new from this search near ${job.location})`
+                 : `${job.leads.length} leads near ${job.location}`);
+}
+
+// Show a lead list; dl is the download id ("saved" for every saved lead).
+function show(list, stats, dl, label) {
+  leads = list;
+  view = "";
+  $("status").textContent = label;
+  const box = $("stats"); box.replaceChildren();
+  for (const [k, v] of Object.entries(stats || {})) box.append(el("span", `${k}: ${v}`));
+  $("dl-xlsx").href = `/download/${dl}.xlsx`;
+  $("dl-csv").href = `/download/${dl}.csv`;
   $("results").hidden = false;
   render();
 }
+
+// The saved leads show as soon as the page opens.
+(async () => {
+  try {
+    const res = await fetch("/leads");
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) { if (body.error) $("warnings").append(el("div", body.error, "warn")); return; }
+    if (body.leads.length && $("results").hidden && !$("go").disabled)
+      show(body.leads, {}, "saved", `${body.leads.length} saved leads`);
+  } catch (err) { /* the search form still works */ }
+})();
 
 $("form").addEventListener("submit", async (e) => {
   e.preventDefault();

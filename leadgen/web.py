@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 from flask import Flask, Response, abort, jsonify, render_template, request
 
-from . import config, marks, usage
+from . import config, marks, saved, store, usage
 from .export import format_phone, to_csv_bytes, to_xlsx_bytes
 from .geo import GeocodeError
 from .http import redact
@@ -31,7 +31,7 @@ def _lead_json(lead):
         "category": lead.category, "address": lead.address, "city": lead.city,
         "zip": lead.zip, "phone": format_phone(lead.phone), "website": lead.website,
         "distance": lead.distance_miles, "reasons": lead.reasons, "map_url": lead.map_url,
-        "sources": lead.sources, "key": marks.lead_key(lead), "has_baler": lead.has_baler,
+        "sources": lead.sources, "key": lead.uid, "has_baler": lead.has_baler,
     }
 
 
@@ -137,6 +137,13 @@ def create_app(password=None):
 
         try:
             result = run(params, progress)
+            try:
+                progress("Saving leads")
+                job["new_leads"], _ = saved.save_search(result.leads, params.keywords)
+                job["saved"] = True
+            except Exception as exc:     # the search still shows; it just is not kept
+                why = str(exc) if isinstance(exc, store.Unavailable) else redact(exc)
+                result.warnings.append(f"These leads were not saved: {why}.")
             job.update(state="done", result=result, message="Done")
         except (PipelineError, GeocodeError) as exc:
             job.update(state="error", message=str(exc))
@@ -192,19 +199,32 @@ def create_app(password=None):
             return jsonify({"error": "Could not start the search. Try again."}), 503
         return jsonify({"job_id": job_id})
 
+    @app.get("/leads")
+    def saved_leads():
+        """Every saved lead, for the page to show before any search."""
+        try:
+            leads = saved.load()
+        except store.Unavailable as exc:
+            return jsonify({"error": f"Saved leads are off: {exc}."}), 503
+        except Exception as exc:
+            return jsonify({"error": f"Could not load the saved leads ({exc.__class__.__name__})"}), 503
+        return jsonify({"leads": [_lead_json(l) for l in leads]})
+
     @app.post("/mark")
     def mark():
         """Save whether a business has a baler ("yes", "no", or "" to clear)."""
         if not _same_origin():
             abort(403)
         data = request.get_json(silent=True) or {}
-        key, value = str(data.get("key") or ""), str(data.get("value") or "")
-        if not key or len(key) > 300 or value not in ("yes", "no", ""):
+        uid, value = str(data.get("key") or ""), str(data.get("value") or "")
+        if not uid or len(uid) > 64 or value not in ("yes", "no", ""):
             return jsonify({"error": "Bad mark"}), 400
         try:
-            marks.set_mark(key, value, str(data.get("name") or ""))
-        except marks.MarksUnavailable as exc:
-            return jsonify({"error": str(exc)}), 503
+            marks.set_mark(uid, value)
+        except store.Unavailable as exc:
+            return jsonify({"error": f"Marks can't be saved: {exc}"}), 503
+        except Exception as exc:
+            return jsonify({"error": f"Could not save the mark ({exc.__class__.__name__})"}), 503
         return jsonify({"ok": True})
 
     @app.get("/status/<job_id>")
@@ -213,24 +233,39 @@ def create_app(password=None):
         body = {"state": job["state"], "message": job["message"]}
         if job["state"] == "done":
             res = job["result"]
-            marks.apply(res.leads)
-            body.update(leads=[_lead_json(l) for l in res.leads], stats=res.stats,
+            leads, stats = res.leads, dict(res.stats)
+            if job.get("saved"):
+                try:
+                    leads = saved.load()
+                    stats.update({"new leads saved": job["new_leads"], "saved leads": len(leads)})
+                except Exception as exc:
+                    res.warnings.append(f"Could not load the saved leads ({exc.__class__.__name__}); "
+                                        "showing this search only.")
+            body.update(leads=[_lead_json(l) for l in leads], stats=stats,
                         warnings=res.warnings, location=res.location_label,
-                        yelp=yelp_quota())
+                        yelp=yelp_quota(), saved=bool(job.get("saved")))
         return jsonify(body)
 
     @app.get("/download/<job_id>.<fmt>")
     def download(job_id, fmt):
-        job = jobs.get(job_id)
-        if not job or job["state"] != "done":
-            abort(404)
-        res = job["result"]
-        marks.apply(res.leads)
+        """A search's leads, or with job id "saved" every saved lead."""
+        if job_id == "saved":
+            try:
+                leads = saved.load()
+            except Exception:
+                abort(503)
+            info = {"list": "All saved leads", "leads": len(leads)}
+        else:
+            job = jobs.get(job_id)
+            if not job or job["state"] != "done":
+                abort(404)
+            leads = marks.apply(job["result"].leads)
+            info = job["result"].run_info(job["params"])
         if fmt == "csv":
-            return Response(to_csv_bytes(res.leads), mimetype="text/csv",
+            return Response(to_csv_bytes(leads), mimetype="text/csv",
                             headers={"Content-Disposition": "attachment; filename=compactor-leads.csv"})
         if fmt == "xlsx":
-            data = to_xlsx_bytes(res.leads, res.run_info(job["params"]))
+            data = to_xlsx_bytes(leads, info)
             return Response(data, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             headers={"Content-Disposition": "attachment; filename=compactor-leads.xlsx"})
         abort(404)
