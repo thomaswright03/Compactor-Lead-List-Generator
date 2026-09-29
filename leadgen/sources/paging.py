@@ -60,8 +60,8 @@ def run_searches(source, queries, cells, fetch_page, parse, *, max_pages, max_re
         warnings.append(
             f"{source} request cap ({max_requests}) is below the {fresh} searches needed "
             f"({len(queries)} phrases x {len(cells)} areas); the last {fresh - max_requests} "
-            f"searches were skipped. Raise --max-requests to about {fresh * max_pages} "
-            "for full coverage.")
+            "searches were skipped. Raise the request cap (--max-requests) to about "
+            f"{fresh * max_pages} for full coverage.")
 
     capped = False
     stopped = None
@@ -118,7 +118,7 @@ def run_searches(source, queries, cells, fetch_page, parse, *, max_pages, max_re
         never = [q for q in queries if q not in tried]
         why = (f"Stopped early: {stopped}" if stopped
                else f"Stopped at the {max_requests}-request {source} cap")
-        advice = "" if stopped else " Raise --max-requests for more coverage."
+        advice = "" if stopped else " Raise the request cap (--max-requests) for more coverage."
         warnings.append(f"{why}: {skipped} {source} searches not run, {more} had more result "
                         f"pages.{advice}"
                         + (f" Not searched at all: {', '.join(never)}." if never else ""))

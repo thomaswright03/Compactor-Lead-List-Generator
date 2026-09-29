@@ -61,6 +61,8 @@ def create_app(password=None):
 
     @app.before_request
     def require_login():
+        if request.path == "/healthz":
+            return None           # holds no data; lets uptime checks see the deployed version
         if not password:
             # Without a login only local/IP access is allowed (see LEADGEN_ALLOWED_HOSTS).
             return None if _host_allowed() else abort(403)
@@ -134,6 +136,10 @@ def create_app(password=None):
             return False
         origin = request.headers.get("Origin") or request.headers.get("Referer")
         return not origin or urlparse(origin).netloc == request.host
+
+    @app.get("/healthz")
+    def healthz():
+        return jsonify({"ok": True, "version": os.environ.get("RENDER_GIT_COMMIT", "")[:7]})
 
     @app.get("/")
     def index():

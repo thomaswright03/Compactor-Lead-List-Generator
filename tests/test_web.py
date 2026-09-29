@@ -94,3 +94,11 @@ def test_password_protects_every_route():
 def test_no_password_means_open(monkeypatch):
     monkeypatch.delenv("APP_PASSWORD", raising=False)
     assert web.create_app().test_client().get("/").status_code == 200
+
+
+def test_healthz_is_public_and_shows_the_deployed_commit(monkeypatch):
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "abcdef1234567")
+    client = web.create_app(password="secret").test_client()
+    res = client.get("/healthz", headers={"Host": "evil.example"})
+    assert res.status_code == 200 and res.get_json() == {"ok": True, "version": "abcdef1"}
+    assert client.get("/").status_code == 401

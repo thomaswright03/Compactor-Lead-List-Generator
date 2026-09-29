@@ -25,9 +25,13 @@
   #status.error { color:#b42318; font-weight:600; }
   .warn { background:#fffaeb; border:1px solid #fedf89; padding:8px 12px; border-radius:6px; margin:6px 0; }
   .bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:10px 0; }
-  .stats span { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 10px; margin-right:6px; font-size:12px; }
+  .stats { display:flex; flex-wrap:wrap; gap:6px; }
+  .stats span { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 10px; font-size:12px; white-space:nowrap; }
   .table-wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; }
-  table { border-collapse:collapse; width:100%; min-width:1000px; }
+  table { border-collapse:collapse; width:100%; min-width:1240px; table-layout:fixed; }
+  col.c-score { width:74px; } col.c-name { width:210px; } col.c-cat { width:150px; }
+  col.c-addr { width:180px; } col.c-phone { width:122px; } col.c-site { width:160px; }
+  col.c-miles { width:58px; }       /* the Why column takes the rest */
   th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { background:#eef2f6; position:sticky; top:0; font-size:12px; }
   tr.A td:first-child { background:var(--a); } tr.B td:first-child { background:var(--b); }
@@ -37,6 +41,15 @@
   .flag { color:#b42318; font-weight:600; font-size:12px; }
   .why { color:var(--muted); font-size:12px; }
   details summary { cursor:pointer; color:var(--accent); font-size:12px; }
+  td.site a { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .reasons { display:flex; flex-direction:column; gap:4px; }
+  .reason { display:flex; gap:8px; align-items:baseline; font-size:13px; line-height:1.35; }
+  .pts { flex:0 0 38px; text-align:center; font-weight:700; font-size:11px; border-radius:999px;
+         padding:1px 0; background:#e3f3e8; color:#146c43; font-variant-numeric:tabular-nums; }
+  .pts.neg { background:#fdecea; color:#b42318; }
+  .pts.zero { background:#f2f4f7; color:var(--muted); }
+  .explain { margin-top:5px; }
+  .explain p { margin:4px 0 0; color:var(--muted); font-size:12px; line-height:1.4; }
   a { color:var(--accent); }
 </style>
 </head>
@@ -89,6 +102,8 @@
     <div class="stats" id="stats"></div>
     <div class="table-wrap" style="margin-top:10px">
       <table>
+        <colgroup><col class="c-score"><col class="c-name"><col class="c-cat"><col class="c-addr">
+          <col class="c-phone"><col class="c-site"><col class="c-miles"><col class="c-why"></colgroup>
         <thead><tr><th>Score</th><th>Business</th><th>Category</th><th>Address</th>
           <th>Phone</th><th>Website</th><th>Miles</th><th>Why</th></tr></thead>
         <tbody id="rows"></tbody>
@@ -113,6 +128,42 @@ function link(href, text) {
   return a;
 }
 
+// "+35 Grocery / supermarket (by Yelp category): Grocery stores bale..." ->
+// {pts: 35, title: "Grocery / supermarket", note: "Grocery stores bale... (matched by Yelp category)"}
+function parseReason(r) {
+  const m = /^([+-]\d+)\s+(.*)$/.exec(r);
+  if (!m) return { pts: null, title: r, note: "" };
+  let title = m[2], note = "";
+  const by = /^(.*?) \(by ([^)]+)\): (.*)$/.exec(title);
+  if (by) { title = by[1]; note = `${by[3]} (matched by ${by[2]}).`; }
+  return { pts: parseInt(m[1], 10), title: title.charAt(0).toUpperCase() + title.slice(1), note };
+}
+
+function whyCell(reasons) {
+  const td = el("td");
+  const list = el("div", undefined, "reasons");
+  const notes = [];
+  for (const r of reasons) {
+    const p = parseReason(r);
+    if (p.pts === null) { notes.push(p.title.charAt(0).toUpperCase() + p.title.slice(1) + "."); continue; }
+    const row = el("div", undefined, "reason");
+    row.title = r;
+    row.append(el("span", (p.pts > 0 ? "+" : "") + p.pts,
+                  "pts" + (p.pts < 0 ? " neg" : p.pts === 0 ? " zero" : "")));
+    row.append(el("span", p.title));
+    list.append(row);
+    if (p.note) notes.unshift(p.note);
+  }
+  td.append(list);
+  if (notes.length) {
+    const d = el("details", undefined, "explain");
+    d.append(el("summary", "Explain"));
+    for (const n of notes) d.append(el("p", n));
+    td.append(d);
+  }
+  return td;
+}
+
 function render() {
   const q = $("filter").value.toLowerCase();
   const tier = $("tier").value;
@@ -135,12 +186,12 @@ function render() {
     if (l.map_url) { addr.append(document.createElement("br")); addr.append(link(l.map_url, "map")); }
     tr.append(addr);
     tr.append(el("td", l.phone, "nowrap"));
-    const site = el("td"); site.append(link(l.website)); tr.append(site);
+    const site = el("td", undefined, "site");
+    const a = link(l.website, l.website && l.website.replace(/^https?:\/\/(www\.)?/i, "").split("/")[0]);
+    if (l.website) a.title = l.website;
+    site.append(a); tr.append(site);
     tr.append(el("td", l.distance));
-    const why = el("td");
-    const d = el("details"); d.append(el("summary", "details"));
-    for (const r of l.reasons) d.append(el("div", r, "why"));
-    why.append(d); tr.append(why);
+    tr.append(whyCell(l.reasons));
     body.append(tr);
   }
 }
