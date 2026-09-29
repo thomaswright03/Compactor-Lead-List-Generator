@@ -1,0 +1,36 @@
+# Lint settings (ruff). Run: python -m ruff check .   CI runs it on every push.
+# The code keeps its own layout (aligned continuation lines), so ruff's formatter
+# is not used; pycodestyle's rules below keep the layout tidy instead.
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = [".cache", "output"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes: unused names, undefined names
+    "I",           # import order
+    "B",           # likely bugs
+    "BLE",         # no blanket `except Exception` that swallows the error
+    "S110",        # no `try: ... except: pass`
+    "UP",          # modern Python syntax
+    "SIM",         # simpler code
+    "RUF",         # ruff's own checks
+    "DTZ",         # no naive datetimes (the site's clock is Utah time)
+]
+ignore = [
+    "E501",        # long lines are wrapped by hand, at up to ~110 characters
+    "E741",        # `l` is the house name for a lead
+    "SIM108",      # an if/else block is sometimes clearer than a ternary
+    "RUF001",      # the pages use typographic characters on purpose
+    "RUF005",      # [a] + b reads fine
+    "RUF012",
+    "B905",        # zip() over lists built side by side
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["BLE", "S110", "B011", "DTZ", "RUF059"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["leadgen"]
