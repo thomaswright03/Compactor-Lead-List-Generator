@@ -44,3 +44,16 @@ min_confidence = 60
 ignore_decorators = ["@bp.*", "@app.*"]
 ignore_names = ["quotePrefix", "font", "alignment", "hyperlink", "freeze_panes", "ref",
                 "permanent", "TABLES"]
+
+# Type check (mypy). Run: python -m mypy   CI runs it on every push; a type error fails it.
+# Most functions have no annotations, so check_untyped_defs makes mypy check their
+# bodies too (a None where a number is expected, a misspelt attribute on Lead).
+[tool.mypy]
+files = ["leadgen"]
+python_version = "3.11"
+check_untyped_defs = true
+strict_equality = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true

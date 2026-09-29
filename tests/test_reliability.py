@@ -3,6 +3,7 @@
 import io
 import logging
 import time
+import zipfile
 
 import pytest
 from openpyxl import load_workbook
@@ -69,6 +70,36 @@ def test_quick_mirror_failures_try_the_next_one(monkeypatch):
     assert tried == config.OVERPASS_ENDPOINTS[:3]
 
 
+def test_a_hanging_mirror_does_not_stop_the_others(monkeypatch):
+    """Mirror 1 fails at once, mirror 2 hangs longer than the whole deadline, mirror 3
+    answers: the search succeeds with mirror 3's businesses, within the deadline."""
+    import threading
+    monkeypatch.setattr(config, "OVERPASS_DEADLINE_SECONDS", 8)
+    monkeypatch.setattr(config, "OVERPASS_STAGGER_SECONDS", 0.5)
+    released = threading.Event()
+    tried = []
+
+    def mirrors(method, url, **kw):
+        tried.append(url)
+        n = config.OVERPASS_ENDPOINTS.index(url)
+        if n == 0:
+            raise HttpError(f"{url}: ConnectionResetError(104, 'reset')")
+        if n == 1:
+            released.wait(30)                    # hangs past the deadline
+            raise HttpError(f"{url}: ReadTimeout")
+        return {"elements": [{"type": "node", "id": 7, "lat": 40.7, "lon": -111.9,
+                              "tags": {"name": "Harmons", "shop": "supermarket"}}]}
+    monkeypatch.setattr(osm, "request_json", mirrors)
+    started = time.monotonic()
+    try:
+        leads, warnings = osm.search(40.76, -111.89, 30)
+    finally:
+        released.set()
+    assert [l.name for l in leads] == ["Harmons"] and warnings == []
+    assert time.monotonic() - started < config.OVERPASS_DEADLINE_SECONDS
+    assert tried == config.OVERPASS_ENDPOINTS[:3]
+
+
 def test_a_failed_search_is_plain_logged_and_kept_in_the_history(monkeypatch, caplog):
     def unreachable(*args, **kw):
         raise osm.SourceError("All OpenStreetMap (Overpass) servers failed: "
@@ -81,7 +112,8 @@ def test_a_failed_search_is_plain_logged_and_kept_in_the_history(monkeypatch, ca
     assert body["state"] == "error"
     message = body["message"]
     assert "Couldn't reach the map data service" in message
-    assert "Today's search was not used up" in message and "Try again in an hour" in message
+    assert "Today's search was not used up" in message
+    assert "You can try again now; if it fails again, try later today." in message
     assert not any(t in message for t in TECHNICAL)
     assert "ProxyError" in caplog.text                 # the detail is in the server log
     history = client.get("/searches").get_json()
@@ -293,6 +325,58 @@ def test_excel_generated_time_is_utah_time_and_offline_columns_are_labelled(monk
     header = [c.value for c in book["Leads"][1]]
     assert header[-2:] == ["My notes: equipment seen (this file only)", "My notes (this file only)"]
     assert "Has Baler or Compactor?" in header
+
+
+def test_excel_of_10000_leads_is_quick_and_complete():
+    """The Excel file is built in time that grows in step with the list: 10,000 saved
+    leads in a few seconds (it took minutes once), with every column, the tier and
+    competitor colours, the web links, the notes dropdown and Run Info."""
+    from leadgen.export import COLUMNS, COMPETITOR_FILL, OFFLINE_VERIFIED, TIER_FILLS
+    leads = []
+    for i in range(10_000):
+        lead = _lead(f"Store {i}", f"s{i}", website=f"https://store{i}.example.com",
+                     map_url=f"https://www.openstreetmap.org/node/{i}", phone="8015550100",
+                     city="Salt Lake City", address=f"{i} Main St", zip="84101")
+        lead.distance_miles = 2.5
+        leads.append(lead)
+    leads[1].lead_type = "Competitor"
+    started = time.perf_counter()
+    data = to_xlsx_bytes(leads, {"List": "All saved leads"})
+    assert time.perf_counter() - started < 3
+    with zipfile.ZipFile(io.BytesIO(data)) as z:        # every row and link is there
+        sheet = z.read("xl/worksheets/sheet1.xml").decode()
+        assert sheet.count("<row ") == 10_001 and sheet.count("<hyperlink ") == 20_000
+    # The rest is checked on a shorter list (reading 10,000 rows back takes a while).
+    book = load_workbook(io.BytesIO(to_xlsx_bytes(leads[:200], {"List": "All saved leads"})))
+    ws = book["Leads"]
+    assert ws.max_row == 201 and ws.max_column == len(COLUMNS)
+    assert [c.value for c in ws[1]] == [name for name, _, _ in COLUMNS]
+    assert ws["A2"].fill.fgColor.rgb == "FF" + TIER_FILLS[leads[0].tier]
+    assert ws["D3"].fill.fgColor.rgb == "FF" + COMPETITOR_FILL          # a competitor row
+    site, where = ws.cell(row=201, column=12), ws.cell(row=201, column=22)
+    assert site.hyperlink.target == "https://store199.example.com"
+    assert where.value == "Open map" and where.hyperlink.target.endswith("/node/199")
+    assert ws.freeze_panes == "F2" and ws.auto_filter.ref == f"A1:AD{ws.max_row}"
+    rule = ws.data_validations.dataValidation[0]
+    letter = ws.cell(row=2, column=[n for n, _, _ in COLUMNS].index(OFFLINE_VERIFIED) + 1).column_letter
+    assert str(rule.sqref) == f"{letter}2:{letter}201"
+    info = {row[0]: row[1] for row in book["Run Info"].iter_rows(values_only=True) if row[0]}
+    assert info["List"] == "All saved leads" and info["Tiers"].startswith("A >= 60")
+
+
+def test_saved_list_run_info_says_what_the_file_holds():
+    from leadgen import marks, saved
+    leads = [_lead("Costco", "c"), _lead("Harmons", "h", lat=40.8), _lead("Pro Baler", "p", lat=40.6)]
+    saved.save_search(leads, config.DEFAULT_KEYWORDS)
+    marks.set_mark(leads[0].uid, "yes")
+    client = web.create_app().test_client()
+    book = load_workbook(io.BytesIO(client.get("/download/saved.xlsx").data))
+    info = {row[0]: row[1] for row in book["Run Info"].iter_rows(values_only=True) if row[0]}
+    assert info["List"] == "All saved leads" and info["Leads in this file"] == 3
+    assert info["Marked Yes (has a baler or compactor)"] == 1 and info["Marked No"] == 0
+    assert info["Not checked yet"] == 1 and info["Competitors and Arco's own listing"] == 1
+    assert sum(v for k, v in info.items() if k.startswith("Tier ") and isinstance(v, int)) == 3
+    assert info["First search"].endswith("(Utah time)") and info["Latest search"]
 
 
 def test_one_place_for_utah_time():

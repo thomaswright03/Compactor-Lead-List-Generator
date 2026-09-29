@@ -161,7 +161,7 @@ def _same_listing_groups(leads, union, find):
     numbers, all within SAME_NAME_MILES of each other): every pair of them is a
     duplicate, so they are one group, found without comparing every pair (a chain
     with hundreds of copies would otherwise take seconds)."""
-    by_sig = {}
+    by_sig: dict[tuple, list[int]] = {}
     for i, lead in enumerate(leads):
         name = clean_name(lead.name)
         if name:
@@ -173,22 +173,23 @@ def _same_listing_groups(leads, union, find):
         # Greedy clusters whose bounding box fits inside SAME_NAME_MILES: any two
         # members of one are within range of each other.
         idxs.sort(key=lambda i: (leads[i].lat, leads[i].lon))
-        cluster, box = [], None
-        for i in idxs + [None]:
-            if i is not None:
-                lat, lon = leads[i].lat, leads[i].lon
+        cluster: list[int] = []
+        box = None
+        for at in [*idxs, None]:
+            if at is not None:
+                lat, lon = leads[at].lat, leads[at].lon
                 grown = (lat, lon, lat, lon) if box is None else (
                     min(box[0], lat), min(box[1], lon), max(box[2], lat), max(box[3], lon))
                 if haversine_miles(*grown) <= _PREMERGE_MILES:
-                    cluster.append(i)
+                    cluster.append(at)
                     box = grown
                     continue
             for j in cluster[1:]:
                 ri, rj = find(cluster[0]), find(j)
                 if ri != rj:
                     union(ri, rj)
-            if i is not None:
-                cluster, box = [i], (lat, lon, lat, lon)
+            if at is not None:
+                cluster, box = [at], (lat, lon, lat, lon)
 
 
 # Groups this big are pre-merged (smaller ones go through the pairwise rules).
@@ -219,7 +220,7 @@ def dedupe(leads):
         members[ri] += members.pop(rj)
 
     # Same record from the same source (found by several queries) is always one place.
-    seen = {}
+    seen: dict[tuple, int] = {}
     for i, lead in enumerate(leads):
         key = (lead.source, lead.source_id)
         if key in seen:
@@ -230,14 +231,14 @@ def dedupe(leads):
             seen[key] = i
     _same_listing_groups(leads, union, find)
 
-    buckets = {}
+    buckets: dict[tuple, list[int]] = {}
     for i, lead in enumerate(leads):
         buckets.setdefault((round(lead.lat, 2), round(lead.lon, 2)), []).append(i)
 
     pairs = []
     for (bx, by), idxs in buckets.items():
         # Neighbours by group, so a big pre-merged group is skipped in one step.
-        near = {}
+        near: dict[int, list[int]] = {}
         for dx in (-1, 0, 1):
             for dy in (-1, 0, 1):
                 for j in buckets.get((round(bx + dx * 0.01, 2), round(by + dy * 0.01, 2)), []):
@@ -268,7 +269,7 @@ def dedupe(leads):
             rejected.add(state)
             links.append((i, j))
 
-    groups = {}
+    groups: dict[int, list] = {}
     for i in range(len(leads)):
         groups.setdefault(find(i), []).append(leads[i])
 

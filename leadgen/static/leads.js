@@ -1,34 +1,65 @@
-/* Part 2: the Leads page (Yes / No marks, undo, keeping up with colleagues). */
+/* Part 2: the Leads page (Yes / No marks, undo, keeping up with colleagues).
+   The server filters, sorts and pages the list: the page holds only the rows it shows. */
+function viewQuery() {
+  const p = new URLSearchParams({ tab: S.leadView || "unchecked", sort: S.sort, dir: S.dir });
+  if (S.q) p.set("q", S.q);
+  if (S.tier) p.set("tier", S.tier);
+  return p;
+}
 async function loadLeads(quiet) {
-  const wrap = $("leads-wrap"), top = wrap.scrollTop;
+  const seq = ++S.seq, wrap = $("leads-wrap"), top = wrap.scrollTop;
+  const p = viewQuery();
+  p.set("limit", S.limit);
+  if (S.pinned.size) p.set("keep", [...S.pinned.keys()].join(","));   // rows just marked stay put
   try {
-    const body = await api("/leads");
-    S.leads = body.leads; S.since = body.now;
-    S.loaded = true; S.loadError = ""; S.refreshError = "";
+    const body = await api(`/leads?${p}`);
+    if (seq !== S.seq) return;                     // a newer view was asked for meanwhile
+    S.leads = body.leads; S.total = body.total; S.counts = body.counts; S.recent = body.recent;
+    S.since = body.now; S.loaded = true; S.loadError = ""; S.refreshError = "";
   } catch (err) {
-    if (err.status === 401) return;
-    if (quiet && S.loaded) S.refreshError = "Couldn't refresh the list just now; it will try again shortly.";
+    if (seq !== S.seq || err.status === 401) return;
+    if (S.loaded) S.refreshError = quiet ? "Couldn't refresh the list just now; it will try again shortly."
+                                         : `Couldn't show this view. ${err.message}`;
     else S.loadError = err.message;
   }
+  S.viewLoading = false;
   renderAll();
   wrap.scrollTop = top;
+}
+// A new tab, filter, tier or sort: the old rows stay (dimmed) until the new ones arrive.
+function changeView() {
+  S.viewLoading = true;
+  renderLeads();
+  loadLeads();
 }
 // Only what changed since the last look (colleagues' marks and calls, a finished search).
 async function loadChanges() {
   if (!S.since) return loadLeads(true);
-  const wrap = $("leads-wrap"), top = wrap.scrollTop;
+  const seq = S.seq, wrap = $("leads-wrap"), top = wrap.scrollTop;
+  const p = viewQuery();
+  p.set("since", S.since);
   try {
-    const body = await api(`/leads?since=${encodeURIComponent(S.since)}`);
+    const body = await api(`/leads?${p}`);
+    if (seq !== S.seq) return;
     S.since = body.now; S.refreshError = "";
     if (!body.leads.length && !body.removed.length) { renderLeads(); return; }
-    const byKey = new Map(S.leads.map((l) => [l.key, l]));
+    let missing = false;
     for (const l of body.leads) {
-      const old = byKey.get(l.key);
+      const inView = l.in_view; delete l.in_view;
+      const old = leadByKey(l.key);
       if (old && old.saving) continue;               // this page's own click is still being saved
-      byKey.set(l.key, old ? Object.assign(old, l) : l);
+      const shown = S.leads.some((x) => x.key === l.key);
+      updateLead(l);
+      if (shown && !inView && !pinnedNow(l.key)) S.leads = S.leads.filter((x) => x.key !== l.key);
+      if (!shown && inView) missing = true;
     }
-    for (const key of body.removed) byKey.delete(key);
-    S.leads = [...byKey.values()];
+    const gone = new Set(body.removed);
+    S.leads = S.leads.filter((l) => !gone.has(l.key));
+    S.called = S.called.filter((l) => !gone.has(l.key));
+    S.total = body.total; S.counts = body.counts; S.recent = body.recent;
+    if (!$("page-calls").hidden) loadCalled(); else S.calledLoaded = false;
+    // A business that now belongs in this view: fetch the view again (it is one page of rows).
+    if (missing) return loadLeads(true);
   } catch (err) {
     if (err.status === 401) return;
     S.refreshError = "Couldn't refresh the list just now; it will try again shortly.";
@@ -36,22 +67,31 @@ async function loadChanges() {
   renderAll();
   wrap.scrollTop = top;
 }
+// Every copy of a lead (the Leads rows, the Calls page, Recent changes) gets the new values.
+function updateLead(data) {
+  for (const list of [S.leads, S.called, S.recent]) for (const l of list) if (l.key === data.key) Object.assign(l, data);
+}
+function addRecent(lead) {
+  S.recent = [lead, ...S.recent.filter((l) => l.key !== lead.key)];
+}
+// A Yes / No click moves a business between tabs; the counts follow at once.
+function moveCount(from, to) {
+  if (!S.counts) return;
+  S.counts[from || "unchecked"]--; S.counts[to || "unchecked"]++;
+}
 function renderAll() { renderLeads(); renderCalls(); renderRecent(); counts(); }
 function counts() {
-  const show = (id, text) => { $(id).textContent = text; $(id).hidden = !S.loaded; };
-  const toCheck = S.leads.filter((l) => !l.has_baler).length;
-  show("n-leads", `${toCheck.toLocaleString()} to check`);
-  show("n-calls", `${S.leads.filter((l) => l.call_count).length.toLocaleString()} called`);
+  const show = (id, text) => { $(id).textContent = text; $(id).hidden = !S.counts; };
+  if (!S.counts) return;
+  show("n-leads", `${S.counts.unchecked.toLocaleString()} to check`);
+  show("n-calls", `${S.counts.called.toLocaleString()} called`);
 }
 
-const LEAD_TABS = [["", "Not checked"], ["yes", "Has baler or compactor"], ["no", "No baler or compactor"], ["all", "All"]];
-// Column sorts: the value to sort by, and the first direction a click picks.
-const SORTS = {
-  score: { key: (l) => l.score, dir: "desc" },
-  name: { key: (l) => l.name.toLowerCase(), dir: "asc" },
-  city: { key: (l) => (l.city || "~").toLowerCase(), dir: "asc" },
-  miles: { key: (l) => l.distance ?? 1e9, dir: "asc" },
-};
+// Competitors and Arco's own listing have their own tab: they are flagged, never asked Yes / No.
+const LEAD_TABS = [["", "Not checked"], ["yes", "Has baler or compactor"], ["no", "No baler or compactor"],
+                   ["competitors", "Competitors"], ["all", "All"]];
+// Column sorts (done by the server) and the first direction a click picks.
+const SORTS = { score: { dir: "desc" }, name: { dir: "asc" }, city: { dir: "asc" }, miles: { dir: "asc" } };
 
 function tabs(box, items, current, onPick) {
   box.replaceChildren();
@@ -104,46 +144,58 @@ function toast(message, undo, bad) {
   $("toast").classList.toggle("bad", !!bad);
   $("toast").hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { $("toast").hidden = true; toastUndo = null; }, bad ? 9000 : 7000);
+  toastTimer = setTimeout(hideToast, bad ? 9000 : 7000);
 }
-$("toast-undo").addEventListener("click", () => { if (toastUndo) { const u = toastUndo; toastUndo = null; $("toast").hidden = true; u(); } });
-const leadByKey = (key) => S.leads.find((l) => l.key === key);
+function hideToast() { clearTimeout(toastTimer); $("toast").hidden = true; toastUndo = null; }
+$("toast-undo").addEventListener("click", () => { if (toastUndo) { const u = toastUndo; hideToast(); u(); } });
+const leadByKey = (key) => [...S.leads, ...S.called, ...S.recent].find((l) => l.key === key);
 
 const pinnedNow = (key) => S.pinned.has(key);
 function unpinAll() { S.pinned.clear(); }
-// Let just-marked rows go once the pointer and focus have left the table for PIN_MS.
+// Does the row belong in the tab shown (a row just marked may stay for a moment when it doesn't)?
+const inTab = (l) => S.leadView === "all" || (S.leadView === "competitors" ? !l.prospect : l.prospect && (l.has_baler || "") === S.leadView);
+// Just-marked rows stay while the mouse is over the list (or focus is in it), and PIN_MS after.
+// The hover is read from the page itself, so no pointer event can be missed.
+let pointerKind = "mouse";
+document.addEventListener("pointermove", (e) => { pointerKind = e.pointerType; }, true);
+document.addEventListener("pointerdown", (e) => { pointerKind = e.pointerType; }, true);
+function holdingRows() {
+  const wrap = $("leads-wrap");
+  return (pointerKind === "mouse" && wrap.matches(":hover")) || wrap.contains(document.activeElement);
+}
 setInterval(() => {
-  if (!S.pinned.size || S.inTable || $("leads-wrap").contains(document.activeElement)) return;
+  if (!S.pinned.size) return;
   const now = Date.now();
+  if (holdingRows()) { for (const key of S.pinned.keys()) S.pinned.set(key, now + PIN_MS); return; }
   let gone = false;
-  for (const [key, until] of S.pinned) if (until <= now) { S.pinned.delete(key); gone = true; }
+  for (const [key, until] of S.pinned) {
+    if (until > now) continue;
+    S.pinned.delete(key); gone = true;
+    const lead = S.leads.find((l) => l.key === key);
+    if (lead && !inTab(lead)) { S.leads = S.leads.filter((l) => l !== lead); S.total--; }
+  }
   if (gone) { S.shiftedAt = now; renderLeads(); }
-}, 500);
-$("leads-wrap").addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") S.inTable = true; });
-$("leads-wrap").addEventListener("pointerleave", () => {
-  S.inTable = false;
-  const until = Date.now() + PIN_MS;
-  for (const key of S.pinned.keys()) S.pinned.set(key, until);
-});
+}, 250);
 
 async function setMark(lead, value) {
   const before = lead.has_baler || "";
-  if (value === before || lead.saving || !lead.key) return;   // clearing is only via Undo
+  if (value === before || lead.saving || !lead.key || !lead.prospect) return;   // clearing is only via Undo
   if (Date.now() - S.shiftedAt < SHIFT_GUARD_MS) return;     // aimed at a row that just left
   const key = lead.key;
   // Keep the row where it is (with its new answer) instead of letting the next one slide under the pointer.
   if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);
-  lead.saving = true; lead.has_baler = value; S.busy++;
+  lead.saving = true; S.busy++;
+  updateLead({ key, has_baler: value }); moveCount(before, value);
   renderAll();
   try {
     const { undo } = await post("/mark", { key, value });
-    const now = leadByKey(key) || lead;
-    now.undo_mark = undo;
+    updateLead({ key, undo_mark: undo });
+    addRecent(leadByKey(key) || lead);
     renderAll();
     toast(`${lead.name}: marked ${value === "yes" ? "Yes" : "No"}.`, () => undoMark(key));
   } catch (err) {
-    const now = leadByKey(key) || lead;
-    now.has_baler = before; renderAll();
+    updateLead({ key, has_baler: before }); moveCount(value, before);
+    renderAll();
     toast(`${lead.name}: answer not saved. ${err.message}`, null, true);
   } finally { lead.saving = false; S.busy--; }
 }
@@ -175,16 +227,21 @@ setInterval(() => {
     if (left <= 0) { b.remove(); expired = true; } else b.textContent = `${b.dataset.label} (${fmtTime(left)})`;
   });
   if (expired) {
-    for (const l of S.leads) {
+    for (const l of [...S.leads, ...S.called, ...S.recent]) {
       if (l.undo_mark && leftOf(l.undo_mark) <= 0) l.undo_mark = null;
       if (l.undo_call && leftOf(l.undo_call) <= 0) l.undo_call = null;
     }
+    S.recent = S.recent.filter((l) => l.undo_mark || l.undo_call);
     renderRecent();
   }
 }, 1000);
 
 function markCell(lead, withCall) {
   const td = el("td");
+  if (!lead.prospect) {
+    td.append(el("div", lead.lead_type === "Competitor" ? "Competitor: not a prospect" : "Arco's own listing", "sub not-asked"));
+    return td;
+  }
   const box = el("div", undefined, "mark");
   for (const [value, label] of [["yes", "Yes"], ["no", "No"]]) {
     const b = button(label, value + (lead.has_baler === value ? " on" : ""), () => setMark(lead, value));
@@ -194,7 +251,7 @@ function markCell(lead, withCall) {
     box.append(b);
   }
   td.append(box);
-  if (pinnedNow(lead.key) && S.leadView !== "all" && (lead.has_baler || "") !== S.leadView) {
+  if (pinnedNow(lead.key) && !inTab(lead)) {
     const tab = LEAD_TABS.find(([v]) => v === (lead.has_baler || ""));
     td.append(el("div", `Saved. Moves to “${tab ? tab[1] : "All"}”.`, "sub moved"));
   }
@@ -204,7 +261,6 @@ function markCell(lead, withCall) {
 }
 function callBox(lead) {
   const box = el("div", undefined, "call-cell");
-  box.style.marginTop = "8px";
   if (lead.call_outcome) {
     box.append(el("span", lead.call_outcome, "badge"));
     box.append(el("span", lead.last_call, "sub"));
@@ -218,7 +274,7 @@ function callBox(lead) {
 function leadRow(l, withCall) {
   const tr = el("tr");
   tr.className = l.tier + (l.lead_type === "Competitor" ? " competitor" : "")
-    + (pinnedNow(l.key) && S.leadView !== "all" && (l.has_baler || "") !== S.leadView ? " just-marked" : "");
+    + (pinnedNow(l.key) && !inTab(l) ? " just-marked" : "");
   tr.append(markCell(l, withCall));
   tr.append(el("td", `${l.score} (${l.tier})`, "score nowrap"));
   const name = el("td");
@@ -249,7 +305,7 @@ function sortHeader(label, sort) {
   const b = button("", "sort", () => {
     if (S.sort === sort) S.dir = S.dir === "asc" ? "desc" : "asc";
     else { S.sort = sort; S.dir = SORTS[sort].dir; }
-    S.limit = 300; unpinAll(); renderLeads();
+    S.limit = 300; unpinAll(); changeView();
   });
   b.append(el("span", label), el("span", on ? (S.dir === "asc" ? "▲" : "▼") : "↕", "arrow"));
   th.setAttribute("aria-sort", on ? (S.dir === "asc" ? "ascending" : "descending") : "none");
@@ -274,6 +330,7 @@ function leadTable(rows, withCall) {
   return table;
 }
 
+function pickTab(v) { S.leadView = v; S.limit = 300; unpinAll(); changeView(); }
 function renderLeads() {
   const problemBox = $("leads-problem");
   if (S.loadError && !S.loaded) {
@@ -283,33 +340,30 @@ function renderLeads() {
   }
   problemBox.replaceChildren(); $("leads-body").hidden = !S.loaded;
   $("leads-note").replaceChildren(...(S.refreshError ? [el("div", S.refreshError, "warn")] : []));
-  const count = (v) => v === "all" ? S.leads.length : S.leads.filter((l) => (l.has_baler || "") === v).length;
-  tabs($("lead-tabs"), LEAD_TABS.map(([v, t]) => [v, t, count(v)]), S.leadView,
-       (v) => { S.leadView = v; S.limit = 300; unpinAll(); renderLeads(); });
-  $("call-hint").hidden = S.leadView === "yes" || !S.leads.length;
-  const q = S.q.toLowerCase(), tier = S.tier;
-  const rows = S.leads.filter((l) => {
-    if (S.leadView !== "all" && (l.has_baler || "") !== S.leadView && !pinnedNow(l.key)) return false;
-    if (tier && l.tier !== tier) return false;
-    if (!q) return true;
-    return [l.name, l.city, l.category, l.address, l.lead_type, l.flags.join(" ")].join(" ").toLowerCase().includes(q);
-  });
-  const { key } = SORTS[S.sort], sign = S.dir === "asc" ? 1 : -1;
-  rows.sort((a, b) => { const x = key(a), y = key(b); return x < y ? -sign : x > y ? sign : 0; });
+  const c = S.counts || {};
+  tabs($("lead-tabs"), LEAD_TABS.map(([v, t]) => [v, t, c[v || "unchecked"] || 0]), S.leadView, pickTab);
+  $("call-hint").hidden = S.leadView === "yes" || S.leadView === "competitors" || !c.all;
+  $("competitor-hint").hidden = S.leadView !== "competitors";
   const wrap = $("leads-wrap");
-  if (!rows.length) {
-    wrap.replaceChildren(el("div", S.leads.length ? "Nothing here with these filters." : "No saved leads yet. Run a search on the Find leads page.", "empty"));
+  wrap.classList.toggle("stale", S.viewLoading);
+  wrap.setAttribute("aria-busy", S.viewLoading);
+  if (!S.leads.length) {
+    const empty = !c.all ? "No saved leads yet. Run a search on the Find leads page."
+      : S.q || S.tier ? "Nothing here with these filters."
+      : S.leadView === "" ? "Every business has been checked." : "Nothing here yet.";
+    wrap.replaceChildren(el("div", empty, "empty"));
   } else {
-    wrap.replaceChildren(leadTable(rows.slice(0, S.limit), S.leadView === "yes"));
+    wrap.replaceChildren(leadTable(S.leads, S.leadView === "yes"));
   }
-  const more = $("leads-more");
-  more.hidden = rows.length <= S.limit;
-  more.textContent = `Show more (${(rows.length - S.limit).toLocaleString()} left)`;
+  const more = $("leads-more"), left = S.total - S.leads.length;
+  more.hidden = left <= 0;
+  more.disabled = S.viewLoading;
+  more.textContent = `Show more (${left.toLocaleString()} left)`;
   if (!$("page-leads").hidden) writeHash("leads");
 }
 function renderRecent() {
   const items = [];
-  for (const l of S.leads) {
+  for (const l of S.recent) {
     if (l.undo_mark && leftOf(l.undo_mark) > 0)
       items.push([l.undo_mark.until, `${l.name}: marked ${l.has_baler === "yes" ? "Yes" : l.has_baler === "no" ? "No" : "Not checked"}`,
                   undoButton(l.undo_mark, "Undo", () => undoMark(l.key))]);
@@ -320,10 +374,42 @@ function renderRecent() {
   $("recent").hidden = !items.length;
   $("recent-list").replaceChildren(...items.slice(0, 8).map(([, text, b]) => { const li = el("li"); li.append(el("span", text), b); return li; }));
 }
-$("leads-more").addEventListener("click", () => { S.limit += 300; renderLeads(); });
-$("filter").addEventListener("input", () => { S.q = $("filter").value; S.limit = 300; unpinAll(); renderLeads(); });
-$("tier").addEventListener("change", () => { S.tier = $("tier").value; S.limit = 300; unpinAll(); renderLeads(); });
-$("call-hint-go").addEventListener("click", () => { S.leadView = "yes"; S.limit = 300; unpinAll(); renderLeads(); });
+$("leads-more").addEventListener("click", () => { S.limit += 300; S.viewLoading = true; renderLeads(); loadLeads(); });
+let filterTimer = null;
+$("filter").addEventListener("input", () => {
+  S.q = $("filter").value; S.limit = 300; unpinAll();
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(changeView, 250);       // ask once typing pauses
+});
+$("tier").addEventListener("change", () => { S.tier = $("tier").value; S.limit = 300; unpinAll(); changeView(); });
+$("call-hint-go").addEventListener("click", () => pickTab("yes"));
+
+/* The downloads: building a big Excel file takes a moment, so the button says so and a second
+   click doesn't start another. The server's answer is fetched and saved as a file. */
+async function download(a) {
+  if (a.dataset.busy) return;
+  const label = a.textContent;
+  a.dataset.busy = "1"; a.setAttribute("aria-disabled", "true"); a.classList.add("busy");
+  a.textContent = a.dataset.busyLabel;
+  try {
+    const res = await fetch(a.href);
+    if (res.status === 401) { location.href = "/login"; return; }
+    if (!res.ok) {                                  // the server's error page says why, in plain words
+      const page = new DOMParser().parseFromString(await res.text().catch(() => ""), "text/html");
+      throw new Error((page.querySelector(".box p") || {}).textContent || "Try again in a minute.");
+    }
+    const url = URL.createObjectURL(await res.blob());
+    const save = el("a"); save.href = url; save.download = a.dataset.file;
+    document.body.append(save); save.click(); save.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (err) {
+    toast(`The download didn't work. ${err.message}`, null, true);
+  } finally {
+    delete a.dataset.busy; a.removeAttribute("aria-disabled"); a.classList.remove("busy");
+    a.textContent = label;
+  }
+}
+document.querySelectorAll("a[data-download]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); download(a); }));
 
 // Keep up with colleagues' marks and calls: every minute while the page is open, and on return
 // to it. Only what changed comes back, so this stays small however long the list grows.

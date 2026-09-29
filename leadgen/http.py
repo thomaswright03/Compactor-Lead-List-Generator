@@ -102,4 +102,4 @@ def request_json(method, url, *, params=None, data=None, json_body=None, headers
             if before_retry is not None and not before_retry():
                 break
             time.sleep(2 ** (attempt + 1))
-    raise last_error
+    raise last_error or HttpError(f"{url}: no attempt was made")

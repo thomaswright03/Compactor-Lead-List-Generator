@@ -250,6 +250,10 @@ def _record(day, result, job, warnings):
             log.exception("Recording today's search failed again")
 
 
+# After a failed search: one piece of advice, the same wherever the page shows it.
+RETRY = "You can try again now; if it fails again, try later today."
+
+
 def _worker(job, params, day):
     try:
         # Closed places come back too, so a saved one that has since closed is updated
@@ -270,12 +274,12 @@ def _worker(job, params, day):
         _fail(job, day, f"{exc} {NOT_USED_UP}", str(exc))
     except PipelineError as exc:
         log.warning("Search %s failed: %s %s", day, exc, exc.detail)
-        _fail(job, day, f"{exc} {NOT_USED_UP} Try again in an hour.", str(exc))
+        _fail(job, day, f"{exc} {NOT_USED_UP} {RETRY}", str(exc))
     except Exception:  # show unexpected failures instead of spinning forever
         log.exception("Search %s failed unexpectedly", day)
-        _fail(job, day, f"Something went wrong during the search. {NOT_USED_UP} Try again "
-                        "in an hour; if it keeps happening, tell whoever looks after the "
-                        "site.", "Something went wrong during the search.")
+        _fail(job, day, f"Something went wrong during the search. {NOT_USED_UP} {RETRY} If it "
+                        "keeps happening, tell whoever looks after the site.",
+                        "Something went wrong during the search.")
 
 
 def _fail(job, day, message, reason):

@@ -7,7 +7,9 @@ and building outlines give a rough size signal.
 
 import logging
 import math
+import queue
 import re
+import threading
 import time
 
 from .. import config
@@ -35,11 +37,14 @@ SQFT_PER_M2 = 10.7639
 _NOT_PLACES = ["highway", "waterway", "railway", "route", "boundary", "natural",
                "public_transport", "place", "power"]
 MAX_BUILDING_SQFT = 3_000_000   # bigger bounding boxes are campuses/resorts, not buildings
+# A mirror is only asked when at least this many seconds of the map-data time are left.
+MIN_SECONDS_LEFT = 5
 
 
 def _tag_filters():
     """Group category tags into Overpass filters: {key: [values]} and bare keys."""
-    by_key, any_value = {}, set()
+    by_key: dict[str, set[str]] = {}
+    any_value: set[str] = set()
     for cat in config.CATEGORIES:
         if not cat.query_osm:
             continue
@@ -174,20 +179,19 @@ def search(lat, lon, radius_miles, keywords=(), progress=None):
     """Return (leads, warnings).
 
     Every mirror together gets config.OVERPASS_DEADLINE_SECONDS: when the map
-    servers are down the search fails within about two minutes, not ten.
+    servers are down the search fails within about two minutes, not ten. A mirror
+    that fails is followed at once by the next one; a mirror that is slow to
+    answer is not waited out: after config.OVERPASS_STAGGER_SECONDS the next one
+    is asked as well (the slow one may still answer), and the first good answer
+    wins. So one hanging server can't use up the time the others need.
     """
     query = build_query(lat, lon, radius_miles, keywords)
     deadline = time.monotonic() + config.OVERPASS_DEADLINE_SECONDS
-    errors = []
-    servers = len(config.OVERPASS_ENDPOINTS)
-    for n, endpoint in enumerate(config.OVERPASS_ENDPOINTS, start=1):
-        left = deadline - time.monotonic()
-        if left < 5:
-            errors.append("out of time before trying " + endpoint)
-            break
-        if progress:
-            progress(f"OpenStreetMap: searching the free map data (server {n} of {servers})")
-        log.info("OpenStreetMap: querying %s", endpoint.split("/")[2])
+    endpoints = list(config.OVERPASS_ENDPOINTS)
+    answers: queue.Queue = queue.Queue()
+    errors, asked, waiting, next_at = [], 0, 0, 0.0
+
+    def ask(endpoint, left):
         try:
             # Connecting gets at most 10 s; the answer may take the rest of the time.
             data = request_json("POST", endpoint, data={"data": query},
@@ -195,6 +199,43 @@ def search(lat, lon, radius_miles, keywords=(), progress=None):
                                 cache_key_extra="overpass",
                                 cacheable=lambda d: not d.get("remark"))
         except HttpError as exc:
+            answers.put((endpoint, None, exc))
+        except Exception as exc:  # noqa: BLE001 - reported like a failed server
+            answers.put((endpoint, None, exc))
+        else:
+            answers.put((endpoint, data, None))
+
+    while True:
+        now = time.monotonic()
+        left = deadline - now
+        if asked < len(endpoints) and (waiting == 0 or now >= next_at):
+            endpoint = endpoints[asked]
+            if left < MIN_SECONDS_LEFT:
+                errors.append("out of time before trying " + endpoint)
+                if waiting == 0:
+                    break
+                asked = len(endpoints)            # no time for more; wait for the ones asked
+                continue
+            asked += 1
+            waiting += 1
+            next_at = now + config.OVERPASS_STAGGER_SECONDS
+            if progress:
+                progress(f"OpenStreetMap: searching the free map data (server {asked} of "
+                         f"{len(endpoints)})")
+            log.info("OpenStreetMap: querying %s", endpoint.split("/")[2])
+            threading.Thread(target=ask, args=(endpoint, left), daemon=True).start()
+            continue
+        if waiting == 0 or left <= 0:
+            if waiting:
+                errors.append("no server answered in time")
+            break
+        until = left if asked >= len(endpoints) else min(left, next_at - now)
+        try:
+            endpoint, data, exc = answers.get(timeout=max(0.01, until))
+        except queue.Empty:
+            continue
+        waiting -= 1
+        if exc is not None:
             log.warning("OpenStreetMap server failed: %s", exc)
             errors.append(str(exc))
             continue

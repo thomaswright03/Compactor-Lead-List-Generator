@@ -21,7 +21,8 @@ async function loadSearches() {
   if (body.running && !S.job) follow(body.running);
   if (S.job) setGo(false, "");
   else if (body.paused) setGo(false, "Searching is paused by the administrator.", true);
-  else if (S.error) setGo(!body.used_today, body.used_today ? S.error : "You can try again.", body.used_today);
+  // The failure box above says what went wrong and when to try again; this only says the day is still free.
+  else if (S.error) setGo(!body.used_today, body.used_today ? S.error : "Today's search is still available.", body.used_today);
   else if (body.used_today && today.leads === undefined && !body.running) {
     setGo(false, `Today's search was interrupted before it finished. It can be run again after ${today.free_at}.`, true);
   } else if (body.used_today) {

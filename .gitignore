@@ -10,3 +10,4 @@ output/
 !tests/fixtures/*.csv
 .pytest_cache/
 *.whl
+.coverage

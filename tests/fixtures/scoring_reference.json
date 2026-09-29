@@ -1,5 +1,5 @@
 {
- "about": "Reference listings for the scoring rules: each is a business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. These are typical examples, not yet businesses Arco has verified: as Arco confirms real businesses (Yes / No on the Leads page), add them here so a scoring change that demotes known-good businesses fails the tests.",
+ "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses Arco's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests.",
  "businesses": [
   {
    "name": "Smith's Marketplace",
@@ -221,5 +221,6 @@
    "has_equipment": false,
    "yelp_reviews": 60
   }
- ]
+ ],
+ "confirmed": []
 }

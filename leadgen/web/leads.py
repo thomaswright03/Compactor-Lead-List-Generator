@@ -6,9 +6,10 @@ import time
 
 from flask import Blueprint, Response, abort, jsonify, request
 
-from .. import calls, config, marks, stats
-from ..export import to_csv_bytes, to_xlsx_bytes
+from .. import calls, config, marks, saved, stats
+from ..export import saved_list_info, to_csv_bytes, to_xlsx_bytes
 from ..localtime import date_time_text
+from ..pipeline import EXEMPT_TYPES
 from .common import (
     MARKS_DOWN,
     LoadError,
@@ -31,28 +32,119 @@ SINCE_OVERLAP = 120.0
 bp = Blueprint("leads", __name__)
 
 
+# The page's views of the saved list (its tabs): prospects not yet checked, marked
+# Yes, marked No; competitors and Arco's own listing (never asked Yes / No); every
+# lead; and the businesses with a call logged (the Calls page).
+VIEWS = ("unchecked", "yes", "no", "competitors", "all", "called")
+# Column sorts: the value to sort by. Equal values keep the saved order (best first).
+SORTS = {
+    "score": lambda l: l.score,
+    "name": lambda l: l.name.lower(),
+    "city": lambda l: (l.city or "~").lower(),
+    "miles": lambda l: 1e9 if l.distance_miles is None else l.distance_miles,
+    "called": lambda l: l.last_call_at or 0,
+}
+MAX_LIMIT = 5000
+
+
+def is_prospect(lead):
+    return lead.lead_type not in EXEMPT_TYPES
+
+
+def in_view(lead, view):
+    if view == "all":
+        return True
+    if view == "competitors":
+        return not is_prospect(lead)
+    if view == "called":
+        return bool(lead.call_count)
+    return is_prospect(lead) and (lead.has_baler or "unchecked") == view
+
+
+def matches(lead, q, tier):
+    """The page's filter box and tier choice."""
+    if tier and lead.tier != tier:
+        return False
+    text = " ".join([lead.name, lead.city, lead.category, lead.address, lead.lead_type,
+                     " ".join(lead.flags)]).lower()
+    return q in text
+
+
+def view_counts(leads):
+    """How many leads each tab holds (ignoring the filter), and calls by result."""
+    counts = dict.fromkeys(VIEWS, 0)
+    outcomes = dict.fromkeys(calls.OUTCOMES, 0)
+    for lead in leads:
+        for view in VIEWS:
+            counts[view] += in_view(lead, view)
+        if lead.call_count and lead.call_outcome in outcomes:
+            outcomes[lead.call_outcome] += 1
+    return {**counts, "outcomes": outcomes}
+
+
+def _recent(leads, undo):
+    """The leads with a mark or call that can still be undone (Recent changes)."""
+    return [lead_json(l, undo) for l in leads
+            if l.uid in undo.get("mark", {}) or l.uid in undo.get("call", {})]
+
+
 @bp.get("/leads")
 def saved_leads():
-    """Every saved lead, for the page to show before any search.
+    """The saved list as the page shows it: one view (tab), filtered, sorted, and
+    only the first `limit` rows, plus every tab's count. The page asks for the rows
+    it shows, so opening it stays quick however long the list grows.
 
-    With ?since=<the "now" of an earlier answer> only the leads whose details,
-    mark or calls changed since then come back (and "removed": the ones that
-    left the list), so keeping an open page up to date costs little however
-    long the list grows.
+    ?tab= one of VIEWS (default all), q= filter text, tier=, sort= / dir=, limit=
+    (default: every row), keep= uids shown even outside the tab (rows just marked,
+    which stay put for a few seconds).
+
+    With ?since=<the "now" of an earlier answer> only the leads whose details, mark
+    or calls changed since then come back (each saying whether it belongs in the
+    view asked about), with "removed": the ones that left the list, so keeping an
+    open page up to date costs little however long the list grows.
     """
     now = time.time()
     since = request.args.get("since", type=float)
+    view = request.args.get("tab", "all")
+    if view not in VIEWS:
+        view = "all"
+    q = (request.args.get("q") or "").strip().lower()[:200]
+    tier = request.args.get("tier") or ""
     try:
         if since is None or not math.isfinite(since) or since <= 0:
             leads, undo = load_saved()
-            return jsonify({"leads": [lead_json(lead, undo) for lead in leads], "now": now})
+            return jsonify({**_page(leads, undo, view, q, tier), "now": now})
         uids = changed_uids(since - SINCE_OVERLAP)
-        leads, undo = load_saved(uids) if uids else ([], {})
+        if not uids:
+            return jsonify({"leads": [], "changes": True, "removed": [], "now": now})
+        leads, undo = load_saved()
     except LoadError as exc:
         return jsonify({"error": str(exc)}), 503
-    kept = {lead.uid for lead in leads}
-    return jsonify({"leads": [lead_json(lead, undo) for lead in leads], "changes": True,
-                    "removed": sorted(uids - kept), "now": now})
+    changed = [l for l in leads if l.uid in uids]
+    kept = {lead.uid for lead in changed}
+    return jsonify({"leads": [{**lead_json(l, undo), "in_view": in_view(l, view) and matches(l, q, tier)}
+                              for l in changed],
+                    "changes": True, "removed": sorted(uids - kept),
+                    "total": sum(in_view(l, view) and matches(l, q, tier) for l in leads),
+                    "counts": view_counts(leads), "recent": _recent(leads, undo), "now": now})
+
+
+def _page(leads, undo, view, q, tier):
+    keep = set((request.args.get("keep") or "").split(",")[:50]) - {""}
+    rows = [l for l in leads if (in_view(l, view) or l.uid in keep) and matches(l, q, tier)]
+    sort = request.args.get("sort") or "score"
+    if sort not in SORTS:
+        sort = "score"
+    default_desc = sort in ("score", "called")
+    desc = {"asc": False, "desc": True}.get(request.args.get("dir") or "", default_desc)
+    if sort != "score" or not desc:
+        rows.sort(key=SORTS[sort], reverse=desc)      # stable: ties keep the best-first order
+    shown = rows                                      # no limit asked for: every row
+    if "limit" in request.args:
+        limit = request.args.get("limit", type=int) or MAX_LIMIT
+        shown = rows[:max(1, min(limit, MAX_LIMIT))]
+    return {"leads": [lead_json(l, undo) for l in shown], "total": len(rows),
+            "counts": view_counts(leads), "recent": _recent(leads, undo)}
 
 
 @bp.post("/calls")
@@ -64,8 +156,10 @@ def log_call():
     uid = str(data.get("key") or "")
     if not uid or len(uid) > 64:
         return jsonify({"error": "Unknown lead"}), 400
+    call_id = str(data["id"]) if data.get("id") else None
     try:
-        call = calls.log_call(uid, str(data.get("outcome") or ""), str(data.get("notes") or ""))
+        call = calls.log_call(uid, str(data.get("outcome") or ""), str(data.get("notes") or ""),
+                              call_id)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
@@ -158,7 +252,12 @@ def download(job_id, fmt):
             leads, _ = load_saved()
         except LoadError as exc:
             unavailable(str(exc))
-        info = {"list": "All saved leads", "leads": len(leads)}
+        try:
+            first, latest = saved.date_range()
+        except Exception:
+            log.warning("Reading the search dates failed", exc_info=True)
+            first = latest = None                  # the file is still useful without them
+        info = saved_list_info(leads, first, latest)
     else:
         job = state().jobs.get(job_id)
         if not job or job["state"] != "done":

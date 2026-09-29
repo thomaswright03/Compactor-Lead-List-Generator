@@ -398,11 +398,15 @@ YELP_CACHE_TTL_SECONDS = 7 * 24 * 3600
 # keeping its data for 24 hours and Google's for 30 days. Setting e.g.
 # {"yelp": 12 * 3600} with a 12-hour YELP_CACHE_TTL_SECONDS drops Yelp details,
 # but only when the site is next used (there is no scheduled purge).
-SAVED_SOURCE_KEEP_SECONDS = {}
+SAVED_SOURCE_KEEP_SECONDS: dict[str, float] = {}
 
 # The whole map-data step (every mirror together) gives up after this long, so a
 # search never hangs for many minutes when the free map servers are down.
 OVERPASS_DEADLINE_SECONDS = 120
+# A mirror that hasn't answered after this long is not waited out: the next one is
+# asked as well, and the first good answer wins (a normal 30-mile query takes 10 to
+# 40 seconds, and the slow mirror can still answer until the deadline).
+OVERPASS_STAGGER_SECONDS = 25
 
 # Overpass mirrors tried in order when the free OpenStreetMap source is used.
 OVERPASS_ENDPOINTS = [

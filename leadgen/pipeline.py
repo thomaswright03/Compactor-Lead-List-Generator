@@ -50,6 +50,7 @@ class SearchParams:
     limit: int = 0
     api_key: str = ""          # Google Places
     yelp_api_key: str = ""
+    skip_yelp: bool = False    # the command line without the site's database (cli.py)
 
     def resolved_keys(self):
         """Return (google key, yelp key, misplaced) from the params or the environment.
@@ -68,7 +69,7 @@ class SearchParams:
             google = ""
         if config.switched_on(config.GOOGLE_OFF_ENV):
             google = ""
-        if config.switched_on(config.YELP_OFF_ENV):
+        if config.switched_on(config.YELP_OFF_ENV) or self.skip_yelp:
             yelp_key = ""
         return google, yelp_key, misplaced
 
@@ -83,7 +84,7 @@ class RunResult:
     problems: list = field(default_factory=list)   # technical detail of failed sources
 
     def run_info(self, params):
-        info = {k: v for k, v in asdict(params).items() if k not in ("api_key", "yelp_api_key")}
+        info = {k: v for k, v in asdict(params).items() if k not in ("api_key", "yelp_api_key", "skip_yelp")}
         info["keywords"] = ", ".join(params.keywords)
         info["resolved location"] = f"{self.location_label} ({self.center[0]:.4f}, {self.center[1]:.4f})"
         info.update(self.stats)
@@ -129,7 +130,8 @@ def run(params: SearchParams, progress=None):
     say(f"Locating '{params.location}'")
     lat, lon, label = geocode(params.location, api_key)
 
-    warnings, stats = [], {}
+    warnings: list[str] = []
+    stats: dict[str, object] = {}
     if misplaced:
         used = ("it was used for Yelp" if use_yelp and not
                 (params.yelp_api_key or os.environ.get("YELP_API_KEY", "")).strip()

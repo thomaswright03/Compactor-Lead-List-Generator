@@ -252,3 +252,28 @@ def test_reference_businesses_rank_where_they_should():
     assert len(strong) >= 0.75 * len(have), f"only {strong} reach tier A or B"
     assert not [lead.name for lead in lack if lead.tier in ("A", "B")]
     assert min(lead.score for lead in have) > max(lead.score for lead in lack)
+
+
+def test_confirmed_businesses_keep_their_tier():
+    """Businesses Arco marked Yes never drop a tier, and ones marked No never rise one,
+    after a scoring change ("confirmed" in scoring_reference.json, copied from the
+    site by `python -m leadgen reference`)."""
+    import json
+    from pathlib import Path
+
+    from leadgen import config
+    from leadgen.models import Lead
+    from leadgen.reference import FACTS
+    from leadgen.scoring import TIERS, score_lead
+
+    rank = {tier: n for n, (_, tier) in enumerate(TIERS)}       # A = 0 ... D = 3
+    data = json.loads((Path(__file__).parent / "fixtures" / "scoring_reference.json").read_text())
+    moved = []
+    for item in data.get("confirmed", []):
+        lead = Lead(lat=40.7, lon=-111.9, source_id=item["name"],
+                    **{k: item[k] for k in FACTS if k in item})
+        score_lead(lead, config.DEFAULT_KEYWORDS)
+        if (item["marked"] == "yes" and rank[lead.tier] > rank[item["tier"]]) or \
+                (item["marked"] == "no" and rank[lead.tier] < rank[item["tier"]]):
+            moved.append(f"{item['name']} (marked {item['marked']}): {item['tier']} -> {lead.tier}")
+    assert not moved, moved

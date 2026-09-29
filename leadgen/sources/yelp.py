@@ -81,8 +81,8 @@ def parse_business(biz, query=""):
     url = (biz.get("url") or "").split("?")[0]     # drop Yelp's tracking parameters
     return Lead(
         name=(biz.get("name") or "").strip(),
-        lat=coords.get("latitude"),
-        lon=coords.get("longitude"),
+        lat=coords.get("latitude"),              # type: ignore[arg-type] # None: dropped
+        lon=coords.get("longitude"),             # type: ignore[arg-type] # by paging.py
         source="yelp",
         source_id=biz.get("id", ""),
         address=" ".join(x for x in [loc.get("address1") or "", loc.get("address2") or ""] if x),
@@ -137,7 +137,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
     n_cells = choose_grid(radius_miles, grid_cells, len(queries), cap)
     cells = search_grid(lat, lon, min(radius_miles, MAX_RADIUS_MILES) if n_cells == 1
                         else radius_miles, n_cells)
-    quota = {"left": None}
+    quota: dict[str, int | None] = {"left": None}
     warnings = []
     if progress:
         progress(f"Yelp: {len(queries)} searches x {n_cells} area(s), up to {cap} calls "
@@ -173,7 +173,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
                           sort_by="review_count")
         else:
             params["term"] = query
-        got = CaseInsensitiveDict()       # header names may arrive in any case
+        got: CaseInsensitiveDict = CaseInsensitiveDict()       # header names may arrive in any case
         try:
             data = request_json("GET", SEARCH_URL, params=params, headers=headers,
                                 use_cache=False, no_retry=(QUOTA_ERROR,), response_headers=got,

@@ -7,16 +7,29 @@ function emptyNote(title, text, href, label) {
   box.append(a);
   return box;
 }
+// The businesses with a call logged (all of them: calls are made by hand, so they stay few).
+async function loadCalled() {
+  try {
+    const body = await api("/leads?tab=called&sort=called&dir=desc&limit=5000");
+    S.called = body.leads; S.counts = body.counts; S.calledLoaded = true; S.calledError = "";
+  } catch (err) {
+    if (err.status === 401) return;
+    S.calledError = err.message;
+  }
+  renderCalls(); counts();
+}
 function renderCalls() {
-  if (S.loadError && !S.loaded) {
-    problem($("calls-problem"), "Can't show your calls right now", S.loadError, () => loadLeads());
+  if (S.calledError && !S.calledLoaded) {
+    problem($("calls-problem"), "Can't show your calls right now", S.calledError, loadCalled);
     $("calls-body").hidden = true; return;
   }
-  $("calls-problem").replaceChildren(); $("calls-body").hidden = !S.loaded;
-  const called = S.leads.filter((l) => l.call_count);
-  tabs($("call-tabs"), OUTCOMES.map((o) => [o, o, called.filter((l) => l.call_outcome === o).length]), S.callView,
+  $("calls-problem").replaceChildren(); $("calls-body").hidden = !S.calledLoaded;
+  if (!S.calledLoaded) return;
+  const called = S.called, outcomes = (S.counts && S.counts.outcomes) || {};
+  // "All calls" first, newest first, so a call just saved is always in view.
+  tabs($("call-tabs"), [["", "All calls", called.length], ...OUTCOMES.map((o) => [o, o, outcomes[o] || 0])], S.callView,
        (v) => { S.callView = v; renderCalls(); writeHash("calls"); });
-  const rows = called.filter((l) => l.call_outcome === S.callView);
+  const rows = S.callView ? called.filter((l) => l.call_outcome === S.callView) : [...called];
   const wrap = $("calls-wrap");
   if (!called.length) {
     wrap.replaceChildren(emptyNote("No calls logged yet.",
@@ -25,9 +38,9 @@ function renderCalls() {
     return;
   }
   if (!rows.length) { wrap.replaceChildren(el("div", `No calls with the result “${S.callView}” yet.`, "empty")); return; }
-  const table = el("table", undefined, "plain");
+  const table = el("table", undefined, "plain calls");
   const head = el("tr");
-  for (const t of ["Business", "Phone", "Last call", "Conversation summary", ""]) head.append(el("th", t));
+  for (const t of ["Business", "Phone", "Latest call", "Conversation summary", ""]) head.append(el("th", t));
   const thead = el("thead"); thead.append(head);
   const tbody = el("tbody");
   rows.sort((a, b) => (b.last_call_at || 0) - (a.last_call_at || 0));   // latest call first
@@ -36,7 +49,9 @@ function renderCalls() {
     const name = el("td"); name.append(el("strong", l.name)); name.append(el("div", [l.address, l.city].filter(Boolean).join(", "), "sub"));
     tr.append(name);
     const phone = el("td"); phone.append(phoneLink(l.phone)); tr.append(phone);
-    const when = el("td"); when.append(el("div", l.last_call)); when.append(el("div", `${l.call_count} call${l.call_count > 1 ? "s" : ""}`, "sub"));
+    const when = el("td");
+    when.append(el("span", l.call_outcome, "badge"), el("div", l.last_call));
+    when.append(el("div", `${l.call_count} call${l.call_count > 1 ? "s" : ""}`, "sub"));
     tr.append(when);
     tr.append(el("td", l.call_notes || "(no notes)", "notes"));
     const act = el("td"); const box = el("div", undefined, "call-cell");
@@ -47,7 +62,6 @@ function renderCalls() {
     tbody.append(tr);
   }
   table.append(thead, tbody);
-  table.style.minWidth = "720px";
   wrap.replaceChildren(table);
 }
 
@@ -65,13 +79,20 @@ function writeDraft(key, draft) {
   try { if (empty) localStorage.removeItem(draftKey(key)); else localStorage.setItem(draftKey(key), JSON.stringify(draft)); }
   catch (e) { /* kept for this visit only */ }
 }
-let callLead = null, callOutcome = "";
+// Each call gets its own id when the box opens (kept with the draft), so sending it twice
+// (a retry after a lost answer) records it once.
+let callLead = null, callOutcome = "", callId = "";
+function newId() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 function pickOutcome(o) {
   callOutcome = o;
   $("outcomes").querySelectorAll("button").forEach((x) => { const on = x.textContent === o; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on); });
   $("call-save").disabled = !o;
 }
-function saveDraft() { if (callLead) writeDraft(callLead.key, { notes: $("call-notes").value, outcome: callOutcome }); }
+function saveDraft() { if (callLead) writeDraft(callLead.key, { notes: $("call-notes").value, outcome: callOutcome, id: callId }); }
 function openCall(lead) {
   callLead = lead;
   $("call-title").textContent = `Just called: ${lead.name}`;
@@ -83,6 +104,7 @@ function openCall(lead) {
     box.append(b);
   }
   const draft = readDraft(lead.key);
+  callId = (draft && draft.id) || newId();
   $("call-notes").value = draft ? draft.notes : "";
   pickOutcome(draft && OUTCOMES.includes(draft.outcome) ? draft.outcome : "");
   $("call-draft-note").textContent = draft ? "Your unsaved notes from before are back. They are kept until you save." : "Notes are kept as a draft until you save.";
@@ -95,18 +117,22 @@ $("call-dlg").addEventListener("close", saveDraft);
 $("call-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!callLead || !callOutcome) return;
-  const key = callLead.key;
+  const target = callLead, key = callLead.key;
   $("call-save").disabled = true; S.busy++;
   try {
-    const { call } = await post("/calls", { key, outcome: callOutcome, notes: $("call-notes").value });
+    const { call } = await post("/calls", { key, outcome: callOutcome, notes: $("call-notes").value, id: callId });
     writeDraft(key, { notes: "", outcome: "" });
     // Update the lead as it is now (the list may have been reloaded while saving).
-    const lead = leadByKey(key);
-    if (lead) Object.assign(lead, { call_outcome: call.outcome, call_notes: call.notes, last_call: call.when,
-                                    last_call_at: call.at, call_count: (lead.call_count || 0) + 1, undo_call: call.undo });
+    const lead = leadByKey(key) || target;
+    const first = !lead.call_count;
+    updateLead({ key, call_outcome: call.outcome, call_notes: call.notes, last_call: call.when,
+                 last_call_at: call.at, call_count: (lead.call_count || 0) + 1, undo_call: call.undo });
+    addRecent(leadByKey(key) || lead);
+    if (S.counts && first) S.counts.called++;
     if (callLead && callLead.key === key) { callLead = null; $("call-dlg").close(); }
     renderAll();
-    toast(`${lead ? lead.name : "Call"}: saved as ${call.outcome}.`, () => undoCall(key));
+    if (!$("page-calls").hidden) loadCalled(); else S.calledLoaded = false;
+    toast(`${lead.name}: saved as ${call.outcome}.`, () => undoCall(key));
   } catch (err) {
     if (callLead && callLead.key === key) {
       $("call-error").textContent = `Not saved. ${err.message}`;

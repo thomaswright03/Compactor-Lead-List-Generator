@@ -2,13 +2,14 @@
 
     python -m leadgen run --location 84101 --radius 30 --out leads.xlsx
     python -m leadgen web
+    python -m leadgen reference      # copy the site's Yes / No marks into the scoring tests
 """
 
 import argparse
 import sys
 from pathlib import Path
 
-from . import config
+from . import config, store
 from .envfile import load_dotenv
 from .export import to_csv_bytes, to_xlsx_bytes
 from .geo import GeocodeError
@@ -50,7 +51,8 @@ def build_parser():
                    help="Cap on Google and on Yelp API requests per run (cost control). "
                         "Default: Google, enough for every search (about 100 with --grid 1); "
                         f"Yelp, {config.YELP_DEFAULT_MAX_REQUESTS}. Yelp never passes "
-                        f"{config.YELP_DAILY_LIMIT} calls a day in total")
+                        f"{config.YELP_DAILY_LIMIT} calls a day in total, counted in the "
+                        "website's database: Yelp is only used when DATABASE_URL points at it")
     r.add_argument("--only-keyword-matches", action="store_true",
                    help="Keep only leads that match one of the keywords")
     r.add_argument("--include-closed", action="store_true", help="Keep permanently closed places")
@@ -61,6 +63,11 @@ def build_parser():
     r.add_argument("--api-key", default="", help="Google Places API key (or set GOOGLE_PLACES_API_KEY)")
     r.add_argument("--yelp-api-key", default="", help="Yelp API key (or set YELP_API_KEY)")
     r.add_argument("--quiet", "-q", action="store_true")
+
+    ref = sub.add_parser("reference", help="Copy the businesses marked Yes / No on the site "
+                         "into the scoring reference set (needs DATABASE_URL)")
+    ref.add_argument("--out", default=None, help="Reference file (default "
+                     "tests/fixtures/scoring_reference.json)")
 
     w = sub.add_parser("web", help="Start the web page")
     w.add_argument("--host", default="127.0.0.1")
@@ -78,13 +85,28 @@ def cmd_run(args):
         include_closed=args.include_closed, limit=args.limit, api_key=args.api_key,
         yelp_api_key=args.yelp_api_key,
     )
+    # The Yelp key is shared, and the website keeps the one count of its calls (at most
+    # YELP_DAILY_LIMIT in any 24 hours) in its database. Without that database the
+    # calls would be counted in a local file instead, apart from the site's count.
+    if not store.database_url() and (args.source == "yelp" or
+                                     (args.source == "auto" and params.resolved_keys()[1])):
+        if args.source == "yelp":
+            print(f"Error: Yelp calls must count against the website's limit of "
+                  f"{config.YELP_DAILY_LIMIT} a day, which is kept in its database. Set "
+                  "DATABASE_URL to the website's database to use Yelp here, or use "
+                  "--source osm.", file=sys.stderr)
+            return 2
+        params.skip_yelp = True
+        print("Note: Yelp was left out, because DATABASE_URL (the website's database, which "
+              f"counts the shared key's {config.YELP_DAILY_LIMIT} calls a day) is not set.",
+              file=sys.stderr)
     progress = None if args.quiet else (lambda m: print(f"  {m}", file=sys.stderr))
     try:
         result = run(params, progress)
     except (PipelineError, GeocodeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         if getattr(exc, "detail", ""):
-            print(f"Details: {exc.detail}", file=sys.stderr)
+            print(f"Details: {getattr(exc, 'detail', '')}", file=sys.stderr)
         return 2
 
     out = Path(args.out)
@@ -110,6 +132,21 @@ def cmd_run(args):
     return 0
 
 
+def cmd_reference(args):
+    from . import reference
+    if not store.database_url():
+        print("Note: DATABASE_URL is not set, so the marks come from the local database, "
+              "not the website's.", file=sys.stderr)
+    try:
+        yes, no = reference.export(args.out or reference.DEFAULT_PATH)
+    except store.Unavailable as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    print(f"{yes} businesses marked Yes and {no} marked No are in the reference set "
+          f"({args.out or reference.DEFAULT_PATH}). Run the tests: python -m pytest")
+    return 0
+
+
 def main(argv=None):
     load_dotenv()
     args = build_parser().parse_args(argv)
@@ -117,6 +154,8 @@ def main(argv=None):
         from .web import create_app
         create_app().run(host=args.host, port=args.port, debug=args.debug)
         return 0
+    if args.command == "reference":
+        return cmd_reference(args)
     if args.command != "run":
         build_parser().print_help()
         return 1

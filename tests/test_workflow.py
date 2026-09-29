@@ -89,6 +89,37 @@ def test_calls_are_logged_for_good_and_set_the_outcome():
     assert "Interested" in csv and "Wants a quote" in csv
 
 
+def test_a_call_sent_twice_is_recorded_once():
+    """The page gives each call its own id; the same call sent twice at once (a retry
+    on a flaky connection) is one call in the history."""
+    import threading
+    import uuid
+    lead = _lead("Costco", "c")
+    saved.save_search([lead])
+    app = web.create_app()
+    call_id = uuid.uuid4().hex
+    answers = []
+
+    def send():
+        answers.append(app.test_client().post("/calls", json={
+            "key": lead.uid, "outcome": "Follow Up", "notes": "Call back Friday", "id": call_id}))
+    threads = [threading.Thread(target=send) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert [a.status_code for a in answers] == [200, 200]
+    assert {a.get_json()["call"]["id"] for a in answers} == {call_id}
+    assert len(calls.history(lead.uid)) == 1
+    client = app.test_client()
+    assert client.post("/calls", json={"key": lead.uid, "outcome": "Interested", "id": "x"}).status_code == 400
+    # Undone, and then a late copy arrives: it stays undone.
+    assert client.post("/calls/undo", json={"id": call_id}).get_json()["ok"]
+    late = client.post("/calls", json={"key": lead.uid, "outcome": "Follow Up", "id": call_id})
+    assert late.status_code == 400 and "already undone" in late.get_json()["error"]
+    assert calls.history(lead.uid) == []
+
+
 def test_call_input_is_checked():
     lead = _lead("Costco", "c")
     saved.save_search([lead])
@@ -112,6 +143,59 @@ def test_stats():
         ("A", 1, 2, 50), ("B", 1, 1, 100), ("C", 0, 0, None), ("D", 0, 1, 0)]
     client = web.create_app().test_client()
     assert client.get("/stats").get_json()["with_equipment"] == 0
+
+
+def test_competitors_and_own_listing_are_left_out_of_stats_and_checking():
+    """Competitors and Arco's own listing stay in the list, flagged, but are not
+    prospects: marking one Yes changes no Stats figure and no "to check" count."""
+    from leadgen import config
+    from leadgen.scoring import score_lead
+    leads = [Lead(name=n, lat=40.7 + i / 100, lon=-111.9, source="osm", source_id=f"n{i}",
+                  raw_categories=["shop=supermarket"]) for i, n in
+             enumerate(["Harmons", "Smith's Marketplace", "Pro Baler", "Arco Compactor"])]
+    for lead in leads:
+        score_lead(lead, config.DEFAULT_KEYWORDS)
+    assert [l.lead_type for l in leads[2:]] == ["Competitor", "Own company"]
+    saved.save_search(leads, config.DEFAULT_KEYWORDS)
+    marks.set_mark(leads[0].uid, "yes")
+    marks.set_mark(leads[1].uid, "no")
+    client = web.create_app().test_client()
+    before = client.get("/stats").get_json()
+    counts = client.get("/leads?tab=unchecked&limit=10").get_json()["counts"]
+    marks.set_mark(leads[2].uid, "yes")                # a competitor does run balers...
+    marks.set_mark(leads[3].uid, "no")
+    after = client.get("/stats").get_json()
+    for key in ("with_equipment", "checked", "average_score", "average_tier", "by_tier"):
+        assert after[key] == before[key], key         # ...but it isn't a prospect
+    assert after["left_out"] == 2 and after["with_equipment"] == 1 and after["checked"] == 2
+    page = client.get("/leads?tab=unchecked&limit=10").get_json()
+    assert page["counts"] == counts and page["counts"]["unchecked"] == 0
+    assert page["counts"]["competitors"] == 2 and page["counts"]["all"] == 4
+    listed = client.get("/leads?tab=competitors&limit=10").get_json()["leads"]
+    assert {l["name"] for l in listed} == {"Pro Baler", "Arco Compactor"}   # still shown
+
+
+def test_the_page_gets_one_view_at_a_time():
+    """The Leads page asks for the rows it shows: one tab, filtered and sorted, the
+    first `limit` of them, plus every tab's count."""
+    leads = [_lead(f"Store {i:02}", f"s{i}", score=20 + i, city="Ogden" if i % 2 else "Sandy")
+             for i in range(30)]
+    saved.save_search(leads)
+    marks.set_mark(leads[0].uid, "yes")
+    client = web.create_app().test_client()
+    page = client.get("/leads?tab=unchecked&limit=5").get_json()
+    assert page["total"] == 29 and len(page["leads"]) == 5
+    scores = [l["score"] for l in page["leads"]]
+    assert scores == sorted(scores, reverse=True)
+    assert page["counts"]["unchecked"] == 29 and page["counts"]["yes"] == 1
+    page = client.get("/leads?tab=unchecked&limit=3&sort=name&dir=asc&q=ogden").get_json()
+    assert page["total"] == 15 and [l["name"] for l in page["leads"]] == ["Store 01", "Store 03", "Store 05"]
+    page = client.get(f"/leads?tab=unchecked&limit=3&sort=name&keep={leads[0].uid}").get_json()
+    assert page["leads"][0]["name"] == "Store 00"       # a row just marked stays put
+    page = client.get("/leads?tab=all&limit=2&sort=name&dir=desc").get_json()
+    assert [l["name"] for l in page["leads"]] == ["Store 29", "Store 28"]
+    assert client.get("/leads?tab=yes&limit=300").get_json()["total"] == 1
+    assert len(client.get("/leads").get_json()["leads"]) == 30          # no view: everything
 
 
 def test_progress_steps():

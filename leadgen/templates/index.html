@@ -125,10 +125,15 @@
             <option value="">All tiers</option><option value="A">A - strong</option><option value="B">B - likely</option>
             <option value="C">C - possible</option><option value="D">D - weak</option>
           </select>
-          <a class="btn quiet" href="/download/saved.xlsx">Download Excel</a>
-          <a class="btn quiet" href="/download/saved.csv">Download CSV</a>
+          <a class="btn quiet" href="/download/saved.xlsx" data-download data-file="compactor-leads.xlsx"
+             data-busy-label="Preparing Excel…">Download Excel</a>
+          <a class="btn quiet" href="/download/saved.csv" data-download data-file="compactor-leads.csv"
+             data-busy-label="Preparing CSV…">Download CSV</a>
         </div>
         <div id="leads-note"></div>
+        <p class="hint-line" id="competitor-hint" hidden>Competitors and Arco's own listing are
+          flagged here so you can see who else works the area. They aren't prospects, so they aren't
+          asked Yes / No and aren't counted in Stats.</p>
         <p class="hint-line" id="call-hint" hidden>To log a call, mark the business Yes, then use
           <strong>Just called</strong> on the <button type="button" class="link" id="call-hint-go">Has baler or compactor</button> tab.</p>
         <div class="recent" id="recent" hidden><h2>Recent changes (can be undone for 5 minutes)</h2><ul id="recent-list"></ul></div>
@@ -140,7 +145,7 @@
     <!-- Calls -->
     <section class="page" id="page-calls" hidden>
       <div class="page-head"><h1>Calls</h1>
-        <p>Businesses with a baler or compactor that have been called, sorted by how the latest call went.</p></div>
+        <p>Businesses with a baler or compactor that have been called: every call, newest first, or by how the latest call went.</p></div>
       <div id="calls-problem"></div>
       <div id="calls-body">
         <div class="tabs" id="call-tabs"></div>
@@ -151,24 +156,27 @@
     <!-- Stats -->
     <section class="page" id="page-stats" hidden>
       <div class="page-head"><h1>Stats</h1>
-        <p>From the businesses marked Yes or No for having a baler or compactor.</p></div>
+        <p>From the businesses marked Yes or No for having a baler or compactor.</p>
+        <p id="stats-left-out" hidden></p></div>
       <div id="stats-problem"></div>
       <div id="stats-body">
         <div class="card" id="stats-empty" hidden></div>
-        <div class="tiles">
-          <div class="card tile"><div class="label">Businesses with a baler or compactor</div>
-            <div class="value" id="s-total">-</div></div>
-          <div class="card tile"><div class="label">Average score of those businesses</div>
-            <div class="value" id="s-avg">-</div></div>
-        </div>
-        <div class="card">
-          <h2>Share with a baler or compactor, by tier</h2>
-          <p class="muted" style="margin-top:-6px">Out of the businesses checked (marked Yes or No) in each tier.</p>
-          <div class="viz" id="chart"></div>
-          <p class="muted" id="tier-d-note" hidden></p>
-          <div class="scroll-x"><table class="plain" id="s-table" style="margin-top:12px">
-            <thead><tr><th>Tier</th><th>Checked</th><th>Have one</th><th>Share</th></tr></thead><tbody></tbody>
-          </table></div>
+        <div id="stats-data" hidden>
+          <div class="tiles">
+            <div class="card tile"><div class="label">Businesses with a baler or compactor</div>
+              <div class="value" id="s-total">-</div></div>
+            <div class="card tile"><div class="label">Average score of those businesses</div>
+              <div class="value" id="s-avg">-</div></div>
+          </div>
+          <div class="card">
+            <h2>Share with a baler or compactor, by tier</h2>
+            <p class="muted">Out of the businesses checked (marked Yes or No) in each tier.</p>
+            <div class="viz" id="chart"></div>
+            <p class="muted" id="tier-d-note" hidden></p>
+            <div class="scroll-x"><table class="plain" id="s-table">
+              <thead><tr><th>Tier</th><th>Checked</th><th>Have one</th><th>Share</th></tr></thead><tbody></tbody>
+            </table></div>
+          </div>
         </div>
       </div>
     </section>
@@ -186,7 +194,7 @@
     <label for="call-notes">Conversation Summary
       <textarea id="call-notes" maxlength="5000" placeholder="Who you spoke to, what they said, next steps..."></textarea></label>
     <div>
-      <div class="sub" style="margin-bottom:6px;font-weight:600">How did it go?</div>
+      <div class="sub ask">How did it go?</div>
       <div class="outcomes" id="outcomes"></div>
     </div>
     <div class="sub" id="call-draft-note"></div>

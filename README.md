@@ -89,15 +89,25 @@ On phones and tablets every button and link is at least 44 px each way.
   today's only search: **Start search** runs it, **Go back and edit** (or Escape)
   leaves the day unused. A search that fails outright
   (e.g. an unknown location, or the map data service is down) gives the day
-  back, says so in one or two plain sentences, and stays in the history marked
+  back, says so in one or two plain sentences (with one piece of advice: "You
+  can try again now; if it fails again, try later today"), and stays in the history marked
   **Failed** with the reason; so does one that never finished (the server
   restarted), after 30 minutes (the page says when, in Utah time). The map data step gives up after two minutes
-  in all (`OVERPASS_DEADLINE_SECONDS`), and the progress bar says when a step
+  in all (`OVERPASS_DEADLINE_SECONDS`); a map server that hasn't answered after
+  25 seconds (`OVERPASS_STAGGER_SECONDS`) is not waited out: the next one is asked
+  as well and the first good answer wins, so one hanging server can't use up the
+  time the others need. The progress bar says when a step
   is taking longer than usual. Steps that don't apply (Google and Yelp when
   neither is set up) are shown as skipped.
 - **Leads**: the saved list, with **Yes** / **No** buttons for "has a baler or
   compactor" and tabs for Not checked, Has baler or compactor, No baler or
-  compactor, and All. The sidebar badge counts the leads still to check. A
+  compactor, Competitors, and All. Competitors and Arco's own listing are
+  flagged (orange) and have their own **Competitors** tab: they aren't prospects,
+  so they get no Yes / No buttons, aren't in Not checked and aren't counted in
+  Stats (they still appear under All and in the downloads). The sidebar badge
+  counts the prospects still to check. The server filters, sorts and pages the
+  list, so opening the page fetches only the rows shown (300 at a time, **Show
+  more** for the next 300) and the tab counts, not the whole saved list. A
   business just marked stays where it is, showing its answer ("Saved. Moves to
   …") and its Undo, until the pointer leaves the list (then a few seconds), or
   you change tab, filter or sort, so a double-click or a quick second click can
@@ -110,10 +120,13 @@ On phones and tablets every button and link is at least 44 px each way.
   newer change has been made to that business (e.g. by a colleague). Click a
   column heading (Score, Business, Contact, Miles) to sort; the tab, filter,
   tier and sort are kept in the address, so a reload or a shared link shows the
-  same view. Phone numbers are tap-to-call links. The list refreshes every
+  same view. **Download Excel** / **Download CSV** say "Preparing Excel…" while
+  the file is built (10,000 leads take about a second) and ignore a second click
+  meanwhile. Phone numbers are tap-to-call links. The list refreshes every
   minute and when you come back to the tab, so colleagues' marks and calls show
   up without a reload; each refresh only fetches the businesses that changed
-  (`GET /leads?since=…`), so it stays small however long the list grows.
+  (`GET /leads?since=…`, which also sends the new tab counts), so it stays small
+  however long the list grows.
   Tabs other than Has baler or compactor say where calls are logged.
 - **Calls**: in the Has baler or compactor tab, **Just called** opens a
   Conversation Summary box and the result of the call (Interested, Follow Up,
@@ -121,13 +134,19 @@ On phones and tablets every button and link is at least 44 px each way.
   for good (a saved call can be undone for 5 minutes, like a mark); **History**
   shows them all. Typed notes are never lost: closing the box (Cancel, Escape,
   even a reload) keeps them as a draft for that business in this browser until
-  they are saved. The Calls page has a tab per result, and a business sits
-  under its latest call's result; with no calls yet it says how to log one.
+  they are saved. A call sent twice (a retry on a flaky connection) is recorded
+  once: the page gives each call its own id. The Calls page opens on **All
+  calls**, newest first, so a call just saved is in view; then there is a tab per
+  result, where a business sits under its latest call's result (`#calls?tab=Follow Up`
+  in the address opens that tab). With no calls yet it says how to log one.
 - **Stats**: how many businesses have a baler or compactor (marked Yes), their
   average score, and a chart of the share of checked businesses (marked Yes or
-  No) that have one, by tier. Tier D is usually empty, and the page says why:
-  searches only save businesses scoring at least the minimum score (20). Before
-  anything is marked, the page says how to fill it and links to the Leads page.
+  No) that have one, by tier. Competitors and Arco's own listing are left out of
+  every figure (the page says how many), since the numbers measure how well the
+  scoring finds prospects. Tier D is usually empty, and the page says why:
+  searches only save businesses scoring at least the minimum score (20; the tier
+  boundaries come from the scoring settings). Before anything is marked, the page
+  shows only a note saying how to fill it, with a link to the Leads page.
 
 Marks and the latest call (result, time and notes) are also columns in the downloads.
 
@@ -211,7 +230,8 @@ If it didn't deploy (the live job failed, or `/healthz` shows an old version):
    check `/healthz` again.
 
 The Python packages are pinned to exact versions in `requirements.txt`, so a
-deploy never picks up a new Flask, psycopg or openpyxl by surprise. To upgrade
+deploy never picks up a new Flask or psycopg by surprise (the Excel files are
+written by the site itself, `leadgen/xlsx.py`; openpyxl is only used by the tests). To upgrade
 one, change its version there, run the tests, and push.
 
 ### Logs, and rolling back a bad deploy
@@ -241,7 +261,13 @@ python -m leadgen run --source google --grid 7                        # wider Go
 python -m leadgen run --source yelp --max-requests 20                 # Yelp only, 20 calls
 python -m leadgen run --grid 7 --max-requests 300                     # wider, but capped spend
 python -m leadgen run --min-score 40 --limit 200                      # only strong leads
+python -m leadgen reference       # copy the site's Yes / No marks into the scoring tests
 ```
+
+Yelp is only used on the command line when `DATABASE_URL` points at the
+website's database, so its calls count against the site's one limit of 50 a
+day (see the Yelp notes). Without it, `--source yelp` stops with an
+explanation, and `--source auto` leaves Yelp out and says so.
 
 | Option | Default | What it does |
 | --- | --- | --- |
@@ -277,7 +303,13 @@ waste, recycling), whatever a search typed, so a business's score and tier
 depend only on facts about it and the Stats page's tiers stay comparable over
 time. `tests/fixtures/scoring_reference.json` lists reference businesses and
 whether they run a baler or compactor; a test fails if a scoring change stops
-ranking them where they should. Add businesses Arco has confirmed to it.
+ranking them where they should. Its **confirmed** list holds real businesses
+Arco's staff marked Yes / No on the Leads page, with the tier each had:
+`python -m leadgen reference` (with `DATABASE_URL` set to the website's
+database) refreshes it from the site's marks, copying only the facts the
+scoring reads (no phone numbers, addresses or call notes). A test then fails
+if a scoring change moves a business marked Yes to a lower tier, or one marked
+No to a higher one. Refresh it every month or so, run the tests, and commit it.
 
 **Lead Type** column:
 - `Prospect`: a business that likely produces the waste.
@@ -297,7 +329,12 @@ compactor, saw a baler, saw neither, not sure) and **My notes (this file only)**
 columns for private notes on a printed or offline copy:
 nothing typed there goes back into the website (record Yes / No and calls on
 the Leads page). A second sheet, **Run Info**, records when it was made (Utah
-time), the settings and counts for each run.
+time) and what the file holds: for a search, its settings and counts; for the
+saved list (**Download Excel** on the Leads page), how many leads, how many are
+marked Yes / No / not checked, competitors and own listing, the count per
+tier, how many were called, and the dates of the first and latest search. The
+Excel file is written by `leadgen/xlsx.py` in time that grows in step with the
+list (10,000 leads in about a second).
 
 ## Tuning after vetting
 
@@ -333,7 +370,9 @@ requests by 7 or 19 (up to about 700 or 1,900), so set `--max-requests` if cost 
 ## Yelp notes
 
 - The same Yelp key is used elsewhere, so this tool makes at most 50 Yelp calls
-  a day in total, across all searches (`YELP_DAILY_LIMIT`). Every call counts,
+  a day in total, across all searches (`YELP_DAILY_LIMIT`), from the website and
+  the command line: both count in the website's database (the command line only
+  uses Yelp when `DATABASE_URL` points at it). Every call counts,
   retries included; nothing in the form or on the command line raises it. Each
   call counts for 24 hours, so the calls come back 24 hours after the last
   search that used them; the page shows how many are left and when they reset
@@ -367,23 +406,32 @@ python -m pytest                               # SQLite
 LEADGEN_TEST_DATABASE_URL=postgresql://... python -m pytest   # a throwaway Postgres
 python -m ruff check .                         # lint (settings in pyproject.toml)
 python -m vulture                              # dead code (settings in pyproject.toml)
+python -m mypy                                 # type check (settings in pyproject.toml)
 ```
 
 The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
 `leadgen/saved.py`, `marks.py`, `calls.py` and `daily.py` keep the saved data
 (`store.py` is the database). The website is `leadgen/web/`: `auth.py` (login),
 `finding.py` (Find leads), `leads.py` (the saved list, marks, calls, stats,
-downloads) and `common.py`. The page's markup is `leadgen/templates/index.html`;
+downloads) and `common.py`. `export.py` lays out the CSV and Excel files and
+`xlsx.py` writes the Excel format; `reference.py` copies the site's marks into
+the scoring tests. The page's markup is `leadgen/templates/index.html`;
 its script and styles are in `leadgen/static/` (`core.js` first, then one file
-per page, then `start.js`).
+per page, then `start.js`). Spacing, radii and text sizes come from one scale of
+CSS variables in `templates/_theme.html` (`--sp-1` … `--sp-6`, `--fs-sm` …
+`--fs-xl`); use those rather than raw pixel values.
 
 The tests never call Google, Yelp or OpenStreetMap (they are mocked).
 `tests/test_browser.py` drives the real pages in Chromium (mark Yes, a
 double-click marks one business only, Undo, Just called and its kept draft, the
-search confirmation, Stats, downloads, reload keeps the view, 44 px touch
-targets on a phone); it is skipped when Playwright's Chromium is missing.
+Calls page opening on the latest call, competitors not asked Yes / No, the
+search confirmation, Stats, downloads and their busy state, reload keeps the
+view, the colour switch fitting from 320 px up, 44 px touch targets on a
+phone); it is skipped when Playwright's Chromium is missing.
+`tests/test_cli.py` runs the command line with the sources mocked.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs the lint and every test, on
+GitHub Actions (`.github/workflows/ci.yml`) runs the lint, the dead-code and
+type checks and every test, on
 SQLite and on Postgres, for each push and pull request. To make a red run block
 merging: GitHub → **Settings** → **Branches** → **Add branch protection rule**
 for `main` → **Require status checks to pass before merging**, and pick

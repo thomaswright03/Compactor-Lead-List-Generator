@@ -9,11 +9,16 @@ async function loadStats() {
   }
   $("stats-problem").replaceChildren(); $("stats-body").hidden = false;
   const empty = $("stats-empty");
-  empty.hidden = s.checked > 0;
+  // Until something is marked, only the note that says how to get numbers shows.
+  empty.hidden = s.checked > 0; $("stats-data").hidden = !s.checked;
+  $("stats-left-out").hidden = !s.left_out;
+  $("stats-left-out").textContent = `${s.left_out.toLocaleString()} competitor and own-company listing${s.left_out === 1 ? " is" : "s are"} ` +
+    "left out of these numbers: they are flagged in the list, but they aren't prospects.";
   if (!s.checked) {
     empty.replaceChildren(s.saved
       ? emptyNote("No businesses checked yet.", "Mark businesses Yes or No on the Leads page to see these numbers.", "#leads", "Go to Leads")
       : emptyNote("No saved leads yet.", "Run a search on the Find leads page, then mark businesses Yes or No on the Leads page.", "#find", "Go to Find leads"));
+    return;
   }
   $("s-total").textContent = s.with_equipment.toLocaleString();
   const avg = $("s-avg"); avg.replaceChildren();
@@ -22,7 +27,8 @@ async function loadStats() {
   drawChart(s.by_tier);
   const d = s.by_tier.find((t) => t.tier === "D");
   $("tier-d-note").hidden = !(d && !d.checked);
-  $("tier-d-note").textContent = `Tier D (scores below 20) is usually empty: searches only save businesses scoring ${s.min_score} or more.`;
+  $("tier-d-note").textContent = `Tier D (scores below ${s.tier_floors.C}) is usually empty: searches only save ` +
+    `businesses scoring ${s.min_score} or more.`;
   const tbody = $("s-table").querySelector("tbody"); tbody.replaceChildren();
   for (const t of s.by_tier) {
     const tr = el("tr");

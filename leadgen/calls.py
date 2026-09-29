@@ -4,6 +4,7 @@ A call belongs to a saved lead (its uid). Its outcome is one of OUTCOMES; the
 latest call's outcome is the lead's current one (the page's call tabs).
 """
 
+import re
 import time
 import uuid
 
@@ -15,18 +16,34 @@ OUTCOMES = ("Interested", "Follow Up", "Not Interested", "Not Qualified", "No Co
 MAX_NOTES = 5000
 
 
-def log_call(uid, outcome, notes):
-    """Record a call; returns it. Raises ValueError for a bad outcome or unknown lead."""
+def log_call(uid, outcome, notes, call_id=None):
+    """Record a call; returns it. Raises ValueError for a bad outcome or unknown lead.
+
+    call_id: the page's own id for this call, so a request sent twice (a retry on a
+    flaky connection) records one call: the second gets the first one back.
+    """
     if outcome not in OUTCOMES:
         raise ValueError("Pick how the call went")
+    if call_id is not None and not re.fullmatch(r"[0-9a-f]{32}", call_id):
+        raise ValueError("Bad call id")
     notes = (notes or "").strip()[:MAX_NOTES]
-    call = {"id": uuid.uuid4().hex, "uid": uid, "at": time.time(), "outcome": outcome,
+    call = {"id": call_id or uuid.uuid4().hex, "uid": uid, "at": time.time(), "outcome": outcome,
             "notes": notes}
     with store.connect() as db:
         if db.one("SELECT uid FROM leads WHERE uid = ?", (uid,)) is None:
             raise ValueError("Unknown lead")
-        db.run("INSERT INTO calls (id, uid, at, outcome, notes) VALUES (?, ?, ?, ?, ?)",
-               (call["id"], uid, call["at"], outcome, notes))
+        added = db.one("INSERT INTO calls (id, uid, at, outcome, notes) VALUES (?, ?, ?, ?, ?) "
+                       "ON CONFLICT (id) DO NOTHING RETURNING id",
+                       (call["id"], uid, call["at"], outcome, notes))
+        if added is None:                       # sent before: the call saved then
+            row = db.one("SELECT uid, at, outcome, notes FROM calls WHERE id = ?", (call["id"],))
+            if row is None or row[0] != uid:
+                raise ValueError("That call was already undone")
+            call.update(at=row[1], outcome=row[2], notes=row[3])
+        elif db.one("SELECT id FROM call_undos WHERE id = ?", (call["id"],)) is not None:
+            # A late copy of a call that was saved and then undone: keep it undone.
+            db.run("DELETE FROM calls WHERE id = ?", (call["id"],))
+            raise ValueError("That call was already undone")
     return call
 
 
@@ -80,7 +97,8 @@ def apply(leads):
         rows = store.rows_for(db, "SELECT uid, at, outcome, notes FROM calls", "uid",
                               dict.fromkeys(lead.uid for lead in leads if lead.uid),
                               order="ORDER BY at")
-    latest, counts = {}, {}
+    latest: dict[str, tuple] = {}
+    counts: dict[str, int] = {}
     for uid, at, outcome, notes in rows:
         latest[uid] = (at, outcome, notes)
         counts[uid] = counts.get(uid, 0) + 1

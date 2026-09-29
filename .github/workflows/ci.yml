@@ -1,4 +1,4 @@
-# Runs on every push and pull request: lint and the dead-code check, then the whole
+# Runs on every push and pull request: lint, the dead-code check and the type check, then the whole
 # test suite on SQLite and on Postgres (like the live site), including the browser
 # tests. After a push to main it also checks that Render deployed it (job "live").
 name: CI
@@ -15,9 +15,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install ruff==0.16.9 vulture==2.16     # the versions in requirements-dev.txt
+          cache: pip
+      - run: pip install -r requirements-dev.txt        # the app's packages too, for the type check
       - run: ruff check .
       - run: vulture                                   # settings in pyproject.toml
+      - run: mypy                                      # settings in pyproject.toml
 
   test:
     runs-on: ubuntu-latest

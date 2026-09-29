@@ -6,6 +6,7 @@ comes from here, so they always agree.
 
 import datetime as dt
 
+UTAH: dt.tzinfo | None
 try:
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 

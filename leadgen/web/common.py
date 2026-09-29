@@ -10,7 +10,7 @@ from werkzeug.exceptions import ServiceUnavailable
 from .. import calls, config, marks, saved, store, usage
 from ..export import format_phone
 from ..localtime import date_time_text
-from ..pipeline import SearchParams
+from ..pipeline import EXEMPT_TYPES, SearchParams
 from ..scoring import TIER_LABELS
 
 log = logging.getLogger("leadgen.web")
@@ -93,6 +93,8 @@ def lead_json(lead, undo=None):
     return {
         "score": lead.score, "tier": lead.tier, "tier_label": TIER_LABELS.get(lead.tier, ""),
         "lead_type": lead.lead_type, "flags": lead.flags, "name": lead.name,
+        # Competitors and Arco's own listing are flagged, never asked Yes / No.
+        "prospect": lead.lead_type not in EXEMPT_TYPES,
         "category": lead.category, "address": lead.address, "city": lead.city,
         "zip": lead.zip, "phone": format_phone(lead.phone), "website": lead.website,
         "distance": lead.distance_miles, "reasons": lead.reasons, "map_url": lead.map_url,

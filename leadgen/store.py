@@ -13,6 +13,7 @@ import os
 import sqlite3
 import threading
 from contextlib import contextmanager
+from typing import Any
 
 from . import http
 
@@ -64,7 +65,7 @@ TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "m
 BY_ID_LIMIT = 1000
 _CHUNK = 500
 
-_ready = set()
+_ready: set[str] = set()
 _lock = threading.Lock()
 _local = threading.local()      # the connection a web request shares (see scope())
 
@@ -155,6 +156,7 @@ def open_db():
     Raises Unavailable when there is no database.
     """
     url = database_url()
+    conn: Any
     if url:
         import psycopg
         try:

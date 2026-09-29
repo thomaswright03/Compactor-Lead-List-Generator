@@ -37,7 +37,7 @@ def _split_formatted(address):
 
 
 def parse_place(place, query=""):
-    comps = {}
+    comps: dict[str, dict] = {}
     for c in place.get("addressComponents", []):
         for t in c.get("types", []):
             comps.setdefault(t, c)

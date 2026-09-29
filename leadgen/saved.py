@@ -122,7 +122,7 @@ def save_search(leads, keywords=None):
         rows = _read(db)
         changed = {r.uid: r for r in _drop_expired(rows, now)}
         by_id = {i: r for r in rows for i in r.ids}
-        buckets = {}
+        buckets: dict[tuple, list] = {}
         for r in rows:
             if r.lead:
                 buckets.setdefault(_bucket(r.lead), []).append(r)
@@ -209,3 +209,11 @@ def changed_since(ts):
     """The uids of saved leads that a search added or updated after ts (epoch seconds)."""
     with store.connect() as db:
         return {uid for (uid,) in db.all("SELECT uid FROM leads WHERE last_seen > ?", (ts,))}
+
+
+def date_range():
+    """(first, latest): when the first and the latest search that saved leads ran
+    (epoch seconds), or (None, None) for an empty list."""
+    with store.connect() as db:
+        first, latest = db.one("SELECT MIN(first_seen), MAX(last_seen) FROM leads")
+    return first, latest

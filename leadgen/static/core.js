@@ -12,9 +12,12 @@ const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", stats: "Sta
 const PIN_MS = 5000;
 // Clicks this soon after rows moved up are ignored (they were aimed at the row that left).
 const SHIFT_GUARD_MS = 700;
-const S = { leads: [], loaded: false, loadError: "", refreshError: "", leadView: "", callView: OUTCOMES[0],
-            q: "", tier: "", sort: "score", dir: "desc", limit: 300, job: null, error: "", skew: 0, busy: 0,
-            since: 0, pinned: new Map(), shiftedAt: 0, inTable: false };
+// The Leads page holds only the rows it shows (one tab, filtered and sorted by the server,
+// the first `limit` of them), every tab's count, and the leads that can still be undone.
+const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "",
+            loaded: false, loadError: "", refreshError: "", viewLoading: false, seq: 0,
+            leadView: "", callView: "", q: "", tier: "", sort: "score", dir: "desc", limit: 300,
+            job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0 };
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);
@@ -81,19 +84,27 @@ function parseHash() {
   const [page, query] = (location.hash || "").slice(1).split("?");
   return { page, params: new URLSearchParams(query || "") };
 }
+// Take the Leads view (tab, filter, tier, sort) from the address; true when it changed.
+function readLeadView(params) {
+  const before = [S.leadView, S.q, S.tier, S.sort, S.dir].join("|");
+  S.leadView = params.get("tab") || "";
+  if (!LEAD_TABS.some(([v]) => v === S.leadView)) S.leadView = "";
+  S.q = params.get("q") || ""; S.tier = params.get("tier") || "";
+  S.sort = SORTS[params.get("sort")] ? params.get("sort") : "score";
+  S.dir = params.get("dir") === "asc" ? "asc" : params.get("dir") === "desc" ? "desc" : SORTS[S.sort].dir;
+  $("filter").value = S.q; $("tier").value = S.tier;
+  return before !== [S.leadView, S.q, S.tier, S.sort, S.dir].join("|");
+}
 function route() {
   const { page: asked, params } = parseHash();
-  const page = ["find", "leads", "calls", "stats"].includes(asked) ? asked : (S.leads.length ? "leads" : "find");
-  if (page === "leads" && params.toString()) {
-    S.leadView = params.get("tab") || "";
-    if (!["", "yes", "no", "all"].includes(S.leadView)) S.leadView = "";
-    S.q = params.get("q") || ""; S.tier = params.get("tier") || ""; S.pinned.clear();
-    S.sort = SORTS[params.get("sort")] ? params.get("sort") : "score";
-    S.dir = params.get("dir") === "asc" ? "asc" : params.get("dir") === "desc" ? "desc" : SORTS[S.sort].dir;
-    $("filter").value = S.q; $("tier").value = S.tier;
-    renderLeads();
+  const page = ["find", "leads", "calls", "stats"].includes(asked) ? asked : (S.counts && S.counts.all ? "leads" : "find");
+  hideToast();                                     // a note about one page never covers the next
+  if (page === "leads" && params.toString() && readLeadView(params)) { S.pinned.clear(); S.limit = 300; changeView(); }
+  if (page === "calls") {
+    const tab = params.get("tab");
+    S.callView = tab && OUTCOMES.includes(tab) ? tab : "";
+    loadCalled();
   }
-  if (page === "calls" && params.get("tab") && OUTCOMES.includes(params.get("tab"))) { S.callView = params.get("tab"); renderCalls(); }
   for (const p of ["find", "leads", "calls", "stats"]) $(`page-${p}`).hidden = p !== page;
   document.title = `${TITLES[page]} · ${SITE}`;
   document.querySelectorAll("nav a").forEach((a) => {
@@ -111,7 +122,7 @@ function writeHash(page) {
     if (S.q) params.set("q", S.q);
     if (S.tier) params.set("tier", S.tier);
     if (S.sort !== "score" || S.dir !== "desc") { params.set("sort", S.sort); params.set("dir", S.dir); }
-  } else if (page === "calls" && S.callView !== OUTCOMES[0]) params.set("tab", S.callView);
+  } else if (page === "calls" && S.callView) params.set("tab", S.callView);
   const hash = `#${page}${params.toString() ? "?" + params : ""}`;
   if (location.hash !== hash) history.replaceState(null, "", hash);
 }

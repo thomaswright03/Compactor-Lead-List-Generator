@@ -5,14 +5,10 @@ import io
 import re
 import time
 
-from openpyxl import Workbook
-from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.datavalidation import DataValidation
-
 from .localtime import date_time_text
-from .scoring import TIER_LABELS
+from .pipeline import EXEMPT_TYPES
+from .scoring import TIER_LABELS, TIERS
+from .xlsx import Book, Cell, clean
 
 # A private scratch column, worded unlike the site's own "Has Baler or Compactor?"
 # answer so the two can't be mistaken for each other.
@@ -73,23 +69,15 @@ _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 def _safe(value):
     """CSV: neutralize text a spreadsheet would run as a formula (data comes from the public)."""
     if isinstance(value, str):
-        value = ILLEGAL_CHARACTERS_RE.sub("", value)
+        value = clean(value)
     if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
         return "'" + value
     return value
 
 
 def _xl(value):
-    """Safe for Excel: no control characters openpyxl rejects."""
-    return ILLEGAL_CHARACTERS_RE.sub("", value) if isinstance(value, str) else value
-
-
-def _as_text(row):
-    """openpyxl stores strings starting with '=' as formulas; keep them as text."""
-    for cell in row:
-        if cell.data_type == "f":
-            cell.data_type = "s"
-            cell.quotePrefix = True   # stays text even if someone edits the cell
+    """Safe for Excel: no control characters a spreadsheet can't hold."""
+    return clean(value) if isinstance(value, str) else value
 
 
 def rows(leads):
@@ -106,59 +94,69 @@ def to_csv_bytes(leads):
 
 
 def to_xlsx_bytes(leads, run_info=None):
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Leads"
-    ws.append([c for c, _, _ in COLUMNS])
-    for cell in ws[1]:
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="1F4E78")
-        cell.alignment = Alignment(vertical="center", wrap_text=True)
-    for lead, r in zip(leads, rows(leads)):
-        ws.append([_xl(v) for v in r])
-        row = ws.max_row
-        _as_text(ws[row])
+    """The leads as an Excel file, plus a Run Info sheet (run_info: label -> value).
+
+    Written by xlsx.py, in time that grows in step with the number of leads.
+    """
+    book = Book()
+    ws = book.add_sheet("Leads", [width for _, _, width in COLUMNS], freeze="F2")
+    ws.append([Cell(name, fill="1F4E78", font="header", wrap=True) for name, _, _ in COLUMNS])
+    site_at, map_at = _col("Website") - 1, _col("Map Link") - 1
+    for lead in leads:
+        row = [_xl(fn(lead)) for _, fn, _ in COLUMNS]
         fill = COMPETITOR_FILL if lead.lead_type == "Competitor" else TIER_FILLS.get(lead.tier)
         if fill:
-            for col in range(1, 5):
-                ws.cell(row=row, column=col).fill = PatternFill("solid", fgColor=fill)
-        site = ws.cell(row=row, column=_col("Website"))
+            for i in range(4):
+                row[i] = Cell(row[i], fill=fill)
         if re.match(r"https?://", lead.website or "", re.I):
-            site.hyperlink = ILLEGAL_CHARACTERS_RE.sub("", lead.website)
-            site.font = Font(color="0563C1", underline="single")
-        link = ws.cell(row=row, column=_col("Map Link"))
+            row[site_at] = Cell(row[site_at], font="link", link=lead.website)
         if re.match(r"https?://", lead.map_url or "", re.I):
-            link.hyperlink = ILLEGAL_CHARACTERS_RE.sub("", lead.map_url)
-            link.value = "Open map"
-            link.font = Font(color="0563C1", underline="single")
-    for i, (_, _, width) in enumerate(COLUMNS, start=1):
-        ws.column_dimensions[get_column_letter(i)].width = width
-    ws.freeze_panes = "F2"
-    ws.auto_filter.ref = ws.dimensions
-    if leads:
-        dv = DataValidation(type="list", formula1='"' + ",".join(OFFLINE_CHOICES) + '"',
-                            allow_blank=True)
-        col = get_column_letter(_col(OFFLINE_VERIFIED))
-        dv.add(f"{col}2:{col}{ws.max_row}")
-        ws.add_data_validation(dv)
+            row[map_at] = Cell("Open map", font="link", link=lead.map_url)
+        ws.append(row)
+    ws.filter = True
+    ws.dropdown = (_col(OFFLINE_VERIFIED), OFFLINE_CHOICES)
 
-    info = wb.create_sheet("Run Info")
+    info = book.add_sheet("Run Info", [26, 90])
     info.append(["Generated", date_time_text(time.time()) + " (Utah time)"])
     for k, v in (run_info or {}).items():
-        info.append([_xl(k), _xl(v if isinstance(v, (int, float, str)) else str(v))])
-        _as_text(info[info.max_row])
+        info.append([_xl(str(k)), _xl(v if isinstance(v, (int, float, str)) else str(v))])
     info.append([])
-    info.append(["Tiers", "A >= 60, B >= 40, C >= 20, D below 20"])
+    info.append(["Tiers", tier_text()])
     info.append(["Row colors", "Green = stronger lead, orange = competitor"])
     info.append(["This file only", "The last two columns are for your own notes on this "
                  "copy. Nothing typed there is saved in the website: record Yes / No and "
                  "calls on the Leads page."])
-    info.column_dimensions["A"].width = 22
-    info.column_dimensions["B"].width = 90
+    return book.save()
 
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+
+def saved_list_info(leads, first=None, latest=None):
+    """The Run Info of the saved list's download: what the file holds, in plain labels.
+    first / latest: when the first and latest search ran (epoch seconds)."""
+    prospects = [l for l in leads if l.lead_type not in EXEMPT_TYPES]
+    info = {
+        "List": "All saved leads",
+        "Leads in this file": len(leads),
+        "Marked Yes (has a baler or compactor)": sum(l.has_baler == "yes" for l in prospects),
+        "Marked No": sum(l.has_baler == "no" for l in prospects),
+        "Not checked yet": sum(l.has_baler not in ("yes", "no") for l in prospects),
+        "Competitors and Arco's own listing": len(leads) - len(prospects),
+    }
+    for tier, label in TIER_LABELS.items():
+        info[f"Tier {label}"] = sum(l.tier == tier for l in leads)
+    info["Called at least once"] = sum(bool(l.call_count) for l in leads)
+    if first:
+        info["First search"] = date_time_text(first) + " (Utah time)"
+    if latest:
+        info["Latest search"] = date_time_text(latest) + " (Utah time)"
+    return info
+
+
+def tier_text():
+    """The tier boundaries in words, from scoring.TIERS: "A >= 60, B >= 40, ..."."""
+    parts = [f"{tier} >= {low}" for low, tier in TIERS if low > 0]
+    lowest = min(TIERS)
+    above = min(low for low, _ in TIERS if low > lowest[0])
+    return ", ".join(parts + [f"{lowest[1]} below {above}"])
 
 
 def _col(name):
