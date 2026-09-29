@@ -5,32 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Log in · Arco Compactor Lead Finder</title>
 <link rel="icon" href="data:,">
+{% include "_theme.html" %}
 <style>
   * { box-sizing:border-box; }
-  body { margin:0; min-height:100vh; display:flex; flex-direction:column; background:#15304d;
-         font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#1d2433; }
+  body { margin:0; min-height:100vh; display:flex; flex-direction:column; background:var(--side);
+         font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); }
   main { flex:1; display:grid; place-items:center; padding:24px 16px; }
-  .box { width:min(380px,100%); background:#fff; border-radius:14px; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+  .box { width:min(400px,100%); background:var(--card); border-radius:14px; padding:28px; box-shadow:0 20px 60px var(--shadow); }
   .brand strong { display:block; font-size:20px; }
-  .brand span { color:#667085; }
-  form { display:flex; flex-direction:column; gap:14px; margin-top:22px; }
-  label { display:flex; flex-direction:column; gap:5px; font-weight:600; font-size:12px; color:#667085; }
-  input { font:inherit; padding:10px; border:1px solid #e4e7ec; border-radius:7px; color:#1d2433; }
-  button { font:inherit; font-weight:600; border:0; border-radius:7px; padding:11px; background:#1f4e78; color:#fff; cursor:pointer; }
-  .error { color:#b42318; font-weight:600; margin:0; }
-  footer { text-align:center; color:#c9d6e5; font-size:12px; padding:16px; }
+  .brand span { color:var(--muted); }
+  .purpose { margin:12px 0 0; color:var(--muted); }
+  form { display:flex; flex-direction:column; gap:14px; margin-top:20px; }
+  label { display:flex; flex-direction:column; gap:5px; font-weight:600; font-size:13px; color:var(--muted); }
+  input { font:inherit; font-weight:400; padding:10px; border:1px solid var(--line); border-radius:7px; color:var(--ink); background:var(--input); min-height:44px; }
+  button { font:inherit; font-weight:600; border:0; border-radius:7px; padding:11px; background:var(--btn); color:var(--btn-ink); cursor:pointer; min-height:44px; }
+  input:focus-visible, button:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
+  .error { color:var(--bad-ink); font-weight:600; margin:0; }
+  .help { margin:18px 0 0; font-size:13px; color:var(--muted); }
+  footer { text-align:center; color:var(--side-ink); font-size:12px; padding:16px; }
 </style>
 </head>
 <body>
 <main>
   <div class="box">
     <div class="brand"><strong>Arco Compactor</strong><span>Lead Finder</span></div>
+    <p class="purpose">Finds businesses likely to use a baler or compactor, and keeps the sales team's Yes / No answers and call notes in one list.</p>
     <form method="post" action="/login">
-      <label>Username <input name="username" autocomplete="username" value="{{ username or '' }}" required autofocus></label>
-      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <label>Username <input name="username" autocomplete="username" value="{{ username or '' }}" required{% if not error %} autofocus{% endif %}></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required{% if error %} autofocus{% endif %}></label>
       {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
       <button type="submit">Log in</button>
     </form>
+    <p class="help">Need access or forgot the password?
+      {% if contact %}Contact {{ contact }}.{% else %}Ask the person who manages the Lead Finder at Arco Compactor.{% endif %}</p>
   </div>
 </main>
 <footer>© {{ year }} Wright AI Solutions. All rights reserved.</footer>

@@ -226,3 +226,29 @@ def test_more_surname_brands_need_corroboration():
 def test_brand_pharmacy_and_gas_get_nothing():
     assert score_lead(make("Walmart Pharmacy", ["pharmacy", "drugstore", "health", "store"])).score < 20
     assert score_lead(make("Costco Gasoline", ["gas_station", "store"], rating_count=900)).score < 20
+
+
+def test_reference_businesses_rank_where_they_should():
+    """Businesses known to run a baler or compactor land in tiers A / B; ones known not
+    to never do (tests/fixtures/scoring_reference.json)."""
+    import json
+    from pathlib import Path
+
+    from leadgen import config
+    from leadgen.models import Lead
+    from leadgen.scoring import score_lead
+
+    data = json.loads((Path(__file__).parent / "fixtures" / "scoring_reference.json").read_text())
+    scored = []
+    for item in data["businesses"]:
+        lead = Lead(name=item["name"], lat=40.7, lon=-111.9, source=item["source"],
+                    source_id=item["name"], raw_categories=item["raw_categories"],
+                    rating_count=item.get("rating_count"), yelp_reviews=item.get("yelp_reviews"))
+        score_lead(lead, config.DEFAULT_KEYWORDS)
+        scored.append((item["has_equipment"], lead))
+    have = [lead for has, lead in scored if has]
+    lack = [lead for has, lead in scored if not has]
+    strong = [lead.name for lead in have if lead.tier in ("A", "B")]
+    assert len(strong) >= 0.75 * len(have), f"only {strong} reach tier A or B"
+    assert not [lead.name for lead in lack if lead.tier in ("A", "B")]
+    assert min(lead.score for lead in have) > max(lead.score for lead in lack)

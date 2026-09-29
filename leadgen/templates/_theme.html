@@ -1,0 +1,40 @@
+{#- Colour tokens and the theme boot for every page (included in each <head>).
+    Light is the default; dark follows the OS unless the Light / Dark / System
+    control (stored in this browser) says otherwise. -#}
+{%- set dark -%}
+  color-scheme:dark;
+  --bg:#0f1623; --card:#182131; --ink:#e6ebf2; --muted:#a6b0c0; --line:#2c384b;
+  --accent:#8cc0f5; --btn:#2d6aa3; --btn-ink:#fff; --accent-2:#5aa2ea;
+  --side:#0b1220; --side-ink:#c9d6e5; --input:#111a28; --th:#1f2a3c;
+  --a:#1d4a2e; --b:#2b4221; --c:#4a3d12; --d:#2a3342; --comp:#5c311d;
+  --good:#1c7a4c; --good-ink:#7ddba6; --bad:#c8372d; --bad-ink:#ff9d94;
+  --warn-bg:#3a2f10; --warn-line:#7a6320; --warn-ink:#f5e2a6;
+  --pts:#173a28; --pts-neg:#4a1f1d; --pts-zero:#263042;
+  --toast:#e6ebf2; --toast-ink:#101826; --badge:#26324a; --hover:#1d2839;
+  --chart-bar:#5aa2ea; --chart-grid:#2c384b; --chart-base:#4a586e; --chart-text:#c3ccd8;
+  --shadow:rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
+{%- endset -%}
+<style>
+  :root {
+    color-scheme:light;
+    --bg:#f4f6f9; --card:#fff; --ink:#1d2433; --muted:#4d5566; --line:#e1e5eb;
+    --accent:#1f4e78; --btn:#1f4e78; --btn-ink:#fff; --accent-2:#2a78d6;
+    --side:#15304d; --side-ink:#c9d6e5; --input:#fff; --th:#eef2f6;
+    --a:#c6efce; --b:#e2efda; --c:#fff2cc; --d:#eceef1; --comp:#f8cbad;
+    --good:#146c43; --good-ink:#146c43; --bad:#b42318; --bad-ink:#b42318;
+    --warn-bg:#fffaeb; --warn-line:#fedf89; --warn-ink:#1d2433;
+    --pts:#e3f3e8; --pts-neg:#fdecea; --pts-zero:#eef0f3;
+    --toast:#1d2433; --toast-ink:#fff; --badge:#e7ecf2; --hover:#f6f8fb;
+    --chart-bar:#2a78d6; --chart-grid:#e8eaee; --chart-base:#c9ced6; --chart-text:#4a5261;
+    --shadow:rgba(16,24,40,.18); --backdrop:rgba(16,24,40,.45);
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { {{ dark }} } }
+  :root[data-theme="dark"] { {{ dark }} }
+</style>
+<script>
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("theme"); } catch (e) { /* storage off: follow the OS */ }
+    if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>

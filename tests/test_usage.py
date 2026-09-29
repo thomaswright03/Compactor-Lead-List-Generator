@@ -1,11 +1,10 @@
 """The website's hard daily limit on Yelp calls (config.YELP_DAILY_LIMIT)."""
 
 import pytest
+from test_yelp import YELP_KEY, _fake_yelp
 
 from leadgen import config, http, store, usage, web
 from leadgen.sources import yelp
-
-from test_yelp import YELP_KEY, _fake_yelp
 
 
 def _search(queries, **kw):
@@ -115,21 +114,21 @@ def test_counter_is_atomic_under_threads():
 
 def test_calls_come_back_24_hours_after_they_were_made(monkeypatch):
     import datetime as dt
-    clock = {"now": dt.datetime(2026, 9, 29, 18, 19, tzinfo=dt.timezone.utc)}   # 12:19 pm in Utah
+    clock = {"now": dt.datetime(2026, 9, 29, 18, 19, tzinfo=dt.UTC)}   # 12:19 pm in Utah
     monkeypatch.setattr(usage, "_now", lambda: clock["now"])
     budget = usage.yelp_budget()
     assert budget.left() == 50 and budget.reset_text() is None
     for _ in range(3):
         assert budget.take()
     assert budget.left() == 47 and budget.reset_text() == "12:21 PM Utah time"
-    clock["now"] = dt.datetime(2026, 9, 30, 6, 0, tzinfo=dt.timezone.utc)     # past midnight UTC
+    clock["now"] = dt.datetime(2026, 9, 30, 6, 0, tzinfo=dt.UTC)     # past midnight UTC
     assert budget.left() == 47                     # still counted: not 24 hours yet
     for _ in range(47):
         assert budget.take()
     assert not budget.take()
-    clock["now"] = dt.datetime(2026, 9, 30, 18, 21, tzinfo=dt.timezone.utc)
+    clock["now"] = dt.datetime(2026, 9, 30, 18, 21, tzinfo=dt.UTC)
     assert budget.left() == 3                      # the first three are back
-    clock["now"] = dt.datetime(2026, 10, 1, 7, 0, tzinfo=dt.timezone.utc)
+    clock["now"] = dt.datetime(2026, 10, 1, 7, 0, tzinfo=dt.UTC)
     assert budget.left() == 50
 
 
@@ -142,7 +141,7 @@ def test_todays_old_count_carries_over(monkeypatch):
 
 def test_page_shows_when_calls_come_back(monkeypatch):
     import datetime as dt
-    monkeypatch.setattr(usage, "_now", lambda: dt.datetime(2026, 9, 29, 18, 19, tzinfo=dt.timezone.utc))
+    monkeypatch.setattr(usage, "_now", lambda: dt.datetime(2026, 9, 29, 18, 19, tzinfo=dt.UTC))
     monkeypatch.setenv("YELP_API_KEY", YELP_KEY)
     for _ in range(3):
         usage.yelp_budget().take()

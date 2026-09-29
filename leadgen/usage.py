@@ -8,10 +8,14 @@ instead; when it cannot be read or updated, the budget counts as used up.
 import datetime as dt
 import hashlib
 import json
+import logging
 import random
 import time
 
 from . import config, store
+from .localtime import clock_text
+
+log = logging.getLogger(__name__)
 
 # A call counts for 24 hours after it was made, plus this margin: a request may
 # take 60 s, plus a few seconds of retry wait, before it reaches the API.
@@ -19,28 +23,18 @@ WINDOW_SECONDS = 24 * 3600 + 90
 
 
 def _now():
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 def _clock():
     return _now().timestamp()
 
 
-def local_time_text(ts):
-    """'12:19 PM Utah time' for a timestamp."""
-    when = dt.datetime.fromtimestamp(ts, dt.timezone.utc)
-    try:
-        from zoneinfo import ZoneInfo
-        when, zone = when.astimezone(ZoneInfo("America/Denver")), "Utah time"
-    except Exception:
-        zone = "UTC"
-    return f"{when.hour % 12 or 12}:{when.minute:02d} {'AM' if when.hour < 12 else 'PM'} {zone}"
-
-
 def _why(exc, what):
     if isinstance(exc, store.Unavailable):
         return str(exc)
-    return f"the usage counter could not be {what} ({exc.__class__.__name__})"
+    log.warning("The Yelp usage counter could not be %s", what, exc_info=exc)
+    return f"the usage counter could not be {what}"
 
 
 class DailyBudget:
@@ -78,7 +72,7 @@ class DailyBudget:
             with store.connect() as db:
                 _, self._calls = self._load(db)
             return min(self.limit, len(self._calls))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - logged by _why; the budget counts as used up
             self.problem = _why(exc, "read")
             return self.limit
 
@@ -91,7 +85,7 @@ class DailyBudget:
 
     def reset_text(self):
         at = self.resets_at()
-        return local_time_text(-(-at // 60) * 60) if at else None     # rounded up to the minute
+        return clock_text(-(-at // 60) * 60) if at else None     # rounded up to the minute
 
     def take(self):
         """Reserve one call. False when the calls are used up or cannot be counted."""
@@ -100,7 +94,7 @@ class DailyBudget:
             return False
         try:
             with store.connect() as db:
-                for attempt in range(200):
+                for _ in range(200):
                     version, calls = self._load(db)
                     if len(calls) >= self.limit:
                         self._calls = calls
@@ -116,7 +110,7 @@ class DailyBudget:
                     time.sleep(random.uniform(0, 0.01))
             self.problem = "the usage counter was too busy to update"
             return False
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - logged by _why; no call is spent
             self.problem = _why(exc, "updated")
             return False
 
@@ -136,12 +130,13 @@ class SharedCache:
         self._db = None
 
     def _run(self, fn):
-        for attempt in (1, 2):
+        for _ in (1, 2):
             try:
                 if self._db is None:
                     self._db = store.open_db()
                 return fn(self._db)
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 - any database error means "cache down"
+                log.warning("The results cache failed: %r", exc)
                 self.close()
         self.down = True
         return None
@@ -150,8 +145,8 @@ class SharedCache:
         if self._db is not None:
             try:
                 self._db.conn.close()
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 - closing a broken connection
+                log.info("Closing the cache connection failed: %r", exc)
             self._db = None
 
     def get(self, key, ttl=None):

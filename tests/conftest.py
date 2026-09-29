@@ -10,7 +10,9 @@ import pytest
 def no_real_keys(monkeypatch, tmp_path):
     """Tests never see (or spend) real API keys, and never touch the real cache or
     daily usage counter."""
-    for var in ("GOOGLE_PLACES_API_KEY", "YELP_API_KEY", "APP_PASSWORD", "DATABASE_URL", "RENDER"):
+    for var in ("GOOGLE_PLACES_API_KEY", "YELP_API_KEY", "APP_PASSWORD", "DATABASE_URL", "RENDER",
+                "LEADGEN_SEARCH_PAUSED", "LEADGEN_GOOGLE_OFF", "LEADGEN_YELP_OFF",
+                "LEADGEN_SUPPORT_CONTACT"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr("leadgen.http.CACHE_DIR", tmp_path / "cache")
     # Tests use a fresh SQLite file; LEADGEN_TEST_DATABASE_URL runs them on a
@@ -20,5 +22,5 @@ def no_real_keys(monkeypatch, tmp_path):
         monkeypatch.setenv("DATABASE_URL", test_db)
         from leadgen import store
         with store.connect() as db:
-            for table in ("usage", "cache", "marks", "leads", "calls", "searches", "windows"):
+            for table in store.TABLES:
                 db.run(f"DELETE FROM {table}")

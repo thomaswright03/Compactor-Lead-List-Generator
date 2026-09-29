@@ -6,21 +6,16 @@ clicked, so two clicks can never both run. A search that fails before finding
 anything (e.g. an unknown location) gives the day back.
 """
 
-import datetime as dt
 import json
 import time
+import uuid
 
-from . import store
-from .calls import local_time_text
+from . import localtime, store
+from .localtime import date_time_text
 
 
 def _local_now():
-    now = dt.datetime.now(dt.timezone.utc)
-    try:
-        from zoneinfo import ZoneInfo
-        return now.astimezone(ZoneInfo("America/Denver"))
-    except Exception:
-        return now - dt.timedelta(hours=7)
+    return localtime.now()
 
 
 def today():
@@ -60,9 +55,16 @@ def finish(day, info):
         db.run("UPDATE searches SET info = ? WHERE day = ?", (json.dumps(merged), day))
 
 
-def release(day):
+def release(day, reason=None):
+    """Give the day back after a search that failed outright. With a reason (plain
+    words for the page) the attempt stays in the history, marked failed."""
     with store.connect() as db:
+        row = db.one("SELECT at, info FROM searches WHERE day = ?", (day,))
         db.run("DELETE FROM searches WHERE day = ?", (day,))
+        if reason and row:
+            info = {**json.loads(row[1]), "failed": True, "reason": reason}
+            db.run("INSERT INTO search_failures (id, day, at, info) VALUES (?, ?, ?, ?)",
+                   (uuid.uuid4().hex, day, row[0], json.dumps(info)))
 
 
 def _abandoned(record, now):
@@ -73,14 +75,18 @@ def _record(row):
     if not row:
         return None
     day, at, info = row
-    return {"day": day, "at": at, "when": local_time_text(at), **json.loads(info)}
+    return {"day": day, "at": at, "when": date_time_text(at), **json.loads(info)}
 
 
 def history(limit=60):
-    """Recent days' searches, newest first, and whether today's has been used."""
+    """Recent days' searches (failed attempts too), newest first, and whether
+    today's has been used."""
     with store.connect() as db:
         rows = db.all("SELECT day, at, info FROM searches ORDER BY day DESC LIMIT ?", (limit,))
+        failed = db.all("SELECT day, at, info FROM search_failures ORDER BY at DESC LIMIT ?",
+                        (limit,))
     records = [_record(r) for r in rows]
     current = records[0] if records and records[0]["day"] == today() else None
+    searches = sorted(records + [_record(r) for r in failed], key=lambda r: -r["at"])[:limit]
     return {"today": today(), "used_today": bool(current) and not _abandoned(current, time.time()),
-            "searches": records}
+            "current": current, "searches": searches}

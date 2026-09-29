@@ -3,7 +3,7 @@
 import csv
 import io
 import re
-from datetime import datetime
+import time
 
 from openpyxl import Workbook
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
@@ -11,8 +11,10 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from .calls import local_time_text
+from .localtime import date_time_text
 from .scoring import TIER_LABELS
+
+OFFLINE_VERIFIED = "Verified? (this file only)"
 
 COLUMNS = [
     ("Score", lambda l: l.score, 8),
@@ -41,10 +43,12 @@ COLUMNS = [
     ("Longitude", lambda l: round(l.lon, 6), 11),
     ("Has Baler or Compactor?", lambda l: {"yes": "Yes", "no": "No"}.get(l.has_baler, ""), 13),
     ("Call Result", lambda l: l.call_outcome, 14),
-    ("Last Called", lambda l: local_time_text(l.last_call_at), 20),
+    ("Last Called", lambda l: date_time_text(l.last_call_at), 20),
     ("Call Notes", lambda l: l.call_notes, 40),
-    ("Verified?", lambda l: "", 11),
-    ("Notes", lambda l: "", 30),
+    # For notes on a printed or offline copy only: nothing typed here goes back into the
+    # website (Yes / No marks and calls are recorded there).
+    (OFFLINE_VERIFIED, lambda l: "", 13),
+    ("Notes (this file only)", lambda l: "", 30),
 ]
 
 TIER_FILLS = {"A": "C6EFCE", "B": "E2EFDA", "C": "FFF2CC", "D": "F2F2F2"}
@@ -131,18 +135,21 @@ def to_xlsx_bytes(leads, run_info=None):
     if leads:
         dv = DataValidation(type="list", formula1='"Yes,No,Maybe,Has compactor,Has baler"',
                             allow_blank=True)
-        col = get_column_letter(_col("Verified?"))
+        col = get_column_letter(_col(OFFLINE_VERIFIED))
         dv.add(f"{col}2:{col}{ws.max_row}")
         ws.add_data_validation(dv)
 
     info = wb.create_sheet("Run Info")
-    info.append(["Generated", datetime.now().strftime("%Y-%m-%d %H:%M")])
+    info.append(["Generated", date_time_text(time.time()) + " (Utah time)"])
     for k, v in (run_info or {}).items():
         info.append([_xl(k), _xl(v if isinstance(v, (int, float, str)) else str(v))])
         _as_text(info[info.max_row])
     info.append([])
     info.append(["Tiers", "A >= 60, B >= 40, C >= 20, D below 20"])
     info.append(["Row colors", "Green = stronger lead, orange = competitor"])
+    info.append(["This file only", "The last two columns are for your own notes on this "
+                 "copy. Nothing typed there is saved in the website: record Yes / No and "
+                 "calls on the Leads page."])
     info.column_dimensions["A"].width = 22
     info.column_dimensions["B"].width = 90
 

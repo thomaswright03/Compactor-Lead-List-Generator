@@ -3,6 +3,7 @@
 import re
 from dataclasses import asdict
 from difflib import SequenceMatcher
+from functools import lru_cache
 
 from .geo import haversine_miles
 from .scoring import is_non_prospect_tag, normalize
@@ -24,29 +25,28 @@ SAME_PHONE_MILES = 0.5       # the widest merge distance of all rules
 PAID_SOURCES = ("google", "yelp")
 
 
+@lru_cache(maxsize=65536)
 def clean_name(name):
     tokens = [t for t in normalize(name).split() if t not in _STOPWORDS and not t.isdigit()]
     return " ".join(tokens)
 
 
+@lru_cache(maxsize=65536)
 def _numbers(name):
-    return {t for t in normalize(name).split() if t.isdigit()}
+    return frozenset(t for t in normalize(name).split() if t.isdigit())
 
 
+@lru_cache(maxsize=65536)
 def phone_numbers(phone):
     """Every 10-digit number in a tag like '+1 801-555-0100;+1 801-555-0199 ext. 2'."""
     nums = set()
-    for part in re.split(r"[;,/]|\bor\b", phone or "", flags=re.I):
-        part = re.split(r"(?:ext\.?|extension|x|#)\s*\d", part, maxsplit=1, flags=re.I)[0]
+    for part in re.split(r"[;,/]|\bor\b", phone or "", flags=re.IGNORECASE):
+        part = re.split(r"(?:ext\.?|extension|x|#)\s*\d", part, maxsplit=1,
+                        flags=re.IGNORECASE)[0]
         digits = re.sub(r"\D", "", part)
         if len(digits) >= 10:
             nums.add(digits[-10:])
-    return nums
-
-
-def phone_digits(phone):
-    nums = sorted(phone_numbers(phone))
-    return nums[0] if nums else ""
+    return frozenset(nums)
 
 
 def names_match(a, b):
@@ -156,13 +156,54 @@ def _pair_rank(a, b):
             haversine_miles(a.lat, a.lon, b.lat, b.lon))
 
 
+def _same_listing_groups(leads, union, find):
+    """Pre-merge big groups of copies of one listing (same cleaned name, phones and
+    numbers, all within SAME_NAME_MILES of each other): every pair of them is a
+    duplicate, so they are one group, found without comparing every pair (a chain
+    with hundreds of copies would otherwise take seconds)."""
+    by_sig = {}
+    for i, lead in enumerate(leads):
+        name = clean_name(lead.name)
+        if name:
+            by_sig.setdefault((name, phone_numbers(lead.phone), _numbers(lead.name)),
+                              []).append(i)
+    for idxs in by_sig.values():
+        if len(idxs) < _PREMERGE_MIN:
+            continue
+        # Greedy clusters whose bounding box fits inside SAME_NAME_MILES: any two
+        # members of one are within range of each other.
+        idxs.sort(key=lambda i: (leads[i].lat, leads[i].lon))
+        cluster, box = [], None
+        for i in idxs + [None]:
+            if i is not None:
+                lat, lon = leads[i].lat, leads[i].lon
+                grown = (lat, lon, lat, lon) if box is None else (
+                    min(box[0], lat), min(box[1], lon), max(box[2], lat), max(box[3], lon))
+                if haversine_miles(*grown) <= _PREMERGE_MILES:
+                    cluster.append(i)
+                    box = grown
+                    continue
+            for j in cluster[1:]:
+                ri, rj = find(cluster[0]), find(j)
+                if ri != rj:
+                    union(ri, rj)
+            if i is not None:
+                cluster, box = [i], (lat, lon, lat, lon)
+
+
+# Groups this big are pre-merged (smaller ones go through the pairwise rules).
+_PREMERGE_MIN = 8
+_PREMERGE_MILES = SAME_NAME_MILES * 0.9
+
+
 def dedupe(leads):
     """Return merged leads.
 
     Candidate pairs are merged strongest first, and two groups merge only when
     every member of one is a duplicate of every member of the other, so A~B and
     B~C never chain A and C together and the result does not depend on input
-    order. A spatial grid keeps it fast on thousands of rows.
+    order. A spatial grid keeps it fast on thousands of rows, and many copies of
+    one listing are grouped up front (see _same_listing_groups).
     """
     parent = list(range(len(leads)))
     members = {i: [i] for i in range(len(leads))}
@@ -187,6 +228,7 @@ def dedupe(leads):
                 union(ri, rj)
         else:
             seen[key] = i
+    _same_listing_groups(leads, union, find)
 
     buckets = {}
     for i, lead in enumerate(leads):
@@ -194,14 +236,20 @@ def dedupe(leads):
 
     pairs = []
     for (bx, by), idxs in buckets.items():
-        neighbors = []
+        # Neighbours by group, so a big pre-merged group is skipped in one step.
+        near = {}
         for dx in (-1, 0, 1):
             for dy in (-1, 0, 1):
-                neighbors += buckets.get((round(bx + dx * 0.01, 2), round(by + dy * 0.01, 2)), [])
+                for j in buckets.get((round(bx + dx * 0.01, 2), round(by + dy * 0.01, 2)), []):
+                    near.setdefault(find(j), []).append(j)
         for i in idxs:
-            for j in neighbors:
-                if j > i and find(i) != find(j) and is_duplicate(leads[i], leads[j]):
-                    pairs.append((_pair_rank(leads[i], leads[j]), i, j))
+            ri = find(i)
+            for rj, js in near.items():
+                if rj == ri:
+                    continue
+                for j in js:
+                    if j > i and is_duplicate(leads[i], leads[j]):
+                        pairs.append((_pair_rank(leads[i], leads[j]), i, j))
     pairs.sort()
 
     links = []            # duplicate pairs that complete linkage kept apart

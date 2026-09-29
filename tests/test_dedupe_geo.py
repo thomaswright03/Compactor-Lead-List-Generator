@@ -117,12 +117,26 @@ def test_merged_parking_tag_does_not_veto_prospect():
     assert len(merged) == 1 and score_lead(merged[0]).category_key == "distribution"
 
 
-def test_dedupe_many_copies_is_fast():
-    import time
-    leads = [_l("Acme Foods", 40.76 + (i % 7) * 0.0001, -111.9, sid=f"n{i}") for i in range(300)]
-    start = time.time()
-    dedupe(leads)
-    assert time.time() - start < 5
+def test_dedupe_many_copies_is_near_linear(monkeypatch):
+    # Counts the work done, not the wall-clock time, so it passes on slow machines too.
+    from leadgen import dedupe as module
+    checks = {"n": 0}
+    real = module.is_duplicate
+
+    def counted(a, b):
+        checks["n"] += 1
+        return real(a, b)
+    monkeypatch.setattr(module, "is_duplicate", counted)
+    leads = [_l("Acme Foods", 40.76 + (i % 7) * 0.0001, -111.9, sid=f"n{i}") for i in range(2000)]
+    other = _l("Zenith Brewing", 40.7605, -111.9, sid="z")
+    merged = dedupe([*leads, other])
+    assert sorted(l.name for l in merged) == ["Acme Foods", "Zenith Brewing"]
+    assert checks["n"] < 20 * len(leads)          # every pair would be ~2,000,000
+
+
+def test_dedupe_many_spread_out_copies_stay_apart():
+    far = [_l("Motel 6", 40.5 + i * 0.01, -111.9, sid=f"m{i}") for i in range(20)]
+    assert len(dedupe(far)) == 20
 
 
 def test_default_location_is_arco_offline():

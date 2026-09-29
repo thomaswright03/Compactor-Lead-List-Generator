@@ -5,14 +5,18 @@ often includes warehouses and industrial buildings that Google lists poorly,
 and building outlines give a rough size signal.
 """
 
+import logging
 import math
 import re
+import time
 
 from .. import config
 from ..geo import METERS_PER_MILE
 from ..http import HttpError, request_json
 from ..models import Lead
 from . import SourceError
+
+log = logging.getLogger(__name__)
 
 # Tag keys copied onto each lead so the scorer can classify it.
 CATEGORY_KEYS = ["shop", "amenity", "building", "industrial", "craft", "man_made", "office",
@@ -54,7 +58,7 @@ def _ql_string(text):
             .replace("\n", "\\n").replace("\t", "\\t"))
 
 
-def build_query(lat, lon, radius_miles, keywords=()):
+def build_query(lat, lon, radius_miles, keywords=(), timeout=None):
     r = int(radius_miles * METERS_PER_MILE)
     around = f"(around:{r},{lat:.6f},{lon:.6f})"
     by_key, any_value = _tag_filters()
@@ -72,7 +76,8 @@ def build_query(lat, lon, radius_miles, keywords=()):
     not_places = "".join(f'[!"{k}"]' for k in _NOT_PLACES)
     parts.append(f'nwr["name"~"{regex}",i]{not_places}{around};')
     body = "\n  ".join(parts)
-    return (f"[out:json][timeout:180];\n(\n  {body}\n)->.all;\n"
+    timeout = int(timeout or config.OVERPASS_DEADLINE_SECONDS)
+    return (f"[out:json][timeout:{timeout}];\n(\n  {body}\n)->.all;\n"
             "node.all->.n;\n.n out body;\n"
             "(way.all; relation.all;)->.w;\n.w out tags bb;")
 
@@ -166,23 +171,40 @@ def parse_element(el):
 
 
 def search(lat, lon, radius_miles, keywords=(), progress=None):
-    """Return (leads, warnings)."""
+    """Return (leads, warnings).
+
+    Every mirror together gets config.OVERPASS_DEADLINE_SECONDS: when the map
+    servers are down the search fails within about two minutes, not ten.
+    """
     query = build_query(lat, lon, radius_miles, keywords)
+    deadline = time.monotonic() + config.OVERPASS_DEADLINE_SECONDS
     errors = []
     for endpoint in config.OVERPASS_ENDPOINTS:
+        left = deadline - time.monotonic()
+        if left < 5:
+            errors.append("out of time before trying " + endpoint)
+            break
         if progress:
             progress(f"OpenStreetMap: querying {endpoint.split('/')[2]}")
         try:
-            data = request_json("POST", endpoint, data={"data": query}, timeout=200, retries=2,
+            # Connecting gets at most 10 s; the answer may take the rest of the time.
+            data = request_json("POST", endpoint, data={"data": query},
+                                timeout=(min(10.0, left), left), retries=1,
                                 cache_key_extra="overpass",
                                 cacheable=lambda d: not d.get("remark"))
         except HttpError as exc:
+            log.warning("OpenStreetMap server failed: %s", exc)
             errors.append(str(exc))
             continue
         if data.get("remark") and not data.get("elements"):
+            log.warning("OpenStreetMap server %s: %s", endpoint, data["remark"])
             errors.append(f"{endpoint}: {data['remark']}")
             continue
         leads = [lead for lead in map(parse_element, data.get("elements", [])) if lead]
-        warnings = [f"OpenStreetMap note: {data['remark']}"] if data.get("remark") else []
+        warnings = []
+        if data.get("remark"):
+            log.warning("OpenStreetMap note: %s", data["remark"])
+            warnings.append("The map data service returned only part of its results "
+                            "(it was busy).")
         return leads, warnings
     raise SourceError("All OpenStreetMap (Overpass) servers failed: " + " | ".join(errors))

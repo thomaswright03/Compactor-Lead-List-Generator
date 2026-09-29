@@ -73,30 +73,54 @@ after a set time instead, keeping the business's id so its mark comes back.
 
 ### The website's pages
 
-The sidebar has four pages:
+The sidebar has four pages, a Light / Dark / System colour switch (System
+follows the computer's setting; the choice is remembered in each browser), and
+every page carries the Wright AI Solutions copyright.
 
-- **Find leads**: the search form (extra settings under **More options**), a
-  step-by-step progress bar while it runs, and the search history with each
-  search's counts under **Details**. **Find Leads works once per calendar day**
-  (Utah time), for the whole site: after today's search it is off until
-  midnight. A search that fails outright (e.g. an unknown location) gives the
-  day back, and so does one that never finished (the server restarted) after
-  30 minutes.
+- **Find leads**: the search form (extra settings, each explained in plain
+  words, under **More options**), a step-by-step progress bar while it runs,
+  and the search history with each search's counts under **Details**.
+  **Find Leads works once per calendar day** (Utah time), for the whole site:
+  after today's search it is off until midnight. A search that fails outright
+  (e.g. an unknown location, or the map data service is down) gives the day
+  back, says so in one or two plain sentences, and stays in the history marked
+  **Failed** with the reason; so does one that never finished (the server
+  restarted), after 30 minutes. The map data step gives up after two minutes
+  in all (`OVERPASS_DEADLINE_SECONDS`), and the progress bar says when a step
+  is taking longer than usual. Steps that don't apply (Google and Yelp when
+  neither is set up) are shown as skipped.
 - **Leads**: the saved list, with **Yes** / **No** buttons for "has a baler or
   compactor" and tabs for Not checked, Has baler or compactor, No baler or
-  compactor, and All. A mark is kept for good: it can be switched between Yes
-  and No but never goes back to Not checked, and a later search that finds the
-  business again updates its row without moving it.
+  compactor, and All. The sidebar badge counts the leads still to check. A mark
+  is kept for good: it can be switched between Yes and No, and a later search
+  that finds the business again updates its row without moving it. **Every
+  click can be undone for 5 minutes**: from the Undo link on the row (with the
+  time left) or from **Recent changes** above the list, even after a reload.
+  The server remembers what each click replaced, and refuses an undo once a
+  newer change has been made to that business (e.g. by a colleague). Click a
+  column heading (Score, Business, Contact, Miles) to sort; the tab, filter,
+  tier and sort are kept in the address, so a reload or a shared link shows the
+  same view. Phone numbers are tap-to-call links. The list refreshes every
+  minute and when you come back to the tab, so colleagues' marks and calls show
+  up without a reload.
 - **Calls**: in the Has baler or compactor tab, **Just called** opens a
   Conversation Summary box and the result of the call (Interested, Follow Up,
   Not Interested, Not Qualified, No Contact or Bad Lead). Every call is kept
-  for good; **History** shows them all. The Calls page has a tab per result,
-  and a business sits under its latest call's result.
+  for good (a saved call can be undone for 5 minutes, like a mark); **History**
+  shows them all. The Calls page has a tab per result, and a business sits
+  under its latest call's result.
 - **Stats**: how many businesses have a baler or compactor (marked Yes), their
   average score, and a chart of the share of checked businesses (marked Yes or
-  No) that have one, by tier.
+  No) that have one, by tier. Tier D is usually empty, and the page says why:
+  searches only save businesses scoring at least the minimum score (20).
 
 Marks and the latest call (result, time and notes) are also columns in the downloads.
+
+If the database can't be reached, each page says so in one plain message with a
+**Retry** button (nothing is lost), and Find leads and the downloads are off
+until it is back. If only the Yes / No marks or calls can't be read, the pages
+say that too rather than showing every business as unchecked. Unknown
+addresses and server errors show a branded page with a link back.
 
 Always set `APP_PASSWORD` on a public site: every search can spend your API keys.
 A login lasts 30 days on a device; changing the username or password logs everyone
@@ -106,6 +130,66 @@ another hostname, list it in `LEADGEN_ALLOWED_HOSTS`.
 The free plan sleeps after 15 idle minutes, so the first visit takes about a minute
 to wake up, and its disk is wiped on each restart (which is why data lives in the database).
 To run the production server yourself: `gunicorn wsgi:app --workers 1 --threads 8 --timeout 0`.
+
+### Settings (environment variables)
+
+In Render: open the service, **Environment**, add or edit the variable, then
+**Save Changes** (the service restarts with it in about a minute). Locally, put
+them in `.env` (see `.env.example`) or the shell.
+
+| Variable | Needed? | Default | What it does |
+| --- | --- | --- | --- |
+| `APP_USERNAME` | On a public site | none (any name works) | The name to log in with (case-sensitive) |
+| `APP_PASSWORD` | On a public site | none (no login; only `localhost`/IP access) | The password for the login page |
+| `DATABASE_URL` | On Render | SQLite file in the cache folder | The permanent Postgres database (saved leads, marks, calls, searches, the Yelp count) |
+| `GOOGLE_PLACES_API_KEY` | No | none | Google Places key (paid; best phones and websites) |
+| `YELP_API_KEY` | No | none | Yelp key (at most 50 calls in any 24 hours) |
+| `SECRET_KEY` | No | derived from the login | Signs the login cookie. Changing it (or the username or password) logs everyone out |
+| `LEADGEN_SEARCH_PAUSED` | No | off | Emergency stop: `1` makes Find leads refuse to start (see below) |
+| `LEADGEN_GOOGLE_OFF` | No | off | `1` stops every Google call (no Google charges); searches use the other sources |
+| `LEADGEN_YELP_OFF` | No | off | `1` stops every Yelp call; searches use the other sources |
+| `LEADGEN_SUPPORT_CONTACT` | No | "the person who manages the Lead Finder" | Who the login page tells people to ask for access, e.g. `Matt at (801) 555-0100` |
+| `LEADGEN_ALLOWED_HOSTS` | No | `localhost` | Without a password, extra host names the page answers on (comma separated) |
+| `LEADGEN_CACHE_DIR` | No | `.cache` | Folder for the API response cache and the local SQLite database |
+| `RENDER`, `RENDER_GIT_COMMIT`, `PORT` | Set by Render | | Render's own; `/healthz` shows the deployed commit |
+| `PYTHON_VERSION` | Render | 3.11.9 (`render.yaml`) | Python version Render builds with |
+| `LEADGEN_TEST_DATABASE_URL` | Tests only | none | Runs the tests on a throwaway Postgres instead of SQLite (its tables are emptied) |
+| `LEADGEN_CHROMIUM` | Tests only | Playwright's Chromium | A Chromium binary for the browser tests |
+
+`1`, `true`, `yes` and `on` all switch a flag on; removing the variable (or
+setting it to anything else) switches it off.
+
+### Emergency switches: stop searches or paid calls
+
+If searches misbehave (unexpected Google charges, bad data going into the saved
+list), whoever looks after the site can stop them without a code change:
+
+1. In Render, open the **compactor-lead-finder** service and click **Environment**.
+2. Add `LEADGEN_SEARCH_PAUSED` with the value `1` to stop all searching, or
+   `LEADGEN_GOOGLE_OFF` = `1` / `LEADGEN_YELP_OFF` = `1` to stop just that
+   paid source (the free map data and everything else keep working).
+3. Click **Save Changes**. The service restarts in about a minute; from then
+   on Find leads says "Searching is paused by the administrator" and refuses
+   to start. Leads, Calls, Stats and the downloads keep working.
+4. To switch it back on, delete the variable (or set it to `0`) and save.
+
+### Logs, and rolling back a bad deploy
+
+The site logs to Render's **Logs** tab: every failed search, database error and
+unexpected error, with the technical detail the pages leave out.
+
+Every push to `main` deploys automatically. To go back to the previous version:
+
+1. In Render, open the service and click **Events** (or **Deploys**).
+2. Find the last deploy that worked, open its menu and choose **Rollback**
+   (or **Redeploy** on older dashboards). Render builds and starts that commit.
+3. Turn off **Auto-Deploy** (service **Settings**) until the fix is on `main`,
+   or the next push deploys again; then fix forward with a new commit
+   (`git revert <bad commit>` and push) and turn Auto-Deploy back on.
+
+Rolling back is safe for the data: database changes are only ever additive
+(new tables or columns, created on first use), so an older version keeps
+working with the newer database, and nothing is deleted.
 
 ## Command line options
 
@@ -147,6 +231,13 @@ ranking can be traced to a specific rule and fixed in `leadgen/config.py`.
 
 Tiers: **A** ≥ 60, **B** ≥ 40, **C** ≥ 20, **D** below 20.
 
+Saved leads are always scored with the default keywords (compactor, baler,
+waste, recycling), whatever a search typed, so a business's score and tier
+depend only on facts about it and the Stats page's tiers stay comparable over
+time. `tests/fixtures/scoring_reference.json` lists reference businesses and
+whether they run a baler or compactor; a test fails if a scoring change stops
+ranking them where they should. Add businesses Arco has confirmed to it.
+
 **Lead Type** column:
 - `Prospect`: a business that likely produces the waste.
 - `Waste / recycling facility`: runs balers/compactors itself (buyers or partners).
@@ -160,9 +251,11 @@ Score, tier, lead type, flags, name, category, address, city, state, ZIP,
 phone (formatted), website, distance, why-this-score, matched keywords, Google
 and Yelp review counts, approx. footprint, source category, which searches found it,
 source(s), map link, lat/lon, "Has Baler or Compactor?", the latest call's
-result, time and notes, plus empty **Verified?** (dropdown) and **Notes**
-columns for vetting. A second sheet, **Run Info**, records the settings and
-counts for each run.
+result, time and notes, plus empty **Verified? (this file only)** (dropdown)
+and **Notes (this file only)** columns for notes on a printed or offline copy:
+nothing typed there goes back into the website (record Yes / No and calls on
+the Leads page). A second sheet, **Run Info**, records when it was made (Utah
+time), the settings and counts for each run.
 
 ## Tuning after vetting
 
@@ -177,7 +270,7 @@ Everything adjustable is in `leadgen/config.py`:
 ## How it works
 
 1. **Geocode** the location (built-in table for SLC-area cities, then ZIP lookup, Google, or OpenStreetMap Nominatim).
-2. **Search**: Google Places text search for your keywords, the competitor names, then ~27 business-type phrases, across 1/7/19 grid cells; Yelp's 13 category searches (most-reviewed first), then word searches for your keywords and the competitor names; and one OpenStreetMap Overpass query for matching tags and name words (several mirror servers are tried).
+2. **Search**: Google Places text search for your keywords, the competitor names, then ~27 business-type phrases, across 1/7/19 grid cells; Yelp's 13 category searches (most-reviewed first), then word searches for your keywords and the competitor names; and one OpenStreetMap Overpass query for matching tags and name words (several mirror servers are tried, within two minutes in all).
 3. **Filter** to the exact radius (Haversine distance).
 4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's (then Yelp's) contact details and OpenStreetMap's building size. Different phone numbers or names that only share generic words ("Inn & Suites Airport") are kept apart. Places Google or Yelp report permanently closed are then dropped.
 5. **Score**, sort by score then distance, and **export**.
@@ -223,9 +316,23 @@ requests by 7 or 19 (up to about 700 or 1,900), so set `--max-requests` if cost 
 - The score estimates likelihood; it cannot see whether a compactor is actually on site. That's what vetting is for.
 - Ideas from the spec for later: website text scanning / AI classification, USPS address validation, enrichment (employees, NAICS), scheduled weekly runs with email, CRM export.
 
-## Tests
+## Tests and checks
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest
+python -m playwright install chromium          # for the browser tests
+python -m pytest                               # SQLite
+LEADGEN_TEST_DATABASE_URL=postgresql://... python -m pytest   # a throwaway Postgres
+python -m ruff check .                         # lint (settings in pyproject.toml)
 ```
+
+The tests never call Google, Yelp or OpenStreetMap (they are mocked).
+`tests/test_browser.py` drives the real pages in Chromium (mark Yes, Undo, Just
+called, Stats, downloads, reload keeps the view); it is skipped when Playwright's
+Chromium is missing.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the lint and every test, on
+SQLite and on Postgres, for each push and pull request. To make a red run block
+merging: GitHub → **Settings** → **Branches** → **Add branch protection rule**
+for `main` → **Require status checks to pass before merging**, and pick
+`lint`, `test (sqlite)` and `test (postgres)`.

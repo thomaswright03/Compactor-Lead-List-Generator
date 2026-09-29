@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -19,9 +18,9 @@ class Lead:
     website: str = ""
     raw_categories: list = field(default_factory=list)   # google types, "yelp:alias", osm "k=v"
     primary_category: str = ""       # source's own label, e.g. "Supermarket"
-    rating_count: Optional[int] = None          # Google review count
-    yelp_reviews: Optional[int] = None
-    footprint_sqft: Optional[int] = None
+    rating_count: int | None = None          # Google review count
+    yelp_reviews: int | None = None
+    footprint_sqft: int | None = None
     business_status: str = ""
     map_url: str = ""
     search_terms: list = field(default_factory=list)     # queries that found it
@@ -36,12 +35,12 @@ class Lead:
     flags: list = field(default_factory=list)
     reasons: list = field(default_factory=list)
     matched_keywords: list = field(default_factory=list)
-    distance_miles: Optional[float] = None
+    distance_miles: float | None = None
     sources: list = field(default_factory=list)
     has_baler: str = ""              # "yes" / "no" as marked on the results page (marks.py)
     uid: str = ""                    # the saved lead's id (saved.py)
     # The latest call (calls.py): when (epoch seconds), its result and notes, and how many.
-    last_call_at: Optional[float] = None
+    last_call_at: float | None = None
     call_outcome: str = ""
     call_notes: str = ""
     call_count: int = 0

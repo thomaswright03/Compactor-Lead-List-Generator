@@ -1,9 +1,9 @@
 """Glue: geocode -> query sources -> radius filter -> dedupe -> score -> sort."""
 
+import logging
 import os
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Optional
 
 from . import config
 from .dedupe import SAME_PHONE_MILES, dedupe
@@ -16,10 +16,24 @@ from .sources import SourceError, google_places, osm, yelp
 SOURCES = ("auto", "google", "yelp", "osm", "both")
 GRIDS = (1, 7, 19)
 EXEMPT_TYPES = ("Competitor", "Own company")   # always kept and flagged, never filtered
+# How each source is named on the page.
+SOURCE_NAMES = {"google": "Google", "yelp": "Yelp", "osm": "the map data service (OpenStreetMap)"}
+
+log = logging.getLogger(__name__)
 
 
 class PipelineError(RuntimeError):
-    pass
+    """A search that could not run. The message is plain words for the page;
+    detail holds the technical reason (for the log and the command line)."""
+
+    def __init__(self, message, detail=""):
+        super().__init__(message)
+        self.detail = detail
+
+
+def _names(sources):
+    names = [SOURCE_NAMES[s] for s in sources]
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
 
 
 @dataclass
@@ -30,21 +44,20 @@ class SearchParams:
     source: str = "auto"
     min_score: int = config.DEFAULT_MIN_SCORE
     grid: int = 1
-    max_requests: Optional[int] = None     # None: enough for every search and page
+    max_requests: int | None = None     # None: enough for every search and page
     only_keyword_matches: bool = False
     include_closed: bool = False
     limit: int = 0
     api_key: str = ""          # Google Places
     yelp_api_key: str = ""
 
-    def resolved_key(self):
-        return self.resolved_keys()[0]
-
     def resolved_keys(self):
         """Return (google key, yelp key, misplaced) from the params or the environment.
 
         A Yelp key pasted into the Google setting is recognized and never sent to
         Google; misplaced is True then (and it is used for Yelp if no Yelp key is set).
+        A source switched off by the administrator (config.GOOGLE_OFF_ENV /
+        YELP_OFF_ENV) gets no key, so it is never called.
         """
         google = (self.api_key or os.environ.get("GOOGLE_PLACES_API_KEY", "")).strip()
         yelp_key = (self.yelp_api_key or os.environ.get("YELP_API_KEY", "")).strip()
@@ -53,6 +66,10 @@ class SearchParams:
         if misplaced:
             yelp_key = yelp_key or google
             google = ""
+        if config.switched_on(config.GOOGLE_OFF_ENV):
+            google = ""
+        if config.switched_on(config.YELP_OFF_ENV):
+            yelp_key = ""
         return google, yelp_key, misplaced
 
 
@@ -63,6 +80,7 @@ class RunResult:
     location_label: str
     warnings: list
     stats: dict
+    problems: list = field(default_factory=list)   # technical detail of failed sources
 
     def run_info(self, params):
         info = {k: v for k, v in asdict(params).items() if k not in ("api_key", "yelp_api_key")}
@@ -90,6 +108,14 @@ def run(params: SearchParams, progress=None):
     use_google = params.source in ("google", "both") or (params.source == "auto" and api_key)
     use_yelp = params.source == "yelp" or (params.source == "auto" and yelp_key)
     use_osm = params.source in ("osm", "both", "auto")
+    off = [name for name, env, picked in (
+        ("google", config.GOOGLE_OFF_ENV, ("google", "both")),
+        ("yelp", config.YELP_OFF_ENV, ("yelp",)))
+        if params.source in picked and config.switched_on(env)]
+    if off:
+        raise PipelineError(f"{SOURCE_NAMES[off[0]]} searches are switched off by the "
+                            "administrator. Search all available sources or the free map "
+                            "data instead.")
     if params.source in ("google", "both") and not api_key:
         if misplaced:
             raise PipelineError("GOOGLE_PLACES_API_KEY holds a Yelp key, not a Google key. "
@@ -103,7 +129,7 @@ def run(params: SearchParams, progress=None):
     say(f"Locating '{params.location}'")
     lat, lon, label = geocode(params.location, api_key)
 
-    raw, warnings, stats, errors = [], [], {}, []
+    raw, warnings, stats, errors, failed = [], [], {}, [], []
     if misplaced:
         used = ("it was used for Yelp" if use_yelp and not
                 (params.yelp_api_key or os.environ.get("YELP_API_KEY", "")).strip()
@@ -129,6 +155,7 @@ def run(params: SearchParams, progress=None):
             stats["google raw results"] = len(found)
         except SourceError as exc:
             errors.append(str(exc))
+            failed.append("google")
     if use_yelp:
         queries = yelp.queries_for(keywords)
         try:
@@ -141,6 +168,7 @@ def run(params: SearchParams, progress=None):
             stats["yelp raw results"] = len(found)
         except SourceError as exc:
             errors.append(str(exc))
+            failed.append("yelp")
     if use_osm:
         try:
             found, w = osm.search(lat, lon, params.radius_miles, keywords, progress)
@@ -149,10 +177,15 @@ def run(params: SearchParams, progress=None):
             stats["osm raw results"] = len(found)
         except SourceError as exc:
             errors.append(str(exc))
+            failed.append("osm")
 
+    for error in errors:
+        log.warning("Search source failed: %s", error)
     if errors and not raw:
-        raise PipelineError("No data source succeeded: " + " | ".join(errors))
-    warnings += errors
+        raise PipelineError(f"Couldn't reach {_names(failed)}, so no leads were found.",
+                            detail=" | ".join(errors))
+    warnings += [f"Couldn't reach {SOURCE_NAMES[s]} this time, so its businesses are missing "
+                 "from this search." for s in failed]
 
     say(f"Filtering {len(raw)} raw results to {params.radius_miles:g} miles")
     # Keep a margin while merging, so a listing just outside the radius can still
@@ -200,4 +233,4 @@ def run(params: SearchParams, progress=None):
         "competitors flagged": sum(l.lead_type == "Competitor" for l in kept),
         "seconds": round(time.time() - started, 1),
     })
-    return RunResult(kept, (lat, lon), label, warnings, stats)
+    return RunResult(kept, (lat, lon), label, warnings, stats, problems=errors)

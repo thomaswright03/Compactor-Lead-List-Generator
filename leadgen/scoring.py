@@ -6,6 +6,7 @@ ranked where it did and tell us which rules to adjust.
 """
 
 import re
+from functools import lru_cache
 
 from . import config
 from .models import Lead
@@ -14,6 +15,7 @@ TIERS = [(60, "A"), (40, "B"), (20, "C"), (0, "D")]
 TIER_LABELS = {"A": "A - strong", "B": "B - likely", "C": "C - possible", "D": "D - weak"}
 
 
+@lru_cache(maxsize=65536)
 def normalize(text):
     s = re.sub(r"[^a-z0-9 ]+", "", (text or "").lower().replace("&", " and "))
     return re.sub(r"\s+", " ", s).strip()
@@ -21,6 +23,12 @@ def normalize(text):
 
 def compact(text):
     return normalize(text).replace(" ", "")
+
+
+@lru_cache(maxsize=4096)
+def _term_pattern(term, whole):
+    end = r"(?![a-z0-9])" if whole else ""
+    return re.compile(rf"(?<![a-z0-9]){re.escape(term)}{end}")
 
 
 def _contains_term(haystack, term, whole=False):
@@ -33,8 +41,7 @@ def _contains_term(haystack, term, whole=False):
     term = normalize(term)
     if not term:
         return False
-    end = r"(?![a-z0-9])" if whole else ""
-    return re.search(rf"(?<![a-z0-9]){re.escape(term)}{end}", haystack) is not None
+    return _term_pattern(term, whole).search(haystack) is not None
 
 
 def yelp_categories(lead):

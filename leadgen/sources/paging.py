@@ -100,7 +100,7 @@ def run_searches(source, queries, cells, fetch_page, parse, *, max_pages, max_re
                 # A first-page 400 before anything has worked means a bad request or key.
                 first_rejected = "HTTP 400" in msg and not any_ok and chain["token"] is None
                 if bad_key or first_rejected:
-                    raise SourceError(f"{source} rejected the request. Check the API key. {msg}")
+                    raise SourceError(f"{source} rejected the request. Check the API key. {msg}") from exc
                 what = "a later results page" if chain["token"] is not None else "the search"
                 warnings.append(f"{source} '{chain['q']}': {what} failed ({msg[:160]}); "
                                 "kept the results already found")

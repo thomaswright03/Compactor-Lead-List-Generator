@@ -8,12 +8,15 @@ every redeploy, so on Render there is no fallback: without DATABASE_URL
 nothing is saved and Yelp is paused (its daily limit could not be kept).
 """
 
+import logging
 import os
 import sqlite3
 import threading
 from contextlib import contextmanager
 
 from . import http
+
+log = logging.getLogger(__name__)
 
 SCHEMA = [
     """CREATE TABLE IF NOT EXISTS usage (
@@ -34,10 +37,23 @@ SCHEMA = [
         name TEXT PRIMARY KEY, version INTEGER NOT NULL, calls TEXT NOT NULL)""",
     """CREATE TABLE IF NOT EXISTS searches (
         day TEXT PRIMARY KEY, at DOUBLE PRECISION NOT NULL, info TEXT NOT NULL)""",
+    # Every Yes / No click (what it replaced, so a misclick can be undone exactly).
+    """CREATE TABLE IF NOT EXISTS mark_changes (
+        id TEXT PRIMARY KEY, uid TEXT NOT NULL, value TEXT NOT NULL, previous TEXT NOT NULL,
+        at DOUBLE PRECISION NOT NULL, undone_at DOUBLE PRECISION)""",
+    "CREATE INDEX IF NOT EXISTS mark_changes_by_uid ON mark_changes (uid, at)",
+    # Searches that failed outright (they give the day back, but stay in the history).
+    """CREATE TABLE IF NOT EXISTS search_failures (
+        id TEXT PRIMARY KEY, day TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
+        info TEXT NOT NULL)""",
 ]
+# Every table, for tests that empty them.
+TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "mark_changes",
+          "search_failures")
 
 _ready = set()
 _lock = threading.Lock()
+_local = threading.local()      # the connection a web request shares (see scope())
 
 
 class Unavailable(RuntimeError):
@@ -70,15 +86,29 @@ class Db:
         rows = self.all(sql, params)
         return rows[0] if rows else None
 
+    @contextmanager
+    def transaction(self):
+        """All statements inside commit together, or none do."""
+        if self.postgres:
+            with self.conn.transaction():
+                yield self
+            return
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield self
+        except BaseException:
+            self.conn.execute("ROLLBACK")
+            raise
+        self.conn.execute("COMMIT")
+
     def many(self, sql, rows):
         """Run one statement for many rows, all or nothing."""
         rows = list(rows)
         if not rows:
             return
         if self.postgres:
-            with self.conn.transaction():
-                with self.conn.cursor() as cur:
-                    cur.executemany(self._sql(sql), rows)
+            with self.conn.transaction(), self.conn.cursor() as cur:
+                cur.executemany(self._sql(sql), rows)
         else:
             self.conn.execute("BEGIN")
             try:
@@ -99,8 +129,9 @@ def open_db():
         import psycopg
         try:
             conn = psycopg.connect(url, autocommit=True, connect_timeout=15)
-        except Exception as exc:
-            raise Unavailable(f"the database could not be reached ({exc.__class__.__name__})")
+        except (psycopg.Error, OSError) as exc:
+            log.warning("Database connection failed: %s", exc.__class__.__name__)
+            raise Unavailable("the database could not be reached") from exc
         db, ready_key = Db(conn, True), url
     elif on_render():
         raise Unavailable("no database is connected yet (DATABASE_URL is not set in Render)")
@@ -127,18 +158,55 @@ def _create_tables(db):
             for statement in SCHEMA:
                 db.run(statement)
             return
-        except Exception:
+        except Exception as exc:
             # Two processes creating the same table at once: one of them fails; retry.
             if attempt == 2:
                 raise
+            log.info("Creating the tables failed (%s); retrying", exc.__class__.__name__)
 
 
 @contextmanager
 def connect():
     """A connection (autocommit) for a few statements; raises Unavailable when there
-    is no database."""
+    is no database. Inside scope() every connect() shares one connection."""
+    shared = getattr(_local, "scope", None)
+    if shared is not None:
+        if shared["db"] is None:
+            shared["db"] = open_db()
+            shared["opened"] += 1
+        yield shared["db"]
+        return
     db = open_db()
     try:
         yield db
     finally:
         db.conn.close()
+
+
+def begin_scope():
+    """From now on this thread's connect() calls share one connection (opened when
+    first needed) until end_scope(): one connection per web request."""
+    _local.scope = {"db": None, "opened": 0}
+
+
+def end_scope():
+    """Close the shared connection; returns how many were opened (0 or 1)."""
+    shared = getattr(_local, "scope", None)
+    _local.scope = None
+    if not shared:
+        return 0
+    if shared["db"] is not None:
+        try:
+            shared["db"].conn.close()
+        except Exception as exc:  # noqa: BLE001 - sqlite3 or psycopg; the request is done
+            log.warning("Closing the database connection failed: %s", exc)
+    return shared["opened"]
+
+
+@contextmanager
+def scope():
+    begin_scope()
+    try:
+        yield
+    finally:
+        end_scope()

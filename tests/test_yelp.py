@@ -279,6 +279,7 @@ def test_rerun_continues_unfinished_searches(monkeypatch):
 def test_expired_cache_files_are_deleted(tmp_path, monkeypatch):
     import os
     import time
+
     from leadgen import http
     monkeypatch.setattr(http, "CACHE_DIR", tmp_path)
     http.cache_put("k", [1])

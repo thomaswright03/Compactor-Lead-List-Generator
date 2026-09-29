@@ -8,6 +8,11 @@ baler mark). Listings from Yelp and Google are dropped once their terms stop
 allowing them to be kept (config.SAVED_SOURCE_KEEP_SECONDS); the lead is then
 rebuilt from what is left, and a lead with nothing left is hidden but keeps
 its listing ids, so its mark comes back if a search finds it again.
+
+A saved lead is always scored with the default keywords
+(config.DEFAULT_KEYWORDS), never with what someone typed into a later search,
+so its score and tier depend only on facts about the business and the Stats
+page's tiers stay comparable over time.
 """
 
 import copy
@@ -45,9 +50,9 @@ def _expired(part, now):
     return keep is not None and now - part["at"] > keep
 
 
-def _rebuild(parts, keywords):
+def _rebuild(parts):
     lead = _merge([_to_lead(copy.deepcopy(p["lead"])) for p in parts])
-    score_lead(lead, keywords)
+    score_lead(lead, config.DEFAULT_KEYWORDS)
     return lead
 
 
@@ -91,21 +96,26 @@ def _drop_expired(rows, now):
         if len(fresh) == len(row.parts):
             continue
         row.parts = fresh
-        row.lead = _rebuild(fresh, config.DEFAULT_KEYWORDS) if fresh else None
+        row.lead = _rebuild(fresh) if fresh else None
         if row.lead:
             row.lead.uid = row.uid
         changed.append(row)
     return changed
 
 
-def save_search(leads, keywords):
+def save_search(leads, keywords=None):
     """Merge a search's leads into the saved list; sets each lead's uid once saved.
+
+    keywords: what the search was scored with; a lead scored with anything but
+    the default keywords is scored again with them before it is saved.
 
     Leads the search found permanently closed update their row too (it then
     leaves the list). Returns (new, updated) counts. Raises store.Unavailable
     without a database, or a database error; no lead gets a uid then.
     """
     now = time.time()
+    rescore = keywords is None or [k.lower() for k in keywords] != [
+        k.lower() for k in config.DEFAULT_KEYWORDS]
     with store.connect() as db:
         rows = _read(db)
         changed = {r.uid: r for r in _drop_expired(rows, now)}
@@ -136,7 +146,12 @@ def save_search(leads, keywords):
             row.parts = parts + older
             row.ids |= ids
             row.last_seen = now
-            row.lead = _rebuild(row.parts, keywords) if older else copy.deepcopy(lead)
+            if older:
+                row.lead = _rebuild(row.parts)
+            else:
+                row.lead = copy.deepcopy(lead)
+                if rescore:
+                    score_lead(row.lead, config.DEFAULT_KEYWORDS)
             if lead.business_status == "CLOSED_PERMANENTLY":
                 row.lead.business_status = lead.business_status
             row.lead.uid = row.uid
@@ -154,15 +169,23 @@ def save_search(leads, keywords):
     return new, shown - new
 
 
-def load():
-    """All saved leads (best first), with baler marks and miles from Arco's shop.
+def load(with_marks=True):
+    """All saved leads (best first), with miles from Arco's shop and (with_marks)
+    their baler marks.
 
-    Raises store.Unavailable without a database.
+    Raises store.Unavailable without a database, or a database error when the
+    leads or their marks can't be read.
     """
     now = time.time()
     with store.connect() as db:
-        rows = _read(db)
-        _write(db, _drop_expired(rows, now))
+        if config.SAVED_SOURCE_KEEP_SECONDS:
+            rows = _read(db)
+            _write(db, _drop_expired(rows, now))
+        else:
+            # Nothing expires, so the source listings (most of each row) needn't be read.
+            rows = [_Row(uid, _to_lead(data) if (data := json.loads(lead)) else None, None,
+                         None, None, None)
+                    for uid, lead in db.all("SELECT uid, lead FROM leads")]
     leads = []
     for row in rows:
         if row.lead and row.lead.business_status != "CLOSED_PERMANENTLY":
@@ -170,6 +193,7 @@ def load():
             row.lead.distance_miles = round(haversine_miles(
                 *config.DEFAULT_CENTER, row.lead.lat, row.lead.lon), 2)
             leads.append(row.lead)
-    marks.apply(leads)
+    if with_marks:
+        marks.apply(leads)
     leads.sort(key=lambda l: (-l.score, l.distance_miles, l.name.lower()))
     return leads

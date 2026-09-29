@@ -1,0 +1,225 @@
+{
+ "about": "Reference listings for the scoring rules: each is a business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. These are typical examples, not yet businesses Arco has verified: as Arco confirms real businesses (Yes / No on the Leads page), add them here so a scoring change that demotes known-good businesses fails the tests.",
+ "businesses": [
+  {
+   "name": "Smith's Marketplace",
+   "source": "google",
+   "raw_categories": [
+    "supermarket",
+    "grocery_store"
+   ],
+   "has_equipment": true,
+   "rating_count": 2400
+  },
+  {
+   "name": "Harmons Grocery",
+   "source": "yelp",
+   "raw_categories": [
+    "yelp:grocery"
+   ],
+   "has_equipment": true,
+   "yelp_reviews": 300
+  },
+  {
+   "name": "Costco Wholesale",
+   "source": "google",
+   "raw_categories": [
+    "warehouse_store",
+    "store"
+   ],
+   "has_equipment": true,
+   "rating_count": 5000
+  },
+  {
+   "name": "Walmart Supercenter",
+   "source": "google",
+   "raw_categories": [
+    "department_store",
+    "supermarket"
+   ],
+   "has_equipment": true,
+   "rating_count": 3000
+  },
+  {
+   "name": "The Home Depot",
+   "source": "google",
+   "raw_categories": [
+    "home_improvement_store",
+    "hardware_store"
+   ],
+   "has_equipment": true,
+   "rating_count": 1500
+  },
+  {
+   "name": "Associated Food Stores Distribution Center",
+   "source": "osm",
+   "raw_categories": [
+    "building=warehouse"
+   ],
+   "has_equipment": true
+  },
+  {
+   "name": "Intermountain Medical Center",
+   "source": "google",
+   "raw_categories": [
+    "hospital"
+   ],
+   "has_equipment": true,
+   "rating_count": 1200
+  },
+  {
+   "name": "Rocky Mountain Recycling",
+   "source": "osm",
+   "raw_categories": [
+    "amenity=recycling"
+   ],
+   "has_equipment": true
+  },
+  {
+   "name": "Kodiak Cakes Manufacturing",
+   "source": "osm",
+   "raw_categories": [
+    "industrial=factory",
+    "building=industrial"
+   ],
+   "has_equipment": true
+  },
+  {
+   "name": "Fashion Place Mall",
+   "source": "google",
+   "raw_categories": [
+    "shopping_mall"
+   ],
+   "has_equipment": true,
+   "rating_count": 9000
+  },
+  {
+   "name": "Amazon Fulfillment Center SLC1",
+   "source": "osm",
+   "raw_categories": [
+    "building=warehouse"
+   ],
+   "has_equipment": true
+  },
+  {
+   "name": "University of Utah",
+   "source": "google",
+   "raw_categories": [
+    "university"
+   ],
+   "has_equipment": true,
+   "rating_count": 800
+  },
+  {
+   "name": "Hilton Salt Lake City Center",
+   "source": "google",
+   "raw_categories": [
+    "hotel",
+    "lodging"
+   ],
+   "has_equipment": true,
+   "rating_count": 3000
+  },
+  {
+   "name": "Swire Coca-Cola Bottling",
+   "source": "osm",
+   "raw_categories": [
+    "industrial=factory"
+   ],
+   "has_equipment": true
+  },
+  {
+   "name": "WinCo Foods",
+   "source": "yelp",
+   "raw_categories": [
+    "yelp:grocery"
+   ],
+   "has_equipment": true,
+   "yelp_reviews": 200
+  },
+  {
+   "name": "Bright Smile Dental",
+   "source": "google",
+   "raw_categories": [
+    "dentist",
+    "health"
+   ],
+   "has_equipment": false,
+   "rating_count": 150
+  },
+  {
+   "name": "Sugar House Veterinary Clinic",
+   "source": "google",
+   "raw_categories": [
+    "veterinary_care"
+   ],
+   "has_equipment": false,
+   "rating_count": 300
+  },
+  {
+   "name": "Coffee Garden",
+   "source": "yelp",
+   "raw_categories": [
+    "yelp:coffee"
+   ],
+   "has_equipment": false,
+   "yelp_reviews": 400
+  },
+  {
+   "name": "Maverik",
+   "source": "google",
+   "raw_categories": [
+    "gas_station",
+    "convenience_store"
+   ],
+   "has_equipment": false,
+   "rating_count": 200
+  },
+  {
+   "name": "Great Clips",
+   "source": "google",
+   "raw_categories": [
+    "hair_care",
+    "beauty_salon"
+   ],
+   "has_equipment": false,
+   "rating_count": 80
+  },
+  {
+   "name": "Walgreens Pharmacy",
+   "source": "google",
+   "raw_categories": [
+    "pharmacy",
+    "drugstore"
+   ],
+   "has_equipment": false,
+   "rating_count": 100
+  },
+  {
+   "name": "Main Street Parking",
+   "source": "osm",
+   "raw_categories": [
+    "amenity=parking"
+   ],
+   "has_equipment": false
+  },
+  {
+   "name": "Smith & Jones CPA",
+   "source": "google",
+   "raw_categories": [
+    "accounting"
+   ],
+   "has_equipment": false,
+   "rating_count": 10
+  },
+  {
+   "name": "Yoga Loft",
+   "source": "yelp",
+   "raw_categories": [
+    "yelp:yoga"
+   ],
+   "has_equipment": false,
+   "yelp_reviews": 60
+  }
+ ]
+}

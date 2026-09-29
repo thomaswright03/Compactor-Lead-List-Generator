@@ -83,6 +83,8 @@ def cmd_run(args):
         result = run(params, progress)
     except (PipelineError, GeocodeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
+        if getattr(exc, "detail", ""):
+            print(f"Details: {exc.detail}", file=sys.stderr)
         return 2
 
     out = Path(args.out)

@@ -4,29 +4,15 @@ A call belongs to a saved lead (its uid). Its outcome is one of OUTCOMES; the
 latest call's outcome is the lead's current one (the page's call tabs).
 """
 
-import datetime as dt
 import time
 import uuid
 
 from . import store
+from .localtime import date_time_text
 
 OUTCOMES = ("Interested", "Follow Up", "Not Interested", "Not Qualified", "No Contact",
             "Bad Lead")
 MAX_NOTES = 5000
-
-
-def local_time_text(ts):
-    """'Sep 29, 2026, 10:14 am' in Utah time."""
-    if not ts:
-        return ""
-    when = dt.datetime.fromtimestamp(ts, dt.timezone.utc)
-    try:
-        from zoneinfo import ZoneInfo
-        when = when.astimezone(ZoneInfo("America/Denver"))
-    except Exception:
-        pass
-    hour = when.hour % 12 or 12
-    return f"{when:%b} {when.day}, {when.year}, {hour}:{when:%M} {'am' if when.hour < 12 else 'pm'}"
 
 
 def log_call(uid, outcome, notes):
@@ -60,17 +46,27 @@ def history(uid):
     with store.connect() as db:
         rows = db.all("SELECT at, outcome, notes FROM calls WHERE uid = ? ORDER BY at DESC",
                       (uid,))
-    return [{"at": at, "when": local_time_text(at), "outcome": outcome, "notes": notes}
+    return [{"at": at, "when": date_time_text(at), "outcome": outcome, "notes": notes}
             for at, outcome, notes in rows]
 
 
+def pending_undos():
+    """{uid: {"id", "until"}}: each business's latest call that can still be undone."""
+    now = time.time()
+    with store.connect() as db:
+        rows = db.all("SELECT id, uid, at FROM calls WHERE at > ? ORDER BY at",
+                      (now - UNDO_SECONDS,))
+    return {uid: {"id": call_id, "until": at + UNDO_SECONDS} for call_id, uid, at in rows}
+
+
 def apply(leads):
-    """Set each lead's latest call and call count; leaves them unset when unreadable."""
-    try:
-        with store.connect() as db:
-            rows = db.all("SELECT uid, at, outcome, notes FROM calls ORDER BY at")
-    except Exception:
-        return leads
+    """Set each lead's latest call and call count.
+
+    Raises store.Unavailable or a database error when the calls can't be read:
+    an unreadable call log must never look like "never called".
+    """
+    with store.connect() as db:
+        rows = db.all("SELECT uid, at, outcome, notes FROM calls ORDER BY at")
     latest, counts = {}, {}
     for uid, at, outcome, notes in rows:
         latest[uid] = (at, outcome, notes)

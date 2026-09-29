@@ -5,6 +5,7 @@ this file, so tuning false positives/negatives never means touching the
 pipeline code.
 """
 
+import os
 from dataclasses import dataclass, field
 
 # Arco Compactor's shop: the default point the radius and "Miles" are measured
@@ -398,6 +399,10 @@ YELP_CACHE_TTL_SECONDS = 7 * 24 * 3600
 # but only when the site is next used (there is no scheduled purge).
 SAVED_SOURCE_KEEP_SECONDS = {}
 
+# The whole map-data step (every mirror together) gives up after this long, so a
+# search never hangs for many minutes when the free map servers are down.
+OVERPASS_DEADLINE_SECONDS = 120
+
 # Overpass mirrors tried in order when the free OpenStreetMap source is used.
 OVERPASS_ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
@@ -410,3 +415,15 @@ HTTP_USER_AGENT = "compactor-lead-list-generator/1.0 (+https://github.com/thomas
 
 # Cached API responses are reused for this long so repeat runs are free.
 CACHE_TTL_SECONDS = 7 * 24 * 3600
+
+
+# Off switches for whoever runs the site, read on every request (set them in
+# Render > Environment; see the README). Any of 1 / true / yes / on counts as set.
+SEARCH_PAUSED_ENV = "LEADGEN_SEARCH_PAUSED"   # Find leads refuses to start
+GOOGLE_OFF_ENV = "LEADGEN_GOOGLE_OFF"         # searches skip Google (no Google charges)
+YELP_OFF_ENV = "LEADGEN_YELP_OFF"             # searches skip Yelp
+
+
+def switched_on(name):
+    """True when the environment variable `name` is set to 1 / true / yes / on."""
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")

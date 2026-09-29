@@ -5,80 +5,91 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Arco Compactor Lead Finder</title>
 <link rel="icon" href="data:,">
+{% include "_theme.html" %}
 <style>
-  :root { --bg:#f4f6f9; --card:#fff; --ink:#1d2433; --muted:#667085; --line:#e4e7ec;
-          --accent:#1f4e78; --accent-2:#2a78d6; --side:#15304d; --side-ink:#c9d6e5;
-          --a:#c6efce; --b:#e2efda; --c:#fff2cc; --d:#f2f2f2; --comp:#f8cbad;
-          --good:#146c43; --bad:#b42318; --warn-bg:#fffaeb; --warn-line:#fedf89; }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
   body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
   a { color:var(--accent); }
   button, .btn { font:inherit; font-weight:600; border-radius:7px; cursor:pointer; border:1px solid transparent;
-                 padding:8px 14px; background:var(--accent); color:#fff; text-decoration:none; display:inline-block; }
+                 padding:8px 14px; background:var(--btn); color:var(--btn-ink); text-decoration:none; display:inline-block; }
   button.quiet, .btn.quiet { background:var(--card); color:var(--ink); border-color:var(--line); }
   button:disabled { opacity:.5; cursor:not-allowed; }
-  input, select, textarea { font:inherit; padding:8px; border:1px solid var(--line); border-radius:7px; color:var(--ink); background:#fff; }
+  button:focus-visible, .btn:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
+  textarea:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
+  input, select, textarea { font:inherit; font-weight:400; padding:8px; border:1px solid var(--line); border-radius:7px; color:var(--ink); background:var(--input); }
 
   /* Layout: sidebar + pages */
-  .app { display:grid; grid-template-columns:230px 1fr; min-height:100vh; }
+  .app { display:grid; grid-template-columns:210px minmax(0,1fr); min-height:100vh; }
   .side { background:var(--side); color:var(--side-ink); padding:20px 14px; display:flex; flex-direction:column; gap:22px;
-          position:sticky; top:0; height:100vh; align-self:start; }
+          position:sticky; top:0; height:100vh; align-self:start; z-index:5; }
   .brand strong { display:block; color:#fff; font-size:17px; }
-  .brand span { font-size:12px; opacity:.8; }
+  .brand span { font-size:12px; opacity:.85; }
   nav { display:flex; flex-direction:column; gap:4px; }
   nav a { color:var(--side-ink); text-decoration:none; padding:9px 12px; border-radius:8px; display:flex; gap:8px;
           justify-content:space-between; align-items:center; font-weight:600; }
   nav a:hover { background:rgba(255,255,255,.08); }
   nav a.on { background:rgba(255,255,255,.16); color:#fff; }
-  nav .count { font-size:12px; font-weight:600; background:rgba(255,255,255,.14); border-radius:999px; padding:1px 8px; }
-  .side .quota { margin-top:auto; font-size:12px; line-height:1.4; opacity:.9; }
+  nav .count { font-size:11px; font-weight:600; background:rgba(255,255,255,.14); border-radius:999px; padding:1px 8px; white-space:nowrap; }
+  .side .quota { margin-top:auto; font-size:12px; line-height:1.4; opacity:.95; }
+  .side .quota.paused { color:#ffb4ab; }
   .side .who { font-size:12px; display:flex; align-items:center; justify-content:space-between; gap:8px;
                border-top:1px solid rgba(255,255,255,.12); padding-top:12px; }
-  .side .who button { background:none; border:1px solid rgba(255,255,255,.25); color:var(--side-ink); padding:4px 10px; font-size:12px; }
-  main { display:flex; flex-direction:column; }
+  .side .who button { background:none; border:1px solid rgba(255,255,255,.3); color:var(--side-ink); padding:4px 10px; font-size:12px; }
+  .theme { display:flex; border:1px solid rgba(255,255,255,.25); border-radius:8px; overflow:hidden; }
+  .theme button { flex:1; background:none; border:0; border-radius:0; color:var(--side-ink); font-size:12px; padding:5px 6px; }
+  .theme button[aria-pressed="true"] { background:rgba(255,255,255,.2); color:#fff; }
+  .side-bottom { margin-top:auto; display:flex; flex-direction:column; gap:12px; }
+  .side-bottom .quota { margin-top:0; }
+  main { padding:24px 24px 50px; min-width:0; display:flex; flex-direction:column; }
+  .wrap { width:100%; max-width:1500px; margin:0 auto; flex:1; display:flex; flex-direction:column; }
   footer.copy { margin-top:auto; padding-top:30px; text-align:center; color:var(--muted); font-size:12px; }
-  .side .quota.paused { color:#ffb4ab; }
-  main { padding:26px 30px 60px; min-width:0; }
-  .page[hidden] { display:none; }
   .page-head { margin:0 0 18px; }
   .page-head h1 { margin:0; font-size:22px; }
   .page-head p { margin:4px 0 0; color:var(--muted); }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px; }
   .card h2 { margin:0 0 12px; font-size:16px; }
   .muted { color:var(--muted); }
-  .error { color:var(--bad); font-weight:600; }
-  .warn { background:var(--warn-bg); border:1px solid var(--warn-line); padding:8px 12px; border-radius:8px; margin:6px 0; }
+  .error { color:var(--bad-ink); font-weight:600; }
+  .warn { background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn-ink); padding:8px 12px; border-radius:8px; margin:6px 0; }
+  .problem { background:var(--card); border:1px solid var(--warn-line); border-left:5px solid var(--bad); border-radius:12px;
+             padding:18px 20px; display:flex; gap:16px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:18px; }
+  .problem strong { display:block; font-size:15px; margin-bottom:2px; }
 
   /* Find leads */
-  .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; }
-  label { display:flex; flex-direction:column; gap:5px; font-weight:600; font-size:12px; color:var(--muted); }
-  label.check { flex-direction:row; align-items:center; gap:6px; }
+  .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; }
+  label { display:flex; flex-direction:column; gap:5px; font-weight:600; font-size:13px; color:var(--ink); }
+  label .hint { font-weight:400; font-size:12px; color:var(--muted); }
+  label.check { flex-direction:row; align-items:center; gap:8px; }
   details.advanced { margin-top:14px; }
   details.advanced summary { cursor:pointer; color:var(--accent); font-weight:600; }
   details.advanced .form-grid { margin-top:12px; }
   .go-row { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:16px; }
-  .go-row button { padding:11px 22px; font-size:15px; }
+  .go-row button { padding:11px 22px; font-size:15px; min-height:44px; }
   #day-note { color:var(--muted); }
-  #day-note.used { color:var(--bad); font-weight:600; }
+  #day-note.used { color:var(--bad-ink); font-weight:600; }
 
   .steps { display:flex; gap:6px; margin:4px 0 14px; flex-wrap:wrap; }
-  .step { flex:1 1 120px; display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+  .step { flex:1 1 130px; display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
   .step .dot { width:22px; height:22px; border-radius:50%; border:2px solid var(--line); display:grid; place-items:center;
-               font-size:12px; font-weight:700; flex:none; background:#fff; }
+               font-size:12px; font-weight:700; flex:none; background:var(--card); }
   .step.done { color:var(--ink); } .step.done .dot { background:var(--good); border-color:var(--good); color:#fff; }
+  .step.skip .dot { border-style:dashed; }
+  .step .why { display:block; font-size:11px; }
   .step.now { color:var(--ink); font-weight:600; }
   .step.now .dot { border-color:var(--accent-2); border-top-color:transparent; animation:spin 1s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
-  .bar { height:14px; background:#e9eef5; border-radius:999px; overflow:hidden; }
+  .bar { height:14px; background:var(--th); border-radius:999px; overflow:hidden; }
   .bar > div { height:100%; width:0; border-radius:999px; transition:width .8s ease;
-               background:linear-gradient(90deg,var(--accent),var(--accent-2)); position:relative; overflow:hidden; }
+               background:linear-gradient(90deg,var(--btn),var(--accent-2)); position:relative; overflow:hidden; }
   .bar > div::after { content:""; position:absolute; inset:0;
                background:repeating-linear-gradient(45deg,rgba(255,255,255,.18) 0 10px,transparent 10px 20px);
                animation:slide 1s linear infinite; }
   @keyframes slide { from { background-position:0 0; } to { background-position:28px 0; } }
+  @media (prefers-reduced-motion: reduce) { .bar > div::after, .step.now .dot { animation:none; } }
   .bar-row { display:flex; justify-content:space-between; margin-top:8px; font-size:13px; color:var(--muted); gap:12px; }
   .bar-row strong { color:var(--ink); }
+  #slow-note { margin-top:10px; }
   .done-box { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
   .done-box .big { font-size:20px; font-weight:700; }
 
@@ -87,7 +98,9 @@
   table.plain th { font-size:12px; color:var(--muted); }
   .scroll-x { overflow-x:auto; }
   button.link { background:none; border:0; padding:0; color:var(--accent); font-weight:600; font-size:12px; }
-  tr.more-row td { background:#f8fafc; }
+  tr.more-row td { background:var(--hover); }
+  tr.failed td { color:var(--muted); }
+  .tag { display:inline-block; font-size:11px; font-weight:700; border-radius:999px; padding:1px 8px; background:var(--pts-neg); color:var(--bad-ink); }
   dl.details { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:6px 18px; margin:8px 0; }
   dl.details div { display:flex; justify-content:space-between; gap:8px; border-bottom:1px dashed var(--line); padding:3px 0; }
   dl.details dt { color:var(--muted); } dl.details dd { margin:0; font-weight:600; }
@@ -95,76 +108,99 @@
   /* Lead and call tables */
   .tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
   .tabs button { background:var(--card); color:var(--ink); border-color:var(--line); }
-  .tabs button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .tabs button.on { background:var(--btn); color:var(--btn-ink); border-color:var(--btn); }
   .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
   .toolbar input { flex:1; min-width:200px; }
-  .table-wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:12px; }
-  table.leads { border-collapse:collapse; width:100%; table-layout:fixed; }
-  table.leads th, table.leads td { text-align:left; padding:8px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
-  table.leads th { background:#eef2f6; position:sticky; top:0; font-size:12px; z-index:1; }
+  .recent { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:12px; }
+  .recent h2 { font-size:13px; margin:0 0 6px; }
+  .recent ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
+  .recent li { display:flex; gap:10px; align-items:center; flex-wrap:wrap; font-size:13px; }
+  /* Wide screens: the table fits, and its header sticks to the top of the window. */
+  .table-wrap { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:clip; }
+  table.leads { border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed; }
+  table.leads th, table.leads td { text-align:left; padding:8px 9px; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
+  table.leads th { background:var(--th); position:sticky; top:0; font-size:12px; z-index:2; color:var(--ink); }
+  table.leads th button.sort { background:none; border:0; padding:0; color:inherit; font:inherit; font-weight:700; display:inline-flex; gap:4px; white-space:nowrap; }
+  table.leads th button.sort .arrow { color:var(--muted); }
   tr.A td.score { background:var(--a); } tr.B td.score { background:var(--b); }
   tr.C td.score { background:var(--c); } tr.D td.score { background:var(--d); }
   tr.competitor td { background:var(--comp); }
   .nowrap { white-space:nowrap; }
-  .flag { color:var(--bad); font-weight:600; font-size:12px; }
+  .flag { color:var(--bad-ink); font-weight:600; font-size:12px; }
   .sub { color:var(--muted); font-size:12px; }
-  td.site a { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .contact > div { margin-bottom:2px; }
+  .contact .site { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .reasons { display:flex; flex-direction:column; gap:4px; }
   .reason { display:flex; gap:8px; align-items:baseline; font-size:13px; line-height:1.35; }
-  .pts { flex:0 0 38px; text-align:center; font-weight:700; font-size:11px; border-radius:999px; padding:1px 0;
-         background:#e3f3e8; color:var(--good); font-variant-numeric:tabular-nums; }
-  .pts.neg { background:#fdecea; color:var(--bad); } .pts.zero { background:#f2f4f7; color:var(--muted); }
+  .pts { flex:0 0 36px; text-align:center; font-weight:700; font-size:11px; border-radius:999px; padding:1px 0;
+         background:var(--pts); color:var(--good-ink); font-variant-numeric:tabular-nums; }
+  .pts.neg { background:var(--pts-neg); color:var(--bad-ink); } .pts.zero { background:var(--pts-zero); color:var(--muted); }
   details.explain summary { cursor:pointer; color:var(--accent); font-size:12px; margin-top:5px; }
   details.explain p { margin:4px 0 0; color:var(--muted); font-size:12px; }
-  .mark { display:flex; gap:4px; }
-  .mark button { padding:4px 9px; font-size:12px; background:var(--card); color:var(--ink); border-color:var(--line); }
+  .mark { display:flex; gap:4px; flex-wrap:wrap; }
+  .mark button { padding:4px 10px; font-size:12px; background:var(--card); color:var(--ink); border-color:var(--line); min-width:44px; }
   .mark button.yes.on { background:var(--good); border-color:var(--good); color:#fff; }
   .mark button.no.on { background:var(--bad); border-color:var(--bad); color:#fff; }
+  button.undo { background:none; border:0; padding:4px 0 0; color:var(--accent); font-size:12px; font-weight:600; text-decoration:underline; }
   .call-cell { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
-  .call-cell button { padding:5px 10px; font-size:12px; white-space:nowrap; }
-  .badge { display:inline-block; font-size:11px; font-weight:700; border-radius:999px; padding:2px 8px; background:#eef2f6; color:var(--ink); }
+  .call-cell button:not(.undo) { padding:5px 10px; font-size:12px; white-space:nowrap; }
+  .badge { display:inline-block; font-size:11px; font-weight:700; border-radius:999px; padding:2px 8px; background:var(--badge); color:var(--ink); }
   .notes { white-space:pre-wrap; font-size:13px; }
   .more { margin:12px auto 0; display:block; }
   .empty { padding:30px; text-align:center; color:var(--muted); }
+  @media (max-width: 1099px) {
+    /* Narrow screens: the table scrolls inside its box (sideways too); the header sticks to the box. */
+    .table-wrap { overflow:auto; max-height:calc(100vh - 110px); }
+    table.leads { min-width:880px; }
+  }
 
   .toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:50; display:flex; align-items:center;
-           gap:14px; background:#1d2433; color:#fff; padding:10px 12px 10px 16px; border-radius:10px;
-           box-shadow:0 10px 30px rgba(0,0,0,.25); max-width:calc(100vw - 32px); }
-  .toast button { background:#fff; color:#1d2433; padding:6px 14px; }
+           gap:14px; background:var(--toast); color:var(--toast-ink); padding:10px 12px 10px 16px; border-radius:10px;
+           box-shadow:0 10px 30px var(--shadow); max-width:calc(100vw - 32px); }
+  .toast.bad { border-left:5px solid var(--bad); }
+  .toast button { background:var(--toast-ink); color:var(--toast); padding:6px 14px; }
 
   /* Dialogs */
-  dialog { border:0; border-radius:14px; padding:0; width:min(560px,94vw); box-shadow:0 20px 60px rgba(0,0,0,.25); }
-  dialog::backdrop { background:rgba(16,24,40,.45); }
+  dialog { border:0; border-radius:14px; padding:0; width:min(560px,94vw); box-shadow:0 20px 60px var(--shadow);
+           background:var(--card); color:var(--ink); }
+  dialog::backdrop { background:var(--backdrop); }
   .dlg { padding:20px; display:flex; flex-direction:column; gap:14px; }
   .dlg h2 { margin:0; font-size:18px; }
   .dlg textarea { min-height:140px; resize:vertical; width:100%; }
   .outcomes { display:flex; flex-wrap:wrap; gap:8px; }
   .outcomes button { background:var(--card); color:var(--ink); border-color:var(--line); }
-  .outcomes button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .outcomes button.on { background:var(--btn); color:var(--btn-ink); border-color:var(--btn); }
   .dlg-actions { display:flex; justify-content:flex-end; gap:8px; }
   .history { max-height:60vh; overflow:auto; display:flex; flex-direction:column; gap:10px; }
   .history .item { border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
 
   /* Stats */
   .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-bottom:18px; }
+  .tiles .card { margin-bottom:0; }
   .tile .label { color:var(--muted); font-size:13px; }
   .tile .value { font-size:34px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
   .tile .value small { font-size:15px; color:var(--muted); font-weight:600; }
   .viz { position:relative; max-width:760px; }
   .viz svg { width:100%; height:auto; display:block; }
-  .viz .tip { position:absolute; pointer-events:none; background:#1d2433; color:#fff; font-size:12px; padding:7px 9px; border-radius:7px;
+  .viz .tip { position:absolute; pointer-events:none; background:var(--toast); color:var(--toast-ink); font-size:12px; padding:7px 9px; border-radius:7px;
               white-space:nowrap; transform:translate(-50%,-110%); }
   .viz .tip strong { font-size:14px; }
   .viz rect.col:hover, .viz rect.col:focus { opacity:.8; outline:none; }
 
+  /* Touch screens: the buttons staff use all day are at least 44px tall. */
+  @media (pointer: coarse) {
+    .mark button, .call-cell button:not(.undo), .tabs button, button.quiet, .btn, nav a { min-height:44px; }
+    button.undo { min-height:32px; }
+  }
   @media (max-width: 820px) {
-    .app { grid-template-columns:1fr; }
+    .app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto 1fr; align-content:start; }
     .side { position:static; height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; gap:10px; padding:12px 16px; }
     nav { flex-direction:row; flex-wrap:wrap; }
     nav a { padding:7px 10px; }
-    .side .quota { margin-top:0; flex-basis:100%; }
-    .side .who { flex-basis:100%; border-top:0; padding-top:0; }
-    main { padding:18px 16px 50px; }
+    .side-bottom { margin-top:0; flex-basis:100%; flex-direction:row; flex-wrap:wrap; align-items:center; gap:10px; }
+    .side .who { border-top:0; padding-top:0; }
+    main { padding:16px 16px 40px; }
+    .table-wrap { max-height:calc(100vh - 40px); }
   }
 </style>
 </head>
@@ -172,68 +208,90 @@
 <div class="app">
   <aside class="side">
     <div class="brand"><strong>Arco Compactor</strong><span>Lead Finder</span></div>
-    <nav>
+    <nav aria-label="Pages">
       <a href="#find" data-page="find">Find leads</a>
-      <a href="#leads" data-page="leads">Leads <span class="count" id="n-leads">0</span></a>
-      <a href="#calls" data-page="calls">Calls <span class="count" id="n-calls">0</span></a>
+      <a href="#leads" data-page="leads" title="Saved businesses not yet marked Yes or No">Leads <span class="count" id="n-leads" hidden></span></a>
+      <a href="#calls" data-page="calls" title="Businesses with at least one call logged">Calls <span class="count" id="n-calls" hidden></span></a>
       <a href="#stats" data-page="stats">Stats</a>
     </nav>
-    {% if yelp %}<div id="yelp-quota" class="quota{{ ' paused' if yelp.paused }}">{{ yelp.text }}</div>{% endif %}
-    {% if login_on %}<form class="who" method="post" action="/logout"
-      {%- if not yelp %} style="margin-top:auto"{% endif %}>
-      <span>Logged in{% if user %} as <strong>{{ user }}</strong>{% endif %}</span>
-      <button type="submit">Log out</button></form>{% endif %}
+    <div class="side-bottom">
+      {% if yelp %}<div id="yelp-quota" class="quota{{ ' paused' if yelp.paused }}">{{ yelp.text }}</div>{% endif %}
+      <div class="theme" role="group" aria-label="Colour theme">
+        <button type="button" data-theme-pick="light">Light</button>
+        <button type="button" data-theme-pick="dark">Dark</button>
+        <button type="button" data-theme-pick="system">System</button>
+      </div>
+      {% if login_on %}<form class="who" method="post" action="/logout">
+        <span>Logged in{% if user %} as <strong>{{ user }}</strong>{% endif %}</span>
+        <button type="submit">Log out</button></form>{% endif %}
+    </div>
   </aside>
 
   <main>
+   <div class="wrap">
     <!-- Find leads -->
     <section class="page" id="page-find" hidden>
       <div class="page-head"><h1>Find leads</h1>
         <p>Search for businesses likely to run a baler or compactor. New finds are added to your saved leads.</p></div>
+      <div class="problem" id="paused-box"{% if not switches.search_paused %} hidden{% endif %}>
+        <div><strong>Searching is paused</strong><span class="muted">{{ paused_text }}</span></div>
+      </div>
       <form id="form" class="card">
         <div class="form-grid">
-          <label>Location (ZIP, city, address or lat,lon)
-            <input name="location" value="{{ defaults.location }}"></label>
-          <label>Radius (miles)
-            <input name="radius" type="number" min="1" max="100" step="1" value="{{ defaults.radius|int }}"></label>
-          <label>Keywords (comma separated)
-            <input name="keywords" value="{{ defaults.keywords }}"></label>
+          <label>Search around
+            <input name="location" value="{{ defaults.location }}" autocomplete="off">
+            <span class="hint">A ZIP code, city or street address. Distances are measured from here.</span></label>
+          <label>How far (miles)
+            <input name="radius" type="number" min="1" max="100" step="1" value="{{ defaults.radius|int }}">
+            <span class="hint">Businesses farther away are left out.</span></label>
+          <label>Extra search words
+            <input name="keywords" value="{{ defaults.keywords }}">
+            <span class="hint">Separate with commas. Businesses matching them score higher.</span></label>
         </div>
         <details class="advanced">
           <summary>More options</summary>
           <div class="form-grid">
-            <label>Data source
+            <label>Where to look
               <select name="source">
-                <option value="auto">Auto (Yelp and Google if set up, plus map data)</option>
-                <option value="osm">Map data only (free)</option>
-                <option value="yelp">Yelp only</option>
-                <option value="google">Google only</option>
-                <option value="both">Google and map data</option>
-              </select></label>
-            <label>Minimum score
-              <input name="min_score" type="number" min="0" max="100" value="{{ defaults.min_score }}"></label>
-            <label>Google / Yelp coverage
+                <option value="auto">Everywhere available (recommended)</option>
+                <option value="osm">Free map data only (no cost)</option>
+                {% if yelp_on %}<option value="yelp">Yelp only</option>{% endif %}
+                {% if google_on %}<option value="google">Google only (paid)</option>
+                <option value="both">Google and free map data (paid)</option>{% endif %}
+              </select>
+              <span class="hint">{% if google_on or yelp_on %}Google and Yelp add phone numbers; Google lookups are paid.{% else %}Google and Yelp aren't set up, so the free map data is used.{% endif %}</span></label>
+            <label>Leave out weak leads below score
+              <input name="min_score" type="number" min="0" max="100" value="{{ defaults.min_score }}">
+              <span class="hint">0 to 100. Lower keeps more, weaker businesses.</span></label>
+            {% if google_on or yelp_on %}<label>Coverage for Google and Yelp
               <select name="grid">
-                <option value="1">Standard (1 search area)</option>
-                <option value="7">Wide (7 areas)</option>
-                <option value="19">Max (19 areas)</option>
-              </select></label>
-            <label>Request cap (Google / Yelp, each)
-              <input name="max_requests" type="number" min="1" max="5000" placeholder="Auto"></label>
-            <label class="check"><input type="checkbox" name="only_keyword_matches"> Only keyword matches</label>
+                <option value="1">Standard: one search around the center</option>
+                <option value="7">Wide: 7 searches (about 7 times the paid lookups)</option>
+                <option value="19">Widest: 19 searches (about 19 times the paid lookups)</option>
+              </select>
+              <span class="hint">Wider coverage finds more businesses but uses more paid lookups.</span></label>
+            <label>Most paid lookups for this search
+              <input name="max_requests" type="number" min="1" max="5000" placeholder="Automatic">
+              <span class="hint">Leave blank for automatic. A number limits what Google (and Yelp) may charge for.</span></label>{% endif %}
+            <label class="check"><input type="checkbox" name="only_keyword_matches"> Only businesses matching the search words</label>
           </div>
         </details>
         <div class="go-row">
-          <button id="go" type="submit">Find leads</button>
-          <span id="day-note">Checking today's search...</span>
+          <button id="go" type="submit"{% if switches.search_paused %} disabled{% endif %}>Find leads</button>
+          <span id="day-note" role="status">Checking today's search...</span>
         </div>
       </form>
 
       <div class="card" id="progress-card" hidden>
         <h2 id="progress-title">Finding leads</h2>
         <div class="steps" id="steps"></div>
-        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="bar"><div id="bar-fill"></div></div>
+        <div class="bar" role="progressbar" aria-label="Search progress" aria-valuemin="0" aria-valuemax="100" id="bar"><div id="bar-fill"></div></div>
         <div class="bar-row"><span id="progress-msg"></span><span><strong id="pct">0%</strong> · <span id="elapsed">0:00</span></span></div>
+        <div class="warn" id="slow-note" hidden>This is taking longer than usual. You can keep working on other pages; the search goes on.</div>
+      </div>
+
+      <div class="problem" id="search-failed" hidden>
+        <div><strong>The search didn't finish</strong><span id="search-failed-msg"></span></div>
       </div>
 
       <div class="card" id="done-card" hidden>
@@ -253,53 +311,66 @@
     <!-- Leads -->
     <section class="page" id="page-leads" hidden>
       <div class="page-head"><h1>Leads</h1>
-        <p>Mark whether each business has a baler or compactor. A mark is kept for good; a misclick can be undone right after.</p></div>
-      <div class="tabs" id="lead-tabs"></div>
-      <div class="toolbar">
-        <input id="filter" placeholder="Filter by name, city, category..." aria-label="Filter leads">
-        <select id="tier" aria-label="Tier">
-          <option value="">All tiers</option><option>A</option><option>B</option><option>C</option><option>D</option>
-        </select>
-        <a class="btn quiet" href="/download/saved.xlsx">Download Excel</a>
-        <a class="btn quiet" href="/download/saved.csv">Download CSV</a>
+        <p>Mark whether each business has a baler or compactor. A mark is kept for good; a misclick can be undone for 5 minutes.</p></div>
+      <div id="leads-problem"></div>
+      <div id="leads-body">
+        <div class="tabs" id="lead-tabs"></div>
+        <div class="toolbar">
+          <input id="filter" type="search" placeholder="Filter by name, city, category..." aria-label="Filter leads">
+          <select id="tier" aria-label="Tier">
+            <option value="">All tiers</option><option value="A">A - strong</option><option value="B">B - likely</option>
+            <option value="C">C - possible</option><option value="D">D - weak</option>
+          </select>
+          <a class="btn quiet" href="/download/saved.xlsx">Download Excel</a>
+          <a class="btn quiet" href="/download/saved.csv">Download CSV</a>
+        </div>
+        <div id="leads-note"></div>
+        <div class="recent" id="recent" hidden><h2>Recent changes (can be undone for 5 minutes)</h2><ul id="recent-list"></ul></div>
+        <div class="table-wrap" id="leads-wrap"></div>
+        <button class="quiet more" id="leads-more" hidden></button>
       </div>
-      <div id="leads-note"></div>
-      <div class="table-wrap" id="leads-wrap"></div>
-      <button class="quiet more" id="leads-more" hidden></button>
     </section>
 
     <!-- Calls -->
     <section class="page" id="page-calls" hidden>
       <div class="page-head"><h1>Calls</h1>
         <p>Businesses with a baler or compactor that have been called, sorted by how the latest call went.</p></div>
-      <div class="tabs" id="call-tabs"></div>
-      <div class="table-wrap" id="calls-wrap"></div>
+      <div id="calls-problem"></div>
+      <div id="calls-body">
+        <div class="tabs" id="call-tabs"></div>
+        <div class="table-wrap scroll-x" id="calls-wrap"></div>
+      </div>
     </section>
 
     <!-- Stats -->
     <section class="page" id="page-stats" hidden>
       <div class="page-head"><h1>Stats</h1>
         <p>From the businesses marked Yes or No for having a baler or compactor.</p></div>
-      <div class="tiles">
-        <div class="card tile"><div class="label">Businesses with a baler or compactor</div>
-          <div class="value" id="s-total">-</div></div>
-        <div class="card tile"><div class="label">Average score of those businesses</div>
-          <div class="value" id="s-avg">-</div></div>
-      </div>
-      <div class="card">
-        <h2>Share with a baler or compactor, by tier</h2>
-        <p class="muted" style="margin-top:-6px">Out of the businesses checked (marked Yes or No) in each tier.</p>
-        <div class="viz" id="chart"></div>
-        <table class="plain" id="s-table" style="margin-top:12px">
-          <thead><tr><th>Tier</th><th>Checked</th><th>Have one</th><th>Share</th></tr></thead><tbody></tbody>
-        </table>
+      <div id="stats-problem"></div>
+      <div id="stats-body">
+        <div class="tiles">
+          <div class="card tile"><div class="label">Businesses with a baler or compactor</div>
+            <div class="value" id="s-total">-</div></div>
+          <div class="card tile"><div class="label">Average score of those businesses</div>
+            <div class="value" id="s-avg">-</div></div>
+        </div>
+        <div class="card">
+          <h2>Share with a baler or compactor, by tier</h2>
+          <p class="muted" style="margin-top:-6px">Out of the businesses checked (marked Yes or No) in each tier.</p>
+          <div class="viz" id="chart"></div>
+          <p class="muted" id="tier-d-note" hidden></p>
+          <div class="scroll-x"><table class="plain" id="s-table" style="margin-top:12px">
+            <thead><tr><th>Tier</th><th>Checked</th><th>Have one</th><th>Share</th></tr></thead><tbody></tbody>
+          </table></div>
+        </div>
       </div>
     </section>
     <footer class="copy">© {{ year }} Wright AI Solutions. All rights reserved.</footer>
+   </div>
   </main>
 </div>
 
-<div class="toast" id="toast" role="status" hidden><span id="toast-msg"></span>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden><span id="toast-msg"></span>
   <button type="button" id="toast-undo">Undo</button></div>
 
 <dialog id="call-dlg">
@@ -311,7 +382,7 @@
       <div class="sub" style="margin-bottom:6px;font-weight:600">How did it go?</div>
       <div class="outcomes" id="outcomes"></div>
     </div>
-    <div class="error" id="call-error"></div>
+    <div class="error" id="call-error" role="alert"></div>
     <div class="dlg-actions">
       <button type="button" class="quiet" id="call-cancel">Cancel</button>
       <button type="submit" id="call-save" disabled>Save</button>
@@ -329,8 +400,10 @@
 
 <script>
 const OUTCOMES = {{ outcomes|tojson }};
+const PAUSED = {{ switches.search_paused|tojson }};
 const $ = (id) => document.getElementById(id);
-const S = { leads: [], leadView: "", callView: OUTCOMES[0], limit: 300, job: null, saved: true, error: "" };
+const S = { leads: [], loaded: false, loadError: "", refreshError: "", leadView: "", callView: OUTCOMES[0],
+            q: "", tier: "", sort: "score", dir: "desc", limit: 300, job: null, error: "", skew: 0, busy: 0 };
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);
@@ -344,6 +417,12 @@ function link(href, text) {
   a.href = href; a.target = "_blank"; a.rel = "noopener";
   return a;
 }
+function phoneLink(phone) {
+  const digits = (phone || "").replace(/[^\d+]/g, "");
+  if (digits.replace(/\D/g, "").length < 7) return el("span", phone || "");
+  const a = el("a", phone); a.href = `tel:${digits}`; a.className = "nowrap";
+  return a;
+}
 function button(text, cls, onClick) {
   const b = el("button", text, cls);
   b.type = "button";
@@ -351,41 +430,112 @@ function button(text, cls, onClick) {
   return b;
 }
 async function api(path, opts) {
-  const res = await fetch(path, opts);
+  let res;
+  try { res = await fetch(path, opts); }
+  catch (err) { throw Object.assign(new Error("Can't reach the Lead Finder. Check your internet connection and try again."), { status: 0 }); }
   if (res.status === 401) { location.href = "/login"; throw new Error("Logged out"); }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) { const e = new Error(body.error || `HTTP ${res.status}`); e.status = res.status; e.body = body; throw e; }
+  if (typeof body.now === "number") S.skew = body.now - Date.now() / 1000;
+  if (!res.ok) {
+    const e = new Error(body.error || "Something went wrong. Try again in a minute.");
+    e.status = res.status; e.body = body; throw e;
+  }
   return body;
 }
 const post = (path, data) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-const fmtTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+const serverNow = () => Date.now() / 1000 + S.skew;
+const leftOf = (undo) => undo ? Math.max(0, Math.floor(undo.until - serverNow())) : 0;
+function problem(box, title, message, retry) {
+  const p = el("div", undefined, "problem");
+  const text = el("div"); text.append(el("strong", title), el("span", message, "muted"));
+  p.append(text);
+  if (retry) p.append(button("Retry", "quiet", retry));
+  box.replaceChildren(p);
+}
 
-/* ---------- pages ---------- */
+/* ---------- theme ---------- */
+function themeChoice() { try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; } }
+function applyTheme(choice) {
+  if (choice === "light" || choice === "dark") document.documentElement.setAttribute("data-theme", choice);
+  else document.documentElement.removeAttribute("data-theme");
+  try { if (choice === "system") localStorage.removeItem("theme"); else localStorage.setItem("theme", choice); } catch (e) { /* not kept */ }
+  document.querySelectorAll("[data-theme-pick]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.themePick === choice));
+  if (chartRows && !$("page-stats").hidden) drawChart(chartRows);
+}
+document.querySelectorAll("[data-theme-pick]").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.themePick)));
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (chartRows) drawChart(chartRows); });
+
+/* ---------- pages and the address bar ---------- */
+function parseHash() {
+  const [page, query] = (location.hash || "").slice(1).split("?");
+  return { page, params: new URLSearchParams(query || "") };
+}
 function route() {
-  const page = (location.hash || "").slice(1) || (S.leads.length ? "leads" : "find");
+  const { page: asked, params } = parseHash();
+  const page = ["find", "leads", "calls", "stats"].includes(asked) ? asked : (S.leads.length ? "leads" : "find");
+  if (page === "leads" && params.toString()) {
+    S.leadView = params.get("tab") || "";
+    if (!["", "yes", "no", "all"].includes(S.leadView)) S.leadView = "";
+    S.q = params.get("q") || ""; S.tier = params.get("tier") || "";
+    S.sort = SORTS[params.get("sort")] ? params.get("sort") : "score";
+    S.dir = params.get("dir") === "asc" ? "asc" : params.get("dir") === "desc" ? "desc" : SORTS[S.sort].dir;
+    $("filter").value = S.q; $("tier").value = S.tier;
+    renderLeads();
+  }
+  if (page === "calls" && params.get("tab") && OUTCOMES.includes(params.get("tab"))) { S.callView = params.get("tab"); renderCalls(); }
   for (const p of ["find", "leads", "calls", "stats"]) $(`page-${p}`).hidden = p !== page;
-  document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("on", a.dataset.page === page));
+  document.querySelectorAll("nav a").forEach((a) => {
+    a.classList.toggle("on", a.dataset.page === page);
+    if (a.dataset.page === page) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+  });
+  if (page === "leads" || page === "calls") writeHash(page);
   if (page === "stats") loadStats();
   if (page === "find") loadSearches();
+}
+function writeHash(page) {
+  const params = new URLSearchParams();
+  if (page === "leads") {
+    if (S.leadView) params.set("tab", S.leadView);
+    if (S.q) params.set("q", S.q);
+    if (S.tier) params.set("tier", S.tier);
+    if (S.sort !== "score" || S.dir !== "desc") { params.set("sort", S.sort); params.set("dir", S.dir); }
+  } else if (page === "calls" && S.callView !== OUTCOMES[0]) params.set("tab", S.callView);
+  const hash = `#${page}${params.toString() ? "?" + params : ""}`;
+  if (location.hash !== hash) history.replaceState(null, "", hash);
 }
 window.addEventListener("hashchange", route);
 
 /* ---------- leads ---------- */
-async function loadLeads() {
+async function loadLeads(quiet) {
+  const wrap = $("leads-wrap"), top = wrap.scrollTop;
   try {
     S.leads = (await api("/leads")).leads;
-    $("leads-note").replaceChildren();
+    S.loaded = true; S.loadError = ""; S.refreshError = "";
   } catch (err) {
-    $("leads-note").replaceChildren(el("div", err.message, "warn"));
+    if (err.status === 401) return;
+    if (quiet && S.loaded) S.refreshError = "Couldn't refresh the list just now; it will try again shortly.";
+    else S.loadError = err.message;
   }
-  renderLeads(); renderCalls(); counts();
+  renderAll();
+  wrap.scrollTop = top;
 }
+function renderAll() { renderLeads(); renderCalls(); renderRecent(); counts(); }
 function counts() {
-  $("n-leads").textContent = S.leads.filter((l) => !l.has_baler).length.toLocaleString();
-  $("n-calls").textContent = S.leads.filter((l) => l.call_count).length.toLocaleString();
+  const show = (id, text) => { $(id).textContent = text; $(id).hidden = !S.loaded; };
+  const toCheck = S.leads.filter((l) => !l.has_baler).length;
+  show("n-leads", `${toCheck.toLocaleString()} to check`);
+  show("n-calls", `${S.leads.filter((l) => l.call_count).length.toLocaleString()} called`);
 }
 
 const LEAD_TABS = [["", "Not checked"], ["yes", "Has baler or compactor"], ["no", "No baler or compactor"], ["all", "All"]];
+// Column sorts: the value to sort by, and the first direction a click picks.
+const SORTS = {
+  score: { key: (l) => l.score, dir: "desc" },
+  name: { key: (l) => l.name.toLowerCase(), dir: "asc" },
+  city: { key: (l) => (l.city || "~").toLowerCase(), dir: "asc" },
+  miles: { key: (l) => l.distance ?? 1e9, dir: "asc" },
+};
 
 function tabs(box, items, current, onPick) {
   box.replaceChildren();
@@ -429,106 +579,153 @@ function whyCell(reasons) {
   return td;
 }
 
-/* A short-lived Undo for the last click, in case of a misclick. */
+/* The toast: a short note after a click (the Undo stays on the row and in Recent changes). */
 let toastTimer = null, toastUndo = null;
-function offerUndo(message, undo) {
+function toast(message, undo, bad) {
   $("toast-msg").textContent = message;
-  toastUndo = undo;
-  $("toast-undo").disabled = false;
+  toastUndo = undo || null;
+  $("toast-undo").hidden = !undo; $("toast-undo").disabled = false;
+  $("toast").classList.toggle("bad", !!bad);
   $("toast").hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { $("toast").hidden = true; toastUndo = null; }, 20000);
+  toastTimer = setTimeout(() => { $("toast").hidden = true; toastUndo = null; }, bad ? 9000 : 7000);
 }
-$("toast-undo").addEventListener("click", async () => {
-  if (!toastUndo) return;
-  const undo = toastUndo; toastUndo = null;
-  $("toast-undo").disabled = true;
-  try { await undo(); $("toast-msg").textContent = "Undone."; }
-  catch (err) { $("toast-msg").textContent = `Could not undo: ${err.message}`; }
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { $("toast").hidden = true; }, 4000);
-});
+$("toast-undo").addEventListener("click", () => { if (toastUndo) { const u = toastUndo; toastUndo = null; $("toast").hidden = true; u(); } });
 const leadByKey = (key) => S.leads.find((l) => l.key === key);
 
 async function setMark(lead, value) {
   const before = lead.has_baler || "";
-  if (value === before || lead.saving || !lead.key) return;   // switching needs no undo; clearing is only via Undo
+  if (value === before || lead.saving || !lead.key) return;   // clearing is only via Undo
   const key = lead.key;
-  lead.saving = true; lead.has_baler = value;
-  renderLeads(); counts();
+  lead.saving = true; lead.has_baler = value; S.busy++;
+  renderAll();
   try {
-    await post("/mark", { key, value });
-    offerUndo(`${lead.name}: marked ${value === "yes" ? "Yes" : "No"}.`, async () => {
-      await post("/mark/undo", { key, previous: before });
-      const now = leadByKey(key);
-      if (now) now.has_baler = before;
-      renderLeads(); counts();
-    });
-  }
-  catch (err) { lead.has_baler = before; renderLeads(); counts(); alert(`Could not save the answer for ${lead.name}: ${err.message}`); }
-  finally { lead.saving = false; }
+    const { undo } = await post("/mark", { key, value });
+    const now = leadByKey(key) || lead;
+    now.undo_mark = undo;
+    renderAll();
+    toast(`${lead.name}: marked ${value === "yes" ? "Yes" : "No"}.`, () => undoMark(key));
+  } catch (err) {
+    const now = leadByKey(key) || lead;
+    now.has_baler = before; renderAll();
+    toast(`${lead.name} wasn't saved. ${err.message}`, null, true);
+  } finally { lead.saving = false; S.busy--; }
 }
-function markCell(lead) {
+async function undoMark(key) {
+  const lead = leadByKey(key);
+  if (!lead || !lead.undo_mark) return;
+  try { await post("/mark/undo", { id: lead.undo_mark.id }); toast(`${lead.name}: undone.`); }
+  catch (err) { toast(`Couldn't undo ${lead.name}. ${err.message}`, null, true); }
+  await loadLeads(true);
+}
+async function undoCall(key) {
+  const lead = leadByKey(key);
+  if (!lead || !lead.undo_call) return;
+  try { await post("/calls/undo", { id: lead.undo_call.id }); toast(`${lead.name}: call removed.`); }
+  catch (err) { toast(`Couldn't undo the call to ${lead.name}. ${err.message}`, null, true); }
+  await loadLeads(true);
+}
+function undoButton(undo, label, onClick) {
+  const b = button("", "undo", onClick);
+  b.dataset.until = undo.until; b.dataset.label = label;
+  b.textContent = `${label} (${fmtTime(leftOf(undo))})`;
+  return b;
+}
+// Count the Undo buttons down; when one runs out, it disappears.
+setInterval(() => {
+  let expired = false;
+  document.querySelectorAll("button.undo[data-until]").forEach((b) => {
+    const left = Math.floor(Number(b.dataset.until) - serverNow());
+    if (left <= 0) { b.remove(); expired = true; } else b.textContent = `${b.dataset.label} (${fmtTime(left)})`;
+  });
+  if (expired) {
+    for (const l of S.leads) {
+      if (l.undo_mark && leftOf(l.undo_mark) <= 0) l.undo_mark = null;
+      if (l.undo_call && leftOf(l.undo_call) <= 0) l.undo_call = null;
+    }
+    renderRecent();
+  }
+}, 1000);
+
+function markCell(lead, withCall) {
   const td = el("td");
   const box = el("div", undefined, "mark");
   for (const [value, label] of [["yes", "Yes"], ["no", "No"]]) {
     const b = button(label, value + (lead.has_baler === value ? " on" : ""), () => setMark(lead, value));
     b.disabled = !lead.key;
-    b.title = !lead.key ? "Not saved, so it can't be marked" : lead.has_baler === value ? "Marked"
-      : `${label}: it ${value === "yes" ? "has" : "doesn't have"} a baler or compactor`;
+    b.setAttribute("aria-pressed", lead.has_baler === value);
+    b.setAttribute("aria-label", `${lead.name}: ${value === "yes" ? "has" : "doesn't have"} a baler or compactor`);
     box.append(b);
   }
   td.append(box);
+  if (lead.undo_mark && leftOf(lead.undo_mark) > 0) td.append(undoButton(lead.undo_mark, "Undo", () => undoMark(lead.key)));
+  if (withCall) td.append(callBox(lead));
   return td;
 }
-function callCell(lead) {
-  const td = el("td");
+function callBox(lead) {
   const box = el("div", undefined, "call-cell");
+  box.style.marginTop = "8px";
   if (lead.call_outcome) {
     box.append(el("span", lead.call_outcome, "badge"));
     box.append(el("span", lead.last_call, "sub"));
   }
   box.append(button("Just called", "", () => openCall(lead)));
   if (lead.call_count) box.append(button(`History (${lead.call_count})`, "quiet", () => openHistory(lead)));
-  td.append(box);
-  return td;
+  if (lead.undo_call && leftOf(lead.undo_call) > 0) box.append(undoButton(lead.undo_call, "Undo call", () => undoCall(lead.key)));
+  return box;
 }
 
 function leadRow(l, withCall) {
   const tr = el("tr");
   tr.className = l.tier + (l.lead_type === "Competitor" ? " competitor" : "");
-  tr.append(markCell(l));
-  if (withCall) tr.append(callCell(l));
-  tr.append(el("td", `${l.score} (${l.tier})`, "score"));
+  tr.append(markCell(l, withCall));
+  tr.append(el("td", `${l.score} (${l.tier})`, "score nowrap"));
   const name = el("td");
   name.append(el("strong", l.name));
+  if (l.category) name.append(el("div", l.category, "sub"));
   if (l.lead_type !== "Prospect") name.append(el("div", l.lead_type, "sub"));
   for (const f of l.flags) name.append(el("div", f, "flag"));
   tr.append(name);
-  tr.append(el("td", l.category));
-  const addr = el("td", [l.address, l.city, l.zip].filter(Boolean).join(", "));
-  if (l.map_url) { addr.append(document.createElement("br")); addr.append(link(l.map_url, "map")); }
-  tr.append(addr);
-  tr.append(el("td", l.phone, "nowrap"));
-  const site = el("td", undefined, "site");
-  const a = link(l.website, l.website && l.website.replace(/^https?:\/\/(www\.)?/i, "").split("/")[0]);
-  if (l.website) a.title = l.website;
-  site.append(a); tr.append(site);
-  tr.append(el("td", l.distance));
+  const contact = el("td", undefined, "contact");
+  const addr = el("div", [l.address, l.city, l.zip].filter(Boolean).join(", "));
+  if (l.map_url) { addr.append(" "); addr.append(link(l.map_url, "map")); }
+  contact.append(addr);
+  if (l.phone) { const p = el("div"); p.append(phoneLink(l.phone)); contact.append(p); }
+  if (l.website) {
+    const a = link(l.website, l.website.replace(/^https?:\/\/(www\.)?/i, "").split("/")[0]);
+    a.classList.add("site"); a.title = l.website; contact.append(a);
+  }
+  tr.append(contact);
+  tr.append(el("td", l.distance ?? "", "nowrap"));
   tr.append(whyCell(l.reasons));
   return tr;
 }
 
+function sortHeader(label, sort) {
+  const th = el("th");
+  if (!sort) { th.textContent = label; return th; }
+  const on = S.sort === sort;
+  const b = button("", "sort", () => {
+    if (S.sort === sort) S.dir = S.dir === "asc" ? "desc" : "asc";
+    else { S.sort = sort; S.dir = SORTS[sort].dir; }
+    S.limit = 300; renderLeads();
+  });
+  b.append(el("span", label), el("span", on ? (S.dir === "asc" ? "▲" : "▼") : "↕", "arrow"));
+  th.setAttribute("aria-sort", on ? (S.dir === "asc" ? "ascending" : "descending") : "none");
+  b.title = `Sort by ${label.toLowerCase()}`;
+  th.append(b);
+  return th;
+}
 function leadTable(rows, withCall) {
   const table = el("table", undefined, "leads");
-  const cols = [["Has baler or compactor?", 118], ...(withCall ? [["Call", 150]] : []), ["Score", 70], ["Business", 200],
-                ["Category", 140], ["Address", 170], ["Phone", 120], ["Website", 150], ["Miles from Arco", 80], ["Why", null]];
+  // Fits a 1280px-wide window without scrolling sideways; the Why column takes the rest.
+  const cols = [[withCall ? "Baler? / Call" : "Baler or compactor?", withCall ? "138px" : "118px"],
+                ["Score", "74px", "score"], ["Business", "22%", "name"], ["Contact", "22%", "city"],
+                ["Miles", "72px", "miles"], ["Why this score", null]];
   const cg = el("colgroup");
-  for (const [, w] of cols) { const c = el("col"); if (w) c.style.width = w + "px"; cg.append(c); }
-  // Leave the Why column room for its reasons; the table scrolls sideways if the screen is narrower.
-  table.style.minWidth = cols.reduce((sum, [, w]) => sum + (w || 340), 0) + "px";
+  for (const [, w] of cols) { const c = el("col"); if (w) c.style.width = w; cg.append(c); }
   const head = el("tr");
-  for (const [t] of cols) head.append(el("th", t));
+  for (const [t, , sort] of cols) head.append(sortHeader(t, sort));
   const thead = el("thead"); thead.append(head);
   const tbody = el("tbody");
   for (const l of rows) tbody.append(leadRow(l, withCall));
@@ -537,35 +734,73 @@ function leadTable(rows, withCall) {
 }
 
 function renderLeads() {
+  const problemBox = $("leads-problem");
+  if (S.loadError && !S.loaded) {
+    problem(problemBox, "Can't show your leads right now", S.loadError, () => { problemBox.replaceChildren(el("div", "Loading...", "muted")); loadLeads(); });
+    $("leads-body").hidden = true;
+    return;
+  }
+  problemBox.replaceChildren(); $("leads-body").hidden = !S.loaded;
+  $("leads-note").replaceChildren(...(S.refreshError ? [el("div", S.refreshError, "warn")] : []));
   const count = (v) => v === "all" ? S.leads.length : S.leads.filter((l) => (l.has_baler || "") === v).length;
   tabs($("lead-tabs"), LEAD_TABS.map(([v, t]) => [v, t, count(v)]), S.leadView,
        (v) => { S.leadView = v; S.limit = 300; renderLeads(); });
-  const q = $("filter").value.toLowerCase(), tier = $("tier").value;
+  const q = S.q.toLowerCase(), tier = S.tier;
   const rows = S.leads.filter((l) => {
     if (S.leadView !== "all" && (l.has_baler || "") !== S.leadView) return false;
     if (tier && l.tier !== tier) return false;
     if (!q) return true;
     return [l.name, l.city, l.category, l.address, l.lead_type, l.flags.join(" ")].join(" ").toLowerCase().includes(q);
   });
+  const { key } = SORTS[S.sort], sign = S.dir === "asc" ? 1 : -1;
+  rows.sort((a, b) => { const x = key(a), y = key(b); return x < y ? -sign : x > y ? sign : 0; });
   const wrap = $("leads-wrap");
   if (!rows.length) {
-    wrap.replaceChildren(el("div", S.leads.length ? "Nothing here yet." : "No saved leads yet. Run a search on the Find leads page.", "empty"));
+    wrap.replaceChildren(el("div", S.leads.length ? "Nothing here with these filters." : "No saved leads yet. Run a search on the Find leads page.", "empty"));
   } else {
     wrap.replaceChildren(leadTable(rows.slice(0, S.limit), S.leadView === "yes"));
   }
   const more = $("leads-more");
   more.hidden = rows.length <= S.limit;
   more.textContent = `Show more (${(rows.length - S.limit).toLocaleString()} left)`;
+  if (!$("page-leads").hidden) writeHash("leads");
+}
+function renderRecent() {
+  const items = [];
+  for (const l of S.leads) {
+    if (l.undo_mark && leftOf(l.undo_mark) > 0)
+      items.push([l.undo_mark.until, `${l.name}: marked ${l.has_baler === "yes" ? "Yes" : l.has_baler === "no" ? "No" : "Not checked"}`,
+                  undoButton(l.undo_mark, "Undo", () => undoMark(l.key))]);
+    if (l.undo_call && leftOf(l.undo_call) > 0)
+      items.push([l.undo_call.until, `${l.name}: call saved as ${l.call_outcome}`, undoButton(l.undo_call, "Undo", () => undoCall(l.key))]);
+  }
+  items.sort((a, b) => b[0] - a[0]);
+  $("recent").hidden = !items.length;
+  $("recent-list").replaceChildren(...items.slice(0, 8).map(([, text, b]) => { const li = el("li"); li.append(el("span", text), b); return li; }));
 }
 $("leads-more").addEventListener("click", () => { S.limit += 300; renderLeads(); });
-$("filter").addEventListener("input", () => { S.limit = 300; renderLeads(); });
-$("tier").addEventListener("change", () => { S.limit = 300; renderLeads(); });
+$("filter").addEventListener("input", () => { S.q = $("filter").value; S.limit = 300; renderLeads(); });
+$("tier").addEventListener("change", () => { S.tier = $("tier").value; S.limit = 300; renderLeads(); });
+
+// Keep up with colleagues' marks and calls: every minute while the page is open, and on return to it.
+function refreshSoon() {
+  if (document.visibilityState !== "visible" || S.busy || !S.loaded) return;
+  if ($("call-dlg").open || $("hist-dlg").open) return;
+  loadLeads(true);
+}
+setInterval(refreshSoon, 60000);
+document.addEventListener("visibilitychange", refreshSoon);
 
 /* ---------- calls ---------- */
 function renderCalls() {
+  if (S.loadError && !S.loaded) {
+    problem($("calls-problem"), "Can't show your calls right now", S.loadError, () => loadLeads());
+    $("calls-body").hidden = true; return;
+  }
+  $("calls-problem").replaceChildren(); $("calls-body").hidden = !S.loaded;
   const called = S.leads.filter((l) => l.call_count);
   tabs($("call-tabs"), OUTCOMES.map((o) => [o, o, called.filter((l) => l.call_outcome === o).length]), S.callView,
-       (v) => { S.callView = v; renderCalls(); });
+       (v) => { S.callView = v; renderCalls(); writeHash("calls"); });
   const rows = called.filter((l) => l.call_outcome === S.callView);
   const wrap = $("calls-wrap");
   if (!rows.length) { wrap.replaceChildren(el("div", "No calls with this result yet.", "empty")); return; }
@@ -579,13 +814,14 @@ function renderCalls() {
     const tr = el("tr");
     const name = el("td"); name.append(el("strong", l.name)); name.append(el("div", [l.address, l.city].filter(Boolean).join(", "), "sub"));
     tr.append(name);
-    tr.append(el("td", l.phone, "nowrap"));
+    const phone = el("td"); phone.append(phoneLink(l.phone)); tr.append(phone);
     const when = el("td"); when.append(el("div", l.last_call)); when.append(el("div", `${l.call_count} call${l.call_count > 1 ? "s" : ""}`, "sub"));
     tr.append(when);
     tr.append(el("td", l.call_notes || "(no notes)", "notes"));
     const act = el("td"); const box = el("div", undefined, "call-cell");
     box.append(button("Just called", "", () => openCall(l)));
     box.append(button("History", "quiet", () => openHistory(l)));
+    if (l.undo_call && leftOf(l.undo_call) > 0) box.append(undoButton(l.undo_call, "Undo call", () => undoCall(l.key)));
     act.append(box); tr.append(act);
     tbody.append(tr);
   }
@@ -603,9 +839,10 @@ function openCall(lead) {
   for (const o of OUTCOMES) {
     const b = button(o, "", () => {
       callOutcome = o;
-      box.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+      box.querySelectorAll("button").forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", x === b); });
       $("call-save").disabled = false;
     });
+    b.setAttribute("aria-pressed", "false");
     box.append(b);
   }
   $("call-save").disabled = true;
@@ -617,29 +854,22 @@ $("call-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!callLead || !callOutcome) return;
   const key = callLead.key;
-  $("call-save").disabled = true;
+  $("call-save").disabled = true; S.busy++;
   try {
     const { call } = await post("/calls", { key, outcome: callOutcome, notes: $("call-notes").value });
     // Update the lead as it is now (the list may have been reloaded while saving).
-    const lead = S.leads.find((l) => l.key === key);
-    const fields = ["call_outcome", "call_notes", "last_call", "last_call_at", "call_count"];
-    const before = lead ? Object.fromEntries(fields.map((f) => [f, lead[f]])) : null;
+    const lead = leadByKey(key);
     if (lead) Object.assign(lead, { call_outcome: call.outcome, call_notes: call.notes, last_call: call.when,
-                                    last_call_at: call.at, call_count: (lead.call_count || 0) + 1 });
+                                    last_call_at: call.at, call_count: (lead.call_count || 0) + 1, undo_call: call.undo });
     if (callLead && callLead.key === key) $("call-dlg").close();
-    renderLeads(); renderCalls(); counts();
-    offerUndo(`${lead ? lead.name : "Call"}: saved as ${call.outcome}.`, async () => {
-      await post("/calls/undo", { id: call.id });
-      const now = leadByKey(key);
-      if (now && before) Object.assign(now, before);
-      renderLeads(); renderCalls(); counts();
-    });
+    renderAll();
+    toast(`${lead ? lead.name : "Call"}: saved as ${call.outcome}.`, () => undoCall(key));
   } catch (err) {
     if (callLead && callLead.key === key) {
-      $("call-error").textContent = `Not saved: ${err.message}`;
+      $("call-error").textContent = `Not saved. ${err.message}`;
       $("call-save").disabled = false;
     }
-  }
+  } finally { S.busy--; }
 });
 
 async function openHistory(lead) {
@@ -662,30 +892,37 @@ async function openHistory(lead) {
 $("hist-close").addEventListener("click", () => $("hist-dlg").close());
 
 /* ---------- find leads ---------- */
+function setGo(enabled, note, used) {
+  $("go").disabled = !enabled;
+  if (note !== undefined) { $("day-note").textContent = note; $("day-note").className = used ? "used" : ""; }
+}
 async function loadSearches() {
   let body;
   try { body = await api("/searches"); }
-  catch (err) { $("history").replaceChildren(el("div", err.message, "error")); return; }
+  catch (err) {
+    if (err.status === 401) return;
+    problem($("history"), "Can't load the search history", err.message, () => { $("history").replaceChildren(el("div", "Loading...", "muted")); loadSearches(); });
+    if (!S.job) setGo(false, "Find leads is off until the saved data can be reached. Use Retry below.", true);
+    return;
+  }
   if (body.yelp && $("yelp-quota")) {
     $("yelp-quota").textContent = body.yelp.text;
     $("yelp-quota").className = "quota" + (body.yelp.paused ? " paused" : "");
   }
-  const today = body.searches.find((s) => s.day === body.today);
-  const note = $("day-note");
+  $("paused-box").hidden = !body.paused;
+  const today = body.current;
   if (body.running && !S.job) follow(body.running);
-  if (S.job) { note.textContent = ""; }
-  else if (S.error) { note.textContent = S.error; note.className = "used"; }
+  if (S.job) setGo(false, "");
+  else if (body.paused) setGo(false, "Searching is paused by the administrator.", true);
+  else if (S.error) setGo(!body.used_today, body.used_today ? S.error : "You can try again.", body.used_today);
   else if (body.used_today && today.leads === undefined && !body.running) {
     const at = new Date((today.at + 30 * 60) * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    note.textContent = `Today's search was interrupted before it finished. It can be run again after ${at}.`;
-    note.className = "used";
+    setGo(false, `Today's search was interrupted before it finished. It can be run again after ${at}.`, true);
   } else if (body.used_today) {
-    note.textContent = `Today's search ran ${today.when.split(", ").pop()}. The next one can run tomorrow.`;
-    note.className = "used";
+    setGo(false, `Today's search ran ${today.when.split(", ").pop()}. The next one can run tomorrow.`, true);
   } else if (today) {
-    note.textContent = "Today's search didn't finish, so it can be run again."; note.className = "";
-  } else { note.textContent = "One search a day. Today's is available."; note.className = ""; }
-  $("go").disabled = body.used_today || !!S.job;
+    setGo(true, "Today's search didn't finish, so it can be run again.");
+  } else setGo(true, "One search a day. Today's is available.");
   renderHistory(body.searches);
 }
 function renderHistory(searches) {
@@ -697,11 +934,20 @@ function renderHistory(searches) {
   const thead = el("thead"); thead.append(head);
   const tbody = el("tbody");
   for (const s of searches) {
-    const tr = el("tr");
+    const tr = el("tr", undefined, s.failed ? "failed" : "");
+    const leadsCell = el("td");
+    if (s.failed) leadsCell.append(el("span", "Failed", "tag")); else leadsCell.textContent = s.leads ?? "-";
     tr.append(el("td", s.when, "nowrap"), el("td", s.location), el("td", s.radius ? `${s.radius} mi` : ""),
-              el("td", s.leads ?? "-"), el("td", s.new ?? "-"));
+              leadsCell, el("td", s.failed ? "" : s.new ?? "-"));
     const td = el("td");
     tr.append(td); tbody.append(tr);
+    if (s.failed) {
+      const extra = el("tr", undefined, "failed");
+      const cell = el("td"); cell.colSpan = 6; cell.className = "sub";
+      cell.textContent = `${s.reason || "The search didn't finish."} It didn't use up the day's search.`;
+      extra.append(cell); tbody.append(extra);
+      continue;
+    }
     if (s.details || (s.warnings || []).length) {
       const extra = el("tr", undefined, "more-row"); extra.hidden = true;
       const cell = el("td"); cell.colSpan = 6;
@@ -728,11 +974,14 @@ function renderHistory(searches) {
 
 function showProgress(job) {
   $("progress-card").hidden = false;
-  if (job.state === "running") { $("day-note").textContent = ""; $("day-note").className = ""; }
   const steps = $("steps"); steps.replaceChildren();
+  const skipped = job.skipped || [];
   job.steps.forEach((name, i) => {
-    const s = el("div", undefined, "step" + (i < job.step ? " done" : i === job.step ? " now" : ""));
-    s.append(el("span", i < job.step ? "✓" : "", "dot"), el("span", name));
+    const skip = skipped.includes(i);
+    const s = el("div", undefined, "step" + (skip ? " skip" : i < job.step ? " done" : i === job.step ? " now" : ""));
+    const label = el("span", name);
+    if (skip) label.append(el("span", i === 1 ? "Skipped: not set up" : "Skipped", "why"));
+    s.append(el("span", skip ? "–" : i < job.step ? "✓" : "", "dot"), label);
     steps.append(s);
   });
   $("bar-fill").style.width = `${job.pct}%`;
@@ -740,23 +989,26 @@ function showProgress(job) {
   $("pct").textContent = `${Math.round(job.pct)}%`;
   $("elapsed").textContent = fmtTime(job.elapsed || 0);
   $("progress-msg").textContent = job.message;
+  $("slow-note").hidden = !job.slow;
 }
 async function follow(jobId, misses = 0) {
   S.job = jobId;
-  $("go").disabled = true; $("done-card").hidden = true;
+  setGo(false, ""); $("done-card").hidden = true; $("search-failed").hidden = true;
   let job;
   try { job = await api(`/status/${jobId}`); }
   catch (err) {
     if (err.status !== 404 && misses < 5) { setTimeout(() => follow(jobId, misses + 1), 3000); return; }
     S.job = null; $("progress-card").hidden = true;
-    $("day-note").textContent = "Lost track of the search. Reload the page."; return;
+    setGo(false, "Lost track of the search (the server may have restarted). Reload the page.", true); return;
   }
   showProgress(job);
   if (job.state === "running") { setTimeout(() => follow(jobId), 1500); return; }
   S.job = null;
   $("progress-card").hidden = true;
   if (job.state === "error") {
-    S.error = `The search failed: ${job.message}`;
+    S.error = job.message;
+    $("search-failed-msg").textContent = job.message;
+    $("search-failed").hidden = false;
     loadSearches();
     return;
   }
@@ -773,16 +1025,15 @@ async function follow(jobId, misses = 0) {
 }
 $("form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  $("go").disabled = true;
-  S.error = "";
-  $("day-note").textContent = "Starting..."; $("day-note").className = "";
+  setGo(false, "Starting...");
+  S.error = ""; $("search-failed").hidden = true;
   try {
     const body = await api("/search", { method: "POST", body: new FormData($("form")) });
     follow(body.job_id);
   } catch (err) {
-    if (err.status === 429 && err.body.job_id) return follow(err.body.job_id);
+    if (err.status === 429 && err.body && err.body.job_id) return follow(err.body.job_id);
     S.error = err.message;
-    $("day-note").textContent = err.message; $("day-note").className = "used";
+    setGo(false, err.message, true);
     loadSearches();
   }
 });
@@ -791,12 +1042,20 @@ $("form").addEventListener("submit", async (e) => {
 async function loadStats() {
   let s;
   try { s = await api("/stats"); }
-  catch (err) { $("chart").replaceChildren(el("div", err.message, "error")); return; }
+  catch (err) {
+    if (err.status === 401) return;
+    problem($("stats-problem"), "Can't show the stats right now", err.message, loadStats);
+    $("stats-body").hidden = true; return;
+  }
+  $("stats-problem").replaceChildren(); $("stats-body").hidden = false;
   $("s-total").textContent = s.with_equipment.toLocaleString();
   const avg = $("s-avg"); avg.replaceChildren();
   if (s.average_score === null) avg.textContent = "-";
   else { avg.append(String(s.average_score)); avg.append(el("small", ` / 100 · tier ${s.average_tier}`)); }
   drawChart(s.by_tier);
+  const d = s.by_tier.find((t) => t.tier === "D");
+  $("tier-d-note").hidden = !(d && !d.checked);
+  $("tier-d-note").textContent = `Tier D (scores below 20) is usually empty: searches only save businesses scoring ${s.min_score} or more.`;
   const tbody = $("s-table").querySelector("tbody"); tbody.replaceChildren();
   for (const t of s.by_tier) {
     const tr = el("tr");
@@ -809,6 +1068,7 @@ async function loadStats() {
 let chartRows = null;
 function drawChart(rows) {
   chartRows = rows;
+  const css = getComputedStyle(document.documentElement), c = (n) => css.getPropertyValue(n).trim();
   const box = $("chart"); box.replaceChildren();
   const W = Math.max(300, Math.round(box.clientWidth || 560)), H = 260, L = 44, R = 12, T = 22, B = 46, NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
@@ -824,23 +1084,23 @@ function drawChart(rows) {
   };
   const y = (p) => T + (H - T - B) * (1 - p / 100);
   for (const p of [0, 25, 50, 75, 100]) {
-    node("line", { x1: L, x2: W - R, y1: y(p), y2: y(p), stroke: p === 0 ? "#c9ced6" : "#e8eaee", "stroke-width": 1 });
-    node("text", { x: L - 8, y: y(p) + 4, "text-anchor": "end", "font-size": 11, fill: "#52514e" }, `${p}%`);
+    node("line", { x1: L, x2: W - R, y1: y(p), y2: y(p), stroke: p === 0 ? c("--chart-base") : c("--chart-grid"), "stroke-width": 1 });
+    node("text", { x: L - 8, y: y(p) + 4, "text-anchor": "end", "font-size": 11, fill: c("--chart-text") }, `${p}%`);
   }
   const band = (W - L - R) / rows.length, bw = 24;
   const tip = el("div", undefined, "tip"); tip.hidden = true; box.append(tip);
   rows.forEach((r, i) => {
     const cx = L + band * i + band / 2;
-    node("text", { x: cx, y: H - B + 18, "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: "#1d2433" }, `Tier ${r.tier}`);
-    node("text", { x: cx, y: H - B + 34, "text-anchor": "middle", "font-size": 11, fill: "#52514e" },
+    node("text", { x: cx, y: H - B + 18, "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: c("--ink") }, `Tier ${r.tier}`);
+    node("text", { x: cx, y: H - B + 34, "text-anchor": "middle", "font-size": 11, fill: c("--chart-text") },
          r.checked ? `${r.yes} of ${r.checked}` : "none checked");
     if (r.pct === null) return;
     const top = y(r.pct), h = Math.max(y(0) - top, r.pct > 0 ? 2 : 0), rad = Math.min(4, h / 2);
     // 4px rounded data-end, square at the baseline.
     const x0 = cx - bw / 2, x1 = cx + bw / 2, yb = y(0);
     const path = node("path", { d: `M${x0},${yb} V${top + rad} Q${x0},${top} ${x0 + rad},${top} H${x1 - rad} Q${x1},${top} ${x1},${top + rad} V${yb} Z`,
-                                fill: "#2a78d6" });
-    node("text", { x: cx, y: top - 7, "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: "#1d2433" }, `${r.pct}%`);
+                                fill: c("--chart-bar") });
+    node("text", { x: cx, y: top - 7, "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: c("--ink") }, `${r.pct}%`);
     // The hit target is the whole column band, bigger than the mark.
     const hit = node("rect", { x: cx - band / 2 + 4, y: T, width: band - 8, height: H - T - B, fill: "transparent", class: "col", tabindex: 0 });
     const show = () => {
@@ -864,7 +1124,9 @@ window.addEventListener("resize", () => {
 });
 
 /* ---------- start ---------- */
-(async () => { await loadLeads(); route(); if (location.hash.slice(1) !== "find") loadSearches(); })();
+applyTheme(themeChoice());
+if (PAUSED) setGo(false, "Searching is paused by the administrator.", true);
+(async () => { await loadLeads(); route(); if (parseHash().page !== "find") loadSearches(); })();
 </script>
 </body>
 </html>

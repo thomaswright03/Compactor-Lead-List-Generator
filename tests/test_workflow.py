@@ -73,7 +73,7 @@ def test_utah_calendar_day(monkeypatch):
 
 def test_calls_are_logged_for_good_and_set_the_outcome():
     lead = _lead("Costco", "c")
-    saved.save_search([lead], [])
+    saved.save_search([lead])
     marks.set_mark(lead.uid, "yes")
     client = web.create_app().test_client()
     first = client.post("/calls", json={"key": lead.uid, "outcome": "Follow Up",
@@ -91,7 +91,7 @@ def test_calls_are_logged_for_good_and_set_the_outcome():
 
 def test_call_input_is_checked():
     lead = _lead("Costco", "c")
-    saved.save_search([lead], [])
+    saved.save_search([lead])
     client = web.create_app().test_client()
     assert client.post("/calls", json={"key": lead.uid, "outcome": "Maybe"}).status_code == 400
     assert client.post("/calls", json={"key": "nope", "outcome": "Interested"}).status_code == 400
@@ -131,26 +131,67 @@ def test_progress_steps():
 
 def test_misclicks_can_be_undone_right_after(monkeypatch):
     lead = _lead("Costco", "c")
-    saved.save_search([lead], [])
+    saved.save_search([lead])
     client = web.create_app().test_client()
-    client.post("/mark", json={"key": lead.uid, "value": "yes"})
-    assert client.post("/mark/undo", json={"key": lead.uid, "previous": ""}).get_json()["ok"]
+    undo = client.post("/mark", json={"key": lead.uid, "value": "yes"}).get_json()["undo"]
+    assert client.post("/mark/undo", json={"id": undo["id"]}).get_json()["ok"]
     assert client.get("/leads").get_json()["leads"][0]["has_baler"] == ""     # back to Not checked
+    assert client.post("/mark/undo", json={"id": undo["id"]}).status_code == 409   # only once
     client.post("/mark", json={"key": lead.uid, "value": "yes"})
-    client.post("/mark", json={"key": lead.uid, "value": "no"})
-    client.post("/mark/undo", json={"key": lead.uid, "previous": "yes"})
+    undo = client.post("/mark", json={"key": lead.uid, "value": "no"}).get_json()["undo"]
+    client.post("/mark/undo", json={"id": undo["id"]})
     assert client.get("/leads").get_json()["leads"][0]["has_baler"] == "yes"
     first = client.post("/calls", json={"key": lead.uid, "outcome": "Interested"}).get_json()["call"]
     second = client.post("/calls", json={"key": lead.uid, "outcome": "Bad Lead"}).get_json()["call"]
-    assert client.post("/calls/undo", json={"id": second["id"]}).get_json()["ok"]
+    assert client.post("/calls/undo", json={"id": second["undo"]["id"]}).get_json()["ok"]
     row = client.get("/leads").get_json()["leads"][0]
     assert row["call_outcome"] == "Interested" and row["call_count"] == 1
     # Later than a few minutes, a click is kept for good.
     real = time.time
     monkeypatch.setattr(marks.time, "time", lambda: real() + marks.UNDO_SECONDS + 1)
     monkeypatch.setattr(calls.time, "time", lambda: real() + calls.UNDO_SECONDS + 1)
-    assert client.post("/mark/undo", json={"key": lead.uid, "previous": ""}).status_code == 409
+    assert client.post("/mark/undo", json={"id": undo["id"]}).status_code == 409
     assert client.post("/calls/undo", json={"id": first["id"]}).status_code == 409
-    assert client.post("/mark/undo", json={"key": lead.uid, "previous": "maybe"}).status_code == 400
+    assert client.post("/mark/undo", json={"key": lead.uid, "previous": ""}).status_code == 400
     assert client.post("/calls/undo", json={"id": first["id"]},
                        headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+
+
+def test_undo_lasts_five_minutes_per_business_and_never_undoes_a_newer_change(monkeypatch):
+    a, b = _lead("Costco", "a"), _lead("Walmart", "b")
+    saved.save_search([a, b])
+    client = web.create_app().test_client()
+    clock = {"now": time.time()}
+    monkeypatch.setattr(marks.time, "time", lambda: clock["now"])
+    undo_a = client.post("/mark", json={"key": a.uid, "value": "yes"}).get_json()["undo"]
+    undo_b = client.post("/mark", json={"key": b.uid, "value": "no"}).get_json()["undo"]
+    assert undo_a["until"] - clock["now"] == marks.UNDO_SECONDS
+    # The page offers both undos, on each business's row, after a reload too.
+    rows = {r["name"]: r for r in client.get("/leads").get_json()["leads"]}
+    assert rows["Costco"]["undo_mark"]["id"] == undo_a["id"]
+    assert rows["Walmart"]["undo_mark"]["id"] == undo_b["id"]
+    clock["now"] += 4 * 60                                   # four minutes later
+    assert client.post("/mark/undo", json={"id": undo_a["id"]}).get_json()["ok"]
+    rows = {r["name"]: r for r in client.get("/leads").get_json()["leads"]}
+    assert rows["Costco"]["has_baler"] == "" and rows["Walmart"]["has_baler"] == "no"
+    assert rows["Costco"]["undo_mark"] is None
+    clock["now"] += 61                                      # past five minutes for Walmart
+    assert client.post("/mark/undo", json={"id": undo_b["id"]}).status_code == 409
+    rows = {r["name"]: r for r in client.get("/leads").get_json()["leads"]}
+    assert rows["Walmart"]["has_baler"] == "no" and rows["Walmart"]["undo_mark"] is None
+    # A colleague's newer click can't be overwritten by undoing an older one.
+    old = client.post("/mark", json={"key": a.uid, "value": "yes"}).get_json()["undo"]
+    client.post("/mark", json={"key": a.uid, "value": "no"})
+    assert client.post("/mark/undo", json={"id": old["id"]}).status_code == 409
+    assert marks.get_all([a.uid]) == {a.uid: "no"}
+    # Clicking the mark it already has changes nothing and offers no undo.
+    assert client.post("/mark", json={"key": a.uid, "value": "no"}).get_json()["undo"] is None
+
+
+def test_marks_only_for_saved_businesses():
+    client = web.create_app().test_client()
+    res = client.post("/mark", json={"key": "no-such-lead", "value": "yes"})
+    assert res.status_code == 404 and "saved list" in res.get_json()["error"]
+    from leadgen import store
+    with store.connect() as db:
+        assert db.all("SELECT uid FROM marks") == []
