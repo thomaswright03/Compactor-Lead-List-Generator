@@ -3,6 +3,8 @@
 import hmac
 import ipaddress
 import math
+import re
+import time
 import os
 import threading
 import uuid
@@ -12,7 +14,7 @@ from urllib.parse import urlparse
 
 from flask import Flask, Response, abort, jsonify, render_template, request
 
-from . import config, marks, saved, store, usage
+from . import calls, config, daily, marks, saved, stats, store, usage
 from .export import format_phone, to_csv_bytes, to_xlsx_bytes
 from .geo import GeocodeError
 from .http import redact
@@ -33,7 +35,60 @@ def _lead_json(lead):
         "zip": lead.zip, "phone": format_phone(lead.phone), "website": lead.website,
         "distance": lead.distance_miles, "reasons": lead.reasons, "map_url": lead.map_url,
         "sources": lead.sources, "key": lead.uid, "has_baler": lead.has_baler,
+        "call_outcome": lead.call_outcome, "call_notes": lead.call_notes,
+        "call_count": lead.call_count, "last_call": calls.local_time_text(lead.last_call_at),
+        "last_call_at": lead.last_call_at,
     }
+
+
+STEPS = ["Find the location", "Search Yelp and Google", "Search map data", "Merge and score",
+         "Save"]
+
+
+class _Progress:
+    """Turns the search's progress messages into a step and a percentage for the page.
+
+    The Yelp / Google part advances with each call; the map data comes back in one
+    slow request, so its share of the bar fills gradually while it runs.
+    """
+
+    def __init__(self, job):
+        self.job = job
+        self.calls, self.cap, self.map_started = 0, None, None
+        job.update(step=0, pct=1.0, started=time.time())
+
+    def __call__(self, msg):
+        job = self.job
+        job["message"] = msg
+        if msg.startswith("Locating"):
+            self._at(0, 3)
+        elif re.match(r"(Yelp|Google): ", msg):
+            cap = re.search(r"up to (\d+)", msg)
+            self.cap = (self.cap or 0) + (int(cap.group(1)) if cap else 0)
+            self._at(1, 6)
+        elif re.match(r"(Yelp|Google) page \d", msg):
+            self.calls += 1
+            self._at(1, 6 + 42 * min(1.0, self.calls / max(self.cap or 1, 1)))
+        elif msg.startswith("OpenStreetMap"):
+            self.map_started = self.map_started or time.time()
+            self._at(2, 50)
+        elif msg.startswith("Filtering"):
+            self._at(3, 88)
+        elif msg.startswith("Merging"):
+            self._at(3, 92)
+        elif msg.startswith("Saving"):
+            self._at(4, 96)
+
+    def _at(self, step, pct):
+        self.job["step"] = max(self.job["step"], step)
+        self.job["pct"] = max(self.job["pct"], pct)
+
+    def pct(self):
+        if self.job["step"] == 2 and self.map_started:
+            # Creeps toward 86% over the few minutes the map servers take.
+            return max(self.job["pct"],
+                       50 + 36 * (1 - math.exp(-(time.time() - self.map_started) / 150)))
+        return self.job["pct"]
 
 
 def yelp_quota():
@@ -132,10 +187,8 @@ def create_app(password=None):
             only_keyword_matches=form.get("only_keyword_matches") == "on",
         )
 
-    def _worker(job, params):
-        def progress(msg):
-            job["message"] = msg
-
+    def _worker(job, params, day):
+        progress = job["progress"]
         try:
             # Closed places come back too, so a saved one that has since closed is updated
             # (and leaves the saved list); they are not shown.
@@ -150,11 +203,28 @@ def create_app(password=None):
             if not params.include_closed:
                 result.leads = [l for l in result.leads
                                 if l.business_status != "CLOSED_PERMANENTLY"]
-            job.update(state="done", result=result, message="Done")
+            # The day's record is written before the job says it is done, so the page's
+            # search history is up to date when it reloads it.
+            try:
+                daily.finish(day, {"leads": len(result.leads), "new": job.get("new_leads"),
+                                   "found_near": result.location_label,
+                                   "details": result.stats, "warnings": result.warnings})
+            except Exception:
+                pass                     # the day stays used; only its summary is missing
+            job.update(state="done", result=result, message="Done", pct=100, step=len(STEPS))
         except (PipelineError, GeocodeError) as exc:
+            _give_back(day)
             job.update(state="error", message=str(exc))
         except Exception as exc:  # show unexpected failures instead of spinning forever
+            _give_back(day)
             job.update(state="error", message=f"Unexpected error: {redact(exc)}")
+
+    def _give_back(day):
+        """A search that failed outright does not use up the day."""
+        try:
+            daily.release(day)
+        except Exception:
+            pass
 
     def _same_origin():
         """Stop other websites from starting (billed) searches through this server."""
@@ -173,7 +243,7 @@ def create_app(password=None):
         return render_template("index.html", defaults={
             "location": config.DEFAULT_LOCATION, "radius": config.DEFAULT_RADIUS_MILES,
             "keywords": ", ".join(config.DEFAULT_KEYWORDS), "min_score": config.DEFAULT_MIN_SCORE,
-        }, yelp=yelp_quota())
+        }, yelp=yelp_quota(), outcomes=list(calls.OUTCOMES))
 
     @app.post("/search")
     def search():
@@ -185,11 +255,26 @@ def create_app(password=None):
             return jsonify({"error": str(exc)}), 400
         job_id = uuid.uuid4().hex[:12]
         job = {"state": "running", "message": "Starting", "params": params}
+        job["progress"] = _Progress(job)
         with lock:
             running = next((k for k, j in jobs.items() if j["state"] == "running"), None)
-            if running is not None:
-                # The page attaches to it (e.g. after a reload) instead of starting another.
-                return jsonify({"error": "A search is already running.", "job_id": running}), 429
+        if running is not None:
+            # The page attaches to it (e.g. after a reload) instead of starting another.
+            return jsonify({"error": "A search is already running.", "job_id": running}), 429
+        try:
+            day, done = daily.claim({"location": params.location, "radius": params.radius_miles,
+                                     "keywords": ", ".join(params.keywords),
+                                     "source": params.source})
+        except store.Unavailable as exc:
+            return jsonify({"error": f"Searching needs the database: {exc}."}), 503
+        except Exception as exc:
+            return jsonify({"error": f"Could not record the search ({exc.__class__.__name__}). "
+                                     "Try again."}), 503
+        if day is None:
+            return jsonify({"error": f"Today's search was already run ({done['when']}). "
+                                     "Find Leads works once a day; the next search can run "
+                                     "tomorrow.", "searched": done}), 409
+        with lock:
             jobs[job_id] = job
             # Evict the oldest finished jobs; never a running one.
             while len(jobs) > MAX_JOBS:
@@ -198,10 +283,11 @@ def create_app(password=None):
                     break
                 del jobs[old]
         try:
-            threading.Thread(target=_worker, args=(job, params), daemon=True).start()
+            threading.Thread(target=_worker, args=(job, params, day), daemon=True).start()
         except RuntimeError:
             with lock:
                 jobs.pop(job_id, None)
+            _give_back(day)
             return jsonify({"error": "Could not start the search. Try again."}), 503
         return jsonify({"job_id": job_id})
 
@@ -209,12 +295,57 @@ def create_app(password=None):
     def saved_leads():
         """Every saved lead, for the page to show before any search."""
         try:
-            leads = saved.load()
+            leads = calls.apply(saved.load())
         except store.Unavailable as exc:
             return jsonify({"error": f"Saved leads are off: {exc}."}), 503
         except Exception as exc:
             return jsonify({"error": f"Could not load the saved leads ({exc.__class__.__name__})"}), 503
         return jsonify({"leads": [_lead_json(l) for l in leads]})
+
+    @app.post("/calls")
+    def log_call():
+        """Record a call to a lead: its outcome and the conversation notes (kept for good)."""
+        if not _same_origin():
+            abort(403)
+        data = request.get_json(silent=True) or {}
+        uid = str(data.get("key") or "")
+        if not uid or len(uid) > 64:
+            return jsonify({"error": "Unknown lead"}), 400
+        try:
+            call = calls.log_call(uid, str(data.get("outcome") or ""), str(data.get("notes") or ""))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except store.Unavailable as exc:
+            return jsonify({"error": f"The call can't be saved: {exc}"}), 503
+        except Exception as exc:
+            return jsonify({"error": f"Could not save the call ({exc.__class__.__name__})"}), 503
+        return jsonify({"ok": True, "call": {**call, "when": calls.local_time_text(call["at"])}})
+
+    @app.get("/calls/<uid>")
+    def call_history(uid):
+        try:
+            return jsonify({"calls": calls.history(uid[:64])})
+        except Exception as exc:
+            return jsonify({"error": f"Could not load the calls ({exc.__class__.__name__})"}), 503
+
+    @app.get("/stats")
+    def stats_data():
+        try:
+            leads = calls.apply(saved.load())
+        except Exception as exc:
+            return jsonify({"error": f"Could not load the saved leads ({exc.__class__.__name__})"}), 503
+        return jsonify(stats.summarize(leads))
+
+    @app.get("/searches")
+    def searches():
+        """Each day's search (when, what, what it found), and whether today's is used."""
+        try:
+            body = daily.history()
+        except Exception as exc:
+            return jsonify({"error": f"Could not load the search history ({exc.__class__.__name__})"}), 503
+        with lock:
+            running = next((k for k, j in jobs.items() if j["state"] == "running"), None)
+        return jsonify({**body, "yelp": yelp_quota(), "running": running})
 
     @app.post("/mark")
     def mark():
@@ -237,7 +368,9 @@ def create_app(password=None):
     @app.get("/status/<job_id>")
     def status(job_id):
         job = jobs.get(job_id) or abort(404)
-        body = {"state": job["state"], "message": job["message"]}
+        body = {"state": job["state"], "message": job["message"], "steps": STEPS,
+                "step": job.get("step", 0), "pct": round(job["progress"].pct(), 1),
+                "elapsed": round(time.time() - job.get("started", time.time()))}
         if job["state"] == "done":
             res = job["result"]
             leads, stats = res.leads, dict(res.stats)
@@ -260,7 +393,7 @@ def create_app(password=None):
         """A search's leads, or with job id "saved" every saved lead."""
         if job_id == "saved":
             try:
-                leads = saved.load()
+                leads = calls.apply(saved.load())
             except Exception:
                 abort(503)
             info = {"list": "All saved leads", "leads": len(leads)}
@@ -268,7 +401,7 @@ def create_app(password=None):
             job = jobs.get(job_id)
             if not job or job["state"] != "done":
                 abort(404)
-            leads = marks.apply(job["result"].leads)
+            leads = calls.apply(marks.apply(job["result"].leads))
             info = job["result"].run_info(job["params"])
         if fmt == "csv":
             return Response(to_csv_bytes(leads), mimetype="text/csv",

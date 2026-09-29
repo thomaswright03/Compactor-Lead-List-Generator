@@ -40,4 +40,9 @@ class Lead:
     sources: list = field(default_factory=list)
     has_baler: str = ""              # "yes" / "no" as marked on the results page (marks.py)
     uid: str = ""                    # the saved lead's id (saved.py)
+    # The latest call (calls.py): when (epoch seconds), its result and notes, and how many.
+    last_call_at: Optional[float] = None
+    call_outcome: str = ""
+    call_notes: str = ""
+    call_count: int = 0
     parts: list = field(default_factory=list)   # the source listings merged into this one

@@ -2,7 +2,7 @@
 
 import time
 
-from leadgen import config, marks, saved, web
+from leadgen import config, daily, marks, saved, web
 from leadgen.dedupe import dedupe
 from leadgen.export import COLUMNS, to_csv_bytes
 from leadgen.models import Lead
@@ -75,7 +75,7 @@ def test_marks_saved_cleared_and_exported():
     marks.set_mark(a.uid, "yes")
     marks.set_mark(b.uid, "no")
     leads = saved.load()
-    assert "Has Baler?" in [c for c, _, _ in COLUMNS]
+    assert "Has Baler or Compactor?" in [c for c, _, _ in COLUMNS]
     csv = to_csv_bytes(leads).decode("utf-8-sig")
     assert ",Yes," in csv and ",No," in csv
     marks.set_mark(a.uid, "")
@@ -97,12 +97,16 @@ def test_page_shows_saved_leads_across_searches(monkeypatch):
                                                                 phone="", lat=40.70)]])
     monkeypatch.setattr(web, "run", lambda params, progress: RunResult(
         next(found), (40.76, -111.89), "SLC", [], {}))
+    days = iter(["2026-09-29", "2026-09-30"])
+    monkeypatch.setattr(daily, "today", lambda: current["day"])
+    current = {"day": next(days)}
     client = web.create_app().test_client()
     assert client.get("/leads").get_json() == {"leads": []}
     _, body = _search(client)
     row = body["leads"][0]
     assert body["saved"] and row["has_baler"] == "" and row["key"]
     assert client.post("/mark", json={"key": row["key"], "value": "yes"}).get_json() == {"ok": True}
+    current["day"] = next(days)                         # searching again takes a new day
     _, body = _search(client)
     assert body["stats"]["new leads saved"] == 1 and body["stats"]["saved leads"] == 2
     assert {l["name"]: l["has_baler"] for l in body["leads"]} == {"Walmart": "yes", "Costco": ""}
@@ -111,17 +115,13 @@ def test_page_shows_saved_leads_across_searches(monkeypatch):
     assert "Walmart" in csv and "Costco" in csv and ",Yes," in csv
 
 
-def test_without_a_database_on_render_searches_still_show(monkeypatch):
+def test_without_a_database_on_render_nothing_runs(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("RENDER", "true")
-    monkeypatch.setattr(web, "run", lambda params, progress: RunResult(
-        [_lead(name="Walmart")], (40.76, -111.89), "SLC", [], {}))
     client = web.create_app().test_client()
     assert "DATABASE_URL" in client.get("/leads").get_json()["error"]
-    job, body = _search(client)
-    assert not body["saved"] and body["leads"][0]["name"] == "Walmart"
-    assert any("not saved" in w for w in body["warnings"])
-    assert client.get(f"/download/{job}.csv").status_code == 200
+    res = client.post("/search", data={"location": "84101"})
+    assert res.status_code == 503 and "DATABASE_URL" in res.get_json()["error"]
     res = client.post("/mark", json={"key": "abc", "value": "yes"})
     assert res.status_code == 503 and "DATABASE_URL" in res.get_json()["error"]
 

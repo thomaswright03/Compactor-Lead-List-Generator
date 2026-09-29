@@ -31,7 +31,8 @@ def _to_lead(data):
 
 def _lead_json(lead):
     return json.dumps({k: v for k, v in asdict(lead).items()
-                       if k not in ("parts", "has_baler")}, separators=(",", ":"))
+                       if k not in ("parts", "has_baler", "last_call_at", "call_outcome", "call_notes",
+                                    "call_count")}, separators=(",", ":"))
 
 
 def _part_id(part):

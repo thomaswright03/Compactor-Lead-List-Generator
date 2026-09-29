@@ -11,6 +11,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
+from .calls import local_time_text
 from .scoring import TIER_LABELS
 
 COLUMNS = [
@@ -38,7 +39,10 @@ COLUMNS = [
     ("Map Link", lambda l: l.map_url, 30),
     ("Latitude", lambda l: round(l.lat, 6), 11),
     ("Longitude", lambda l: round(l.lon, 6), 11),
-    ("Has Baler?", lambda l: {"yes": "Yes", "no": "No"}.get(l.has_baler, ""), 11),
+    ("Has Baler or Compactor?", lambda l: {"yes": "Yes", "no": "No"}.get(l.has_baler, ""), 13),
+    ("Call Result", lambda l: l.call_outcome, 14),
+    ("Last Called", lambda l: local_time_text(l.last_call_at), 20),
+    ("Call Notes", lambda l: l.call_notes, 40),
     ("Verified?", lambda l: "", 11),
     ("Notes", lambda l: "", 30),
 ]

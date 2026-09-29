@@ -47,7 +47,7 @@ The repo includes `render.yaml`, so Render can set everything up:
 3. When asked, set **APP_PASSWORD** (the page asks for it; any username works) and, optionally, **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
 4. Open the `onrender.com` link Render shows.
 
-### The database (saved leads, baler marks, the Yelp count)
+### The database (saved leads, marks, calls, the Yelp count)
 
 Render's disk is wiped on every redeploy, so the site keeps its data in a
 Postgres database named by `DATABASE_URL`. A free Neon database works and does
@@ -71,12 +71,32 @@ Yelp's terms allow keeping its data for 24 hours (and Google's for 30 days);
 `SAVED_SOURCE_KEEP_SECONDS` in `leadgen/config.py` drops a source's details
 after a set time instead, keeping the business's id so its mark comes back.
 
-**Baler marks.** Each row has **Yes** / **No** buttons for "has a baler"; the
-tabs above the table show Not checked, Has baler and No baler. A mark is kept
-for good: it can be switched between Yes and No but never goes back to Not
-checked, and a later search that finds the business again updates its row
-without moving it, so marked businesses never come up as new. Marks also appear
-in the "Has Baler?" column of the downloads.
+### The website's pages
+
+The sidebar has four pages:
+
+- **Find leads**: the search form (extra settings under **More options**), a
+  step-by-step progress bar while it runs, and the search history with each
+  search's counts under **Details**. **Find Leads works once per calendar day**
+  (Utah time), for the whole site: after today's search it is off until
+  midnight. A search that fails outright (e.g. an unknown location) gives the
+  day back, and so does one that never finished (the server restarted) after
+  30 minutes.
+- **Leads**: the saved list, with **Yes** / **No** buttons for "has a baler or
+  compactor" and tabs for Not checked, Has baler or compactor, No baler or
+  compactor, and All. A mark is kept for good: it can be switched between Yes
+  and No but never goes back to Not checked, and a later search that finds the
+  business again updates its row without moving it.
+- **Calls**: in the Has baler or compactor tab, **Just called** opens a
+  Conversation Summary box and the result of the call (Interested, Follow Up,
+  Not Interested, Not Qualified, No Contact or Bad Lead). Every call is kept
+  for good; **History** shows them all. The Calls page has a tab per result,
+  and a business sits under its latest call's result.
+- **Stats**: how many businesses have a baler or compactor (marked Yes), their
+  average score, and a chart of the share of checked businesses (marked Yes or
+  No) that have one, by tier.
+
+Marks and the latest call (result, time and notes) are also columns in the downloads.
 
 Always set `APP_PASSWORD` on a public site: every search can spend your API keys.
 Without a password the page only answers on `localhost` or an IP address; to use
@@ -137,7 +157,8 @@ Tiers: **A** ≥ 60, **B** ≥ 40, **C** ≥ 20, **D** below 20.
 Score, tier, lead type, flags, name, category, address, city, state, ZIP,
 phone (formatted), website, distance, why-this-score, matched keywords, Google
 and Yelp review counts, approx. footprint, source category, which searches found it,
-source(s), map link, lat/lon, plus empty **Verified?** (dropdown) and **Notes**
+source(s), map link, lat/lon, "Has Baler or Compactor?", the latest call's
+result, time and notes, plus empty **Verified?** (dropdown) and **Notes**
 columns for vetting. A second sheet, **Run Info**, records the settings and
 counts for each run.
 

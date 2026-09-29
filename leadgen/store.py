@@ -1,7 +1,7 @@
 """The one permanent database for what the site keeps between searches.
 
-Saved leads, the Yes / No baler marks, the count of today's Yelp calls and
-recent Yelp results all live here. With DATABASE_URL set (a Postgres URL, e.g.
+Saved leads, the Yes / No baler marks, the call log, the record of each day's
+search, the count of today's Yelp calls and recent Yelp results all live here. With DATABASE_URL set (a Postgres URL, e.g.
 a free Neon database) that is Postgres; otherwise, for the command line and
 local use, a SQLite file in the cache folder. Render's own disk is wiped on
 every redeploy, so on Render there is no fallback: without DATABASE_URL
@@ -26,6 +26,12 @@ SCHEMA = [
     """CREATE TABLE IF NOT EXISTS leads (
         uid TEXT PRIMARY KEY, lead TEXT NOT NULL, parts TEXT NOT NULL, ids TEXT NOT NULL,
         first_seen DOUBLE PRECISION NOT NULL, last_seen DOUBLE PRECISION NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS calls (
+        id TEXT PRIMARY KEY, uid TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
+        outcome TEXT NOT NULL, notes TEXT NOT NULL)""",
+    "CREATE INDEX IF NOT EXISTS calls_by_uid ON calls (uid)",
+    """CREATE TABLE IF NOT EXISTS searches (
+        day TEXT PRIMARY KEY, at DOUBLE PRECISION NOT NULL, info TEXT NOT NULL)""",
 ]
 
 _ready = set()
