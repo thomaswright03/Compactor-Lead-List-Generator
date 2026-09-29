@@ -20,5 +20,5 @@ def no_real_keys(monkeypatch, tmp_path):
         monkeypatch.setenv("DATABASE_URL", test_db)
         from leadgen import store
         with store.connect() as db:
-            for table in ("usage", "cache", "marks", "leads", "calls", "searches"):
+            for table in ("usage", "cache", "marks", "leads", "calls", "searches", "windows"):
                 db.run(f"DELETE FROM {table}")

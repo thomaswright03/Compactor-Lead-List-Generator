@@ -199,9 +199,10 @@ requests by 7 or 19 (up to about 700 or 1,900), so set `--max-requests` if cost 
 
 - The same Yelp key is used elsewhere, so this tool makes at most 50 Yelp calls
   a day in total, across all searches (`YELP_DAILY_LIMIT`). Every call counts,
-  retries included; nothing in the form or on the command line raises it. The
-  day is Yelp's own: it resets at midnight UTC (6 pm Utah time in summer, 5 pm
-  in winter), and the page shows how many calls are left.
+  retries included; nothing in the form or on the command line raises it. Each
+  call counts for 24 hours, so the calls come back 24 hours after the last
+  search that used them; the page shows how many are left and when they reset
+  (any 24 hours also covers Yelp's own day, which starts at midnight UTC).
 - The count lives in the database, so restarts and redeploys don't reset it.
   If the database can't be reached, Yelp is paused rather than risk going over.
 - With 50 calls, a 30-mile search uses one Yelp search area (25 miles around

@@ -106,8 +106,9 @@ def yelp_quota():
     if budget.problem:
         text = f"Yelp is paused: {budget.problem}."
     else:
-        text = (f"Yelp: {left} of today's {budget.limit} calls left "
-                f"(resets at {usage.reset_time_text()}). No search can go past this.")
+        reset = budget.reset_text()
+        text = (f"Yelp: {left} of today's {budget.limit} calls left"
+                + (f" (resets at {reset})" if reset else ""))
     return {"left": left, "limit": budget.limit, "paused": bool(budget.problem), "text": text}
 
 

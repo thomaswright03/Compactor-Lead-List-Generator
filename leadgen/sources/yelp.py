@@ -99,9 +99,13 @@ def parse_business(biz, query=""):
     )
 
 
+def _resets(budget):
+    reset = budget.reset_text()
+    return f"; they come back at {reset}" if reset else ""
+
+
 def used_up(budget):
-    return (f"this site's {budget.limit} Yelp calls for today are used up "
-            f"(the count resets at {usage.reset_time_text()})")
+    return f"this site's {budget.limit} Yelp calls for today are used up{_resets(budget)}"
 
 
 def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=None,
@@ -125,7 +129,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
         limit_note = used_up(budget)
     elif left <= cap:                 # the daily limit, not the request cap, is what binds
         limit_note = (f"this site may make {budget.limit} Yelp calls a day and {left} were left "
-                      f"today; the count resets at {usage.reset_time_text()}")
+                      f"today{_resets(budget)}")
     elif len(queries) * len(search_grid(0, 0, radius_miles, grid_for(radius_miles, grid_cells))) > cap:
         limit_note = (f"the request cap; up to {left} of today's {budget.limit} Yelp calls are "
                       "left if you raise it")

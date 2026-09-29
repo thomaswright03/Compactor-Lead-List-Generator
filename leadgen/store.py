@@ -30,6 +30,8 @@ SCHEMA = [
         id TEXT PRIMARY KEY, uid TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
         outcome TEXT NOT NULL, notes TEXT NOT NULL)""",
     "CREATE INDEX IF NOT EXISTS calls_by_uid ON calls (uid)",
+    """CREATE TABLE IF NOT EXISTS windows (
+        name TEXT PRIMARY KEY, version INTEGER NOT NULL, calls TEXT NOT NULL)""",
     """CREATE TABLE IF NOT EXISTS searches (
         day TEXT PRIMARY KEY, at DOUBLE PRECISION NOT NULL, info TEXT NOT NULL)""",
 ]

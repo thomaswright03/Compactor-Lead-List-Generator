@@ -78,7 +78,7 @@ def test_page_shows_yelp_calls_left(monkeypatch):
     for _ in range(8):
         budget.take()
     page = client.get("/").data.decode()
-    assert "Yelp: 42 of today&#39;s 50 calls left" in page or "Yelp: 42 of today's 50 calls left" in page
+    assert "Yelp: 42 of today&#39;s 50 calls left (resets at " in page
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("RENDER", "true")
     assert "Yelp is paused" in client.get("/").data.decode()
@@ -113,16 +113,41 @@ def test_counter_is_atomic_under_threads():
     assert got.count(True) == 50 and budget.used() == 50
 
 
-def test_calls_just_before_midnight_count_on_both_days(monkeypatch):
+def test_calls_come_back_24_hours_after_they_were_made(monkeypatch):
     import datetime as dt
-    clock = {"now": dt.datetime(2026, 9, 29, 23, 59, 30, tzinfo=dt.timezone.utc)}
+    clock = {"now": dt.datetime(2026, 9, 29, 18, 19, tzinfo=dt.timezone.utc)}   # 12:19 pm in Utah
     monkeypatch.setattr(usage, "_now", lambda: clock["now"])
     budget = usage.yelp_budget()
-    assert budget.take()
-    clock["now"] = dt.datetime(2026, 9, 30, 0, 0, 5, tzinfo=dt.timezone.utc)
-    assert budget.used() == 1          # it may have reached Yelp after midnight
-    clock["now"] = dt.datetime(2026, 9, 30, 12, 0, tzinfo=dt.timezone.utc)
-    assert budget.take() and budget.used() == 2
+    assert budget.left() == 50 and budget.reset_text() is None
+    for _ in range(3):
+        assert budget.take()
+    assert budget.left() == 47 and budget.reset_text() == "12:21 PM Utah time"
+    clock["now"] = dt.datetime(2026, 9, 30, 6, 0, tzinfo=dt.timezone.utc)     # past midnight UTC
+    assert budget.left() == 47                     # still counted: not 24 hours yet
+    for _ in range(47):
+        assert budget.take()
+    assert not budget.take()
+    clock["now"] = dt.datetime(2026, 9, 30, 18, 21, tzinfo=dt.timezone.utc)
+    assert budget.left() == 3                      # the first three are back
+    clock["now"] = dt.datetime(2026, 10, 1, 7, 0, tzinfo=dt.timezone.utc)
+    assert budget.left() == 50
+
+
+def test_todays_old_count_carries_over(monkeypatch):
+    with store.connect() as db:
+        db.run("INSERT INTO usage (name, day, used) VALUES ('yelp', ?, 3)",
+               (usage._now().strftime("%Y-%m-%d"),))
+    assert usage.yelp_budget().left() == 47
+
+
+def test_page_shows_when_calls_come_back(monkeypatch):
+    import datetime as dt
+    monkeypatch.setattr(usage, "_now", lambda: dt.datetime(2026, 9, 29, 18, 19, tzinfo=dt.timezone.utc))
+    monkeypatch.setenv("YELP_API_KEY", YELP_KEY)
+    for _ in range(3):
+        usage.yelp_budget().take()
+    page = web.create_app(password="").test_client().get("/").data.decode()
+    assert "Yelp: 47 of today&#39;s 50 calls left (resets at 12:21 PM Utah time)</div>" in page
 
 
 def test_small_request_cap_advice_stays_within_the_daily_limit(monkeypatch):

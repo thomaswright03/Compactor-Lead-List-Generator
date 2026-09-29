@@ -1,4 +1,4 @@
-"""Daily API call budgets and a results cache, kept in the database (store.py).
+"""API call budgets and a results cache, kept in the database (store.py).
 
 Render's own disk is wiped whenever the site sleeps or redeploys, so a count
 kept there could reset mid-day. The count lives in the permanent database
@@ -8,58 +8,76 @@ instead; when it cannot be read or updated, the budget counts as used up.
 import datetime as dt
 import hashlib
 import json
+import random
 import time
 
 from . import config, store
 
-# A call reserved this close to midnight UTC also counts toward the next day
-# (a request may take 60 s, plus a few seconds of retry wait).
-SPILL_SECONDS = 90
+# A call counts for 24 hours after it was made, plus this margin: a request may
+# take 60 s, plus a few seconds of retry wait, before it reaches the API.
+WINDOW_SECONDS = 24 * 3600 + 90
 
 
 def _now():
     return dt.datetime.now(dt.timezone.utc)
 
 
-def _today():
-    return _now().strftime("%Y-%m-%d")
+def _clock():
+    return _now().timestamp()
 
 
-def reset_time_text():
-    """When a UTC-day budget resets, in Utah time: '6 pm Utah time'."""
-    midnight = (_now() + dt.timedelta(days=1)).replace(hour=0, minute=0, second=0,
-                                                       microsecond=0)
+def local_time_text(ts):
+    """'12:19 PM Utah time' for a timestamp."""
+    when = dt.datetime.fromtimestamp(ts, dt.timezone.utc)
     try:
         from zoneinfo import ZoneInfo
-        local = midnight.astimezone(ZoneInfo("America/Denver"))
+        when, zone = when.astimezone(ZoneInfo("America/Denver")), "Utah time"
     except Exception:
-        return "midnight UTC"
-    hour = local.hour % 12 or 12
-    return f"{hour} {'am' if local.hour < 12 else 'pm'} Utah time"
+        zone = "UTC"
+    return f"{when.hour % 12 or 12}:{when.minute:02d} {'AM' if when.hour < 12 else 'PM'} {zone}"
 
 
 def _why(exc, what):
     if isinstance(exc, store.Unavailable):
         return str(exc)
-    return f"the daily usage counter could not be {what} ({exc.__class__.__name__})"
+    return f"the usage counter could not be {what} ({exc.__class__.__name__})"
 
 
 class DailyBudget:
-    """At most `limit` calls per UTC day, counted across every search and restart."""
+    """At most `limit` calls in any 24 hours, counted across every search and restart.
+
+    Each call counts for 24 hours after it was made, so the calls come back 24
+    hours after the last search that used them (any 24 hours also covers the
+    API's own day, which runs from midnight UTC).
+    """
 
     def __init__(self, name, limit):
         self.name = name
         self.limit = limit
         self.problem = None          # why the budget cannot be used right now
+        self._calls = []             # times of the calls that still count, from the last read
+
+    def _load(self, db):
+        row = db.one("SELECT version, calls FROM windows WHERE name = ?", (self.name,))
+        if row is None:
+            # First use: yesterday's style of count (per UTC day) carries over, as calls
+            # made now, so switching can never allow more than the limit.
+            day = db.one("SELECT used FROM usage WHERE name = ? AND day = ?",
+                         (self.name, _now().strftime("%Y-%m-%d")))
+            seeded = [_clock()] * min(self.limit, int(day[0])) if day else []
+            db.run("INSERT INTO windows (name, version, calls) VALUES (?, 0, ?) "
+                   "ON CONFLICT (name) DO NOTHING", (self.name, json.dumps(seeded)))
+            row = db.one("SELECT version, calls FROM windows WHERE name = ?", (self.name,))
+        cutoff = _clock() - WINDOW_SECONDS
+        return int(row[0]), [t for t in json.loads(row[1]) if t > cutoff]
 
     def used(self):
-        """Calls spent today; the full limit when the count cannot be read."""
+        """Calls that still count; the full limit when the count cannot be read."""
         self.problem = None
         try:
             with store.connect() as db:
-                row = db.one("SELECT used FROM usage WHERE name = ? AND day = ?",
-                             (self.name, _today()))
-            return min(self.limit, int(row[0])) if row else 0
+                _, self._calls = self._load(db)
+            return min(self.limit, len(self._calls))
         except Exception as exc:
             self.problem = _why(exc, "read")
             return self.limit
@@ -67,28 +85,37 @@ class DailyBudget:
     def left(self):
         return max(0, self.limit - self.used())
 
+    def resets_at(self):
+        """When every call counted now is back (from the last used()/left()), or None."""
+        return max(self._calls) + WINDOW_SECONDS if self._calls else None
+
+    def reset_text(self):
+        at = self.resets_at()
+        return local_time_text(-(-at // 60) * 60) if at else None     # rounded up to the minute
+
     def take(self):
-        """Reserve one call. False when today's calls are used up or cannot be counted."""
+        """Reserve one call. False when the calls are used up or cannot be counted."""
         self.problem = None
         if self.limit < 1:
             return False
         try:
-            now = _now()
             with store.connect() as db:
-                # One atomic statement: counts the call only while under the limit.
-                row = db.one("INSERT INTO usage (name, day, used) VALUES (?, ?, 1) "
-                             "ON CONFLICT (name, day) DO UPDATE SET used = usage.used + 1 "
-                             "WHERE usage.used < ? RETURNING used",
-                             (self.name, now.strftime("%Y-%m-%d"), self.limit))
-                midnight = (now + dt.timedelta(days=1)).replace(hour=0, minute=0, second=0,
-                                                                microsecond=0)
-                if row is not None and (midnight - now).total_seconds() < SPILL_SECONDS:
-                    # The call (with its retries) may reach the API after midnight UTC,
-                    # in the API's next day: count it there too.
-                    db.run("INSERT INTO usage (name, day, used) VALUES (?, ?, 1) "
-                           "ON CONFLICT (name, day) DO UPDATE SET used = usage.used + 1",
-                           (self.name, midnight.strftime("%Y-%m-%d")))
-            return row is not None
+                for attempt in range(200):
+                    version, calls = self._load(db)
+                    if len(calls) >= self.limit:
+                        self._calls = calls
+                        return False
+                    calls.append(_clock())
+                    # Compare-and-swap: only one of two simultaneous takes can win a version.
+                    won = db.one("UPDATE windows SET version = ?, calls = ? "
+                                 "WHERE name = ? AND version = ? RETURNING version",
+                                 (version + 1, json.dumps(calls), self.name, version))
+                    if won is not None:
+                        self._calls = calls
+                        return True
+                    time.sleep(random.uniform(0, 0.01))
+            self.problem = "the usage counter was too busy to update"
+            return False
         except Exception as exc:
             self.problem = _why(exc, "updated")
             return False
