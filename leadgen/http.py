@@ -55,12 +55,13 @@ def cache_put(key: str, value) -> None:
 
 def request_json(method, url, *, params=None, data=None, json_body=None, headers=None,
                  timeout=60, retries=3, use_cache=True, cache_key_extra="",
-                 cacheable=None, no_retry=(), response_headers=None):
+                 cacheable=None, no_retry=(), response_headers=None, before_retry=None):
     """Return parsed JSON, retrying on network errors, 429 and 5xx.
 
     cacheable(value) -> bool can veto caching a response (e.g. a timeout notice).
     no_retry: error-body text that makes retrying pointless (e.g. a used-up daily quota).
     response_headers: a dict that receives the response's headers.
+    before_retry() -> bool is asked before each retry; False gives up (e.g. no calls left).
     """
     key = json.dumps([method, url, params, data, json_body, cache_key_extra], sort_keys=True)
     if use_cache:
@@ -98,5 +99,7 @@ def request_json(method, url, *, params=None, data=None, json_body=None, headers
         except requests.RequestException as exc:
             last_error = HttpError(f"{url}: {redact(exc)}")
         if attempt < retries - 1:
+            if before_retry is not None and not before_retry():
+                break
             time.sleep(2 ** (attempt + 1))
     raise last_error

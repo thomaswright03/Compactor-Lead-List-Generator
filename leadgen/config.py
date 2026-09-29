@@ -382,9 +382,13 @@ YELP_SEARCHES = {
                                                   "sportgoods", "thrift_stores"],
     "machine shops and fabricators": ["machineshops", "metalfabricators"],
 }
-# Yelp's trial allows about 300 calls a day, so a run stops here unless a
-# request cap is given. Yelp's terms allow caching its data for 24 hours only.
-YELP_DEFAULT_MAX_REQUESTS = 200
+# The website may make at most this many Yelp calls a day in total, across all
+# searches (the same Yelp key is used elsewhere). The day is Yelp's own: it
+# resets at midnight UTC. Nothing in the form can raise it.
+YELP_DAILY_LIMIT = 50
+# A run stops here unless a (smaller) request cap is given.
+# Yelp's terms allow caching its data for 24 hours only.
+YELP_DEFAULT_MAX_REQUESTS = YELP_DAILY_LIMIT
 YELP_CACHE_TTL_SECONDS = 24 * 3600
 
 # Overpass mirrors tried in order when the free OpenStreetMap source is used.

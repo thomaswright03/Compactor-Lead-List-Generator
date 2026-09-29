@@ -47,6 +47,19 @@ The repo includes `render.yaml`, so Render can set everything up:
 3. When asked, set **APP_PASSWORD** (the page asks for it; any username works) and, optionally, **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
 4. Open the `onrender.com` link Render shows.
 
+The Blueprint also creates a free Render Key Value store (`lead-finder-counter`)
+and sets `REDIS_URL` from it. It holds the count of today's Yelp calls (see the
+Yelp notes) and 24 hours of Yelp results, which the web service's own disk
+cannot keep. On Render, Yelp stays paused until `REDIS_URL` is set.
+
+Each result row has **Yes** / **No** buttons for "has a baler"; the tabs above
+the table show Not checked, Has baler and No baler. Marks are saved per business
+(name plus phone, or ZIP) in the same store, so they come back on later searches,
+and they appear in the "Has Baler?" column of the Excel and CSV downloads.
+Render's free Key Value store keeps its data in memory only, so a restart of it
+by Render would clear the marks; download the Excel file now and then as a
+backup, or move the store to a paid plan with disk persistence.
+
 Always set `APP_PASSWORD` on a public site: every search can spend your API keys.
 Without a password the page only answers on `localhost` or an IP address; to use
 another hostname, list it in `LEADGEN_ALLOWED_HOSTS`.
@@ -60,7 +73,7 @@ To run the production server yourself: `gunicorn wsgi:app --workers 1 --threads 
 python -m leadgen run --location 84101 --radius 30 --keywords compactor baler recycling --out leads.xlsx
 python -m leadgen run --location "Ogden, UT" --radius 15 --out ogden.csv
 python -m leadgen run --source google --grid 7                        # wider Google coverage
-python -m leadgen run --source yelp --max-requests 100                # Yelp only, 100 calls
+python -m leadgen run --source yelp --max-requests 20                 # Yelp only, 20 calls
 python -m leadgen run --grid 7 --max-requests 300                     # wider, but capped spend
 python -m leadgen run --min-score 40 --limit 200                      # only strong leads
 ```
@@ -73,7 +86,7 @@ python -m leadgen run --min-score 40 --limit 200                      # only str
 | `--source` | auto | `auto` = OpenStreetMap plus Google and/or Yelp when their key is set. Also `google`, `yelp`, `osm`, and `both` (Google + OpenStreetMap) |
 | `--min-score` | 20 | Drop leads below this score (competitors are always kept) |
 | `--grid` | 1 | Google and Yelp. 1, 7 or 19 search cells. Google caps each search at 60 results and Yelp at 240, so more cells find more businesses (and cost more). Yelp searches at most 25 miles around a point, so it uses at least 7 cells past 25 miles |
-| `--max-requests` | auto | Hard cap on API calls per run, for Google and for Yelp separately. Auto = Google: enough for every search (about 100 at `--grid 1`); Yelp: 200. Under a cap, every search gets its first page before any gets a second, and your keywords and the competitor names are searched first |
+| `--max-requests` | auto | Hard cap on API calls per run, for Google and for Yelp separately. Auto = Google: enough for every search (about 100 at `--grid 1`); Yelp: 50. Yelp never goes past its daily limit of 50 calls, whatever the cap. Under a cap, every search gets its first page before any gets a second; Google searches your keywords and the competitor names first, Yelp its category searches |
 | `--only-keyword-matches` | off | Keep only leads matching a keyword |
 | `--limit` | 0 (all) | Keep the top N prospects (competitors are always kept) |
 | `--out` | output/leads.xlsx | `.xlsx` or `.csv` |
@@ -116,14 +129,14 @@ Everything adjustable is in `leadgen/config.py`:
 - `CATEGORIES`: business types, their weights, and the Google types / Yelp categories / OSM tags / name words that identify them.
 - `HIGH_VOLUME_BRANDS`: chains that almost always have a baler or compactor.
 - `GOOGLE_QUERIES`: the search phrases sent to Google.
-- `YELP_SEARCHES`: the Yelp category searches, and `YELP_DEFAULT_MAX_REQUESTS`.
+- `YELP_SEARCHES`: the Yelp category searches, `YELP_DAILY_LIMIT` (50) and `YELP_DEFAULT_MAX_REQUESTS`.
 - `REVIEW_BONUS`: review-count thresholds for Google and Yelp.
 - `COMPETITORS`: names and website fragments to flag.
 
 ## How it works
 
 1. **Geocode** the location (built-in table for SLC-area cities, then ZIP lookup, Google, or OpenStreetMap Nominatim).
-2. **Search**: Google Places text search for your keywords, the competitor names, then ~27 business-type phrases, across 1/7/19 grid cells; Yelp word searches for your keywords and the competitor names, then 13 category searches (most-reviewed first); and one OpenStreetMap Overpass query for matching tags and name words (several mirror servers are tried).
+2. **Search**: Google Places text search for your keywords, the competitor names, then ~27 business-type phrases, across 1/7/19 grid cells; Yelp's 13 category searches (most-reviewed first), then word searches for your keywords and the competitor names; and one OpenStreetMap Overpass query for matching tags and name words (several mirror servers are tried).
 3. **Filter** to the exact radius (Haversine distance).
 4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's (then Yelp's) contact details and OpenStreetMap's building size. Different phone numbers or names that only share generic words ("Inn & Suites Airport") are kept apart. Places Google or Yelp report permanently closed are then dropped.
 5. **Score**, sort by score then distance, and **export**.
@@ -143,11 +156,22 @@ requests by 7 or 19 (up to about 700 or 1,900), so set `--max-requests` if cost 
 
 ## Yelp notes
 
-- A Yelp trial allows about 300 calls a day (5,000 over 30 days). A default
-  30-mile run uses up to 200; the run stops early, keeping what it found, when
-  Yelp says 5 or fewer calls are left today. The quota resets at midnight UTC.
-  Re-running within 24 hours reuses what was fetched and continues where the
-  last run stopped (on Render's free plan the cache is lost when it restarts).
+- The same Yelp key is used elsewhere, so this tool makes at most 50 Yelp calls
+  a day in total, across all searches (`YELP_DAILY_LIMIT`). Every call counts,
+  retries included; nothing in the form or on the command line raises it. The
+  day is Yelp's own: it resets at midnight UTC (6 pm Utah time in summer, 5 pm
+  in winter), and the page shows how many calls are left.
+- The count lives in Redis when `REDIS_URL` is set (on Render, the Key Value
+  store from the Blueprint), otherwise in `.cache/yelp-usage.json`. A free
+  Render Key Value store loses its data if Render restarts it, so on a day the
+  store started fresh the tool also counts every Yelp call your key made that
+  day (Yelp reports it with each response) toward the 50.
+- With 50 calls, a 30-mile search uses one Yelp search area (25 miles around
+  the center, Yelp's reach) unless you pick a wider coverage; OpenStreetMap
+  still covers the full radius. A run also stops early, keeping what it found,
+  when Yelp says 5 or fewer calls are left on the key today.
+- Re-running within 24 hours reuses what was fetched (on Render it is kept in
+  the Key Value store) and continues where the last run stopped, at no cost.
 - Yelp returns no business websites and only lists places with at least one
   review, so warehouses and plants are thin; OpenStreetMap fills those in.
 - Yelp's trial is for evaluation, and its terms restrict commercial use and

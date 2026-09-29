@@ -131,9 +131,6 @@ def run(params: SearchParams, progress=None):
             errors.append(str(exc))
     if use_yelp:
         queries = yelp.queries_for(keywords)
-        cells = yelp.grid_for(params.radius_miles, params.grid)
-        cap = params.max_requests or config.YELP_DEFAULT_MAX_REQUESTS
-        say(f"Yelp: {len(queries)} searches x {cells} area(s), up to {cap} requests")
         try:
             found, n_requests, w = yelp.search(
                 lat, lon, params.radius_miles, queries, yelp_key, params.grid,

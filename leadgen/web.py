@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 from flask import Flask, Response, abort, jsonify, render_template, request
 
-from . import config
+from . import config, marks, usage
 from .export import format_phone, to_csv_bytes, to_xlsx_bytes
 from .geo import GeocodeError
 from .http import redact
@@ -31,8 +31,22 @@ def _lead_json(lead):
         "category": lead.category, "address": lead.address, "city": lead.city,
         "zip": lead.zip, "phone": format_phone(lead.phone), "website": lead.website,
         "distance": lead.distance_miles, "reasons": lead.reasons, "map_url": lead.map_url,
-        "sources": lead.sources,
+        "sources": lead.sources, "key": marks.lead_key(lead), "has_baler": lead.has_baler,
     }
+
+
+def yelp_quota():
+    """Today's Yelp calls left for this site, or None when no Yelp key is set."""
+    if not SearchParams().resolved_keys()[1]:
+        return None
+    budget = usage.yelp_budget()
+    left = budget.left()
+    if budget.problem:
+        text = f"Yelp is paused: {budget.problem}."
+    else:
+        text = (f"Yelp: {left} of today's {budget.limit} calls left "
+                f"(resets at {usage.reset_time_text()}). No search can go past this.")
+    return {"left": left, "limit": budget.limit, "paused": bool(budget.problem), "text": text}
 
 
 def create_app(password=None):
@@ -146,7 +160,7 @@ def create_app(password=None):
         return render_template("index.html", defaults={
             "location": config.DEFAULT_LOCATION, "radius": config.DEFAULT_RADIUS_MILES,
             "keywords": ", ".join(config.DEFAULT_KEYWORDS), "min_score": config.DEFAULT_MIN_SCORE,
-        })
+        }, yelp=yelp_quota())
 
     @app.post("/search")
     def search():
@@ -178,14 +192,31 @@ def create_app(password=None):
             return jsonify({"error": "Could not start the search. Try again."}), 503
         return jsonify({"job_id": job_id})
 
+    @app.post("/mark")
+    def mark():
+        """Save whether a business has a baler ("yes", "no", or "" to clear)."""
+        if not _same_origin():
+            abort(403)
+        data = request.get_json(silent=True) or {}
+        key, value = str(data.get("key") or ""), str(data.get("value") or "")
+        if not key or len(key) > 300 or value not in ("yes", "no", ""):
+            return jsonify({"error": "Bad mark"}), 400
+        try:
+            marks.set_mark(key, value, str(data.get("name") or ""))
+        except marks.MarksUnavailable as exc:
+            return jsonify({"error": str(exc)}), 503
+        return jsonify({"ok": True})
+
     @app.get("/status/<job_id>")
     def status(job_id):
         job = jobs.get(job_id) or abort(404)
         body = {"state": job["state"], "message": job["message"]}
         if job["state"] == "done":
             res = job["result"]
+            marks.apply(res.leads)
             body.update(leads=[_lead_json(l) for l in res.leads], stats=res.stats,
-                        warnings=res.warnings, location=res.location_label)
+                        warnings=res.warnings, location=res.location_label,
+                        yelp=yelp_quota())
         return jsonify(body)
 
     @app.get("/download/<job_id>.<fmt>")
@@ -194,6 +225,7 @@ def create_app(password=None):
         if not job or job["state"] != "done":
             abort(404)
         res = job["result"]
+        marks.apply(res.leads)
         if fmt == "csv":
             return Response(to_csv_bytes(res.leads), mimetype="text/csv",
                             headers={"Content-Disposition": "attachment; filename=compactor-leads.csv"})

@@ -21,6 +21,8 @@
   button, .btn { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 14px;
                  font:inherit; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
   button:disabled { opacity:.5; cursor:wait; }
+  .quota { margin:10px 2px 0; color:var(--muted); font-size:13px; }
+  .quota.paused { color:#b42318; font-weight:600; }
   #status { margin:16px 0 8px; color:var(--muted); min-height:20px; }
   #status.error { color:#b42318; font-weight:600; }
   .warn { background:#fffaeb; border:1px solid #fedf89; padding:8px 12px; border-radius:6px; margin:6px 0; }
@@ -28,14 +30,22 @@
   .stats { display:flex; flex-wrap:wrap; gap:6px; }
   .stats span { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 10px; font-size:12px; white-space:nowrap; }
   .table-wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; }
-  table { border-collapse:collapse; width:100%; min-width:1240px; table-layout:fixed; }
+  table { border-collapse:collapse; width:100%; min-width:1330px; table-layout:fixed; }
+  col.c-baler { width:92px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 0; }
+  .tabs button { background:var(--card); color:var(--ink); border:1px solid var(--line); font-weight:600; }
+  .tabs button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .baler { display:flex; gap:4px; }
+  .baler button { padding:4px 8px; font-size:12px; background:var(--card); color:var(--ink); border:1px solid var(--line); }
+  .baler button.yes.on { background:#146c43; border-color:#146c43; color:#fff; }
+  .baler button.no.on { background:#b42318; border-color:#b42318; color:#fff; }
   col.c-score { width:74px; } col.c-name { width:210px; } col.c-cat { width:150px; }
   col.c-addr { width:180px; } col.c-phone { width:122px; } col.c-site { width:160px; }
   col.c-miles { width:58px; }       /* the Why column takes the rest */
   th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { background:#eef2f6; position:sticky; top:0; font-size:12px; }
-  tr.A td:first-child { background:var(--a); } tr.B td:first-child { background:var(--b); }
-  tr.C td:first-child { background:var(--c); } tr.D td:first-child { background:var(--d); }
+  tr.A td.score { background:var(--a); } tr.B td.score { background:var(--b); }
+  tr.C td.score { background:var(--c); } tr.D td.score { background:var(--d); }
   tr.competitor td { background:var(--comp); }
   .nowrap { white-space:nowrap; }
   .flag { color:#b42318; font-weight:600; font-size:12px; }
@@ -87,6 +97,7 @@
     <label class="check"><input type="checkbox" name="only_keyword_matches"> Only keyword matches</label>
     <button id="go" type="submit">Find leads</button>
   </form>
+  {% if yelp %}<p id="yelp-quota" class="quota{{ ' paused' if yelp.paused }}">{{ yelp.text }}</p>{% endif %}
 
   <div id="status"></div>
   <div id="warnings"></div>
@@ -100,11 +111,12 @@
       </select>
     </div>
     <div class="stats" id="stats"></div>
+    <div class="tabs" id="tabs" role="tablist"></div>
     <div class="table-wrap" style="margin-top:10px">
       <table>
-        <colgroup><col class="c-score"><col class="c-name"><col class="c-cat"><col class="c-addr">
+        <colgroup><col class="c-baler"><col class="c-score"><col class="c-name"><col class="c-cat"><col class="c-addr">
           <col class="c-phone"><col class="c-site"><col class="c-miles"><col class="c-why"></colgroup>
-        <thead><tr><th>Score</th><th>Business</th><th>Category</th><th>Address</th>
+        <thead><tr><th>Has baler?</th><th>Score</th><th>Business</th><th>Category</th><th>Address</th>
           <th>Phone</th><th>Website</th><th>Miles</th><th>Why</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
@@ -114,6 +126,8 @@
 <script>
 const $ = (id) => document.getElementById(id);
 let leads = [];
+let view = "";          // which baler tab is showing: "" (not checked), "yes", "no" or "all"
+const TABS = [["", "Not checked"], ["yes", "Has baler"], ["no", "No baler"], ["all", "All"]];
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);
@@ -164,7 +178,51 @@ function whyCell(reasons) {
   return td;
 }
 
+function renderTabs() {
+  const tabs = $("tabs");
+  tabs.replaceChildren();
+  for (const [value, label] of TABS) {
+    const n = value === "all" ? leads.length : leads.filter((l) => (l.has_baler || "") === value).length;
+    const b = el("button", `${label} (${n})`, value === view ? "on" : "");
+    b.type = "button";
+    b.addEventListener("click", () => { view = value; render(); });
+    tabs.append(b);
+  }
+}
+
+async function setBaler(lead, value) {
+  const before = lead.has_baler || "";
+  if (value === before) value = "";               // clicking the chosen answer again clears it
+  lead.has_baler = value;
+  render();
+  try {
+    const res = await fetch("/mark", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: lead.key, value, name: lead.name }) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+  } catch (err) {
+    lead.has_baler = before;
+    render();
+    $("status").className = "error";
+    $("status").textContent = `Could not save the baler answer for ${lead.name}: ${err.message}`;
+  }
+}
+
+function balerCell(lead) {
+  const td = el("td");
+  const box = el("div", undefined, "baler");
+  for (const [value, label] of [["yes", "Yes"], ["no", "No"]]) {
+    const b = el("button", label, value + (lead.has_baler === value ? " on" : ""));
+    b.type = "button";
+    b.title = lead.has_baler === value ? "Click again to clear" : `Mark: ${label.toLowerCase()}, it ${value === "yes" ? "has" : "does not have"} a baler`;
+    b.addEventListener("click", () => setBaler(lead, value));
+    box.append(b);
+  }
+  td.append(box);
+  return td;
+}
+
 function render() {
+  renderTabs();
   const q = $("filter").value.toLowerCase();
   const tier = $("tier").value;
   const body = $("rows");
@@ -173,9 +231,11 @@ function render() {
     const hay = [l.name, l.city, l.category, l.address, l.lead_type, l.flags.join(" ")].join(" ").toLowerCase();
     if (q && !hay.includes(q)) continue;
     if (tier && l.tier !== tier) continue;
+    if (view !== "all" && (l.has_baler || "") !== view) continue;
     const tr = el("tr");
     tr.className = l.tier + (l.lead_type === "Competitor" ? " competitor" : "");
-    tr.append(el("td", `${l.score} (${l.tier})`));
+    tr.append(balerCell(l));
+    tr.append(el("td", `${l.score} (${l.tier})`, "score"));
     const name = el("td");
     name.append(el("strong", l.name));
     if (l.lead_type !== "Prospect") name.append(el("div", l.lead_type, "why"));
@@ -216,10 +276,15 @@ async function poll(jobId) {
   $("go").disabled = false;
   if (job.state === "error") return fail(job.message);
   leads = job.leads;
+  view = "";
   $("status").textContent = `${leads.length} leads near ${job.location}`;
   for (const w of job.warnings) $("warnings").append(el("div", w, "warn"));
   const stats = $("stats"); stats.replaceChildren();
   for (const [k, v] of Object.entries(job.stats)) stats.append(el("span", `${k}: ${v}`));
+  if (job.yelp && $("yelp-quota")) {
+    $("yelp-quota").textContent = job.yelp.text;
+    $("yelp-quota").className = "quota" + (job.yelp.paused ? " paused" : "");
+  }
   $("dl-xlsx").href = `/download/${jobId}.xlsx`;
   $("dl-csv").href = `/download/${jobId}.csv`;
   $("results").hidden = false;

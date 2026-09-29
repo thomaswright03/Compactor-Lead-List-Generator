@@ -38,3 +38,4 @@ class Lead:
     matched_keywords: list = field(default_factory=list)
     distance_miles: Optional[float] = None
     sources: list = field(default_factory=list)
+    has_baler: str = ""              # "yes" / "no" as marked on the results page (marks.py)

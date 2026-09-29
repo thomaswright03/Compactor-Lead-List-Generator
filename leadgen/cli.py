@@ -44,11 +44,13 @@ def build_parser():
                    help="Drop leads scoring below this (competitors are always kept)")
     r.add_argument("--grid", type=int, choices=[1, 7, 19], default=1,
                    help="Google/Yelp: split the area into 1, 7, or 19 search cells for more "
-                        "results (Yelp uses at least 7 past 25 miles)")
+                        "results (past 25 miles Yelp needs 7, or searches 25 miles around "
+                        "the center when its daily limit cannot cover 7)")
     r.add_argument("--max-requests", type=int, default=None,
                    help="Cap on Google and on Yelp API requests per run (cost control). "
                         "Default: Google, enough for every search (about 100 with --grid 1); "
-                        f"Yelp, {config.YELP_DEFAULT_MAX_REQUESTS}")
+                        f"Yelp, {config.YELP_DEFAULT_MAX_REQUESTS}. Yelp never passes "
+                        f"{config.YELP_DAILY_LIMIT} calls a day in total")
     r.add_argument("--only-keyword-matches", action="store_true",
                    help="Keep only leads that match one of the keywords")
     r.add_argument("--include-closed", action="store_true", help="Keep permanently closed places")
