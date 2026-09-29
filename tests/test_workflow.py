@@ -127,3 +127,30 @@ def test_progress_steps():
     assert job["step"] == 2 and 50 <= progress.pct() < 86
     progress("Saving leads")
     assert job["step"] == 4 and progress.pct() == 96
+
+
+def test_misclicks_can_be_undone_right_after(monkeypatch):
+    lead = _lead("Costco", "c")
+    saved.save_search([lead], [])
+    client = web.create_app().test_client()
+    client.post("/mark", json={"key": lead.uid, "value": "yes"})
+    assert client.post("/mark/undo", json={"key": lead.uid, "previous": ""}).get_json()["ok"]
+    assert client.get("/leads").get_json()["leads"][0]["has_baler"] == ""     # back to Not checked
+    client.post("/mark", json={"key": lead.uid, "value": "yes"})
+    client.post("/mark", json={"key": lead.uid, "value": "no"})
+    client.post("/mark/undo", json={"key": lead.uid, "previous": "yes"})
+    assert client.get("/leads").get_json()["leads"][0]["has_baler"] == "yes"
+    first = client.post("/calls", json={"key": lead.uid, "outcome": "Interested"}).get_json()["call"]
+    second = client.post("/calls", json={"key": lead.uid, "outcome": "Bad Lead"}).get_json()["call"]
+    assert client.post("/calls/undo", json={"id": second["id"]}).get_json()["ok"]
+    row = client.get("/leads").get_json()["leads"][0]
+    assert row["call_outcome"] == "Interested" and row["call_count"] == 1
+    # Later than a few minutes, a click is kept for good.
+    real = time.time
+    monkeypatch.setattr(marks.time, "time", lambda: real() + marks.UNDO_SECONDS + 1)
+    monkeypatch.setattr(calls.time, "time", lambda: real() + calls.UNDO_SECONDS + 1)
+    assert client.post("/mark/undo", json={"key": lead.uid, "previous": ""}).status_code == 409
+    assert client.post("/calls/undo", json={"id": first["id"]}).status_code == 409
+    assert client.post("/mark/undo", json={"key": lead.uid, "previous": "maybe"}).status_code == 400
+    assert client.post("/calls/undo", json={"id": first["id"]},
+                       headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403

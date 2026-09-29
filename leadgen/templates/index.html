@@ -127,6 +127,11 @@
   .more { margin:12px auto 0; display:block; }
   .empty { padding:30px; text-align:center; color:var(--muted); }
 
+  .toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:50; display:flex; align-items:center;
+           gap:14px; background:#1d2433; color:#fff; padding:10px 12px 10px 16px; border-radius:10px;
+           box-shadow:0 10px 30px rgba(0,0,0,.25); max-width:calc(100vw - 32px); }
+  .toast button { background:#fff; color:#1d2433; padding:6px 14px; }
+
   /* Dialogs */
   dialog { border:0; border-radius:14px; padding:0; width:min(560px,94vw); box-shadow:0 20px 60px rgba(0,0,0,.25); }
   dialog::backdrop { background:rgba(16,24,40,.45); }
@@ -248,7 +253,7 @@
     <!-- Leads -->
     <section class="page" id="page-leads" hidden>
       <div class="page-head"><h1>Leads</h1>
-        <p>Mark whether each business has a baler or compactor. A mark is kept for good.</p></div>
+        <p>Mark whether each business has a baler or compactor. A mark is kept for good; a misclick can be undone right after.</p></div>
       <div class="tabs" id="lead-tabs"></div>
       <div class="toolbar">
         <input id="filter" placeholder="Filter by name, city, category..." aria-label="Filter leads">
@@ -293,6 +298,9 @@
     <footer class="copy">© {{ year }} Wright AI Solutions. All rights reserved.</footer>
   </main>
 </div>
+
+<div class="toast" id="toast" role="status" hidden><span id="toast-msg"></span>
+  <button type="button" id="toast-undo">Undo</button></div>
 
 <dialog id="call-dlg">
   <form class="dlg" method="dialog" id="call-form">
@@ -421,12 +429,42 @@ function whyCell(reasons) {
   return td;
 }
 
+/* A short-lived Undo for the last click, in case of a misclick. */
+let toastTimer = null, toastUndo = null;
+function offerUndo(message, undo) {
+  $("toast-msg").textContent = message;
+  toastUndo = undo;
+  $("toast-undo").disabled = false;
+  $("toast").hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $("toast").hidden = true; toastUndo = null; }, 20000);
+}
+$("toast-undo").addEventListener("click", async () => {
+  if (!toastUndo) return;
+  const undo = toastUndo; toastUndo = null;
+  $("toast-undo").disabled = true;
+  try { await undo(); $("toast-msg").textContent = "Undone."; }
+  catch (err) { $("toast-msg").textContent = `Could not undo: ${err.message}`; }
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $("toast").hidden = true; }, 4000);
+});
+const leadByKey = (key) => S.leads.find((l) => l.key === key);
+
 async function setMark(lead, value) {
   const before = lead.has_baler || "";
-  if (value === before || lead.saving || !lead.key) return;   // a mark is kept for good; it can only be switched
+  if (value === before || lead.saving || !lead.key) return;   // switching needs no undo; clearing is only via Undo
+  const key = lead.key;
   lead.saving = true; lead.has_baler = value;
   renderLeads(); counts();
-  try { await post("/mark", { key: lead.key, value }); }
+  try {
+    await post("/mark", { key, value });
+    offerUndo(`${lead.name}: marked ${value === "yes" ? "Yes" : "No"}.`, async () => {
+      await post("/mark/undo", { key, previous: before });
+      const now = leadByKey(key);
+      if (now) now.has_baler = before;
+      renderLeads(); counts();
+    });
+  }
   catch (err) { lead.has_baler = before; renderLeads(); counts(); alert(`Could not save the answer for ${lead.name}: ${err.message}`); }
   finally { lead.saving = false; }
 }
@@ -584,10 +622,18 @@ $("call-form").addEventListener("submit", async (e) => {
     const { call } = await post("/calls", { key, outcome: callOutcome, notes: $("call-notes").value });
     // Update the lead as it is now (the list may have been reloaded while saving).
     const lead = S.leads.find((l) => l.key === key);
+    const fields = ["call_outcome", "call_notes", "last_call", "last_call_at", "call_count"];
+    const before = lead ? Object.fromEntries(fields.map((f) => [f, lead[f]])) : null;
     if (lead) Object.assign(lead, { call_outcome: call.outcome, call_notes: call.notes, last_call: call.when,
                                     last_call_at: call.at, call_count: (lead.call_count || 0) + 1 });
     if (callLead && callLead.key === key) $("call-dlg").close();
     renderLeads(); renderCalls(); counts();
+    offerUndo(`${lead ? lead.name : "Call"}: saved as ${call.outcome}.`, async () => {
+      await post("/calls/undo", { id: call.id });
+      const now = leadByKey(key);
+      if (now && before) Object.assign(now, before);
+      renderLeads(); renderCalls(); counts();
+    });
   } catch (err) {
     if (callLead && callLead.key === key) {
       $("call-error").textContent = `Not saved: ${err.message}`;

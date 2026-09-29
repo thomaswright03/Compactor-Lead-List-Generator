@@ -447,6 +447,39 @@ def create_app(password=None, username=None):
             return jsonify({"error": f"Could not save the mark ({exc.__class__.__name__})"}), 503
         return jsonify({"ok": True})
 
+    @app.post("/mark/undo")
+    def undo_mark():
+        """Undo a Yes/No click made in the last few minutes (a misclick)."""
+        if not _same_origin():
+            abort(403)
+        data = request.get_json(silent=True) or {}
+        uid, previous = str(data.get("key") or ""), str(data.get("previous") or "")
+        if not uid or len(uid) > 64 or previous not in marks.VALUES + ("",):
+            return jsonify({"error": "Bad undo"}), 400
+        try:
+            ok = marks.undo(uid, previous)
+        except Exception as exc:
+            return jsonify({"error": f"Could not undo ({exc.__class__.__name__})"}), 503
+        if not ok:
+            return jsonify({"error": "It's too late to undo that."}), 409
+        return jsonify({"ok": True})
+
+    @app.post("/calls/undo")
+    def undo_call():
+        """Undo a call saved in the last few minutes (a misclick)."""
+        if not _same_origin():
+            abort(403)
+        call_id = str((request.get_json(silent=True) or {}).get("id") or "")
+        if not call_id or len(call_id) > 64:
+            return jsonify({"error": "Bad undo"}), 400
+        try:
+            ok = calls.undo(call_id)
+        except Exception as exc:
+            return jsonify({"error": f"Could not undo ({exc.__class__.__name__})"}), 503
+        if not ok:
+            return jsonify({"error": "It's too late to undo that."}), 409
+        return jsonify({"ok": True})
+
     @app.get("/status/<job_id>")
     def status(job_id):
         job = jobs.get(job_id) or abort(404)

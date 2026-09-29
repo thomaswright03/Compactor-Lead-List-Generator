@@ -9,6 +9,7 @@ import time
 from . import store
 
 VALUES = ("yes", "no")
+UNDO_SECONDS = 5 * 60           # how long after a click it can still be undone
 
 
 def get_all(uids):
@@ -36,6 +37,22 @@ def set_mark(uid, value):
                    "updated_at = excluded.updated_at", (uid, value, time.time()))
         else:
             db.run("DELETE FROM marks WHERE uid = ?", (uid,))
+
+
+def undo(uid, previous):
+    """Put back the mark a recent click replaced ("" = Not checked). False when the
+    mark was not changed in the last UNDO_SECONDS (too late to undo)."""
+    if previous not in VALUES + ("",):
+        raise ValueError("A baler mark must be yes, no or empty")
+    recent = time.time() - UNDO_SECONDS
+    with store.connect() as db:
+        if previous:
+            row = db.one("UPDATE marks SET value = ? WHERE uid = ? AND updated_at > ? "
+                         "RETURNING uid", (previous, uid, recent))
+        else:
+            row = db.one("DELETE FROM marks WHERE uid = ? AND updated_at > ? RETURNING uid",
+                         (uid, recent))
+    return row is not None
 
 
 def apply(leads):

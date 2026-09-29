@@ -44,6 +44,17 @@ def log_call(uid, outcome, notes):
     return call
 
 
+UNDO_SECONDS = 5 * 60           # how long after saving a call it can still be undone
+
+
+def undo(call_id):
+    """Delete a call saved in the last UNDO_SECONDS. False when it is too late (or unknown)."""
+    with store.connect() as db:
+        row = db.one("DELETE FROM calls WHERE id = ? AND at > ? RETURNING id",
+                     (call_id, time.time() - UNDO_SECONDS))
+    return row is not None
+
+
 def history(uid):
     """Every call to a lead, newest first."""
     with store.connect() as db:
