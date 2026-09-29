@@ -44,7 +44,7 @@ The repo includes `render.yaml`, so Render can set everything up:
 
 1. Sign in at https://render.com with GitHub.
 2. **New** > **Blueprint**, pick this repo, and click **Apply**.
-3. When asked, set **APP_PASSWORD** (the page asks for it; any username works) and, optionally, **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
+3. When asked, set **APP_USERNAME** and **APP_PASSWORD** (the login page asks for them; the username is not case-sensitive) and, optionally, **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
 4. Open the `onrender.com` link Render shows.
 
 ### The database (saved leads, marks, calls, the Yelp count)
@@ -99,6 +99,8 @@ The sidebar has four pages:
 Marks and the latest call (result, time and notes) are also columns in the downloads.
 
 Always set `APP_PASSWORD` on a public site: every search can spend your API keys.
+A login lasts 30 days on a device; changing the username or password logs everyone
+out. After 10 wrong passwords from one address, logins from it pause for 15 minutes.
 Without a password the page only answers on `localhost` or an IP address; to use
 another hostname, list it in `LEADGEN_ALLOWED_HOSTS`.
 The free plan sleeps after 15 idle minutes, so the first visit takes about a minute

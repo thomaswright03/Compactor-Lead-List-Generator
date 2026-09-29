@@ -80,15 +80,56 @@ def test_web_accepts_browser_number_formats(monkeypatch):
     assert client.post("/search", data={"min_score": "20.5"}).status_code in (400, 429)
 
 
-def test_password_protects_every_route():
-    import base64
-    client = web.create_app(password="s3cret").test_client()
-    assert client.get("/").status_code == 401
+def _login(client, username="Matt", password="s3cret"):
+    return client.post("/login", data={"username": username, "password": password})
+
+
+def test_login_page_protects_every_route():
+    client = web.create_app(password="s3cret", username="Matt").test_client()
+    assert client.get("/").headers["Location"].endswith("/login")
+    assert client.get("/download/saved.csv").status_code == 302
     assert client.post("/search", data={}).status_code == 401
-    bad = base64.b64encode(b"any:wrong").decode()
-    assert client.get("/", headers={"Authorization": f"Basic {bad}"}).status_code == 401
-    good = base64.b64encode(b"arco:s3cret").decode()
-    assert client.get("/", headers={"Authorization": f"Basic {good}"}).status_code == 200
+    assert client.get("/leads").status_code == 401
+    page = client.get("/login")
+    assert page.status_code == 200 and b"Wright AI Solutions" in page.data
+    assert _login(client, password="wrong").status_code == 401
+    assert _login(client, username="Bob").status_code == 401
+    assert client.get("/leads").status_code == 401
+    res = _login(client, username="matt")                  # the name is not case-sensitive
+    assert res.status_code == 302 and res.headers["Location"] == "/"
+    home = client.get("/")
+    assert home.status_code == 200 and b"Wright AI Solutions" in home.data
+    assert b"Matt" in home.data and b"Log out" in home.data
+    assert client.get("/leads").status_code == 200
+    client.post("/logout")
+    assert client.get("/leads").status_code == 401
+
+
+def test_changing_the_password_ends_logins():
+    old = web.create_app(password="s3cret", username="Matt")
+    client = old.test_client()
+    _login(client)
+    assert client.get("/leads").status_code == 200
+    new = web.create_app(password="n3w", username="Matt")
+    cookie = client.get_cookie("session")
+    other = new.test_client()
+    other.set_cookie("session", cookie.value)
+    assert other.get("/leads").status_code == 401
+
+
+def test_wrong_passwords_are_throttled(monkeypatch):
+    monkeypatch.setattr(web.time, "sleep", lambda s: None)
+    client = web.create_app(password="s3cret", username="Matt").test_client()
+    for _ in range(web.LOGIN_TRIES):
+        assert _login(client, password="nope").status_code == 401
+    assert _login(client).status_code == 429           # even the right one, for a while
+
+
+def test_login_rejects_other_sites():
+    client = web.create_app(password="s3cret", username="Matt").test_client()
+    res = client.post("/login", data={"username": "Matt", "password": "s3cret"},
+                      headers={"Sec-Fetch-Site": "cross-site"})
+    assert res.status_code == 403
 
 
 def test_no_password_means_open(monkeypatch):
@@ -101,4 +142,4 @@ def test_healthz_is_public_and_shows_the_deployed_commit(monkeypatch):
     client = web.create_app(password="secret").test_client()
     res = client.get("/healthz", headers={"Host": "evil.example"})
     assert res.status_code == 200 and res.get_json() == {"ok": True, "version": "abcdef1"}
-    assert client.get("/").status_code == 401
+    assert client.get("/").status_code == 302

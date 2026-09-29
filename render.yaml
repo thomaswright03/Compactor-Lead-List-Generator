@@ -8,6 +8,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: APP_USERNAME        # the name to log in with
+        sync: false
       - key: APP_PASSWORD        # required: protects the page (and your API keys)
         sync: false
       - key: GOOGLE_PLACES_API_KEY   # optional

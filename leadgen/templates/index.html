@@ -33,6 +33,11 @@
   nav a.on { background:rgba(255,255,255,.16); color:#fff; }
   nav .count { font-size:12px; font-weight:600; background:rgba(255,255,255,.14); border-radius:999px; padding:1px 8px; }
   .side .quota { margin-top:auto; font-size:12px; line-height:1.4; opacity:.9; }
+  .side .who { font-size:12px; display:flex; align-items:center; justify-content:space-between; gap:8px;
+               border-top:1px solid rgba(255,255,255,.12); padding-top:12px; }
+  .side .who button { background:none; border:1px solid rgba(255,255,255,.25); color:var(--side-ink); padding:4px 10px; font-size:12px; }
+  main { display:flex; flex-direction:column; }
+  footer.copy { margin-top:auto; padding-top:30px; text-align:center; color:var(--muted); font-size:12px; }
   .side .quota.paused { color:#ffb4ab; }
   main { padding:26px 30px 60px; min-width:0; }
   .page[hidden] { display:none; }
@@ -153,6 +158,7 @@
     nav { flex-direction:row; flex-wrap:wrap; }
     nav a { padding:7px 10px; }
     .side .quota { margin-top:0; flex-basis:100%; }
+    .side .who { flex-basis:100%; border-top:0; padding-top:0; }
     main { padding:18px 16px 50px; }
   }
 </style>
@@ -168,6 +174,10 @@
       <a href="#stats" data-page="stats">Stats</a>
     </nav>
     {% if yelp %}<div id="yelp-quota" class="quota{{ ' paused' if yelp.paused }}">{{ yelp.text }}</div>{% endif %}
+    {% if login_on %}<form class="who" method="post" action="/logout"
+      {%- if not yelp %} style="margin-top:auto"{% endif %}>
+      <span>Logged in{% if user %} as <strong>{{ user }}</strong>{% endif %}</span>
+      <button type="submit">Log out</button></form>{% endif %}
   </aside>
 
   <main>
@@ -280,6 +290,7 @@
         </table>
       </div>
     </section>
+    <footer class="copy">© {{ year }} Wright AI Solutions. All rights reserved.</footer>
   </main>
 </div>
 
@@ -333,6 +344,7 @@ function button(text, cls, onClick) {
 }
 async function api(path, opts) {
   const res = await fetch(path, opts);
+  if (res.status === 401) { location.href = "/login"; throw new Error("Logged out"); }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) { const e = new Error(body.error || `HTTP ${res.status}`); e.status = res.status; e.body = body; throw e; }
   return body;

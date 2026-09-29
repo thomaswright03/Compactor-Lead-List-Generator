@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in · Arco Compactor Lead Finder</title>
+<link rel="icon" href="data:,">
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; flex-direction:column; background:#15304d;
+         font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#1d2433; }
+  main { flex:1; display:grid; place-items:center; padding:24px 16px; }
+  .box { width:min(380px,100%); background:#fff; border-radius:14px; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+  .brand strong { display:block; font-size:20px; }
+  .brand span { color:#667085; }
+  form { display:flex; flex-direction:column; gap:14px; margin-top:22px; }
+  label { display:flex; flex-direction:column; gap:5px; font-weight:600; font-size:12px; color:#667085; }
+  input { font:inherit; padding:10px; border:1px solid #e4e7ec; border-radius:7px; color:#1d2433; }
+  button { font:inherit; font-weight:600; border:0; border-radius:7px; padding:11px; background:#1f4e78; color:#fff; cursor:pointer; }
+  .error { color:#b42318; font-weight:600; margin:0; }
+  footer { text-align:center; color:#c9d6e5; font-size:12px; padding:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="box">
+    <div class="brand"><strong>Arco Compactor</strong><span>Lead Finder</span></div>
+    <form method="post" action="/login">
+      <label>Username <input name="username" autocomplete="username" value="{{ username or '' }}" required autofocus></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+      <button type="submit">Log in</button>
+    </form>
+  </div>
+</main>
+<footer>© {{ year }} Wright AI Solutions. All rights reserved.</footer>
+</body>
+</html>

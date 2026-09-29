@@ -1,5 +1,7 @@
 """Minimal web page: fill in the form, watch progress, preview, download CSV/Excel."""
 
+import datetime as dt
+import hashlib
 import hmac
 import ipaddress
 import math
@@ -12,7 +14,8 @@ from collections import OrderedDict
 from dataclasses import replace
 from urllib.parse import urlparse
 
-from flask import Flask, Response, abort, jsonify, render_template, request
+from flask import (Flask, Response, abort, jsonify, redirect, render_template, request,
+                   session)
 
 from . import calls, config, daily, marks, saved, stats, store, usage
 from .export import format_phone, to_csv_bytes, to_xlsx_bytes
@@ -25,6 +28,9 @@ MAX_JOBS = 20
 MAX_KEYWORDS = 20
 MAX_KEYWORD_LEN = 60
 MAX_REQUESTS_LIMIT = 5000
+LOGIN_DAYS = 30                 # how long a login lasts on a device
+LOGIN_TRIES = 10                # wrong passwords allowed per address ...
+LOGIN_WINDOW = 15 * 60          # ... in this many seconds
 
 
 def _lead_json(lead):
@@ -105,14 +111,24 @@ def yelp_quota():
     return {"left": left, "limit": budget.limit, "paused": bool(budget.problem), "text": text}
 
 
-def create_app(password=None):
-    """password (or the APP_PASSWORD env var) puts the whole site behind a login.
+def create_app(password=None, username=None):
+    """password (or the APP_PASSWORD env var) puts the whole site behind a login page.
 
-    Always set one when the page is reachable from the internet: every search
-    can spend the Google or Yelp API key.
+    username (or APP_USERNAME) is the name to log in with; without one any name
+    works. Always set a password when the page is reachable from the internet:
+    every search can spend the Google or Yelp API key.
     """
     app = Flask(__name__)
     password = password if password is not None else os.environ.get("APP_PASSWORD", "")
+    username = (username if username is not None else os.environ.get("APP_USERNAME", "")).strip()
+    # Logins are kept in a signed cookie. SECRET_KEY can be set; otherwise the key is
+    # derived from the login itself, so changing the password logs everyone out.
+    app.secret_key = os.environ.get("SECRET_KEY") or hmac.new(
+        f"{username}\n{password}".encode(), b"lead-finder-session-v1", hashlib.sha256).digest()
+    app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+                      SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),
+                      PERMANENT_SESSION_LIFETIME=dt.timedelta(days=LOGIN_DAYS))
+    failures = {}                  # address -> times of recent wrong passwords
     jobs = OrderedDict()
 
     allowed_hosts = {"localhost"} | {
@@ -129,6 +145,11 @@ def create_app(password=None):
         except ValueError:
             return name in allowed_hosts
 
+    @app.context_processor
+    def page_globals():
+        return {"year": dt.date.today().year, "login_on": bool(password),
+                "user": session.get("user", "")}
+
     @app.before_request
     def require_login():
         if request.path == "/healthz":
@@ -136,12 +157,67 @@ def create_app(password=None):
         if not password:
             # Without a login only local/IP access is allowed (see LEADGEN_ALLOWED_HOSTS).
             return None if _host_allowed() else abort(403)
-        auth = request.authorization
-        supplied = (auth.password or "") if auth else ""
-        if hmac.compare_digest(supplied.encode(), password.encode()):
+        if request.path == "/login":
             return None
-        return Response("Login required", 401,
-                        {"WWW-Authenticate": 'Basic realm="Lead Finder", charset="UTF-8"'})
+        if session.get("login") == _login_token():
+            return None
+        if request.method == "GET" and (request.path == "/" or request.path.startswith("/download/")):
+            return redirect("/login")
+        return jsonify({"error": "You were logged out. Reload the page to log in again."}), 401
+
+    def _login_token():
+        """Changes when the username or password changes, which ends existing logins."""
+        return hmac.new(app.secret_key if isinstance(app.secret_key, bytes)
+                        else app.secret_key.encode(), f"{username}\n{password}".encode(),
+                        hashlib.sha256).hexdigest()[:32]
+
+    def _client_address():
+        # On Render the last X-Forwarded-For entry is the one its proxy added (the visitor).
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if os.environ.get("RENDER") and forwarded:
+            return forwarded.split(",")[-1].strip()
+        return request.remote_addr or ""
+
+    @app.get("/login")
+    def login_page():
+        if not password or session.get("login") == _login_token():
+            return redirect("/")
+        return render_template("login.html", error="")
+
+    @app.post("/login")
+    def login():
+        if not password:
+            return redirect("/")
+        if not _same_origin():
+            abort(403)
+        now, who = time.time(), _client_address()
+        recent = [t for t in failures.get(who, []) if now - t < LOGIN_WINDOW]
+        if len(recent) >= LOGIN_TRIES:
+            return render_template("login.html", error="Too many wrong tries. Wait 15 minutes "
+                                   "and try again."), 429
+        name = (request.form.get("username") or "").strip()
+        supplied = request.form.get("password") or ""
+        name_ok = not username or hmac.compare_digest(name.lower().encode(),
+                                                      username.lower().encode())
+        if name_ok and hmac.compare_digest(supplied.encode(), password.encode()):
+            failures.pop(who, None)
+            session.clear()
+            session.permanent = True
+            session.update(login=_login_token(), user=username or name)
+            return redirect("/")
+        failures[who] = recent + [now]
+        if len(failures) > 5000:              # keep memory bounded
+            failures.clear()
+        time.sleep(0.5)
+        return render_template("login.html", error="Wrong username or password.",
+                               username=name), 401
+
+    @app.post("/logout")
+    def logout():
+        if not _same_origin():
+            abort(403)
+        session.clear()
+        return redirect("/login")
 
     lock = threading.Lock()
 
