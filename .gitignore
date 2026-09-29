@@ -9,3 +9,4 @@ output/
 *.csv
 !tests/fixtures/*.csv
 .pytest_cache/
+*.whl
