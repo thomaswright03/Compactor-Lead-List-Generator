@@ -8,7 +8,7 @@ from leadgen.pipeline import RunResult
 def test_web_flow(monkeypatch):
     lead = Lead(name="<b>Walmart</b>", lat=40.7, lon=-111.9, source="google", source_id="x",
                 score=70, tier="A", category="Grocery / supermarket", distance_miles=3.2)
-    monkeypatch.setattr(web, "run", lambda params, progress: RunResult(
+    monkeypatch.setattr(web.finding, "run", lambda params, progress: RunResult(
         [lead], (40.76, -111.89), "Salt Lake City, UT", [], {"leads kept": 1}))
     client = web.create_app().test_client()
     assert b"Lead Finder" in client.get("/").data
@@ -32,7 +32,7 @@ def _client(monkeypatch, block=None):
         if block:
             gate.wait(5)
         return RunResult([], (40.76, -111.89), "SLC", [], {})
-    monkeypatch.setattr(web, "run", fake_run)
+    monkeypatch.setattr(web.finding, "run", fake_run)
     return web.create_app().test_client(), gate
 
 

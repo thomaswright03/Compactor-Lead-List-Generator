@@ -70,7 +70,12 @@ def test_mark_yes_moves_the_lead_and_undo_brings_it_back(page):
     _row(page, "Costco").locator(".mark button.yes").click()
     page.wait_for_selector("#recent:not([hidden])")
     assert "Costco Wholesale: marked Yes" in page.inner_text("#recent")
-    assert _row(page, "Costco").count() == 0                    # left Not checked
+    # The row stays put (showing its answer) while the pointer is on the table ...
+    assert "Moves to “Has baler or compactor”" in _row(page, "Costco").inner_text()
+    page.mouse.move(5, 5)
+    # ... and leaves Not checked a few seconds after the pointer moves away.
+    page.wait_for_function("!document.querySelector('#leads-wrap').innerText.includes('Costco')",
+                           timeout=15000)
     page.get_by_role("button", name="Has baler or compactor (1)").click()
     assert _row(page, "Costco").count() == 1
     assert "Undo (4:" in _row(page, "Costco").inner_text()
@@ -122,3 +127,116 @@ def test_the_view_survives_a_reload(page):
     assert page.input_value("#filter") == "hampton"
     assert page.locator("#lead-tabs button.on").inner_text().startswith("All")
     assert page.locator("th[aria-sort=ascending]").inner_text().startswith("Miles")
+
+
+def _posts(page, path):
+    sent = []
+    page.on("request", lambda r: sent.append(r.url) if r.method == "POST" and r.url.endswith(path) else None)
+    return sent
+
+
+def test_a_double_click_marks_only_the_business_aimed_at(page):
+    sent = _posts(page, "/mark")
+    first = page.locator("table.leads tbody tr").first
+    name = first.locator("strong").first.inner_text()
+    first.locator(".mark button.no").dblclick()
+    page.wait_for_selector("text=No baler or compactor (1)")
+    page.wait_for_timeout(800)
+    assert len(sent) == 1
+    assert page.locator("text=Not checked (2)").count() == 1
+    page.get_by_role("button", name="No baler or compactor (1)").click()
+    assert _row(page, name).count() == 1
+
+
+def test_find_leads_asks_before_using_the_days_search(page, monkeypatch):
+    from leadgen.pipeline import RunResult
+    monkeypatch.setattr(web.finding, "run", lambda params, progress: RunResult(
+        [], (40.76, -111.89), "SLC", [], {"leads kept": 0, "seconds": 3.2}))
+    sent = _posts(page, "/search")
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    page.fill("input[name=radius]", "12")
+    page.click("#go")
+    dialog = page.locator("#confirm-dlg")
+    assert dialog.is_visible()
+    text = dialog.inner_text()
+    assert "This uses today's only search" in text and "12 miles" in text
+    page.click("#confirm-back")
+    assert not dialog.is_visible() and not sent
+    assert "Today's is available" in page.inner_text("#day-note")
+    page.click("#go")
+    page.keyboard.press("Escape")                     # the keyboard can back out too
+    assert not dialog.is_visible() and not sent
+    page.click("#go")
+    page.click("#confirm-go")
+    page.wait_for_selector("#done-card:not([hidden])")
+    assert len(sent) == 1
+    page.get_by_role("button", name="Details").first.click()
+    details = page.inner_text("#history")
+    assert "Leads kept" in details and "3 seconds" in details and "leads kept" not in details
+
+
+def test_typed_call_notes_survive_closing_the_box(page):
+    _row(page, "Smith").locator(".mark button.yes").click()
+    page.get_by_role("button", name="Has baler or compactor (1)").click()
+    _row(page, "Smith").get_by_role("button", name="Just called").click()
+    page.fill("#call-notes", "Spoke to Dana; call back Friday.")
+    page.keyboard.press("Escape")
+    assert page.locator("#call-dlg").is_hidden()
+    _row(page, "Smith").get_by_role("button", name="Just called").click()
+    assert page.input_value("#call-notes") == "Spoke to Dana; call back Friday."
+    page.click("#call-cancel")
+    page.reload()                                      # kept in this browser, even after a reload
+    page.wait_for_selector("table.leads")
+    page.get_by_role("button", name="Has baler or compactor (1)").click()
+    _row(page, "Smith").get_by_role("button", name="Just called").click()
+    assert page.input_value("#call-notes") == "Spoke to Dana; call back Friday."
+    page.locator("#outcomes").get_by_role("button", name="Interested", exact=True).click()
+    page.click("#call-save")
+    page.wait_for_selector("#call-dlg:not([open])", state="attached")
+    _row(page, "Smith").get_by_role("button", name="Just called").click()
+    assert page.input_value("#call-notes") == ""       # saved, so the draft is gone
+
+
+def test_titles_hints_and_empty_pages(page):
+    assert page.title() == "Leads · Arco Compactor Lead Finder"
+    assert "mark the business Yes" in page.inner_text("#call-hint")
+    page.click("nav a[data-page=calls]")
+    page.wait_for_function("document.title === 'Calls · Arco Compactor Lead Finder'")
+    assert "Log a call with Just called" in page.inner_text("#calls-wrap")
+    page.click("nav a[data-page=stats]")
+    page.wait_for_function("document.title === 'Stats · Arco Compactor Lead Finder'")
+    page.wait_for_selector("#stats-empty:not([hidden])")
+    assert "Mark businesses Yes or No on the Leads page" in page.inner_text("#stats-empty")
+    page.click("#stats-empty a")
+    page.wait_for_function("document.title.startsWith('Leads')")
+
+
+def test_a_colleagues_mark_arrives_without_reloading_everything(page, monkeypatch):
+    from leadgen import marks
+    from leadgen import saved as saved_list
+    monkeypatch.setattr(web.leads, "SINCE_OVERLAP", 0.0)   # the leads were saved just now
+    costco = next(l for l in saved_list.load() if l.name.startswith("Costco"))
+    marks.set_mark(costco.uid, "no")                  # a colleague, elsewhere
+    with page.expect_response(lambda r: "/leads?since=" in r.url) as info:
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    body = info.value.json()
+    assert [l["name"] for l in body["leads"]] == ["Costco Wholesale"]
+    page.wait_for_selector("text=No baler or compactor (1)")
+
+
+def test_touch_targets_on_a_phone(browser, site, page):
+    context = browser.new_context(viewport={"width": 375, "height": 800}, has_touch=True,
+                                  is_mobile=True)
+    phone = context.new_page()
+    phone.goto(site + "#leads")
+    phone.wait_for_selector("table.leads")
+    phone.locator(".mark button.yes").first.tap()
+    phone.wait_for_selector("button.undo")
+    small = phone.evaluate("""() => [...document.querySelectorAll('button, a, summary, select')]
+        .filter((e) => e.offsetParent !== null)
+        .map((e) => [e.textContent.trim().slice(0, 30), e.getBoundingClientRect()])
+        .filter(([, r]) => r.width > 0 && (r.height < 44 || r.width < 44))
+        .map(([t, r]) => `${t}: ${Math.round(r.width)}x${Math.round(r.height)}`)""")
+    context.close()
+    assert small == []

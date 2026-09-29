@@ -1,5 +1,7 @@
 -r requirements.txt
-pytest>=8.0
-ruff>=0.6
+# Exact versions, like requirements.txt, so CI checks with the same tools every time.
+pytest==9.1.1
+ruff==0.16.9
+vulture==2.16
 # The browser tests (tests/test_browser.py) also need: playwright install chromium
-playwright>=1.45
+playwright==1.63.0

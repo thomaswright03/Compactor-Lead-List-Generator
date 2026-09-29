@@ -22,7 +22,7 @@ def _wait(client, job):
 
 
 def test_find_leads_works_once_per_calendar_day(monkeypatch):
-    monkeypatch.setattr(web, "run", lambda params, progress: RunResult(
+    monkeypatch.setattr(web.finding, "run", lambda params, progress: RunResult(
         [_lead("Walmart", "w")], (40.76, -111.89), "SLC", ["a note"], {"leads kept": 1}))
     day = {"now": "2026-09-29"}
     monkeypatch.setattr(daily, "today", lambda: day["now"])
@@ -43,7 +43,7 @@ def test_find_leads_works_once_per_calendar_day(monkeypatch):
 def test_a_failed_search_gives_the_day_back(monkeypatch):
     def fail(params, progress):
         raise GeocodeError("Could not find 'nowhere'")
-    monkeypatch.setattr(web, "run", fail)
+    monkeypatch.setattr(web.finding, "run", fail)
     client = web.create_app().test_client()
     job = client.post("/search", data={"location": "nowhere"}).get_json()["job_id"]
     assert _wait(client, job)["state"] == "error"

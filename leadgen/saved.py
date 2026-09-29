@@ -21,7 +21,7 @@ import time
 import uuid
 from dataclasses import asdict, fields
 
-from . import config, marks, store
+from . import config, store
 from .dedupe import _merge, is_duplicate, snapshot
 from .geo import haversine_miles
 from .models import Lead
@@ -71,10 +71,12 @@ class _Row:
                 self.first_seen, self.last_seen)
 
 
-def _read(db):
+def _read(db, uids=None):
+    """Every saved row, or (with uids) just those rows."""
+    select = "SELECT uid, lead, parts, ids, first_seen, last_seen FROM leads"
+    found = db.all(select) if uids is None else store.rows_for(db, select, "uid", uids)
     rows = []
-    for uid, lead, parts, ids, first, last in db.all(
-            "SELECT uid, lead, parts, ids, first_seen, last_seen FROM leads"):
+    for uid, lead, parts, ids, first, last in found:
         data = json.loads(lead)
         rows.append(_Row(uid, _to_lead(data) if data else None, json.loads(parts),
                          set(json.loads(ids)), first, last))
@@ -169,31 +171,41 @@ def save_search(leads, keywords=None):
     return new, shown - new
 
 
-def load(with_marks=True):
-    """All saved leads (best first), with miles from Arco's shop and (with_marks)
-    their baler marks.
+def load(uids=None):
+    """All saved leads (best first), or with uids just those, with miles from
+    Arco's shop. Their marks and calls are added by marks.apply / calls.apply.
 
     Raises store.Unavailable without a database, or a database error when the
-    leads or their marks can't be read.
+    leads can't be read.
     """
     now = time.time()
+    wanted = None if uids is None else set(uids)
     with store.connect() as db:
         if config.SAVED_SOURCE_KEEP_SECONDS:
-            rows = _read(db)
+            rows = _read(db, None if wanted is None else list(wanted))
             _write(db, _drop_expired(rows, now))
         else:
             # Nothing expires, so the source listings (most of each row) needn't be read.
+            select = "SELECT uid, lead FROM leads"
+            found = (db.all(select) if wanted is None
+                     else store.rows_for(db, select, "uid", list(wanted)))
             rows = [_Row(uid, _to_lead(data) if (data := json.loads(lead)) else None, None,
                          None, None, None)
-                    for uid, lead in db.all("SELECT uid, lead FROM leads")]
+                    for uid, lead in found]
     leads = []
     for row in rows:
+        if wanted is not None and row.uid not in wanted:
+            continue
         if row.lead and row.lead.business_status != "CLOSED_PERMANENTLY":
             row.lead.uid = row.uid
             row.lead.distance_miles = round(haversine_miles(
                 *config.DEFAULT_CENTER, row.lead.lat, row.lead.lon), 2)
             leads.append(row.lead)
-    if with_marks:
-        marks.apply(leads)
     leads.sort(key=lambda l: (-l.score, l.distance_miles, l.name.lower()))
     return leads
+
+
+def changed_since(ts):
+    """The uids of saved leads that a search added or updated after ts (epoch seconds)."""
+    with store.connect() as db:
+        return {uid for (uid,) in db.all("SELECT uid FROM leads WHERE last_seen > ?", (ts,))}

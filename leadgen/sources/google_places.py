@@ -8,6 +8,7 @@ later by the pipeline.
 import json
 import re
 
+from .. import config
 from ..geo import METERS_PER_MILE, search_grid
 from ..http import request_json
 from ..models import Lead
@@ -104,6 +105,6 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
     return run_searches("Google", queries, cells, fetch_page, parse_place,
                         max_pages=MAX_PAGES, max_requests=max_requests,
                         cache_version=["google-chain-v1", FIELD_MASK], cache_key=chain_key,
-                        progress=progress,
+                        progress=progress, stop_check=lambda: config.stop_reason("google"),
                         token_delay=TOKEN_DELAY_SECONDS,
                         key_errors=("API_KEY_INVALID", "API key not valid"))

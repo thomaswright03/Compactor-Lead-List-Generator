@@ -18,16 +18,24 @@ UNDO_SECONDS = 5 * 60           # how long after a click it can still be undone
 def get_all(uids):
     """{uid: "yes"/"no"} for the given uids that have a mark.
 
-    Raises store.Unavailable or a database error when the marks can't be read:
-    an unreadable mark must never look like "Not checked".
+    Only the marks of those businesses are read (the whole table only when most
+    of it is wanted anyway). Raises store.Unavailable or a database error when
+    the marks can't be read: an unreadable mark must never look like "Not checked".
     """
     uids = [u for u in dict.fromkeys(uids) if u]
     if not uids:
         return {}
     with store.connect() as db:
-        rows = db.all("SELECT uid, value FROM marks")
+        rows = store.rows_for(db, "SELECT uid, value FROM marks", "uid", uids)
     wanted = set(uids)
     return {uid: value for uid, value in rows if uid in wanted and value in VALUES}
+
+
+def changed_since(ts):
+    """The uids whose mark was set, switched or undone after ts (epoch seconds)."""
+    with store.connect() as db:
+        rows = db.all("SELECT uid FROM mark_changes WHERE at > ? OR undone_at > ?", (ts, ts))
+    return {uid for (uid,) in rows}
 
 
 def _current(db, uid):
@@ -37,14 +45,14 @@ def _current(db, uid):
 
 
 def set_mark(uid, value):
-    """Save a mark; an empty value clears it. Returns the undo for the click
-    ({"id", "until"}), or None when nothing changed.
+    """Save a mark ("yes" or "no"; a mark is only taken back by undo()). Returns the
+    undo for the click ({"id", "until"}), or None when nothing changed.
 
     Raises ValueError for a bad value or a business that isn't saved, and
     store.Unavailable or a database error when it can't be saved.
     """
-    if value not in (*VALUES, ""):
-        raise ValueError("A baler mark must be yes, no or empty")
+    if value not in VALUES:
+        raise ValueError("A baler mark must be yes or no")
     now = time.time()
     with store.connect() as db, db.transaction():
         if db.one("SELECT uid FROM leads WHERE uid = ?", (uid,)) is None:
@@ -52,12 +60,9 @@ def set_mark(uid, value):
         previous = _current(db, uid)
         if previous == value:
             return None
-        if value:
-            db.run("INSERT INTO marks (uid, value, updated_at) VALUES (?, ?, ?) "
-                   "ON CONFLICT (uid) DO UPDATE SET value = excluded.value, "
-                   "updated_at = excluded.updated_at", (uid, value, now))
-        else:
-            db.run("DELETE FROM marks WHERE uid = ?", (uid,))
+        db.run("INSERT INTO marks (uid, value, updated_at) VALUES (?, ?, ?) "
+               "ON CONFLICT (uid) DO UPDATE SET value = excluded.value, "
+               "updated_at = excluded.updated_at", (uid, value, now))
         change = uuid.uuid4().hex
         db.run("INSERT INTO mark_changes (id, uid, value, previous, at) VALUES (?, ?, ?, ?, ?)",
                (change, uid, value, previous, now))

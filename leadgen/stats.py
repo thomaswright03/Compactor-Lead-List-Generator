@@ -1,4 +1,4 @@
-"""Numbers for the stats page, from the saved leads, their marks and the call log."""
+"""Numbers for the stats page, from the saved leads and their Yes / No marks."""
 
 from .scoring import TIERS
 
@@ -6,7 +6,7 @@ TIER_ORDER = ("A", "B", "C", "D")
 
 
 def summarize(leads):
-    """leads: saved leads with has_baler and call fields set."""
+    """leads: saved leads with has_baler set."""
     yes = [l for l in leads if l.has_baler == "yes"]
     checked = [l for l in leads if l.has_baler in ("yes", "no")]
     avg = round(sum(l.score for l in yes) / len(yes)) if yes else None
@@ -23,5 +23,4 @@ def summarize(leads):
         "average_tier": next((t for threshold, t in TIERS if avg >= threshold), "D")
                         if avg is not None else None,
         "by_tier": by_tier,
-        "called": sum(1 for l in leads if l.call_count),
     }

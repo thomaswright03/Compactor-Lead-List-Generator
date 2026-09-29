@@ -14,7 +14,10 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from .localtime import date_time_text
 from .scoring import TIER_LABELS
 
-OFFLINE_VERIFIED = "Verified? (this file only)"
+# A private scratch column, worded unlike the site's own "Has Baler or Compactor?"
+# answer so the two can't be mistaken for each other.
+OFFLINE_VERIFIED = "My notes: equipment seen (this file only)"
+OFFLINE_CHOICES = ("Saw a compactor", "Saw a baler", "Saw neither", "Not sure")
 
 COLUMNS = [
     ("Score", lambda l: l.score, 8),
@@ -47,8 +50,8 @@ COLUMNS = [
     ("Call Notes", lambda l: l.call_notes, 40),
     # For notes on a printed or offline copy only: nothing typed here goes back into the
     # website (Yes / No marks and calls are recorded there).
-    (OFFLINE_VERIFIED, lambda l: "", 13),
-    ("Notes (this file only)", lambda l: "", 30),
+    (OFFLINE_VERIFIED, lambda l: "", 18),
+    ("My notes (this file only)", lambda l: "", 30),
 ]
 
 TIER_FILLS = {"A": "C6EFCE", "B": "E2EFDA", "C": "FFF2CC", "D": "F2F2F2"}
@@ -133,7 +136,7 @@ def to_xlsx_bytes(leads, run_info=None):
     ws.freeze_panes = "F2"
     ws.auto_filter.ref = ws.dimensions
     if leads:
-        dv = DataValidation(type="list", formula1='"Yes,No,Maybe,Has compactor,Has baler"',
+        dv = DataValidation(type="list", formula1='"' + ",".join(OFFLINE_CHOICES) + '"',
                             allow_blank=True)
         col = get_column_letter(_col(OFFLINE_VERIFIED))
         dv.add(f"{col}2:{col}{ws.max_row}")

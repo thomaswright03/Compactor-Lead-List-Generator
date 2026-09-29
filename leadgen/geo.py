@@ -1,11 +1,14 @@
 """Turn a ZIP / city / "lat,lon" into coordinates and measure distances."""
 
+import logging
 import math
 import os
 import re
 
 from . import config
 from .http import HttpError, request_json
+
+log = logging.getLogger(__name__)
 
 EARTH_RADIUS_MILES = 3958.8
 METERS_PER_MILE = 1609.344
@@ -146,6 +149,7 @@ def geocode(location, api_key=None):
     except (HttpError, KeyError, ValueError) as exc:
         errors.append(str(exc))
 
-    detail = f" ({'; '.join(errors)})" if errors else ""
-    raise GeocodeError(f"Could not find a location for '{location}'. Try a 5-digit ZIP "
-                       f"or 'lat,lon'{detail}")
+    if errors:
+        log.info("Geocoding %r failed: %s", location, "; ".join(errors))
+    raise GeocodeError(f"Could not find the place '{location}'. Try a 5-digit ZIP code or a "
+                       "city name.")

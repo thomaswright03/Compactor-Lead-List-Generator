@@ -129,7 +129,7 @@ def run(params: SearchParams, progress=None):
     say(f"Locating '{params.location}'")
     lat, lon, label = geocode(params.location, api_key)
 
-    raw, warnings, stats, errors, failed = [], [], {}, [], []
+    warnings, stats = [], {}
     if misplaced:
         used = ("it was used for Yelp" if use_yelp and not
                 (params.yelp_api_key or os.environ.get("YELP_API_KEY", "")).strip()
@@ -139,53 +139,8 @@ def run(params: SearchParams, progress=None):
     if params.source == "auto" and not (api_key or yelp_key):
         warnings.append("No Google Places or Yelp API key set: using free OpenStreetMap data "
                         "only. Add a key for much better phone coverage.")
-    if use_google:
-        # Most specific first, so a request cap trims generic phrases, never the user's
-        # keywords or the competitor names (searched so they show up flagged).
-        queries = list(dict.fromkeys(keywords + list(config.COMPETITORS) + config.GOOGLE_QUERIES))
-        cap = params.max_requests or google_places.estimate_requests(queries, params.grid)
-        say(f"Google: {len(queries)} phrases x {params.grid} area(s), up to {cap} requests")
-        try:
-            found, n_requests, w = google_places.search(
-                lat, lon, params.radius_miles, queries, api_key, params.grid,
-                params.max_requests, progress)
-            raw += found
-            warnings += w
-            stats["google requests"] = n_requests
-            stats["google raw results"] = len(found)
-        except SourceError as exc:
-            errors.append(str(exc))
-            failed.append("google")
-    if use_yelp:
-        queries = yelp.queries_for(keywords)
-        try:
-            found, n_requests, w = yelp.search(
-                lat, lon, params.radius_miles, queries, yelp_key, params.grid,
-                params.max_requests, progress)
-            raw += found
-            warnings += w
-            stats["yelp requests"] = n_requests
-            stats["yelp raw results"] = len(found)
-        except SourceError as exc:
-            errors.append(str(exc))
-            failed.append("yelp")
-    if use_osm:
-        try:
-            found, w = osm.search(lat, lon, params.radius_miles, keywords, progress)
-            raw += found
-            warnings += w
-            stats["osm raw results"] = len(found)
-        except SourceError as exc:
-            errors.append(str(exc))
-            failed.append("osm")
-
-    for error in errors:
-        log.warning("Search source failed: %s", error)
-    if errors and not raw:
-        raise PipelineError(f"Couldn't reach {_names(failed)}, so no leads were found.",
-                            detail=" | ".join(errors))
-    warnings += [f"Couldn't reach {SOURCE_NAMES[s]} this time, so its businesses are missing "
-                 "from this search." for s in failed]
+    raw, errors = _query_sources(params, (use_google, use_yelp, use_osm), (api_key, yelp_key),
+                                 keywords, lat, lon, progress, warnings, stats)
 
     say(f"Filtering {len(raw)} raw results to {params.radius_miles:g} miles")
     # Keep a margin while merging, so a listing just outside the radius can still
@@ -234,3 +189,77 @@ def run(params: SearchParams, progress=None):
         "seconds": round(time.time() - started, 1),
     })
     return RunResult(kept, (lat, lon), label, warnings, stats, problems=errors)
+
+
+def _query_sources(params, use, keys, keywords, lat, lon, progress, warnings, stats):
+    """Ask each source in turn; returns (raw leads, technical errors). Adds plain notes to
+    warnings and counts to stats. A source the administrator switched off since the
+    search started is skipped; raises PipelineError when nothing at all was found."""
+    use_google, use_yelp, use_osm = use
+    api_key, yelp_key = keys
+    say = progress or (lambda msg: None)
+    raw, errors, failed, stopped = [], [], [], []
+
+    def halted(source):
+        """True when the administrator switched searching (or this source) off
+        since the search started; the source is then skipped."""
+        if config.stop_reason(source):
+            stopped.append(source)
+            return True
+        return False
+
+    if use_google and not halted("google"):
+        # Most specific first, so a request cap trims generic phrases, never the user's
+        # keywords or the competitor names (searched so they show up flagged).
+        queries = list(dict.fromkeys(keywords + list(config.COMPETITORS) + config.GOOGLE_QUERIES))
+        cap = params.max_requests or google_places.estimate_requests(queries, params.grid)
+        say(f"Google: {len(queries)} phrases x {params.grid} area(s), up to {cap} requests")
+        try:
+            found, n_requests, w = google_places.search(
+                lat, lon, params.radius_miles, queries, api_key, params.grid,
+                params.max_requests, progress)
+            raw += found
+            warnings += w
+            stats["google requests"] = n_requests
+            stats["google raw results"] = len(found)
+        except SourceError as exc:
+            errors.append(str(exc))
+            failed.append("google")
+    if use_yelp and not halted("yelp"):
+        queries = yelp.queries_for(keywords)
+        try:
+            found, n_requests, w = yelp.search(
+                lat, lon, params.radius_miles, queries, yelp_key, params.grid,
+                params.max_requests, progress)
+            raw += found
+            warnings += w
+            stats["yelp requests"] = n_requests
+            stats["yelp raw results"] = len(found)
+        except SourceError as exc:
+            errors.append(str(exc))
+            failed.append("yelp")
+    if use_osm and not halted("osm"):
+        try:
+            found, w = osm.search(lat, lon, params.radius_miles, keywords, progress)
+            raw += found
+            warnings += w
+            stats["osm raw results"] = len(found)
+        except SourceError as exc:
+            errors.append(str(exc))
+            failed.append("osm")
+
+    for error in errors:
+        log.warning("Search source failed: %s", error)
+    if stopped:
+        log.warning("Search stopped by the administrator's switch before: %s", ", ".join(stopped))
+        if not raw:
+            raise PipelineError("The search was stopped by the administrator before it found "
+                                "anything.")
+        warnings.append(f"The search was stopped by the administrator before "
+                        f"{_names(stopped)} was searched; the businesses already found were kept.")
+    if errors and not raw:
+        raise PipelineError(f"Couldn't reach {_names(failed)}, so no leads were found.",
+                            detail=" | ".join(errors))
+    warnings += [f"Couldn't reach {SOURCE_NAMES[s]} this time, so its businesses are missing "
+                 "from this search." for s in failed]
+    return raw, errors

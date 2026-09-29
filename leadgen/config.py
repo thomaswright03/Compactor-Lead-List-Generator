@@ -383,9 +383,10 @@ YELP_SEARCHES = {
                                                   "sportgoods", "thrift_stores"],
     "machine shops and fabricators": ["machineshops", "metalfabricators"],
 }
-# The website may make at most this many Yelp calls a day in total, across all
-# searches (the same Yelp key is used elsewhere). The day is Yelp's own: it
-# resets at midnight UTC. Nothing in the form can raise it.
+# The website may make at most this many Yelp calls in any 24 hours in total,
+# across all searches (the same Yelp key is used elsewhere): a rolling window,
+# so each call frees up again 24 hours after it was made (usage.py). Nothing in
+# the form can raise it.
 YELP_DAILY_LIMIT = 50
 # A run stops here unless a (smaller) request cap is given.
 YELP_DEFAULT_MAX_REQUESTS = YELP_DAILY_LIMIT
@@ -427,3 +428,18 @@ YELP_OFF_ENV = "LEADGEN_YELP_OFF"             # searches skip Yelp
 def switched_on(name):
     """True when the environment variable `name` is set to 1 / true / yes / on."""
     return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def stop_reason(source=None):
+    """Why a running search must stop now (plain words), or None.
+
+    Checked between sources and before every paid call, so switching searching
+    off (or Google / Yelp off) also stops a search that is already running.
+    """
+    if switched_on(SEARCH_PAUSED_ENV):
+        return "the administrator paused searching"
+    if source == "google" and switched_on(GOOGLE_OFF_ENV):
+        return "the administrator switched Google off"
+    if source == "yelp" and switched_on(YELP_OFF_ENV):
+        return "the administrator switched Yelp off"
+    return None

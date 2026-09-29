@@ -75,23 +75,33 @@ after a set time instead, keeping the business's id so its mark comes back.
 
 The sidebar has four pages, a Light / Dark / System colour switch (System
 follows the computer's setting; the choice is remembered in each browser), and
-every page carries the Wright AI Solutions copyright.
+every page carries the Wright AI Solutions copyright. The browser tab names the
+page ("Leads · Arco Compactor Lead Finder") and shows the Lead Finder icon.
+On phones and tablets every button and link is at least 44 px each way.
 
 - **Find leads**: the search form (extra settings, each explained in plain
   words, under **More options**), a step-by-step progress bar while it runs,
-  and the search history with each search's counts under **Details**.
-  **Find Leads works once per calendar day** (Utah time), for the whole site:
-  after today's search it is off until midnight. A search that fails outright
+  and the search history with each search's counts under **Details** (in plain
+  words: businesses found, after merging duplicates, within the radius, how long
+  it took). **Find Leads works once per calendar day** (Utah time), for the whole site:
+  after today's search it is off until midnight. Pressing **Find leads** first
+  shows a summary (location, miles, search words, sources) and says this uses
+  today's only search: **Start search** runs it, **Go back and edit** (or Escape)
+  leaves the day unused. A search that fails outright
   (e.g. an unknown location, or the map data service is down) gives the day
   back, says so in one or two plain sentences, and stays in the history marked
   **Failed** with the reason; so does one that never finished (the server
-  restarted), after 30 minutes. The map data step gives up after two minutes
+  restarted), after 30 minutes (the page says when, in Utah time). The map data step gives up after two minutes
   in all (`OVERPASS_DEADLINE_SECONDS`), and the progress bar says when a step
   is taking longer than usual. Steps that don't apply (Google and Yelp when
   neither is set up) are shown as skipped.
 - **Leads**: the saved list, with **Yes** / **No** buttons for "has a baler or
   compactor" and tabs for Not checked, Has baler or compactor, No baler or
-  compactor, and All. The sidebar badge counts the leads still to check. A mark
+  compactor, and All. The sidebar badge counts the leads still to check. A
+  business just marked stays where it is, showing its answer ("Saved. Moves to
+  …") and its Undo, until the pointer leaves the list (then a few seconds), or
+  you change tab, filter or sort, so a double-click or a quick second click can
+  never mark the next business by mistake. A mark
   is kept for good: it can be switched between Yes and No, and a later search
   that finds the business again updates its row without moving it. **Every
   click can be undone for 5 minutes**: from the Undo link on the row (with the
@@ -102,17 +112,22 @@ every page carries the Wright AI Solutions copyright.
   tier and sort are kept in the address, so a reload or a shared link shows the
   same view. Phone numbers are tap-to-call links. The list refreshes every
   minute and when you come back to the tab, so colleagues' marks and calls show
-  up without a reload.
+  up without a reload; each refresh only fetches the businesses that changed
+  (`GET /leads?since=…`), so it stays small however long the list grows.
+  Tabs other than Has baler or compactor say where calls are logged.
 - **Calls**: in the Has baler or compactor tab, **Just called** opens a
   Conversation Summary box and the result of the call (Interested, Follow Up,
   Not Interested, Not Qualified, No Contact or Bad Lead). Every call is kept
   for good (a saved call can be undone for 5 minutes, like a mark); **History**
-  shows them all. The Calls page has a tab per result, and a business sits
-  under its latest call's result.
+  shows them all. Typed notes are never lost: closing the box (Cancel, Escape,
+  even a reload) keeps them as a draft for that business in this browser until
+  they are saved. The Calls page has a tab per result, and a business sits
+  under its latest call's result; with no calls yet it says how to log one.
 - **Stats**: how many businesses have a baler or compactor (marked Yes), their
   average score, and a chart of the share of checked businesses (marked Yes or
   No) that have one, by tier. Tier D is usually empty, and the page says why:
-  searches only save businesses scoring at least the minimum score (20).
+  searches only save businesses scoring at least the minimum score (20). Before
+  anything is marked, the page says how to fill it and links to the Leads page.
 
 Marks and the latest call (result, time and notes) are also columns in the downloads.
 
@@ -170,15 +185,41 @@ list), whoever looks after the site can stop them without a code change:
    paid source (the free map data and everything else keep working).
 3. Click **Save Changes**. The service restarts in about a minute; from then
    on Find leads says "Searching is paused by the administrator" and refuses
-   to start. Leads, Calls, Stats and the downloads keep working.
+   to start. Leads, Calls, Stats and the downloads keep working. A search that
+   is already running checks the switches between sources and before every
+   paid Google or Yelp call: it stops there, keeps (and saves) what it found,
+   and says it was stopped by the administrator.
 4. To switch it back on, delete the variable (or set it to `0`) and save.
+
+### Deploying
+
+Every push to `main` deploys automatically (Render's **Auto-Deploy**, set in
+`render.yaml`); a deploy takes about 5 minutes. To see which version is live,
+open `https://compactor-lead-finder.onrender.com/healthz`: `version` is the
+first seven characters of the deployed commit (`git log -1 --format=%h`).
+After each push, GitHub Actions' **live** job waits for that deploy and fails,
+which emails the owner, if the site is still on an older commit after 20
+minutes (set a repository variable `LIVE_URL` if the address changes).
+
+If it didn't deploy (the live job failed, or `/healthz` shows an old version):
+
+1. In Render, open the **compactor-lead-finder** service. **Events** shows
+   whether the last deploy failed (its log says why) or never started.
+2. Check **Settings** > **Auto-Deploy** is **Yes** (on commit) and the branch
+   is `main`.
+3. Click **Manual Deploy** > **Deploy latest commit**, wait for "Live", and
+   check `/healthz` again.
+
+The Python packages are pinned to exact versions in `requirements.txt`, so a
+deploy never picks up a new Flask, psycopg or openpyxl by surprise. To upgrade
+one, change its version there, run the tests, and push.
 
 ### Logs, and rolling back a bad deploy
 
 The site logs to Render's **Logs** tab: every failed search, database error and
 unexpected error, with the technical detail the pages leave out.
 
-Every push to `main` deploys automatically. To go back to the previous version:
+To go back to the previous version:
 
 1. In Render, open the service and click **Events** (or **Deploys**).
 2. Find the last deploy that worked, open its menu and choose **Rollback**
@@ -251,8 +292,9 @@ Score, tier, lead type, flags, name, category, address, city, state, ZIP,
 phone (formatted), website, distance, why-this-score, matched keywords, Google
 and Yelp review counts, approx. footprint, source category, which searches found it,
 source(s), map link, lat/lon, "Has Baler or Compactor?", the latest call's
-result, time and notes, plus empty **Verified? (this file only)** (dropdown)
-and **Notes (this file only)** columns for notes on a printed or offline copy:
+result, time and notes, plus empty **My notes: equipment seen (this file only)** (a dropdown: saw a
+compactor, saw a baler, saw neither, not sure) and **My notes (this file only)**
+columns for private notes on a printed or offline copy:
 nothing typed there goes back into the website (record Yes / No and calls on
 the Leads page). A second sheet, **Run Info**, records when it was made (Utah
 time), the settings and counts for each run.
@@ -324,15 +366,25 @@ python -m playwright install chromium          # for the browser tests
 python -m pytest                               # SQLite
 LEADGEN_TEST_DATABASE_URL=postgresql://... python -m pytest   # a throwaway Postgres
 python -m ruff check .                         # lint (settings in pyproject.toml)
+python -m vulture                              # dead code (settings in pyproject.toml)
 ```
 
+The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
+`leadgen/saved.py`, `marks.py`, `calls.py` and `daily.py` keep the saved data
+(`store.py` is the database). The website is `leadgen/web/`: `auth.py` (login),
+`finding.py` (Find leads), `leads.py` (the saved list, marks, calls, stats,
+downloads) and `common.py`. The page's markup is `leadgen/templates/index.html`;
+its script and styles are in `leadgen/static/` (`core.js` first, then one file
+per page, then `start.js`).
+
 The tests never call Google, Yelp or OpenStreetMap (they are mocked).
-`tests/test_browser.py` drives the real pages in Chromium (mark Yes, Undo, Just
-called, Stats, downloads, reload keeps the view); it is skipped when Playwright's
-Chromium is missing.
+`tests/test_browser.py` drives the real pages in Chromium (mark Yes, a
+double-click marks one business only, Undo, Just called and its kept draft, the
+search confirmation, Stats, downloads, reload keeps the view, 44 px touch
+targets on a phone); it is skipped when Playwright's Chromium is missing.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the lint and every test, on
 SQLite and on Postgres, for each push and pull request. To make a red run block
 merging: GitHub → **Settings** → **Branches** → **Add branch protection rule**
 for `main` → **Require status checks to pass before merging**, and pick
-`lint`, `test (sqlite)` and `test (postgres)`.
+`lint`, `test (sqlite)` and `test (postgres)` (not `live`: it runs after the push).

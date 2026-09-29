@@ -35,10 +35,21 @@ UNDO_SECONDS = 5 * 60           # how long after saving a call it can still be u
 
 def undo(call_id):
     """Delete a call saved in the last UNDO_SECONDS. False when it is too late (or unknown)."""
-    with store.connect() as db:
-        row = db.one("DELETE FROM calls WHERE id = ? AND at > ? RETURNING id",
-                     (call_id, time.time() - UNDO_SECONDS))
+    now = time.time()
+    with store.connect() as db, db.transaction():
+        row = db.one("DELETE FROM calls WHERE id = ? AND at > ? RETURNING uid",
+                     (call_id, now - UNDO_SECONDS))
+        if row is not None:
+            db.run("INSERT INTO call_undos (id, uid, at) VALUES (?, ?, ?)", (call_id, row[0], now))
     return row is not None
+
+
+def changed_since(ts):
+    """The uids with a call saved or undone after ts (epoch seconds)."""
+    with store.connect() as db:
+        rows = db.all("SELECT uid FROM calls WHERE at > ? UNION SELECT uid FROM call_undos "
+                      "WHERE at > ?", (ts, ts))
+    return {uid for (uid,) in rows}
 
 
 def history(uid):
@@ -66,7 +77,9 @@ def apply(leads):
     an unreadable call log must never look like "never called".
     """
     with store.connect() as db:
-        rows = db.all("SELECT uid, at, outcome, notes FROM calls ORDER BY at")
+        rows = store.rows_for(db, "SELECT uid, at, outcome, notes FROM calls", "uid",
+                              dict.fromkeys(lead.uid for lead in leads if lead.uid),
+                              order="ORDER BY at")
     latest, counts = {}, {}
     for uid, at, outcome, notes in rows:
         latest[uid] = (at, outcome, notes)

@@ -33,7 +33,7 @@ def test_searches_merge_into_one_saved_row_and_keep_the_mark():
     other = _lead(name="Costco", source_id="y3", phone="(801) 555-0199", lat=40.70)
     assert saved.save_search([again, other]) == (1, 1)
     assert again.uid == first.uid != other.uid
-    leads = saved.load()
+    leads = marks.apply(saved.load())
     assert len(leads) == 2
     smiths = next(l for l in leads if l.uid == first.uid)
     assert smiths.has_baler == "yes" and sorted(smiths.sources) == ["google", "yelp"]
@@ -51,11 +51,11 @@ def test_yelp_details_expire_but_the_mark_comes_back(monkeypatch):
     saved.save_search([osm])
     later = time.time() + config.SAVED_SOURCE_KEEP_SECONDS["yelp"] + 60
     monkeypatch.setattr(saved.time, "time", lambda: later)
-    assert [l.name for l in saved.load()] == ["Walmart"]        # map data is kept
+    assert [l.name for l in marks.apply(saved.load())] == ["Walmart"]        # map data is kept
     again = _lead(source_id="y1")                                 # the same Yelp listing
     saved.save_search([again])
     assert again.uid == lead.uid
-    assert {l.name: l.has_baler for l in saved.load()} == {"Walmart": "", lead.name: "no"}
+    assert {l.name: l.has_baler for l in marks.apply(saved.load())} == {"Walmart": "", lead.name: "no"}
 
 
 def test_merged_lead_drops_only_the_yelp_part(monkeypatch):
@@ -66,22 +66,22 @@ def test_merged_lead_drops_only_the_yelp_part(monkeypatch):
     saved.save_search([both])
     later = time.time() + config.SAVED_SOURCE_KEEP_SECONDS["yelp"] + 60
     monkeypatch.setattr(saved.time, "time", lambda: later)
-    lead = saved.load()[0]
+    lead = marks.apply(saved.load())[0]
     assert lead.sources == ["osm"] and lead.yelp_reviews is None and not lead.phone
     assert lead.footprint_sqft == 50000 and lead.uid == both.uid
 
 
-def test_marks_saved_cleared_and_exported():
+def test_marks_saved_and_exported():
     a, b = _lead(), _lead(name="Costco", source_id="y3", phone="(801) 555-0199", lat=40.70)
     saved.save_search([a, b])
     marks.set_mark(a.uid, "yes")
     marks.set_mark(b.uid, "no")
-    leads = saved.load()
+    leads = marks.apply(saved.load())
     assert "Has Baler or Compactor?" in [c for c, _, _ in COLUMNS]
     csv = to_csv_bytes(leads).decode("utf-8-sig")
     assert ",Yes," in csv and ",No," in csv
-    marks.set_mark(a.uid, "")
-    assert {l.name: l.has_baler for l in saved.load()}[a.name] == ""
+    with pytest.raises(ValueError):
+        marks.set_mark(a.uid, "")                    # a mark is only taken back by Undo
 
 
 def _search(client):
@@ -97,7 +97,7 @@ def test_page_shows_saved_leads_across_searches(monkeypatch):
     found = iter([[_lead(name="Walmart", source_id="w1")],
                   [_lead(name="Walmart", source_id="w1"), _lead(name="Costco", source_id="c1",
                                                                 phone="", lat=40.70)]])
-    monkeypatch.setattr(web, "run", lambda params, progress: RunResult(
+    monkeypatch.setattr(web.finding, "run", lambda params, progress: RunResult(
         next(found), (40.76, -111.89), "SLC", [], {}))
     days = iter(["2026-09-29", "2026-09-30"])
     monkeypatch.setattr(daily, "today", lambda: current["day"])
@@ -110,7 +110,7 @@ def test_page_shows_saved_leads_across_searches(monkeypatch):
     assert client.post("/mark", json={"key": row["key"], "value": "yes"}).get_json()["ok"]
     current["day"] = next(days)                         # searching again takes a new day
     _, body = _search(client)
-    assert body["stats"]["new leads saved"] == 1 and body["stats"]["saved leads"] == 2
+    assert body["new_leads"] == 1 and body["saved_count"] == 2
     assert {l["name"]: l["has_baler"] for l in body["leads"]} == {"Walmart": "yes", "Costco": ""}
     assert len(client.get("/leads").get_json()["leads"]) == 2
     csv = client.get("/download/saved.csv").data.decode("utf-8-sig")
@@ -146,7 +146,7 @@ def test_two_businesses_never_share_a_row():
     b = _lead(name="Smiths Fuel", source="osm", source_id="n1", phone="(801) 555-0199",
               yelp_reviews=None, lat=40.7503)
     saved.save_search([a, b])
-    assert a.uid != b.uid and len(saved.load()) == 2
+    assert a.uid != b.uid and len(marks.apply(saved.load())) == 2
 
 
 def test_a_business_found_closed_leaves_the_list_but_keeps_its_mark():
@@ -155,7 +155,7 @@ def test_a_business_found_closed_leaves_the_list_but_keeps_its_mark():
     marks.set_mark(lead.uid, "yes")
     closed = _lead(business_status="CLOSED_PERMANENTLY")
     assert saved.save_search([closed]) == (0, 0)
-    assert closed.uid == lead.uid and saved.load() == []
+    assert closed.uid == lead.uid and marks.apply(saved.load()) == []
 
 
 def test_a_failed_save_hands_out_no_ids(monkeypatch):

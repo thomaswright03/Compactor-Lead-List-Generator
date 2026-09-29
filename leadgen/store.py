@@ -46,10 +46,23 @@ SCHEMA = [
     """CREATE TABLE IF NOT EXISTS search_failures (
         id TEXT PRIMARY KEY, day TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
         info TEXT NOT NULL)""",
+    # Calls taken back with Undo (the call itself is deleted), so open pages can
+    # notice the change without reloading every call.
+    """CREATE TABLE IF NOT EXISTS call_undos (
+        id TEXT PRIMARY KEY, uid TEXT NOT NULL, at DOUBLE PRECISION NOT NULL)""",
+    # For "what changed since the page last looked" (see the /leads refresh).
+    "CREATE INDEX IF NOT EXISTS calls_by_time ON calls (at)",
+    "CREATE INDEX IF NOT EXISTS leads_by_last_seen ON leads (last_seen)",
+    "CREATE INDEX IF NOT EXISTS mark_changes_by_time ON mark_changes (at)",
+    "CREATE INDEX IF NOT EXISTS mark_changes_by_undo ON mark_changes (undone_at)",
+    "CREATE INDEX IF NOT EXISTS call_undos_by_time ON call_undos (at)",
 ]
 # Every table, for tests that empty them.
 TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "mark_changes",
-          "search_failures")
+          "search_failures", "call_undos")
+# Up to this many ids are looked up by id (in chunks); more read the whole table.
+BY_ID_LIMIT = 1000
+_CHUNK = 500
 
 _ready = set()
 _lock = threading.Lock()
@@ -117,6 +130,23 @@ class Db:
             except Exception:
                 self.conn.execute("ROLLBACK")
                 raise
+
+
+def rows_for(db, select, column, ids, order=""):
+    """Rows of `select` (a SELECT without WHERE) whose `column` is one of ids.
+
+    A few ids are looked up by id; for most of a big list one read of the whole
+    table is cheaper, and the caller filters. `order` is an ORDER BY clause.
+    """
+    ids = list(ids)
+    if len(ids) > BY_ID_LIMIT:
+        return db.all(f"{select} {order}")
+    rows = []
+    for start in range(0, len(ids), _CHUNK):
+        chunk = ids[start:start + _CHUNK]
+        marks = ", ".join("?" * len(chunk))
+        rows += db.all(f"{select} WHERE {column} IN ({marks}) {order}", chunk)
+    return rows
 
 
 def open_db():

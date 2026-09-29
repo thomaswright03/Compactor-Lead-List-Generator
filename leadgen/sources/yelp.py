@@ -192,6 +192,9 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
         return [slim(b) for b in items], (nxt if more else None)
 
     def stop_check():
+        stop = config.stop_reason("yelp")
+        if stop:
+            return stop
         if quota["left"] is not None and quota["left"] <= DAILY_RESERVE:
             return (f"Yelp's daily limit is almost used up ({quota['left']} calls left; "
                     "it resets at midnight UTC)")

@@ -179,13 +179,15 @@ def search(lat, lon, radius_miles, keywords=(), progress=None):
     query = build_query(lat, lon, radius_miles, keywords)
     deadline = time.monotonic() + config.OVERPASS_DEADLINE_SECONDS
     errors = []
-    for endpoint in config.OVERPASS_ENDPOINTS:
+    servers = len(config.OVERPASS_ENDPOINTS)
+    for n, endpoint in enumerate(config.OVERPASS_ENDPOINTS, start=1):
         left = deadline - time.monotonic()
         if left < 5:
             errors.append("out of time before trying " + endpoint)
             break
         if progress:
-            progress(f"OpenStreetMap: querying {endpoint.split('/')[2]}")
+            progress(f"OpenStreetMap: searching the free map data (server {n} of {servers})")
+        log.info("OpenStreetMap: querying %s", endpoint.split("/")[2])
         try:
             # Connecting gets at most 10 s; the answer may take the rest of the time.
             data = request_json("POST", endpoint, data={"data": query},

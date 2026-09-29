@@ -170,7 +170,7 @@ def test_database_errors_never_show_class_names(monkeypatch):
 
 def test_search_pause_switch(monkeypatch):
     ran = []
-    monkeypatch.setattr(web, "run", lambda params, progress: ran.append(params) or RunResult(
+    monkeypatch.setattr(web.finding, "run", lambda params, progress: ran.append(params) or RunResult(
         [], (40.76, -111.89), "SLC", [], {}))
     client = web.create_app().test_client()
     saved.save_search([_lead()])
@@ -291,7 +291,8 @@ def test_excel_generated_time_is_utah_time_and_offline_columns_are_labelled(monk
     assert info["Generated"] == "Sep 29, 2026, 1:22 pm (Utah time)"
     assert "Nothing typed there is saved in the website" in info["This file only"]
     header = [c.value for c in book["Leads"][1]]
-    assert header[-2:] == ["Verified? (this file only)", "Notes (this file only)"]
+    assert header[-2:] == ["My notes: equipment seen (this file only)", "My notes (this file only)"]
+    assert "Has Baler or Compactor?" in header
 
 
 def test_one_place_for_utah_time():

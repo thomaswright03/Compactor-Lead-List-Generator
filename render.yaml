@@ -3,6 +3,7 @@ services:
     name: compactor-lead-finder
     runtime: python
     plan: free
+    autoDeploy: true            # every push to main goes live (CI's "live" job checks it did)
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn wsgi:app --workers 1 --threads 8 --timeout 0 --bind 0.0.0.0:$PORT
     envVars:

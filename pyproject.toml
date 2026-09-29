@@ -34,3 +34,13 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["leadgen"]
+
+# Dead-code check (vulture). Run: python -m vulture   CI runs it on every push.
+# Flask calls the decorated routes and openpyxl reads the attributes set on cells;
+# store.TABLES is for the tests.
+[tool.vulture]
+paths = ["leadgen"]
+min_confidence = 60
+ignore_decorators = ["@bp.*", "@app.*"]
+ignore_names = ["quotePrefix", "font", "alignment", "hyperlink", "freeze_panes", "ref",
+                "permanent", "TABLES"]
