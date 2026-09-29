@@ -118,14 +118,17 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
     budget = usage.yelp_budget()
     left = budget.left()
     cap = config.YELP_DEFAULT_MAX_REQUESTS if max_requests is None else max_requests
+    if budget.problem:                # no count means no calls, and no usable cache either
+        return [], 0, [f"Yelp was skipped: Yelp is paused because {budget.problem}."]
     limit_note = None
-    if budget.problem:
-        limit_note = f"Yelp is paused because {budget.problem}"
-    elif left == 0:
+    if left == 0:
         limit_note = used_up(budget)
     elif left <= cap:                 # the daily limit, not the request cap, is what binds
         limit_note = (f"this site may make {budget.limit} Yelp calls a day and {left} were left "
                       f"today; the count resets at {usage.reset_time_text()}")
+    elif len(queries) * len(search_grid(0, 0, radius_miles, grid_for(radius_miles, grid_cells))) > cap:
+        limit_note = (f"the request cap; up to {left} of today's {budget.limit} Yelp calls are "
+                      "left if you raise it")
     cap = min(cap, left)
     n_cells = choose_grid(radius_miles, grid_cells, len(queries), cap)
     cells = search_grid(lat, lon, min(radius_miles, MAX_RADIUS_MILES) if n_cells == 1
@@ -135,7 +138,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
     if progress:
         progress(f"Yelp: {len(queries)} searches x {n_cells} area(s), up to {cap} calls "
                  f"({left} of today's {budget.limit} left)")
-    if n_cells < grid_for(radius_miles, grid_cells):
+    if n_cells < grid_for(radius_miles, grid_cells) and cap:
         warnings.append(f"Yelp searched the {MAX_RADIUS_MILES:.0f} miles around the center (the "
                         f"most one Yelp search reaches). Covering all {radius_miles:g} miles "
                         "takes 7 areas, more calls than this search could make.")

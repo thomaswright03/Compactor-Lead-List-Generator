@@ -212,12 +212,13 @@ def create_app(password=None):
 
     @app.post("/mark")
     def mark():
-        """Save whether a business has a baler ("yes", "no", or "" to clear)."""
+        """Save whether a business has a baler ("yes" or "no"). A mark is kept for good:
+        it can be switched but not cleared, and later searches keep it with the business."""
         if not _same_origin():
             abort(403)
         data = request.get_json(silent=True) or {}
         uid, value = str(data.get("key") or ""), str(data.get("value") or "")
-        if not uid or len(uid) > 64 or value not in ("yes", "no", ""):
+        if not uid or len(uid) > 64 or value not in marks.VALUES:
             return jsonify({"error": "Bad mark"}), 400
         try:
             marks.set_mark(uid, value)

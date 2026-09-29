@@ -12,6 +12,10 @@ import time
 
 from . import config, store
 
+# A call reserved this close to midnight UTC also counts toward the next day
+# (a request may take 60 s, plus a few seconds of retry wait).
+SPILL_SECONDS = 90
+
 
 def _now():
     return dt.datetime.now(dt.timezone.utc)
@@ -69,12 +73,21 @@ class DailyBudget:
         if self.limit < 1:
             return False
         try:
+            now = _now()
             with store.connect() as db:
                 # One atomic statement: counts the call only while under the limit.
                 row = db.one("INSERT INTO usage (name, day, used) VALUES (?, ?, 1) "
                              "ON CONFLICT (name, day) DO UPDATE SET used = usage.used + 1 "
                              "WHERE usage.used < ? RETURNING used",
-                             (self.name, _today(), self.limit))
+                             (self.name, now.strftime("%Y-%m-%d"), self.limit))
+                midnight = (now + dt.timedelta(days=1)).replace(hour=0, minute=0, second=0,
+                                                                microsecond=0)
+                if row is not None and (midnight - now).total_seconds() < SPILL_SECONDS:
+                    # The call (with its retries) may reach the API after midnight UTC,
+                    # in the API's next day: count it there too.
+                    db.run("INSERT INTO usage (name, day, used) VALUES (?, ?, 1) "
+                           "ON CONFLICT (name, day) DO UPDATE SET used = usage.used + 1",
+                           (self.name, midnight.strftime("%Y-%m-%d")))
             return row is not None
         except Exception as exc:
             self.problem = _why(exc, "updated")
@@ -86,19 +99,27 @@ def yelp_budget():
 
 
 class SharedCache:
-    """A results cache in the database, so it survives restarts. Misses on any error."""
+    """A results cache in the database, so it survives restarts. Misses on any error,
+    and after one failure stops trying (a down database would stall every lookup)."""
+
+    def __init__(self):
+        self.down = False
 
     def get(self, key, ttl=None):
+        if self.down:
+            return None
         try:
             with store.connect() as db:
                 row = db.one("SELECT value, expires_at FROM cache WHERE key = ?", (self._key(key),))
             if row and row[1] > time.time():
                 return json.loads(row[0])
         except Exception:
-            pass
+            self.down = True
         return None
 
     def put(self, key, value, ttl=None):
+        if self.down:
+            return
         now = time.time()
         try:
             with store.connect() as db:
@@ -109,7 +130,7 @@ class SharedCache:
                        (self._key(key), json.dumps(value, separators=(",", ":")),
                         now + (ttl or config.CACHE_TTL_SECONDS)))
         except Exception:
-            pass                        # a cache that cannot be written only costs a miss
+            self.down = True            # a cache that cannot be written only costs a miss
 
     @staticmethod
     def _key(key):

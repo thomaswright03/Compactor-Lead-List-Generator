@@ -111,3 +111,23 @@ def test_counter_is_atomic_under_threads():
     for t in threads:
         t.join()
     assert got.count(True) == 50 and budget.used() == 50
+
+
+def test_calls_just_before_midnight_count_on_both_days(monkeypatch):
+    import datetime as dt
+    clock = {"now": dt.datetime(2026, 9, 29, 23, 59, 30, tzinfo=dt.timezone.utc)}
+    monkeypatch.setattr(usage, "_now", lambda: clock["now"])
+    budget = usage.yelp_budget()
+    assert budget.take()
+    clock["now"] = dt.datetime(2026, 9, 30, 0, 0, 5, tzinfo=dt.timezone.utc)
+    assert budget.used() == 1          # it may have reached Yelp after midnight
+    clock["now"] = dt.datetime(2026, 9, 30, 12, 0, tzinfo=dt.timezone.utc)
+    assert budget.take() and budget.used() == 2
+
+
+def test_small_request_cap_advice_stays_within_the_daily_limit(monkeypatch):
+    _fake_yelp(monkeypatch, total=10)
+    _, n, warnings = _search([f"a{i}" for i in range(19)], max_requests=10)
+    assert n == 10
+    assert any("the request cap; up to 50 of today's 50 Yelp calls are left" in w for w in warnings)
+    assert not any("--max-requests" in w for w in warnings)

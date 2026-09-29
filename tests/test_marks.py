@@ -129,6 +129,7 @@ def test_without_a_database_on_render_searches_still_show(monkeypatch):
 def test_mark_endpoint_checks_input():
     client = web.create_app().test_client()
     assert client.post("/mark", json={"key": "k", "value": "maybe"}).status_code == 400
+    assert client.post("/mark", json={"key": "k", "value": ""}).status_code == 400   # kept for good
     assert client.post("/mark", json={"value": "yes"}).status_code == 400
     assert client.post("/mark", json={"key": "k", "value": "yes"},
                        headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403

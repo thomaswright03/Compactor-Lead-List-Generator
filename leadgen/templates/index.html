@@ -192,7 +192,7 @@ function renderTabs() {
 
 async function setBaler(lead, value) {
   const before = lead.has_baler || "";
-  if (value === before) value = "";               // clicking the chosen answer again clears it
+  if (value === before) return;                   // an answer is kept for good (it can only be switched)
   lead.has_baler = value;
   render();
   try {
@@ -214,7 +214,7 @@ function balerCell(lead) {
     const b = el("button", label, value + (lead.has_baler === value ? " on" : ""));
     b.type = "button";
     if (!lead.key) { b.disabled = true; b.title = "Not saved, so it can't be marked"; box.append(b); continue; }
-    b.title = lead.has_baler === value ? "Click again to clear" : `Mark: ${label.toLowerCase()}, it ${value === "yes" ? "has" : "does not have"} a baler`;
+    b.title = lead.has_baler === value ? "Marked" : `Mark: ${label.toLowerCase()}, it ${value === "yes" ? "has" : "does not have"} a baler`;
     b.addEventListener("click", () => setBaler(lead, value));
     box.append(b);
   }

@@ -72,9 +72,11 @@ Yelp's terms allow keeping its data for 24 hours (and Google's for 30 days);
 after a set time instead, keeping the business's id so its mark comes back.
 
 **Baler marks.** Each row has **Yes** / **No** buttons for "has a baler"; the
-tabs above the table show Not checked, Has baler and No baler. Marks belong to
-the saved business, so they come back on later searches, and they appear in the
-"Has Baler?" column of the downloads.
+tabs above the table show Not checked, Has baler and No baler. A mark is kept
+for good: it can be switched between Yes and No but never goes back to Not
+checked, and a later search that finds the business again updates its row
+without moving it, so marked businesses never come up as new. Marks also appear
+in the "Has Baler?" column of the downloads.
 
 Always set `APP_PASSWORD` on a public site: every search can spend your API keys.
 Without a password the page only answers on `localhost` or an IP address; to use
@@ -101,7 +103,7 @@ python -m leadgen run --min-score 40 --limit 200                      # only str
 | `--keywords` | compactor baler waste recycling | Extra search terms; matches add points |
 | `--source` | auto | `auto` = OpenStreetMap plus Google and/or Yelp when their key is set. Also `google`, `yelp`, `osm`, and `both` (Google + OpenStreetMap) |
 | `--min-score` | 20 | Drop leads below this score (competitors are always kept) |
-| `--grid` | 1 | Google and Yelp. 1, 7 or 19 search cells. Google caps each search at 60 results and Yelp at 240, so more cells find more businesses (and cost more). Yelp searches at most 25 miles around a point, so it uses at least 7 cells past 25 miles |
+| `--grid` | 1 | Google and Yelp. 1, 7 or 19 search cells. Google caps each search at 60 results and Yelp at 240, so more cells find more businesses (and cost more). Yelp searches at most 25 miles around a point, so past 25 miles it needs 7 cells; at the default 1 it searches the 25 miles around the center instead when 7 would take more calls than are left |
 | `--max-requests` | auto | Hard cap on API calls per run, for Google and for Yelp separately. Auto = Google: enough for every search (about 100 at `--grid 1`); Yelp: 50. Yelp never goes past its daily limit of 50 calls, whatever the cap. Under a cap, every search gets its first page before any gets a second; Google searches your keywords and the competitor names first, Yelp its category searches |
 | `--only-keyword-matches` | off | Keep only leads matching a keyword |
 | `--limit` | 0 (all) | Keep the top N prospects (competitors are always kept) |
