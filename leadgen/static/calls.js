@@ -26,8 +26,8 @@ function renderCalls() {
   $("calls-problem").replaceChildren(); $("calls-body").hidden = !S.calledLoaded;
   if (!S.calledLoaded) return;
   const called = S.called, outcomes = (S.counts && S.counts.outcomes) || {};
-  // "All calls" first, newest first, so a call just saved is always in view.
-  tabs($("call-tabs"), [["", "All calls", called.length], ...OUTCOMES.map((o) => [o, o, outcomes[o] || 0])], S.callView,
+  // Every called business first (one row each, latest call first), so a call just saved is always in view.
+  tabs($("call-tabs"), [["", "All called businesses", called.length], ...OUTCOMES.map((o) => [o, o, outcomes[o] || 0])], S.callView,
        (v) => { S.callView = v; renderCalls(); writeHash("calls"); });
   const rows = S.callView ? called.filter((l) => l.call_outcome === S.callView) : [...called];
   const wrap = $("calls-wrap");
@@ -53,7 +53,7 @@ function renderCalls() {
     when.append(el("span", l.call_outcome, "badge"), el("div", l.last_call));
     when.append(el("div", `${l.call_count} call${l.call_count > 1 ? "s" : ""}`, "sub"));
     tr.append(when);
-    tr.append(el("td", l.call_notes || "(no notes)", "notes"));
+    tr.append(notesCell(l));
     const act = el("td"); const box = el("div", undefined, "call-cell");
     box.append(button("Just called", "", () => openCall(l)));
     box.append(button("History", "quiet", () => openHistory(l)));
@@ -63,6 +63,16 @@ function renderCalls() {
   }
   table.append(thead, tbody);
   wrap.replaceChildren(table);
+}
+
+// The latest call's notes; when it had none, the latest notes from an earlier call, with their date.
+function notesCell(l) {
+  const td = el("td", undefined, "notes");
+  if (l.call_notes) { td.textContent = l.call_notes; return td; }
+  if (!l.earlier_notes) { td.append(el("span", "(no notes)", "sub")); return td; }
+  td.append(el("div", "Latest call: no notes.", "sub"),
+            el("div", `From the call on ${l.earlier_notes_when}:`, "sub earlier"), el("div", l.earlier_notes));
+  return td;
 }
 
 /* Unsent call notes are kept per business (in this browser) until they are saved, so closing
@@ -125,7 +135,9 @@ $("call-form").addEventListener("submit", async (e) => {
     // Update the lead as it is now (the list may have been reloaded while saving).
     const lead = leadByKey(key) || target;
     const first = !lead.call_count;
-    updateLead({ key, call_outcome: call.outcome, call_notes: call.notes, last_call: call.when,
+    const earlier = call.notes ? { earlier_notes: "", earlier_notes_when: "" }
+      : lead.call_notes ? { earlier_notes: lead.call_notes, earlier_notes_when: lead.last_call } : {};
+    updateLead({ key, ...earlier, call_outcome: call.outcome, call_notes: call.notes, last_call: call.when,
                  last_call_at: call.at, call_count: (lead.call_count || 0) + 1, undo_call: call.undo });
     addRecent(leadByKey(key) || lead);
     if (S.counts && first) S.counts.called++;

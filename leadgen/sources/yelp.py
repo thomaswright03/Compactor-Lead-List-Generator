@@ -11,6 +11,8 @@ The website may make at most config.YELP_DAILY_LIMIT Yelp calls a day in total
 """
 
 import re
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any
 
 from requests.structures import CaseInsensitiveDict
 
@@ -19,7 +21,7 @@ from ..geo import METERS_PER_MILE, search_grid
 from ..http import HttpError, request_json
 from ..models import Lead
 from . import SourceError
-from .paging import run_searches
+from .paging import Cell, run_searches
 
 SEARCH_URL = "https://api.yelp.com/v3/businesses/search"
 MAX_RADIUS_M = 40000
@@ -33,7 +35,7 @@ KEY_ERRORS = ("TOKEN_INVALID", "UNAUTHORIZED_API_KEY", "UNAUTHORIZED_ACCESS_TOKE
 QUOTA_ERROR = "ACCESS_LIMIT_REACHED"
 
 
-def grid_for(radius_miles, grid_cells):
+def grid_for(radius_miles: float, grid_cells: int) -> int:
     """The smallest grid (at least the one asked for) whose cells fit Yelp's 25-mile limit."""
     for cells in (1, 7, 19):
         if cells >= grid_cells and search_grid(0, 0, radius_miles, cells)[0][2] <= MAX_RADIUS_MILES:
@@ -41,7 +43,7 @@ def grid_for(radius_miles, grid_cells):
     return 19
 
 
-def queries_for(keywords):
+def queries_for(keywords: Iterable[str]) -> list[str]:
     """Yelp category searches (the best leads, so they come first under the daily
     limit), then word searches for the user's keywords and the competitors."""
     words = [q for q in dict.fromkeys(list(keywords) + list(config.COMPETITORS))
@@ -49,7 +51,7 @@ def queries_for(keywords):
     return list(config.YELP_SEARCHES) + words
 
 
-def choose_grid(radius_miles, grid_cells, n_queries, affordable):
+def choose_grid(radius_miles: float, grid_cells: int, n_queries: int, affordable: int) -> int:
     """Cells to search. Past 25 miles Yelp needs 7 cells; when that is more first
     pages than the calls available and the user did not ask for a wider grid,
     one 25-mile search around the center is used instead."""
@@ -59,7 +61,7 @@ def choose_grid(radius_miles, grid_cells, n_queries, affordable):
     return cells
 
 
-def slim(biz):
+def slim(biz: dict[str, Any]) -> dict[str, Any]:
     """Only the fields parse_business reads, so cached results stay small."""
     loc = biz.get("location") or {}
     return {
@@ -74,7 +76,7 @@ def slim(biz):
     }
 
 
-def parse_business(biz, query=""):
+def parse_business(biz: dict[str, Any], query: str = "") -> Lead:
     coords = biz.get("coordinates") or {}
     loc = biz.get("location") or {}
     cats = [c for c in biz.get("categories") or [] if c.get("alias")]
@@ -99,17 +101,19 @@ def parse_business(biz, query=""):
     )
 
 
-def _resets(budget):
+def _resets(budget: usage.DailyBudget) -> str:
     reset = budget.reset_text()
-    return f"; they come back at {reset}" if reset else ""
+    return f"; all are back by {reset}" if reset else ""
 
 
-def used_up(budget):
-    return f"this site's {budget.limit} Yelp calls for today are used up{_resets(budget)}"
+def used_up(budget: usage.DailyBudget) -> str:
+    return (f"this site's {budget.limit} Yelp calls for the last 24 hours are used up"
+            f"{_resets(budget)}")
 
 
-def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=None,
-           progress=None):
+def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], api_key: str,
+           grid_cells: int = 1, max_requests: int | None = None,
+           progress: Callable[[str], None] | None = None) -> tuple[list[Lead], int, list[str]]:
     """Return (leads, requests_made, warnings). Put the most important queries first.
 
     A query that names an entry of config.YELP_SEARCHES searches those Yelp
@@ -128,10 +132,10 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
     if left == 0:
         limit_note = used_up(budget)
     elif left <= cap:                 # the daily limit, not the request cap, is what binds
-        limit_note = (f"this site may make {budget.limit} Yelp calls a day and {left} were left "
-                      f"today{_resets(budget)}")
+        limit_note = (f"this site may make {budget.limit} Yelp calls in any 24 hours and {left} "
+                      f"were left{_resets(budget)}")
     elif len(queries) * len(search_grid(0, 0, radius_miles, grid_for(radius_miles, grid_cells))) > cap:
-        limit_note = (f"the request cap; up to {left} of today's {budget.limit} Yelp calls are "
+        limit_note = (f"the request cap; up to {left} of the {budget.limit} Yelp calls for 24 hours are "
                       "left if you raise it")
     cap = min(cap, left)
     n_cells = choose_grid(radius_miles, grid_cells, len(queries), cap)
@@ -141,7 +145,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
     warnings = []
     if progress:
         progress(f"Yelp: {len(queries)} searches x {n_cells} area(s), up to {cap} calls "
-                 f"({left} of today's {budget.limit} left)")
+                 f"({left} of {budget.limit} left in the last 24 hours)")
     if n_cells < grid_for(radius_miles, grid_cells) and cap:
         warnings.append(f"Yelp searched the {MAX_RADIUS_MILES:.0f} miles around the center (the "
                         f"most one Yelp search reaches). Covering all {radius_miles:g} miles "
@@ -152,7 +156,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
 
     cache = usage.SharedCache()
 
-    def take_call():
+    def take_call() -> str | None:
         if cache.down:
             return ("Yelp stopped because saved Yelp results could not be read from the "
                     "database, and searching again would spend calls on them")
@@ -162,10 +166,10 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
             return f"Yelp is paused because {budget.problem}"
         return used_up(budget)
 
-    def fetch_page(query, cell, offset):
+    def fetch_page(query: str, cell: Cell, offset: int | None) -> tuple[list[Any], int | None]:
         clat, clon, crad = cell
         offset = offset or 0
-        params = {"latitude": round(clat, 6), "longitude": round(clon, 6),
+        params: dict[str, Any] = {"latitude": round(clat, 6), "longitude": round(clon, 6),
                   "radius": int(min(crad * METERS_PER_MILE, MAX_RADIUS_M)),
                   "limit": min(PAGE_SIZE, MAX_RESULTS - offset), "offset": offset}
         if query in config.YELP_SEARCHES:
@@ -173,7 +177,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
                           sort_by="review_count")
         else:
             params["term"] = query
-        got: CaseInsensitiveDict = CaseInsensitiveDict()       # header names may arrive in any case
+        got: CaseInsensitiveDict[str] = CaseInsensitiveDict()       # header names may arrive in any case
         try:
             data = request_json("GET", SEARCH_URL, params=params, headers=headers,
                                 use_cache=False, no_retry=(QUOTA_ERROR,), response_headers=got,
@@ -191,7 +195,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
         more = len(items) == params["limit"] and nxt < min(data.get("total") or 0, MAX_RESULTS)
         return [slim(b) for b in items], (nxt if more else None)
 
-    def stop_check():
+    def stop_check() -> str | None:
         stop = config.stop_reason("yelp")
         if stop:
             return stop
@@ -220,9 +224,9 @@ _GOOGLE_KEY = re.compile(r"^AIza[0-9A-Za-z_\-]{30,}$")
 _YELP_KEY = re.compile(r"^[A-Za-z0-9_\-]{128}$")
 
 
-def looks_like_google_key(key):
+def looks_like_google_key(key: str | None) -> bool:
     return bool(_GOOGLE_KEY.match((key or "").strip()))
 
 
-def looks_like_yelp_key(key):
+def looks_like_yelp_key(key: str | None) -> bool:
     return bool(_YELP_KEY.match((key or "").strip()))

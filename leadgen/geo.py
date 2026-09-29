@@ -44,7 +44,7 @@ class GeocodeError(ValueError):
     pass
 
 
-def _place_key(text):
+def _place_key(text: str) -> str:
     """'876 Fortune Rd,  Salt Lake City, UT' -> '876 fortune rd salt lake city ut'."""
     return " ".join(re.sub(r"[,.]", " ", text.lower()).split())
 
@@ -52,7 +52,7 @@ def _place_key(text):
 _KNOWN = {_place_key(k): v for k, v in KNOWN_PLACES.items()}
 
 
-def haversine_miles(lat1, lon1, lat2, lon2):
+def haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     p1, p2 = math.radians(lat1), math.radians(lat2)
     dp = p2 - p1
     dl = math.radians(lon2 - lon1)
@@ -60,7 +60,7 @@ def haversine_miles(lat1, lon1, lat2, lon2):
     return 2 * EARTH_RADIUS_MILES * math.asin(math.sqrt(a))
 
 
-def offset_point(lat, lon, distance_miles, bearing_deg):
+def offset_point(lat: float, lon: float, distance_miles: float, bearing_deg: float) -> tuple[float, float]:
     """Point reached by travelling distance_miles from (lat, lon) on a bearing."""
     d = distance_miles / EARTH_RADIUS_MILES
     b = math.radians(bearing_deg)
@@ -71,7 +71,7 @@ def offset_point(lat, lon, distance_miles, bearing_deg):
     return math.degrees(p2), math.degrees(l2)
 
 
-def search_grid(lat, lon, radius_miles, cells):
+def search_grid(lat: float, lon: float, radius_miles: float, cells: int) -> list[tuple[float, float, float]]:
     """Cover a big circle with smaller overlapping circles.
 
     Google returns at most 60 results per query, so splitting a 30-mile area
@@ -95,7 +95,7 @@ _LATLON = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$")
 _ZIP = re.compile(r"^\s*(\d{5})(?:-\d{4})?\s*$")
 
 
-def geocode(location, api_key=None):
+def geocode(location: str, api_key: str | None = None) -> tuple[float, float, str]:
     """Return (lat, lon, label) for a ZIP code, city, address, or "lat,lon"."""
     location = (location or "").strip() or config.DEFAULT_LOCATION
     m = _LATLON.match(location)

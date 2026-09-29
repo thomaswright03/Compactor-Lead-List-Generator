@@ -7,16 +7,18 @@ latest call's outcome is the lead's current one (the page's call tabs).
 import re
 import time
 import uuid
+from typing import Any
 
 from . import store
 from .localtime import date_time_text
+from .models import Lead, Undo
 
 OUTCOMES = ("Interested", "Follow Up", "Not Interested", "Not Qualified", "No Contact",
             "Bad Lead")
 MAX_NOTES = 5000
 
 
-def log_call(uid, outcome, notes, call_id=None):
+def log_call(uid: str, outcome: str, notes: str, call_id: str | None = None) -> dict[str, Any]:
     """Record a call; returns it. Raises ValueError for a bad outcome or unknown lead.
 
     call_id: the page's own id for this call, so a request sent twice (a retry on a
@@ -50,7 +52,7 @@ def log_call(uid, outcome, notes, call_id=None):
 UNDO_SECONDS = 5 * 60           # how long after saving a call it can still be undone
 
 
-def undo(call_id):
+def undo(call_id: str) -> bool:
     """Delete a call saved in the last UNDO_SECONDS. False when it is too late (or unknown)."""
     now = time.time()
     with store.connect() as db, db.transaction():
@@ -61,7 +63,7 @@ def undo(call_id):
     return row is not None
 
 
-def changed_since(ts):
+def changed_since(ts: float) -> set[str]:
     """The uids with a call saved or undone after ts (epoch seconds)."""
     with store.connect() as db:
         rows = db.all("SELECT uid FROM calls WHERE at > ? UNION SELECT uid FROM call_undos "
@@ -69,7 +71,7 @@ def changed_since(ts):
     return {uid for (uid,) in rows}
 
 
-def history(uid):
+def history(uid: str) -> list[dict[str, Any]]:
     """Every call to a lead, newest first."""
     with store.connect() as db:
         rows = db.all("SELECT at, outcome, notes FROM calls WHERE uid = ? ORDER BY at DESC",
@@ -78,7 +80,7 @@ def history(uid):
             for at, outcome, notes in rows]
 
 
-def pending_undos():
+def pending_undos() -> dict[str, Undo]:
     """{uid: {"id", "until"}}: each business's latest call that can still be undone."""
     now = time.time()
     with store.connect() as db:
@@ -87,7 +89,7 @@ def pending_undos():
     return {uid: {"id": call_id, "until": at + UNDO_SECONDS} for call_id, uid, at in rows}
 
 
-def apply(leads):
+def apply(leads: list[Lead]) -> list[Lead]:
     """Set each lead's latest call and call count.
 
     Raises store.Unavailable or a database error when the calls can't be read:
@@ -97,13 +99,20 @@ def apply(leads):
         rows = store.rows_for(db, "SELECT uid, at, outcome, notes FROM calls", "uid",
                               dict.fromkeys(lead.uid for lead in leads if lead.uid),
                               order="ORDER BY at")
-    latest: dict[str, tuple] = {}
+    latest: dict[str, tuple[float, str, str]] = {}
+    noted: dict[str, tuple[float, str]] = {}              # the latest call with notes
     counts: dict[str, int] = {}
     for uid, at, outcome, notes in rows:
         latest[uid] = (at, outcome, notes)
+        if notes:
+            noted[uid] = (at, notes)
         counts[uid] = counts.get(uid, 0) + 1
     for lead in leads:
         at, outcome, notes = latest.get(lead.uid, (None, "", ""))
         lead.last_call_at, lead.call_outcome, lead.call_notes = at, outcome, notes
         lead.call_count = counts.get(lead.uid, 0)
+        earlier_at, earlier = noted.get(lead.uid, (None, ""))
+        if notes or not earlier:
+            earlier_at, earlier = None, ""
+        lead.earlier_notes, lead.earlier_notes_at = earlier, earlier_at
     return leads

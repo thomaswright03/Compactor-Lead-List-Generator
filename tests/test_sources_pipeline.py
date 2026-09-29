@@ -291,3 +291,23 @@ def test_osm_keeps_live_places_with_history_and_3m():
     depot = {"type": "way", "id": 3, "bounds": {"minlat": 40.7, "minlon": -111.9, "maxlat": 40.701, "maxlon": -111.899},
              "tags": {"name": "UTA Depot Warehouse", "building": "warehouse", "railway": "yard"}}
     assert osm.parse_element(was) and osm.parse_element(three_m) and osm.parse_element(depot)
+
+
+@pytest.mark.parametrize("extra", [{}, {"limit": 1}, {"include_closed": True},
+                                   {"keywords": ["baler"], "only_keyword_matches": True}])
+def test_search_numbers_add_up(monkeypatch, extra):
+    """The search history's Details read as a funnel whose numbers add up."""
+    from leadgen.web.finding import plain_details
+    _fake_sources(monkeypatch)
+    res = pipeline.run(SearchParams(source="both", api_key="KEY", min_score=20, **extra))
+    s = res.stats
+    assert s["results in radius"] - s["duplicates merged"] == s["after dedupe"]
+    assert (s["after dedupe"] - s["closed"] - s["below min score"] - s["not matching keywords"]
+            - s["over limit"]) == s["leads kept"]
+    assert sum(s[f"tier {t}"] for t in "ABCD") == s["leads kept"]
+    assert s["leads kept"] == sum(l.business_status != "CLOSED_PERMANENTLY" for l in res.leads)
+    assert s["closed"] == 1 and s["min score"] == 20
+    labels = [label for label, _ in plain_details(s)]
+    assert labels.index("Listings within the radius") < labels.index("Businesses after merging duplicates") \
+        < labels.index("Left out: score below 20") < labels.index("Leads kept") < labels.index("Tier D leads")
+    assert labels[0].startswith("Businesses from") and labels[-1] == "Took"

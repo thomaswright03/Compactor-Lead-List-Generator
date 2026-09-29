@@ -11,6 +11,8 @@ import queue
 import re
 import threading
 import time
+from collections.abc import Callable, Sequence
+from typing import Any
 
 from .. import config
 from ..geo import METERS_PER_MILE
@@ -41,7 +43,7 @@ MAX_BUILDING_SQFT = 3_000_000   # bigger bounding boxes are campuses/resorts, no
 MIN_SECONDS_LEFT = 5
 
 
-def _tag_filters():
+def _tag_filters() -> tuple[dict[str, set[str]], set[str]]:
     """Group category tags into Overpass filters: {key: [values]} and bare keys."""
     by_key: dict[str, set[str]] = {}
     any_value: set[str] = set()
@@ -58,12 +60,13 @@ def _tag_filters():
     return by_key, any_value
 
 
-def _ql_string(text):
+def _ql_string(text: str) -> str:
     return (text.replace("\\", "\\\\").replace('"', '\\"')
             .replace("\n", "\\n").replace("\t", "\\t"))
 
 
-def build_query(lat, lon, radius_miles, keywords=(), timeout=None):
+def build_query(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] = (),
+                timeout: int | None = None) -> str:
     r = int(radius_miles * METERS_PER_MILE)
     around = f"(around:{r},{lat:.6f},{lon:.6f})"
     by_key, any_value = _tag_filters()
@@ -87,7 +90,7 @@ def build_query(lat, lon, radius_miles, keywords=(), timeout=None):
             "(way.all; relation.all;)->.w;\n.w out tags bb;")
 
 
-def _footprint_sqft(bounds):
+def _footprint_sqft(bounds: dict[str, float] | None) -> int | None:
     if not bounds:
         return None
     dlat = (bounds["maxlat"] - bounds["minlat"]) * 111320
@@ -97,7 +100,7 @@ def _footprint_sqft(bounds):
     return int(round(area, -2)) if area > 0 else None
 
 
-def _pretty(tag_value):
+def _pretty(tag_value: str) -> str:
     return tag_value.replace("_", " ").replace(";", ", ").title()
 
 
@@ -105,19 +108,19 @@ _LIFECYCLE = ("disused:", "abandoned:", "was:", "demolished:")
 _USE_KEYS = [k for k in CATEGORY_KEYS if k != "building"]
 
 
-def _only_former_use(tags):
+def _only_former_use(tags: dict[str, str]) -> bool:
     """True when a lifecycle prefix (disused:shop=...) records the only use left."""
     former = any(k.startswith(_LIFECYCLE) and k.split(":", 1)[1] in _USE_KEYS for k in tags)
     return former and not any(k in tags for k in _USE_KEYS)
 
 
-def _fetched_by_tag(tags):
+def _fetched_by_tag(tags: dict[str, str]) -> bool:
     by_key, any_value = _tag_filters()
     return (any(v in values for k, values in by_key.items() for v in tags.get(k, "").split(";"))
             or any(k in tags for k in any_value))
 
 
-def parse_element(el):
+def parse_element(el: dict[str, Any]) -> Lead | None:
     tags = el.get("tags", {})
     name = tags.get("name", "").strip()
     # Skip unnamed features and per-building labels like "B" or "12" inside a
@@ -175,7 +178,8 @@ def parse_element(el):
     )
 
 
-def search(lat, lon, radius_miles, keywords=(), progress=None):
+def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] = (),
+           progress: Callable[[str], None] | None = None) -> tuple[list[Lead], list[str]]:
     """Return (leads, warnings).
 
     Every mirror together gets config.OVERPASS_DEADLINE_SECONDS: when the map
@@ -188,10 +192,10 @@ def search(lat, lon, radius_miles, keywords=(), progress=None):
     query = build_query(lat, lon, radius_miles, keywords)
     deadline = time.monotonic() + config.OVERPASS_DEADLINE_SECONDS
     endpoints = list(config.OVERPASS_ENDPOINTS)
-    answers: queue.Queue = queue.Queue()
+    answers: queue.Queue[tuple[str, Any, BaseException | None]] = queue.Queue()
     errors, asked, waiting, next_at = [], 0, 0, 0.0
 
-    def ask(endpoint, left):
+    def ask(endpoint: str, left: float) -> None:
         try:
             # Connecting gets at most 10 s; the answer may take the rest of the time.
             data = request_json("POST", endpoint, data={"data": query},

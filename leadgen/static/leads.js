@@ -81,10 +81,11 @@ function moveCount(from, to) {
 }
 function renderAll() { renderLeads(); renderCalls(); renderRecent(); counts(); }
 function counts() {
-  const show = (id, text) => { $(id).textContent = text; $(id).hidden = !S.counts; };
+  // The number, then its word (phones show just the number; the link's title says what it counts).
+  const show = (id, n, word) => { $(id).replaceChildren(n.toLocaleString(), el("span", ` ${word}`, "cw")); $(id).hidden = !S.counts; };
   if (!S.counts) return;
-  show("n-leads", `${S.counts.unchecked.toLocaleString()} to check`);
-  show("n-calls", `${S.counts.called.toLocaleString()} called`);
+  show("n-leads", S.counts.unchecked, "to check");
+  show("n-calls", S.counts.called, "called");
 }
 
 // Competitors and Arco's own listing have their own tab: they are flagged, never asked Yes / No.
@@ -112,7 +113,14 @@ function parseReason(r) {
   return { pts: parseInt(m[1], 10), title: title.charAt(0).toUpperCase() + title.slice(1), note };
 }
 function whyCell(reasons) {
-  const td = el("td");
+  const td = el("td", undefined, "c-why");
+  // On a phone the reasons sit behind this toggle (each lead is a card there); wider screens show them.
+  const toggle = button("Why this score", "link why-toggle", () => {
+    td.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", td.classList.contains("open"));
+  });
+  toggle.setAttribute("aria-expanded", "false");
+  td.append(toggle);
   const list = el("div", undefined, "reasons");
   const notes = [];
   for (const r of reasons) {
@@ -237,7 +245,7 @@ setInterval(() => {
 }, 1000);
 
 function markCell(lead, withCall) {
-  const td = el("td");
+  const td = el("td", undefined, "c-mark");
   if (!lead.prospect) {
     td.append(el("div", lead.lead_type === "Competitor" ? "Competitor: not a prospect" : "Arco's own listing", "sub not-asked"));
     return td;
@@ -276,8 +284,10 @@ function leadRow(l, withCall) {
   tr.className = l.tier + (l.lead_type === "Competitor" ? " competitor" : "")
     + (pinnedNow(l.key) && !inTab(l) ? " just-marked" : "");
   tr.append(markCell(l, withCall));
-  tr.append(el("td", `${l.score} (${l.tier})`, "score nowrap"));
-  const name = el("td");
+  const score = el("td", `${l.score} (${l.tier})`, "score nowrap");
+  score.title = `Score ${l.score} of 100, tier ${l.tier}`;
+  tr.append(score);
+  const name = el("td", undefined, "c-name");
   name.append(el("strong", l.name));
   if (l.category) name.append(el("div", l.category, "sub"));
   if (l.lead_type !== "Prospect") name.append(el("div", l.lead_type, "sub"));
@@ -285,7 +295,10 @@ function leadRow(l, withCall) {
   tr.append(name);
   const contact = el("td", undefined, "contact");
   const addr = el("div", [l.address, l.city, l.zip].filter(Boolean).join(", "));
-  if (l.map_url) { addr.append(" "); addr.append(link(l.map_url, "map")); }
+  if (l.map_url) {
+    const map = link(l.map_url, "map"); map.classList.add("map"); map.setAttribute("aria-label", `${l.name} on a map`);
+    addr.append(" ", map);
+  }
   contact.append(addr);
   if (l.phone) { const p = el("div"); p.append(phoneLink(l.phone)); contact.append(p); }
   if (l.website) {
@@ -293,7 +306,9 @@ function leadRow(l, withCall) {
     a.classList.add("site"); a.title = l.website; contact.append(a);
   }
   tr.append(contact);
-  tr.append(el("td", l.distance ?? "", "nowrap"));
+  const miles = el("td", undefined, "c-miles nowrap");
+  if (l.distance != null) { miles.append(String(l.distance)); miles.append(el("span", " mi", "unit")); }
+  tr.append(miles);
   tr.append(whyCell(l.reasons));
   return tr;
 }
@@ -355,6 +370,8 @@ function renderLeads() {
   } else {
     wrap.replaceChildren(leadTable(S.leads, S.leadView === "yes"));
   }
+  $("sort-pick").value = `${S.sort}:${S.dir}`;
+  if (!$("sort-pick").value) $("sort-pick").value = "score:desc";
   const more = $("leads-more"), left = S.total - S.leads.length;
   more.hidden = left <= 0;
   more.disabled = S.viewLoading;
@@ -380,6 +397,11 @@ $("filter").addEventListener("input", () => {
   S.q = $("filter").value; S.limit = 300; unpinAll();
   clearTimeout(filterTimer);
   filterTimer = setTimeout(changeView, 250);       // ask once typing pauses
+});
+// Phones sort with this list (the table's column headers are hidden there).
+$("sort-pick").addEventListener("change", () => {
+  [S.sort, S.dir] = $("sort-pick").value.split(":");
+  S.limit = 300; unpinAll(); changeView();
 });
 $("tier").addEventListener("change", () => { S.tier = $("tier").value; S.limit = 300; unpinAll(); changeView(); });
 $("call-hint-go").addEventListener("click", () => pickTab("yes"));

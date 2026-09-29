@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 
-def load_dotenv(path=".env"):
+def load_dotenv(path: str = ".env") -> None:
     """Load KEY=VALUE lines from .env without overriding real environment variables."""
     try:
         lines = Path(path).read_text().splitlines()

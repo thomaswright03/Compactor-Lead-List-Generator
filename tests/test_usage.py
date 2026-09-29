@@ -21,8 +21,8 @@ def test_limit_counts_across_searches_and_no_cap_overrides_it(monkeypatch):
     _, n1, _ = _search([f"a{i}" for i in range(30)])
     _, n2, w2 = _search([f"b{i}" for i in range(30)], max_requests=5000)
     assert (n1, n2, len(calls)) == (30, 20, 50)
-    assert any("Stopped after 20 Yelp calls (this site may make 50 Yelp calls a day and 20 "
-               "were left today" in w for w in w2)
+    assert any("Stopped after 20 Yelp calls (this site may make 50 Yelp calls in any 24 hours "
+               "and 20 were left" in w for w in w2)
     assert usage.yelp_budget().left() == 0
     # Used up: cached searches still come back, new ones make no calls.
     leads, n3, w3 = _search(["a0", "c0"])
@@ -77,7 +77,7 @@ def test_page_shows_yelp_calls_left(monkeypatch):
     for _ in range(8):
         budget.take()
     page = client.get("/").data.decode()
-    assert "Yelp: 42 of today&#39;s 50 calls left (resets at " in page
+    assert "Yelp: 42 of 50 calls left in the last 24 hours; all back by " in page
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("RENDER", "true")
     assert "Yelp is paused" in client.get("/").data.decode()
@@ -120,7 +120,7 @@ def test_calls_come_back_24_hours_after_they_were_made(monkeypatch):
     assert budget.left() == 50 and budget.reset_text() is None
     for _ in range(3):
         assert budget.take()
-    assert budget.left() == 47 and budget.reset_text() == "12:21 PM Utah time"
+    assert budget.left() == 47 and budget.reset_text() == "12:21 PM"
     clock["now"] = dt.datetime(2026, 9, 30, 6, 0, tzinfo=dt.UTC)     # past midnight UTC
     assert budget.left() == 47                     # still counted: not 24 hours yet
     for _ in range(47):
@@ -146,14 +146,14 @@ def test_page_shows_when_calls_come_back(monkeypatch):
     for _ in range(3):
         usage.yelp_budget().take()
     page = web.create_app(password="").test_client().get("/").data.decode()
-    assert "Yelp: 47 of today&#39;s 50 calls left (resets at 12:21 PM Utah time)</div>" in page
+    assert "Yelp: 47 of 50 calls left in the last 24 hours; all back by 12:21 PM</div>" in page
 
 
 def test_small_request_cap_advice_stays_within_the_daily_limit(monkeypatch):
     _fake_yelp(monkeypatch, total=10)
     _, n, warnings = _search([f"a{i}" for i in range(19)], max_requests=10)
     assert n == 10
-    assert any("the request cap; up to 50 of today's 50 Yelp calls are left" in w for w in warnings)
+    assert any("the request cap; up to 50 of the 50 Yelp calls for 24 hours are left" in w for w in warnings)
     assert not any("--max-requests" in w for w in warnings)
 
 

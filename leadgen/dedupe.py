@@ -1,11 +1,14 @@
 """Merge duplicate listings (same business found by several queries or sources)."""
 
 import re
+from collections.abc import Callable
 from dataclasses import asdict
 from difflib import SequenceMatcher
 from functools import lru_cache
+from typing import Any
 
 from .geo import haversine_miles
+from .models import Lead
 from .scoring import is_non_prospect_tag, normalize
 
 _STOPWORDS = {"the", "inc", "llc", "co", "corp", "corporation", "company", "ltd", "store",
@@ -26,18 +29,18 @@ PAID_SOURCES = ("google", "yelp")
 
 
 @lru_cache(maxsize=65536)
-def clean_name(name):
+def clean_name(name: str) -> str:
     tokens = [t for t in normalize(name).split() if t not in _STOPWORDS and not t.isdigit()]
     return " ".join(tokens)
 
 
 @lru_cache(maxsize=65536)
-def _numbers(name):
+def _numbers(name: str) -> frozenset[str]:
     return frozenset(t for t in normalize(name).split() if t.isdigit())
 
 
 @lru_cache(maxsize=65536)
-def phone_numbers(phone):
+def phone_numbers(phone: str) -> frozenset[str]:
     """Every 10-digit number in a tag like '+1 801-555-0100;+1 801-555-0199 ext. 2'."""
     nums = set()
     for part in re.split(r"[;,/]|\bor\b", phone or "", flags=re.IGNORECASE):
@@ -49,7 +52,7 @@ def phone_numbers(phone):
     return frozenset(nums)
 
 
-def names_match(a, b):
+def names_match(a: str, b: str) -> bool:
     ca, cb = clean_name(a), clean_name(b)
     if not ca or not cb:
         return False
@@ -66,7 +69,7 @@ def names_match(a, b):
             and SequenceMatcher(None, ca, cb).ratio() >= 0.85)
 
 
-def is_duplicate(a, b):
+def is_duplicate(a: Lead, b: Lead) -> bool:
     if a.source == b.source and a.source_id == b.source_id:
         return True
     dist = haversine_miles(a.lat, a.lon, b.lat, b.lon)
@@ -93,7 +96,7 @@ def is_duplicate(a, b):
     return dist <= 0.05 or names_match(a.name, b.name)
 
 
-def _resolve_status(group):
+def _resolve_status(group: list[Lead]) -> str:
     """Google's word wins, then Yelp's: closed only if none of that source's listings is open."""
     for source in PAID_SOURCES:
         said = {l.business_status for l in group if l.source == source and l.business_status}
@@ -103,16 +106,16 @@ def _resolve_status(group):
     return next((l.business_status for l in group if l.business_status), "")
 
 
-def _source_rank(lead):
+def _source_rank(lead: Lead) -> int:
     return PAID_SOURCES.index(lead.source) if lead.source in PAID_SOURCES else len(PAID_SOURCES)
 
 
-def snapshot(lead):
+def snapshot(lead: Lead) -> list[dict[str, Any]]:
     """The listing as its source sent it (the parts a merged lead is made of)."""
     return lead.parts or [{k: v for k, v in asdict(lead).items() if k != "parts"}]
 
 
-def _merge(group):
+def _merge(group: list[Lead]) -> Lead:
     parts = [p for lead in group for p in snapshot(lead)]
     # Open listings first, then Google, then Yelp records (phone/website coverage),
     # then the richest.
@@ -147,7 +150,7 @@ def _merge(group):
     return base
 
 
-def _pair_rank(a, b):
+def _pair_rank(a: Lead, b: Lead) -> tuple[int, float, float]:
     """Merge order: strongest evidence, then the main (most reviewed) listing, then closest."""
     strength = (0 if clean_name(a.name) == clean_name(b.name)
                 else 1 if phone_numbers(a.phone) & phone_numbers(b.phone) else 2)
@@ -156,12 +159,13 @@ def _pair_rank(a, b):
             haversine_miles(a.lat, a.lon, b.lat, b.lon))
 
 
-def _same_listing_groups(leads, union, find):
+def _same_listing_groups(leads: list[Lead], union: Callable[[int, int], None],
+                         find: Callable[[int], int]) -> None:
     """Pre-merge big groups of copies of one listing (same cleaned name, phones and
     numbers, all within SAME_NAME_MILES of each other): every pair of them is a
     duplicate, so they are one group, found without comparing every pair (a chain
     with hundreds of copies would otherwise take seconds)."""
-    by_sig: dict[tuple, list[int]] = {}
+    by_sig: dict[tuple[str, frozenset[str], frozenset[str]], list[int]] = {}
     for i, lead in enumerate(leads):
         name = clean_name(lead.name)
         if name:
@@ -197,7 +201,7 @@ _PREMERGE_MIN = 8
 _PREMERGE_MILES = SAME_NAME_MILES * 0.9
 
 
-def dedupe(leads):
+def dedupe(leads: list[Lead]) -> list[Lead]:
     """Return merged leads.
 
     Candidate pairs are merged strongest first, and two groups merge only when
@@ -209,18 +213,18 @@ def dedupe(leads):
     parent = list(range(len(leads)))
     members = {i: [i] for i in range(len(leads))}
 
-    def find(i):
+    def find(i: int) -> int:
         while parent[i] != i:
             parent[i] = parent[parent[i]]
             i = parent[i]
         return i
 
-    def union(ri, rj):
+    def union(ri: int, rj: int) -> None:
         parent[rj] = ri
         members[ri] += members.pop(rj)
 
     # Same record from the same source (found by several queries) is always one place.
-    seen: dict[tuple, int] = {}
+    seen: dict[tuple[str, str], int] = {}
     for i, lead in enumerate(leads):
         key = (lead.source, lead.source_id)
         if key in seen:
@@ -231,7 +235,7 @@ def dedupe(leads):
             seen[key] = i
     _same_listing_groups(leads, union, find)
 
-    buckets: dict[tuple, list[int]] = {}
+    buckets: dict[tuple[float, float], list[int]] = {}
     for i, lead in enumerate(leads):
         buckets.setdefault((round(lead.lat, 2), round(lead.lon, 2)), []).append(i)
 
@@ -269,14 +273,14 @@ def dedupe(leads):
             rejected.add(state)
             links.append((i, j))
 
-    groups: dict[int, list] = {}
+    groups: dict[int, list[Lead]] = {}
     for i in range(len(leads)):
         groups.setdefault(find(i), []).append(leads[i])
 
     # A copy linked to a listing from a more trusted source (Google over Yelp over
     # the map) that reports it permanently closed is closed too, unless it is also
     # linked to one such listing that reports it open.
-    def trust(group):
+    def trust(group: list[Lead]) -> int:
         return min(_source_rank(l) for l in group)
 
     closed, still_open = set(), set()

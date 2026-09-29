@@ -10,15 +10,34 @@ also cache unfinished searches, and a re-run continues where they stopped.
 
 import json
 import time
+from collections.abc import Callable, Sequence
+from typing import Any, Protocol
 
 from ..http import HttpError, cache_get, cache_put
+from ..models import Lead
 from . import SourceError
 
 
-def run_searches(source, queries, cells, fetch_page, parse, *, max_pages, max_requests,
-                 cache_version, progress=None, token_delay=0.0, key_errors=(),
-                 cache_ttl=None, stop_check=None, cache_key=None, cache_partial=False,
-                 cache=None, cap_reason=None):
+class Cache(Protocol):
+    """Where a source keeps its searches (usage.DbCache; the default is the file cache)."""
+
+    def get(self, key: str, ttl: float | None = None) -> Any: ...
+
+    def put(self, key: str, value: object, ttl: float | None = None) -> None: ...
+
+
+Cell = tuple[float, float, float]           # a search circle: lat, lon, radius (miles)
+
+
+def run_searches(source: str, queries: Sequence[str], cells: Sequence[Cell],
+                 fetch_page: Callable[[str, Cell, Any], tuple[list[Any], Any]],
+                 parse: Callable[[Any, str], Lead | None], *, max_pages: int, max_requests: int,
+                 cache_version: object, progress: Callable[[str], None] | None = None,
+                 token_delay: float = 0.0, key_errors: Sequence[str] = (),
+                 cache_ttl: float | None = None, stop_check: Callable[[], str | None] | None = None,
+                 cache_key: Callable[[str, Cell], str] | None = None, cache_partial: bool = False,
+                 cache: Cache | None = None,
+                 cap_reason: str | None = None) -> tuple[list[Lead], int, list[str]]:
     """Return (leads, requests_made, warnings).
 
     fetch_page(query, cell, token) -> (items, next_token); token is None for page 1.
@@ -30,21 +49,25 @@ def run_searches(source, queries, cells, fetch_page, parse, *, max_pages, max_re
     cache: an object with get(key, ttl) and put(key, value, ttl) (default: the file cache).
     cap_reason: why max_requests is what it is, when raising it would not help.
     """
-    leads, warnings, requests_made = [], [], 0
-    get = cache.get if cache else cache_get
-    put = (lambda k, v: cache.put(k, v, cache_ttl)) if cache else cache_put
+    leads: list[Lead] = []
+    warnings: list[str] = []
+    requests_made = 0
+    get: Callable[[str, float | None], Any] = cache.get if cache else cache_get
+    put: Callable[[str, object], None] = ((lambda k, v: cache.put(k, v, cache_ttl)) if cache
+                                          else cache_put)
 
-    def keep(items, query):
+    def keep(items: list[Any], query: str) -> list[Lead]:
         return [lead for lead in (parse(i, query) for i in items)
                 if lead is not None and lead.lat is not None and lead.lon is not None]
 
-    chains, cached_q = [], set()
+    chains: list[dict[str, Any]] = []
+    cached_q: set[str] = set()
     for cell in cells:
         for q in queries:
             key = (cache_key(q, cell) if cache_key
-                   else json.dumps([cache_version, q] + [round(x, 5) for x in cell]))
+                   else json.dumps([cache_version, q, *(round(x, 5) for x in cell)]))
             cached = get(key, cache_ttl)
-            chain = {"q": q, "cell": cell, "key": key, "items": [], "token": None,
+            chain: dict[str, Any] = {"q": q, "cell": cell, "key": key, "items": [], "token": None,
                      "token_at": 0.0, "pages": 0, "failed": False, "fetched": False}
             if isinstance(cached, list):          # a complete search
                 cached_q.add(q)

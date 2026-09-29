@@ -77,13 +77,31 @@ The sidebar has four pages, a Light / Dark / System colour switch (System
 follows the computer's setting; the choice is remembered in each browser), and
 every page carries the Wright AI Solutions copyright. The browser tab names the
 page ("Leads · Arco Compactor Lead Finder") and shows the Lead Finder icon.
-On phones and tablets every button and link is at least 44 px each way.
+On phones and tablets every button and link is at least 44 px each way. On a
+phone the navigation is one short bar at the top (the page counts show just the
+number), with the Yelp count, the colour switch and Log out under **Menu**; the
+browser's own bar takes the sidebar's colour, light or dark. Times are written
+one way everywhere, in Utah time: "Sep 29, 2026, 4:43 PM", or "4:43 PM".
 
 - **Find leads**: the search form (extra settings, each explained in plain
   words, under **More options**), a step-by-step progress bar while it runs,
-  and the search history with each search's counts under **Details** (in plain
-  words: businesses found, after merging duplicates, within the radius, how long
-  it took). **Find Leads works once per calendar day** (Utah time), for the whole site:
+  and the search history with each search's counts under **Details**, in plain
+  words and in funnel order so the numbers add up: businesses found per source,
+  listings within the radius, duplicates merged, businesses after merging, then
+  what was left out (closed for good, a score below the minimum, e.g. "Left out:
+  score below 20", not matching the search words, over a lead limit), leads kept,
+  competitors among them, the leads per tier A to D, then the paid lookups and how
+  long it took. The form checks itself before anything runs: **Search around** must
+  not be empty (it is never quietly replaced by Arco's address), and the search
+  words are limited to 20, each up to 60 characters (the hint says so). When
+  a search can't start, whether the browser catches it or the server refuses
+  (a bad value, today's search already run, searching paused, the database
+  down), the reason shows in red under **Find leads** and next to the field it is
+  about, and stays until the form is edited. The note beside the button (how the
+  day stands, e.g. "Today's search ran at 4:43 PM") is plain grey text.
+  When a search finishes, the page gets only the counts it shows ("N new leads,
+  M saved leads in all"), not the saved list, so finishing stays quick however
+  long the list grows. **Find Leads works once per calendar day** (Utah time), for the whole site:
   after today's search it is off until midnight. Pressing **Find leads** first
   shows a summary (location, miles, search words, sources) and says this uses
   today's only search: **Start search** runs it, **Go back and edit** (or Escape)
@@ -128,6 +146,11 @@ On phones and tablets every button and link is at least 44 px each way.
   (`GET /leads?since=…`, which also sends the new tab counts), so it stays small
   however long the list grows.
   Tabs other than Has baler or compactor say where calls are logged.
+  Below 700 px wide (phones) each lead is a card: the business name with its
+  score, right above its **Yes** / **No** buttons (and **Just called** on the Has
+  baler or compactor tab), then the address with a map link, the tap-to-call
+  phone and the miles, with the reasons for the score behind **Why this score**.
+  Nothing scrolls sideways; a **Sort** list replaces the column headings.
 - **Calls**: in the Has baler or compactor tab, **Just called** opens a
   Conversation Summary box and the result of the call (Interested, Follow Up,
   Not Interested, Not Qualified, No Contact or Bad Lead). Every call is kept
@@ -136,9 +159,13 @@ On phones and tablets every button and link is at least 44 px each way.
   even a reload) keeps them as a draft for that business in this browser until
   they are saved. A call sent twice (a retry on a flaky connection) is recorded
   once: the page gives each call its own id. The Calls page opens on **All
-  calls**, newest first, so a call just saved is in view; then there is a tab per
+  called businesses**: one row per business, latest call first, so a call just
+  saved is in view (every call is under **History**); then there is a tab per
   result, where a business sits under its latest call's result (`#calls?tab=Follow Up`
-  in the address opens that tab). With no calls yet it says how to log one.
+  in the address opens that tab). The Conversation summary column shows the
+  latest call's notes; when the latest call had none it says so and shows the
+  most recent notes from an earlier call, with that call's date (the downloads'
+  Call Notes column does the same). With no calls yet it says how to log one.
 - **Stats**: how many businesses have a baler or compactor (marked Yes), their
   average score, and a chart of the share of checked businesses (marked Yes or
   No) that have one, by tier. Competitors and Arco's own listing are left out of
@@ -212,20 +239,32 @@ list), whoever looks after the site can stop them without a code change:
 
 ### Deploying
 
-Every push to `main` deploys automatically (Render's **Auto-Deploy**, set in
-`render.yaml`); a deploy takes about 5 minutes. To see which version is live,
-open `https://compactor-lead-finder.onrender.com/healthz`: `version` is the
-first seven characters of the deployed commit (`git log -1 --format=%h`).
-After each push, GitHub Actions' **live** job waits for that deploy and fails,
-which emails the owner, if the site is still on an older commit after 20
-minutes (set a repository variable `LIVE_URL` if the address changes).
+A push to `main` deploys automatically, but only once GitHub's CI checks have
+passed on it: `render.yaml` sets `autoDeployTrigger: checksPass` (in Render:
+**Settings** > **Build & Deploy** > **Auto-Deploy** = **After CI Checks Pass**).
+A commit whose lint or tests fail is never deployed. A deploy takes about 5
+minutes. To see which version is live, open
+`https://compactor-lead-finder.onrender.com/healthz`: `version` is the first
+seven characters of the deployed commit (`git log -1 --format=%h`). Every hour
+GitHub Actions' **Live site** workflow (`.github/workflows/live.yml`, also
+runnable by hand from the Actions tab) checks that the latest commit on `main`
+that passed CI is live, and fails, which emails the owner, if it still isn't
+40 minutes after the push (set a repository variable `LIVE_URL` if the address
+changes).
 
-If it didn't deploy (the live job failed, or `/healthz` shows an old version):
+Protect `main` so that nothing reaches it without green checks (a one-time
+setting only the repository owner can make): GitHub → **Settings** →
+**Branches** → **Add branch protection rule** for `main` → **Require status
+checks to pass before merging**, and pick `lint`, `test (sqlite)` and
+`test (postgres)`.
+
+If it didn't deploy (the Live site workflow failed, or `/healthz` shows an old version):
 
 1. In Render, open the **compactor-lead-finder** service. **Events** shows
    whether the last deploy failed (its log says why) or never started.
-2. Check **Settings** > **Auto-Deploy** is **Yes** (on commit) and the branch
-   is `main`.
+2. Check the commit's checks on GitHub are green (a red one is not deployed:
+   fix it and push), that **Settings** > **Auto-Deploy** is **After CI Checks
+   Pass** and that the branch is `main`.
 3. Click **Manual Deploy** > **Deploy latest commit**, wait for "Live", and
    check `/healthz` again.
 
@@ -375,8 +414,10 @@ requests by 7 or 19 (up to about 700 or 1,900), so set `--max-requests` if cost 
   uses Yelp when `DATABASE_URL` points at it). Every call counts,
   retries included; nothing in the form or on the command line raises it. Each
   call counts for 24 hours, so the calls come back 24 hours after the last
-  search that used them; the page shows how many are left and when they reset
-  (any 24 hours also covers Yelp's own day, which starts at midnight UTC).
+  search that used them; the page shows how many are left in the last 24
+  hours and when they are all back ("Yelp: 20 of 50 calls left in the last 24
+  hours; all back by 3:12 PM"; any 24 hours also covers Yelp's own day, which
+  starts at midnight UTC).
 - The count lives in the database, so restarts and redeploys don't reset it.
   If the database can't be reached, Yelp is paused rather than risk going over.
 - With 50 calls, a 30-mile search uses one Yelp search area (25 miles around
@@ -406,7 +447,7 @@ python -m pytest                               # SQLite
 LEADGEN_TEST_DATABASE_URL=postgresql://... python -m pytest   # a throwaway Postgres
 python -m ruff check .                         # lint (settings in pyproject.toml)
 python -m vulture                              # dead code (settings in pyproject.toml)
-python -m mypy                                 # type check (settings in pyproject.toml)
+python -m mypy                                 # strict type check (settings in pyproject.toml)
 ```
 
 The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
@@ -424,15 +465,16 @@ CSS variables in `templates/_theme.html` (`--sp-1` … `--sp-6`, `--fs-sm` …
 The tests never call Google, Yelp or OpenStreetMap (they are mocked).
 `tests/test_browser.py` drives the real pages in Chromium (mark Yes, a
 double-click marks one business only, Undo, Just called and its kept draft, the
-Calls page opening on the latest call, competitors not asked Yes / No, the
-search confirmation, Stats, downloads and their busy state, reload keeps the
+Calls page opening on the latest call and keeping earlier notes in view,
+competitors not asked Yes / No, the search confirmation, a refused search saying
+why (in the browser and from the server), the phone cards and the short phone
+header, Stats, downloads and their busy state, reload keeps the
 view, the colour switch fitting from 320 px up, 44 px touch targets on a
 phone); it is skipped when Playwright's Chromium is missing.
 `tests/test_cli.py` runs the command line with the sources mocked.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the lint, the dead-code and
-type checks and every test, on
-SQLite and on Postgres, for each push and pull request. To make a red run block
-merging: GitHub → **Settings** → **Branches** → **Add branch protection rule**
-for `main` → **Require status checks to pass before merging**, and pick
-`lint`, `test (sqlite)` and `test (postgres)` (not `live`: it runs after the push).
+strict type checks and every test, on SQLite and on Postgres, for each push and
+pull request; Render deploys only commits that pass, and branch protection on
+`main` should require the three jobs (see "Deploying"). Every public function in
+`leadgen/` has parameter and return annotations (`strict = true` for mypy).

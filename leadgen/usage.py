@@ -11,6 +11,8 @@ import json
 import logging
 import random
 import time
+from collections.abc import Callable
+from typing import Any
 
 from . import config, store
 from .localtime import clock_text
@@ -22,15 +24,15 @@ log = logging.getLogger(__name__)
 WINDOW_SECONDS = 24 * 3600 + 90
 
 
-def _now():
+def _now() -> dt.datetime:
     return dt.datetime.now(dt.UTC)
 
 
-def _clock():
+def _clock() -> float:
     return _now().timestamp()
 
 
-def _why(exc, what):
+def _why(exc: BaseException, what: str) -> str:
     if isinstance(exc, store.Unavailable):
         return str(exc)
     log.warning("The Yelp usage counter could not be %s", what, exc_info=exc)
@@ -45,13 +47,13 @@ class DailyBudget:
     API's own day, which runs from midnight UTC).
     """
 
-    def __init__(self, name, limit):
+    def __init__(self, name: str, limit: int) -> None:
         self.name = name
         self.limit = limit
-        self.problem = None          # why the budget cannot be used right now
-        self._calls = []             # times of the calls that still count, from the last read
+        self.problem: str | None = None   # why the budget cannot be used right now
+        self._calls: list[float] = []            # times of the calls that still count, from the last read
 
-    def _load(self, db):
+    def _load(self, db: store.Db) -> tuple[int, list[float]]:
         row = db.one("SELECT version, calls FROM windows WHERE name = ?", (self.name,))
         if row is None:
             # First use: yesterday's style of count (per UTC day) carries over, as calls
@@ -62,10 +64,12 @@ class DailyBudget:
             db.run("INSERT INTO windows (name, version, calls) VALUES (?, 0, ?) "
                    "ON CONFLICT (name) DO NOTHING", (self.name, json.dumps(seeded)))
             row = db.one("SELECT version, calls FROM windows WHERE name = ?", (self.name,))
+            if row is None:              # just written; only a broken database gets here
+                raise store.Unavailable("the usage counter could not be read")
         cutoff = _clock() - WINDOW_SECONDS
         return int(row[0]), [t for t in json.loads(row[1]) if t > cutoff]
 
-    def used(self):
+    def used(self) -> int:
         """Calls that still count; the full limit when the count cannot be read."""
         self.problem = None
         try:
@@ -76,18 +80,18 @@ class DailyBudget:
             self.problem = _why(exc, "read")
             return self.limit
 
-    def left(self):
+    def left(self) -> int:
         return max(0, self.limit - self.used())
 
-    def resets_at(self):
+    def resets_at(self) -> float | None:
         """When every call counted now is back (from the last used()/left()), or None."""
         return max(self._calls) + WINDOW_SECONDS if self._calls else None
 
-    def reset_text(self):
+    def reset_text(self) -> str | None:
         at = self.resets_at()
         return clock_text(-(-at // 60) * 60) if at else None     # rounded up to the minute
 
-    def take(self):
+    def take(self) -> bool:
         """Reserve one call. False when the calls are used up or cannot be counted."""
         self.problem = None
         if self.limit < 1:
@@ -115,7 +119,7 @@ class DailyBudget:
             return False
 
 
-def yelp_budget():
+def yelp_budget() -> DailyBudget:
     return DailyBudget("yelp", config.YELP_DAILY_LIMIT)
 
 
@@ -125,11 +129,11 @@ class SharedCache:
     connection; after that the cache counts as down, and `down` says so (the
     caller should then stop spending calls on searches that may be cached)."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.down = False
-        self._db = None
+        self._db: store.Db | None = None
 
-    def _run(self, fn):
+    def _run(self, fn: Callable[[store.Db], Any]) -> Any:
         for _ in (1, 2):
             try:
                 if self._db is None:
@@ -141,7 +145,7 @@ class SharedCache:
         self.down = True
         return None
 
-    def close(self):
+    def close(self) -> None:
         if self._db is not None:
             try:
                 self._db.conn.close()
@@ -149,19 +153,19 @@ class SharedCache:
                 log.info("Closing the cache connection failed: %r", exc)
             self._db = None
 
-    def get(self, key, ttl=None):
+    def get(self, key: str, ttl: float | None = None) -> Any:
         if self.down:
             return None
         row = self._run(lambda db: db.one("SELECT value, expires_at FROM cache WHERE key = ?",
                                           (self._key(key),)) or ())
         return json.loads(row[0]) if row and row[1] > time.time() else None
 
-    def put(self, key, value, ttl=None):
+    def put(self, key: str, value: object, ttl: float | None = None) -> None:
         if self.down:
             return
         now = time.time()
 
-        def write(db):
+        def write(db: store.Db) -> bool:
             db.run("DELETE FROM cache WHERE expires_at < ?", (now,))
             db.run("INSERT INTO cache (key, value, expires_at) VALUES (?, ?, ?) "
                    "ON CONFLICT (key) DO UPDATE SET value = excluded.value, "
@@ -172,5 +176,5 @@ class SharedCache:
         self._run(write)
 
     @staticmethod
-    def _key(key):
+    def _key(key: str) -> str:
         return hashlib.sha256(key.encode()).hexdigest()

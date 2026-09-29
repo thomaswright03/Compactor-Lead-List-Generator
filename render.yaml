@@ -3,7 +3,9 @@ services:
     name: compactor-lead-finder
     runtime: python
     plan: free
-    autoDeploy: true            # every push to main goes live (CI's "live" job checks it did)
+    # A push to main goes live only after GitHub's CI checks pass on it (lint, and the tests on
+    # SQLite and Postgres); a red commit is never deployed. The "Live site" workflow checks it went live.
+    autoDeployTrigger: checksPass
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn wsgi:app --workers 1 --threads 8 --timeout 0 --bind 0.0.0.0:$PORT
     envVars:

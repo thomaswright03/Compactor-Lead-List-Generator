@@ -37,6 +37,7 @@ nav .count { font-size:var(--fs-sm); font-weight:600; background:rgba(255,255,25
 .theme button:first-child { border-radius:var(--r-sm) 0 0 var(--r-sm); }
 .theme button:last-child { border-radius:0 var(--r-sm) var(--r-sm) 0; }
 .theme button[aria-pressed="true"] { background:rgba(255,255,255,.2); color:#fff; }
+.menu-btn, .phone-only, button.why-toggle, .c-miles .unit { display:none; }
 .side-bottom { margin-top:auto; display:flex; flex-direction:column; gap:var(--sp-3); }
 main { padding:var(--sp-5) var(--sp-5) var(--sp-6); min-width:0; display:flex; flex-direction:column; }
 .wrap { width:100%; max-width:1500px; margin:0 auto; flex:1; display:flex; flex-direction:column; }
@@ -64,8 +65,10 @@ details.advanced summary { cursor:pointer; color:var(--accent); font-weight:600;
 details.advanced .form-grid { margin-top:var(--sp-3); }
 .go-row { display:flex; align-items:center; gap:var(--sp-4); flex-wrap:wrap; margin-top:var(--sp-4); }
 .go-row button { padding:var(--sp-3) var(--sp-5); font-size:var(--fs-md); min-height:44px; }
-#day-note { color:var(--muted); }
-#day-note.used { color:var(--bad-ink); font-weight:600; }
+#day-note { color:var(--muted); }                  /* how the day stands: never red */
+#go-error { margin-top:var(--sp-3); }               /* why a search can't start */
+.field-error { color:var(--bad-ink); font-weight:600; font-size:var(--fs-sm); }
+input[aria-invalid="true"], select[aria-invalid="true"] { border-color:var(--bad); }
 
 .steps { display:flex; gap:var(--sp-2); margin:var(--sp-1) 0 var(--sp-4); flex-wrap:wrap; }
 .step { flex:1 1 130px; display:flex; align-items:center; gap:var(--sp-2); font-size:var(--fs-sm); color:var(--muted); }
@@ -203,7 +206,10 @@ dialog::backdrop { background:var(--backdrop); }
 .viz .tip { position:absolute; pointer-events:none; background:var(--toast); color:var(--toast-ink); font-size:var(--fs-sm); padding:var(--sp-2);
             border-radius:var(--r-sm); white-space:nowrap; transform:translate(-50%,-110%); }
 .viz .tip strong { font-size:var(--fs-base); }
-.viz rect.col:hover, .viz rect.col:focus { opacity:.8; outline:none; }
+.viz rect.col:hover { opacity:.8; }
+.viz rect.col:focus { outline:none; }
+/* A bar reached with the keyboard gets a clear ring (the same colour as every other focus ring). */
+.viz rect.col:focus-visible { stroke:var(--accent-2); stroke-width:3px; fill:var(--hover); fill-opacity:.35; }
 #s-table { margin-top:var(--sp-3); }
 
 /* Touch screens: everything that can be tapped is at least 44px each way. */
@@ -216,6 +222,7 @@ dialog::backdrop { background:var(--backdrop); }
   table.leads th button.sort { min-height:44px; align-items:center; }
   table.leads td a, table.plain td a { display:inline-flex; align-items:center; min-height:44px; }
   .contact .site { display:flex; align-items:center; min-height:44px; }
+  table.leads td a.map { min-width:44px; justify-content:center; }
   details.explain summary, details.advanced summary { display:flex; align-items:center; }
   label.check { min-height:44px; }
   label.check input { width:24px; height:24px; }
@@ -229,4 +236,45 @@ dialog::backdrop { background:var(--backdrop); }
   .side .who { border-top:0; padding-top:0; }
   main { padding:var(--sp-4) var(--sp-4) var(--sp-6); }
   .table-wrap { max-height:calc(100vh - 40px); }
+}
+@media (max-width: 700px) {
+  /* Phones: one short bar at the top (name and Menu, then the pages); the rest is in the menu. */
+  .side { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:var(--sp-1) var(--sp-3);
+          padding:var(--sp-2) var(--sp-4); }
+  .brand { display:flex; gap:var(--sp-2); align-items:baseline; min-width:0; white-space:nowrap; overflow:hidden; }
+  .brand strong { display:inline; }
+  .menu-btn { display:inline-flex; align-items:center; background:none; border:1px solid rgba(255,255,255,.3); color:var(--side-ink);
+              padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); }
+  nav { grid-column:1 / -1; flex-wrap:nowrap; overflow-x:auto; gap:var(--sp-1); }
+  nav a { padding:var(--sp-1) var(--sp-2); flex:none; }
+  nav .count .cw { display:none; }
+  .side-bottom { grid-column:1 / -1; display:none; padding:var(--sp-2) 0; }
+  .side.open .side-bottom { display:flex; }
+  main { padding-top:var(--sp-3); }
+
+  /* The Leads list: one card per lead, with the name right above its Yes / No buttons,
+     and no sideways scrolling. The reasons for the score open with "Why this score". */
+  .phone-only { display:inline-block; }
+  .table-wrap, .table-wrap.stale { overflow:visible; max-height:none; background:none; border:0; border-radius:0; }
+  table.leads { display:block; min-width:0; }
+  table.leads colgroup, table.leads thead { display:none; }
+  table.leads tbody { display:flex; flex-direction:column; gap:var(--sp-3); }
+  table.leads tr { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--sp-2) var(--sp-3);
+                   grid-template-areas:"name score" "mark mark" "contact miles" "why why";
+                   background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); }
+  table.leads td { display:block; border:0; padding:0; min-width:0; }
+  table.leads td.c-name { grid-area:name; }
+  table.leads td.score { grid-area:score; align-self:start; border-radius:var(--r-pill); padding:0 var(--sp-2); font-weight:700; }
+  table.leads td.c-mark { grid-area:mark; }
+  table.leads td.contact { grid-area:contact; }
+  table.leads td.c-miles { grid-area:miles; color:var(--muted); font-size:var(--fs-sm); }
+  table.leads td.c-why { grid-area:why; border-top:1px dashed var(--line); padding-top:var(--sp-1); }
+  table.leads td.c-miles:empty { display:none; }
+  .c-miles .unit { display:inline; }
+  tr.competitor { background:var(--comp) !important; }
+  tr.competitor td:not(.score), tr.just-marked td { background:none; }
+  tr.just-marked { background:var(--hover) !important; }
+  button.why-toggle { display:inline-flex; }
+  td.c-why:not(.open) .reasons, td.c-why:not(.open) details.explain { display:none; }
+  td.c-why.open .reasons { margin-top:var(--sp-2); }
 }

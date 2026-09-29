@@ -3,11 +3,14 @@
 import logging
 import os
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
+from typing import Any
 
 from . import config
 from .dedupe import SAME_PHONE_MILES, dedupe
 from .geo import geocode, haversine_miles
+from .models import Lead
 from .scoring import score_lead
 from .sources import SourceError, google_places, osm, yelp
 
@@ -21,17 +24,20 @@ SOURCE_NAMES = {"google": "Google", "yelp": "Yelp", "osm": "the map data service
 
 log = logging.getLogger(__name__)
 
+# Called with each progress message of a search (the page turns them into its steps).
+Progress = Callable[[str], None]
+
 
 class PipelineError(RuntimeError):
     """A search that could not run. The message is plain words for the page;
     detail holds the technical reason (for the log and the command line)."""
 
-    def __init__(self, message, detail=""):
+    def __init__(self, message: str, detail: str = "") -> None:
         super().__init__(message)
         self.detail = detail
 
 
-def _names(sources):
+def _names(sources: Sequence[str]) -> str:
     names = [SOURCE_NAMES[s] for s in sources]
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
 
@@ -40,7 +46,7 @@ def _names(sources):
 class SearchParams:
     location: str = config.DEFAULT_LOCATION
     radius_miles: float = config.DEFAULT_RADIUS_MILES
-    keywords: list = field(default_factory=lambda: list(config.DEFAULT_KEYWORDS))
+    keywords: list[str] = field(default_factory=lambda: list(config.DEFAULT_KEYWORDS))
     source: str = "auto"
     min_score: int = config.DEFAULT_MIN_SCORE
     grid: int = 1
@@ -52,7 +58,7 @@ class SearchParams:
     yelp_api_key: str = ""
     skip_yelp: bool = False    # the command line without the site's database (cli.py)
 
-    def resolved_keys(self):
+    def resolved_keys(self) -> tuple[str, str, bool]:
         """Return (google key, yelp key, misplaced) from the params or the environment.
 
         A Yelp key pasted into the Google setting is recognized and never sent to
@@ -76,14 +82,14 @@ class SearchParams:
 
 @dataclass
 class RunResult:
-    leads: list
-    center: tuple
+    leads: list[Lead]
+    center: tuple[float, float]
     location_label: str
-    warnings: list
-    stats: dict
-    problems: list = field(default_factory=list)   # technical detail of failed sources
+    warnings: list[str]
+    stats: dict[str, object]
+    problems: list[str] = field(default_factory=list)   # technical detail of failed sources
 
-    def run_info(self, params):
+    def run_info(self, params: SearchParams) -> dict[str, Any]:
         info = {k: v for k, v in asdict(params).items() if k not in ("api_key", "yelp_api_key", "skip_yelp")}
         info["keywords"] = ", ".join(params.keywords)
         info["resolved location"] = f"{self.location_label} ({self.center[0]:.4f}, {self.center[1]:.4f})"
@@ -93,7 +99,7 @@ class RunResult:
         return info
 
 
-def run(params: SearchParams, progress=None):
+def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
     started = time.time()
     if params.source not in SOURCES:
         raise PipelineError(f"Unknown source '{params.source}'. Use one of {', '.join(SOURCES)}")
@@ -106,8 +112,8 @@ def run(params: SearchParams, progress=None):
     keywords = [k.strip() for k in params.keywords if k and k.strip()]
     api_key, yelp_key, misplaced = params.resolved_keys()
 
-    use_google = params.source in ("google", "both") or (params.source == "auto" and api_key)
-    use_yelp = params.source == "yelp" or (params.source == "auto" and yelp_key)
+    use_google = params.source in ("google", "both") or (params.source == "auto" and bool(api_key))
+    use_yelp = params.source == "yelp" or (params.source == "auto" and bool(yelp_key))
     use_osm = params.source in ("osm", "both", "auto")
     off = [name for name, env, picked in (
         ("google", config.GOOGLE_OFF_ENV, ("google", "both")),
@@ -154,10 +160,12 @@ def run(params: SearchParams, progress=None):
 
     say("Merging duplicates")
     merged = dedupe(near)
+    miles = {id(lead): round(haversine_miles(lat, lon, lead.lat, lead.lon), 2) for lead in merged}
     for lead in merged:
-        lead.distance_miles = round(haversine_miles(lat, lon, lead.lat, lead.lon), 2)
-    merged = [l for l in merged if l.distance_miles <= params.radius_miles]
+        lead.distance_miles = miles[id(lead)]
+    merged = [l for l in merged if miles[id(l)] <= params.radius_miles]
     n_merged = len(merged)
+    closed = sum(l.business_status == "CLOSED_PERMANENTLY" for l in merged)
     # Closed places are dropped after merging, so an old map copy of a place
     # Google or Yelp reports closed cannot slip through on its own.
     if not params.include_closed:
@@ -165,44 +173,63 @@ def run(params: SearchParams, progress=None):
     for lead in merged:
         score_lead(lead, keywords)
 
+    # Each business within the radius ends up in exactly one of these, so the search's
+    # numbers add up: closed, left out for a low score, left out for not matching the
+    # search words, over the lead limit, or kept.
+    low_score = no_match = 0
     kept = []
     for lead in merged:
         if lead.lead_type not in EXEMPT_TYPES:
             if lead.score < params.min_score:
+                low_score += lead.business_status != "CLOSED_PERMANENTLY"
                 continue
             if params.only_keyword_matches and not lead.matched_keywords:
+                no_match += lead.business_status != "CLOSED_PERMANENTLY"
                 continue
         kept.append(lead)
-    def sort_key(l):
-        return (-l.score, l.distance_miles, l.name.lower())
+
+    def sort_key(l: Lead) -> tuple[int, float, str]:
+        return (-l.score, l.distance_miles or 0.0, l.name.lower())
 
     kept.sort(key=sort_key)
     if params.limit and params.limit > 0:
         prospects = [l for l in kept if l.lead_type not in EXEMPT_TYPES][:params.limit]
         kept = sorted(prospects + [l for l in kept if l.lead_type in EXEMPT_TYPES], key=sort_key)
+    open_kept = [l for l in kept if l.business_status != "CLOSED_PERMANENTLY"]
+    over_limit = n_merged - closed - low_score - no_match - len(open_kept)
 
     stats.update({
         "results in radius": n_in_radius,
+        "duplicates merged": max(0, n_in_radius - n_merged),
         "after dedupe": n_merged,
-        "leads kept": len(kept),
-        "tier A": sum(l.tier == "A" for l in kept),
-        "tier B": sum(l.tier == "B" for l in kept),
-        "competitors flagged": sum(l.lead_type == "Competitor" for l in kept),
+        "closed": closed,
+        "min score": params.min_score,
+        "below min score": low_score,
+        "not matching keywords": no_match,
+        "over limit": over_limit,
+        "competitors flagged": sum(l.lead_type == "Competitor" for l in open_kept),
+        "leads kept": len(open_kept),
+        **{f"tier {t}": sum(l.tier == t for l in open_kept) for t in "ABCD"},
         "seconds": round(time.time() - started, 1),
     })
     return RunResult(kept, (lat, lon), label, warnings, stats, problems=errors)
 
 
-def _query_sources(params, use, keys, keywords, lat, lon, progress, warnings, stats):
+def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tuple[str, str],
+                   keywords: list[str], lat: float, lon: float, progress: Progress | None,
+                   warnings: list[str], stats: dict[str, object]) -> tuple[list[Lead], list[str]]:
     """Ask each source in turn; returns (raw leads, technical errors). Adds plain notes to
     warnings and counts to stats. A source the administrator switched off since the
     search started is skipped; raises PipelineError when nothing at all was found."""
     use_google, use_yelp, use_osm = use
     api_key, yelp_key = keys
     say = progress or (lambda msg: None)
-    raw, errors, failed, stopped = [], [], [], []
+    raw: list[Lead] = []
+    errors: list[str] = []
+    failed: list[str] = []
+    stopped: list[str] = []
 
-    def halted(source):
+    def halted(source: str) -> bool:
         """True when the administrator switched searching (or this source) off
         since the search started; the source is then skipped."""
         if config.stop_reason(source):

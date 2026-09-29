@@ -18,7 +18,7 @@ def test_web_flow(monkeypatch):
         if body["state"] != "running":
             break
         time.sleep(0.05)
-    assert body["state"] == "done" and body["leads"][0]["name"] == "<b>Walmart</b>"
+    assert body["state"] == "done" and body["found"] == 1 and body["saved"]
     assert client.get(f"/download/{job}.csv").status_code == 200
     assert client.get(f"/download/{job}.xlsx").data[:2] == b"PK"
     assert client.get(f"/download/{job}.pdf").status_code == 404
@@ -144,3 +144,34 @@ def test_healthz_is_public_and_shows_the_deployed_commit(monkeypatch):
     res = client.get("/healthz", headers={"Host": "evil.example"})
     assert res.status_code == 200 and res.get_json() == {"ok": True, "version": "abcdef1"}
     assert client.get("/").status_code == 302
+
+
+def test_a_refused_form_names_the_field(monkeypatch):
+    client, _ = _client(monkeypatch)
+    for form, field in [({"keywords": "x" * 61}, "keywords"), ({"keywords": ",".join(["k"] * 21)}, "keywords"),
+                        ({"location": "   "}, "location"), ({"radius": "500"}, "radius"),
+                        ({"min_score": "abc"}, "min_score"), ({"source": "evil"}, "source")]:
+        res = client.post("/search", data=form)
+        body = res.get_json()
+        assert res.status_code == 400 and body["field"] == field and body["error"], form
+    assert "up to 60 characters" in client.post("/search", data={"keywords": "x" * 61}).get_json()["error"]
+
+
+def test_the_finished_search_sends_counts_not_the_saved_list(monkeypatch):
+    from leadgen import saved
+    many = [Lead(name=f"Store {i}", lat=40.7 + i * 0.001, lon=-111.9, source="osm", source_id=f"n{i}",
+                 score=50, tier="B", reasons=["+30 Grocery / supermarket"] * 3) for i in range(1500)]
+    saved.save_search(many)
+    found = [Lead(name="Walmart", lat=40.6, lon=-111.8, source="google", source_id="w", score=70, tier="A")]
+    monkeypatch.setattr(web.finding, "run", lambda params, progress: RunResult(
+        found, (40.76, -111.89), "Salt Lake City, UT", [], {"leads kept": 1}))
+    client = web.create_app().test_client()
+    job = client.post("/search", data={"location": "84101"}).get_json()["job_id"]
+    for _ in range(200):
+        res = client.get(f"/status/{job}")
+        if res.get_json()["state"] != "running":
+            break
+        time.sleep(0.05)
+    body = res.get_json()
+    assert body["saved"] and body["new_leads"] == 1 and body["saved_count"] == 1501 and body["found"] == 1
+    assert "leads" not in body and len(res.data) < 5000

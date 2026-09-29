@@ -4,13 +4,16 @@ They measure how well the scoring finds prospects, so competitors and Arco's own
 listing (flagged in the list, never asked Yes / No) are left out of every figure.
 """
 
+from typing import Any
+
+from .models import Lead
 from .pipeline import EXEMPT_TYPES
 from .scoring import TIERS
 
 TIER_ORDER = ("A", "B", "C", "D")
 
 
-def summarize(leads):
+def summarize(leads: list[Lead]) -> dict[str, Any]:
     """leads: saved leads with has_baler set."""
     prospects = [l for l in leads if l.lead_type not in EXEMPT_TYPES]
     left_out = len(leads) - len(prospects)

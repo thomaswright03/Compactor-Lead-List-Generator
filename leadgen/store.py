@@ -12,6 +12,7 @@ import logging
 import os
 import sqlite3
 import threading
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any
 
@@ -70,38 +71,42 @@ _lock = threading.Lock()
 _local = threading.local()      # the connection a web request shares (see scope())
 
 
+# A row as the database returns it.
+Row = tuple[Any, ...]
+
+
 class Unavailable(RuntimeError):
     """No database to use; the message says why, for the page."""
 
 
-def on_render():
+def on_render() -> bool:
     return bool(os.environ.get("RENDER"))
 
 
-def database_url():
+def database_url() -> str:
     return os.environ.get("DATABASE_URL", "").strip()
 
 
 class Db:
-    def __init__(self, conn, postgres):
+    def __init__(self, conn: Any, postgres: bool) -> None:
         self.conn = conn
         self.postgres = postgres
 
-    def _sql(self, sql):
+    def _sql(self, sql: str) -> str:
         return sql.replace("?", "%s") if self.postgres else sql
 
-    def run(self, sql, params=()):
+    def run(self, sql: str, params: Sequence[Any] = ()) -> None:
         self.conn.execute(self._sql(sql), params)
 
-    def all(self, sql, params=()):
+    def all(self, sql: str, params: Sequence[Any] = ()) -> list[Row]:
         return list(self.conn.execute(self._sql(sql), params).fetchall())
 
-    def one(self, sql, params=()):
+    def one(self, sql: str, params: Sequence[Any] = ()) -> Row | None:
         rows = self.all(sql, params)
         return rows[0] if rows else None
 
     @contextmanager
-    def transaction(self):
+    def transaction(self) -> Iterator["Db"]:
         """All statements inside commit together, or none do."""
         if self.postgres:
             with self.conn.transaction():
@@ -115,7 +120,7 @@ class Db:
             raise
         self.conn.execute("COMMIT")
 
-    def many(self, sql, rows):
+    def many(self, sql: str, rows: Iterable[Sequence[Any]]) -> None:
         """Run one statement for many rows, all or nothing."""
         rows = list(rows)
         if not rows:
@@ -133,7 +138,7 @@ class Db:
                 raise
 
 
-def rows_for(db, select, column, ids, order=""):
+def rows_for(db: Db, select: str, column: str, ids: Iterable[str], order: str = "") -> list[Row]:
     """Rows of `select` (a SELECT without WHERE) whose `column` is one of ids.
 
     A few ids are looked up by id; for most of a big list one read of the whole
@@ -150,7 +155,7 @@ def rows_for(db, select, column, ids, order=""):
     return rows
 
 
-def open_db():
+def open_db() -> Db:
     """A Db on a new connection (autocommit); close it with db.conn.close().
 
     Raises Unavailable when there is no database.
@@ -184,7 +189,7 @@ def open_db():
     return db
 
 
-def _create_tables(db):
+def _create_tables(db: Db) -> None:
     for attempt in range(3):
         try:
             for statement in SCHEMA:
@@ -198,7 +203,7 @@ def _create_tables(db):
 
 
 @contextmanager
-def connect():
+def connect() -> Iterator[Db]:
     """A connection (autocommit) for a few statements; raises Unavailable when there
     is no database. Inside scope() every connect() shares one connection."""
     shared = getattr(_local, "scope", None)
@@ -215,13 +220,13 @@ def connect():
         db.conn.close()
 
 
-def begin_scope():
+def begin_scope() -> None:
     """From now on this thread's connect() calls share one connection (opened when
     first needed) until end_scope(): one connection per web request."""
     _local.scope = {"db": None, "opened": 0}
 
 
-def end_scope():
+def end_scope() -> int:
     """Close the shared connection; returns how many were opened (0 or 1)."""
     shared = getattr(_local, "scope", None)
     _local.scope = None
@@ -232,11 +237,11 @@ def end_scope():
             shared["db"].conn.close()
         except Exception as exc:  # noqa: BLE001 - sqlite3 or psycopg; the request is done
             log.warning("Closing the database connection failed: %s", exc)
-    return shared["opened"]
+    return int(shared["opened"])
 
 
 @contextmanager
-def scope():
+def scope() -> Iterator[None]:
     begin_scope()
     try:
         yield

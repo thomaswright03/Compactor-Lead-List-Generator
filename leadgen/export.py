@@ -4,8 +4,11 @@ import csv
 import io
 import re
 import time
+from collections.abc import Callable
+from typing import Any
 
 from .localtime import date_time_text
+from .models import Lead
 from .pipeline import EXEMPT_TYPES
 from .scoring import TIER_LABELS, TIERS
 from .xlsx import Book, Cell, clean
@@ -15,7 +18,8 @@ from .xlsx import Book, Cell, clean
 OFFLINE_VERIFIED = "My notes: equipment seen (this file only)"
 OFFLINE_CHOICES = ("Saw a compactor", "Saw a baler", "Saw neither", "Not sure")
 
-COLUMNS = [
+# Each column: its heading, the value for a lead, and its width in Excel.
+COLUMNS: list[tuple[str, Callable[[Lead], object], float]] = [
     ("Score", lambda l: l.score, 8),
     ("Tier", lambda l: TIER_LABELS.get(l.tier, l.tier), 13),
     ("Lead Type", lambda l: l.lead_type, 20),
@@ -43,7 +47,10 @@ COLUMNS = [
     ("Has Baler or Compactor?", lambda l: {"yes": "Yes", "no": "No"}.get(l.has_baler, ""), 13),
     ("Call Result", lambda l: l.call_outcome, 14),
     ("Last Called", lambda l: date_time_text(l.last_call_at), 20),
-    ("Call Notes", lambda l: l.call_notes, 40),
+    # The latest call's notes; when it had none, the latest notes an earlier call has.
+    ("Call Notes", lambda l: l.call_notes or (
+        f"(From the call on {date_time_text(l.earlier_notes_at)}) {l.earlier_notes}"
+        if l.earlier_notes else ""), 40),
     # For notes on a printed or offline copy only: nothing typed here goes back into the
     # website (Yes / No marks and calls are recorded there).
     (OFFLINE_VERIFIED, lambda l: "", 18),
@@ -54,7 +61,7 @@ TIER_FILLS = {"A": "C6EFCE", "B": "E2EFDA", "C": "FFF2CC", "D": "F2F2F2"}
 COMPETITOR_FILL = "F8CBAD"
 
 
-def format_phone(phone):
+def format_phone(phone: str | None) -> str:
     digits = re.sub(r"\D", "", phone or "")
     if len(digits) == 11 and digits.startswith("1"):
         digits = digits[1:]
@@ -66,7 +73,7 @@ def format_phone(phone):
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
-def _safe(value):
+def _safe(value: object) -> object:
     """CSV: neutralize text a spreadsheet would run as a formula (data comes from the public)."""
     if isinstance(value, str):
         value = clean(value)
@@ -75,16 +82,16 @@ def _safe(value):
     return value
 
 
-def _xl(value):
+def _xl(value: object) -> object:
     """Safe for Excel: no control characters a spreadsheet can't hold."""
     return clean(value) if isinstance(value, str) else value
 
 
-def rows(leads):
+def rows(leads: list[Lead]) -> list[list[object]]:
     return [[fn(l) for _, fn, _ in COLUMNS] for l in leads]
 
 
-def to_csv_bytes(leads):
+def to_csv_bytes(leads: list[Lead]) -> bytes:
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow([c for c, _, _ in COLUMNS])
@@ -93,7 +100,7 @@ def to_csv_bytes(leads):
     return buf.getvalue().encode("utf-8-sig")   # BOM so Excel opens it cleanly
 
 
-def to_xlsx_bytes(leads, run_info=None):
+def to_xlsx_bytes(leads: list[Lead], run_info: dict[str, Any] | None = None) -> bytes:
     """The leads as an Excel file, plus a Run Info sheet (run_info: label -> value).
 
     Written by xlsx.py, in time that grows in step with the number of leads.
@@ -129,7 +136,8 @@ def to_xlsx_bytes(leads, run_info=None):
     return book.save()
 
 
-def saved_list_info(leads, first=None, latest=None):
+def saved_list_info(leads: list[Lead], first: float | None = None,
+                    latest: float | None = None) -> dict[str, Any]:
     """The Run Info of the saved list's download: what the file holds, in plain labels.
     first / latest: when the first and latest search ran (epoch seconds)."""
     prospects = [l for l in leads if l.lead_type not in EXEMPT_TYPES]
@@ -151,7 +159,7 @@ def saved_list_info(leads, first=None, latest=None):
     return info
 
 
-def tier_text():
+def tier_text() -> str:
     """The tier boundaries in words, from scoring.TIERS: "A >= 60, B >= 40, ..."."""
     parts = [f"{tier} >= {low}" for low, tier in TIERS if low > 0]
     lowest = min(TIERS)
@@ -159,5 +167,5 @@ def tier_text():
     return ", ".join(parts + [f"{lowest[1]} below {above}"])
 
 
-def _col(name):
+def _col(name: str) -> int:
     return next(i for i, (c, _, _) in enumerate(COLUMNS, start=1) if c == name)

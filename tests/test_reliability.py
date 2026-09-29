@@ -320,7 +320,7 @@ def test_excel_generated_time_is_utah_time_and_offline_columns_are_labelled(monk
     monkeypatch.setattr("leadgen.export.time.time", lambda: fixed)
     book = load_workbook(io.BytesIO(to_xlsx_bytes([_lead()], {})))
     info = {row[0].value: row[1].value for row in book["Run Info"].iter_rows() if row[0].value}
-    assert info["Generated"] == "Sep 29, 2026, 1:22 pm (Utah time)"
+    assert info["Generated"] == "Sep 29, 2026, 1:22 PM (Utah time)"
     assert "Nothing typed there is saved in the website" in info["This file only"]
     header = [c.value for c in book["Leads"][1]]
     assert header[-2:] == ["My notes: equipment seen (this file only)", "My notes (this file only)"]
@@ -381,5 +381,5 @@ def test_saved_list_run_info_says_what_the_file_holds():
 
 def test_one_place_for_utah_time():
     from leadgen import localtime
-    assert localtime.clock_text(1790709540) == "1:19 PM Utah time"   # 19:19 UTC, daylight time
+    assert localtime.clock_text(1790709540) == "1:19 PM"   # 19:19 UTC, daylight time
     assert daily.today() == localtime.now().strftime("%Y-%m-%d")

@@ -4,6 +4,8 @@ pytest==9.1.1
 ruff==0.16.9
 vulture==2.16
 mypy==2.3.1
+# requests' types for the type check (without them mypy stops at `import requests`).
+types-requests==2.33.0.20260906
 # The tests read the Excel downloads back with openpyxl (the site writes them itself, xlsx.py).
 openpyxl==3.1.5
   et-xmlfile==2.0.0

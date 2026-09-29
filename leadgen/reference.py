@@ -11,8 +11,10 @@ the scoring reads are copied (no phone numbers, addresses or call notes).
 
 import json
 from pathlib import Path
+from typing import Any
 
 from . import marks, saved
+from .models import Lead
 from .pipeline import EXEMPT_TYPES
 
 DEFAULT_PATH = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "scoring_reference.json"
@@ -20,7 +22,7 @@ FACTS = ("name", "source", "raw_categories", "primary_category", "rating_count",
          "footprint_sqft", "website", "alt_names", "search_terms")
 
 
-def confirmed_entries(leads):
+def confirmed_entries(leads: list[Lead]) -> list[dict[str, Any]]:
     """Reference entries for the marked prospects among leads (marks applied)."""
     out = []
     for lead in leads:
@@ -32,7 +34,7 @@ def confirmed_entries(leads):
     return sorted(out, key=lambda e: (e["marked"], e["name"].lower()))
 
 
-def export(path=DEFAULT_PATH):
+def export(path: str | Path = DEFAULT_PATH) -> tuple[int, int]:
     """Replace the "confirmed" list in the reference file with the marks saved now.
     Returns (yes, no) counts. Raises store.Unavailable without a database."""
     path = Path(path)

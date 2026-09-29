@@ -79,6 +79,13 @@ function applyTheme(choice) {
 document.querySelectorAll("[data-theme-pick]").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.themePick)));
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (chartRows) drawChart(chartRows); });
 
+// Phones fold the Yelp count, the colour theme and Log out into a Menu button, so the
+// navigation stays one short bar at the top.
+$("menu-btn").addEventListener("click", () => {
+  const open = document.querySelector(".side").classList.toggle("open");
+  $("menu-btn").setAttribute("aria-expanded", open);
+});
+
 /* ---------- pages and the address bar ---------- */
 function parseHash() {
   const [page, query] = (location.hash || "").slice(1).split("?");

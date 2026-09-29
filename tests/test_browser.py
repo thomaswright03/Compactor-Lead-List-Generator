@@ -48,7 +48,8 @@ def page(browser, site):
                                       ("Pro Baler", ["yelp:junkremoval"])]):
         lead = Lead(name=name, lat=40.72 + i * 0.01, lon=-111.9, source="yelp", source_id=f"y{i}",
                     phone=f"(801) 555-010{i}", city="Salt Lake City", raw_categories=cats,
-                    yelp_reviews=200)
+                    yelp_reviews=200, address=f"{100 + i} Main St",
+                    map_url=f"https://www.google.com/maps/search/?api=1&query=y{i}")
         score_lead(lead, config.DEFAULT_KEYWORDS)
         leads.append(lead)
     saved.save_search(leads, config.DEFAULT_KEYWORDS)
@@ -94,9 +95,9 @@ def test_just_called_lands_in_the_calls_tab(page):
     page.click("#call-save")
     page.wait_for_selector("#call-dlg:not([open])", state="attached")
     page.click("nav a[data-page=calls]")
-    # The Calls page opens on every call, newest first: the one just saved is in view.
+    # The Calls page opens on every called business, latest call first: the one just saved is in view.
     expect(page.locator("#calls-wrap")).to_contain_text("Spoke to Dana; send a quote.")
-    assert page.locator("#call-tabs button.on").inner_text() == "All calls (1)"
+    assert page.locator("#call-tabs button.on").inner_text() == "All called businesses (1)"
     page.get_by_role("button", name="Follow Up (1)").click()
     table = page.inner_text("#calls-wrap")
     assert "Smith's Marketplace" in table and "Spoke to Dana; send a quote." in table
@@ -104,6 +105,28 @@ def test_just_called_lands_in_the_calls_tab(page):
     assert page.url.endswith("#calls?tab=Follow+Up")
     page.reload()                                      # a tab in the address is kept
     expect(page.locator("#call-tabs button.on")).to_have_text("Follow Up (1)")
+
+
+def test_a_call_without_notes_keeps_the_earlier_notes_in_view(page):
+    _row(page, "Smith").locator(".mark button.yes").click()
+    page.get_by_role("button", name="Has baler or compactor (1)").click()
+    for notes, outcome in [("Spoke with store manager Jim; 60-yd compactor, lease ends March", "Follow Up"),
+                           ("", "Interested")]:
+        _row(page, "Smith").get_by_role("button", name="Just called").click()
+        page.fill("#call-notes", notes)
+        page.locator("#outcomes").get_by_role("button", name=outcome, exact=True).click()
+        page.click("#call-save")
+        page.wait_for_selector("#call-dlg:not([open])", state="attached")
+    page.click("nav a[data-page=calls]")
+    expect(page.locator("#calls-wrap")).to_contain_text("Latest call: no notes.")
+    cell = page.inner_text("#calls-wrap td.notes")
+    assert "From the call on" in cell and "lease ends March" in cell
+    # One row per business, and the tab says so.
+    assert page.locator("#calls-wrap tbody tr").count() == 1
+    assert page.locator("#call-tabs button.on").inner_text() == "All called businesses (1)"
+    assert "2 calls" in page.inner_text("#calls-wrap")
+    page.reload()                                      # the same after a reload (from the server)
+    expect(page.locator("#calls-wrap td.notes")).to_contain_text("lease ends March")
 
 
 def test_stats_count_the_marks(page):
@@ -304,6 +327,8 @@ def test_theme_labels_fit_at_every_width(browser, site, page, width):
     tab = context.new_page()
     tab.goto(site + "#leads")
     tab.wait_for_selector("table.leads")
+    if tab.locator("#menu-btn").is_visible():          # phones: the theme switch is in the menu
+        tab.click("#menu-btn")
     clipped = tab.evaluate("""(touch) => {
         const side = document.querySelector('.side').getBoundingClientRect();
         return [...document.querySelectorAll('.theme button')].filter((b) => {
@@ -314,3 +339,79 @@ def test_theme_labels_fit_at_every_width(browser, site, page, width):
     wide = tab.evaluate("document.documentElement.scrollWidth > window.innerWidth")
     context.close()
     assert clipped == [] and not wide
+
+
+def test_find_leads_says_why_a_search_cannot_start(page):
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    assert "up to 20 words, each up to 60 characters" in page.inner_text("#form")
+    # Caught in the browser, before the confirmation opens.
+    page.fill("input[name=keywords]", "x" * 70)
+    page.click("#go")
+    assert not page.locator("#confirm-dlg").is_visible()
+    expect(page.locator("#err-keywords")).to_contain_text("up to 60 characters")
+    assert page.get_attribute("input[name=keywords]", "aria-invalid") == "true"
+    assert "Today's is available" in page.inner_text("#day-note")
+    # Editing the form clears it.
+    page.fill("input[name=keywords]", "baler")
+    expect(page.locator("#err-keywords")).to_have_count(0)
+    # An empty "Search around" is never quietly replaced by Arco's address.
+    page.fill("input[name=location]", "")
+    page.click("#go")
+    assert not page.locator("#confirm-dlg").is_visible()
+    expect(page.locator("#err-location")).to_contain_text("Enter where to search around")
+    page.fill("input[name=location]", "84101")
+    # The server's own refusal (the browser check skipped) shows too, and stays.
+    page.evaluate("document.querySelector('input[name=keywords]').value = Array(22).fill('w').join(',')")
+    page.evaluate("startSearch()")
+    expect(page.locator("#go-error")).to_contain_text("Use at most 20 search words")
+    expect(page.locator("#err-keywords")).to_be_visible()
+    page.wait_for_timeout(300)                         # the search history has reloaded by now
+    expect(page.locator("#go-error")).to_contain_text("Use at most 20 search words")
+    assert "red" not in page.evaluate("getComputedStyle(document.getElementById('day-note')).color")
+
+
+def test_a_refused_search_says_so(page):
+    from leadgen import daily
+    day, _ = daily.claim({"location": "84101"})      # someone else ran today's search
+    daily.finish(day, {"leads": 0})
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("#day-note:has-text('The next one can run tomorrow')")
+    # A normal state, not an error: muted, not red.
+    colour = page.evaluate("getComputedStyle(document.getElementById('day-note')).color")
+    error = page.evaluate("getComputedStyle(document.getElementById('go-error')).color")
+    assert colour != error
+    page.evaluate("startSearch()")
+    expect(page.locator("#go-error")).to_contain_text("Today's search was already run")
+
+
+def test_leads_are_cards_on_a_phone(browser, site, page):
+    context = browser.new_context(viewport={"width": 375, "height": 812}, has_touch=True, is_mobile=True)
+    phone = context.new_page()
+    phone.goto(site + "#leads")
+    phone.wait_for_selector("table.leads")
+    fits = phone.evaluate("""() => {
+        const wrap = document.getElementById('leads-wrap');
+        const inside = (e) => { const r = e.getBoundingClientRect();
+                                return r.left >= 0 && r.right <= window.innerWidth; };
+        return { wide: wrap.scrollWidth > wrap.clientWidth,
+                 page: document.documentElement.scrollWidth > window.innerWidth,
+                 rows: [...document.querySelectorAll('table.leads tbody tr')].slice(0, 5).map((tr) =>
+                   [...tr.querySelectorAll('td.c-name strong, .mark button')].every(inside)) }; }""")
+    assert not fits["wide"] and not fits["page"] and fits["rows"] and all(fits["rows"])
+    # The name sits right above its own Yes / No buttons.
+    row = phone.locator("table.leads tbody tr").first
+    name, yes = row.locator("td.c-name strong").bounding_box(), row.locator(".mark button.yes").bounding_box()
+    assert 0 < yes["y"] - (name["y"] + name["height"]) < 120
+    # The reasons open with a toggle.
+    assert row.locator(".reasons").is_hidden()
+    row.get_by_role("button", name="Why this score").tap()
+    assert row.locator(".reasons").is_visible()
+    # The page title starts near the top: the navigation is one short bar.
+    assert phone.locator("#page-leads h1").bounding_box()["y"] < 140
+    assert phone.locator(".side").bounding_box()["height"] <= 112
+    phone.click("#menu-btn")
+    assert phone.locator(".theme").is_visible()
+    phone.select_option("#sort-pick", "name:asc")
+    phone.wait_for_function("location.hash.includes('sort=name')")
+    context.close()

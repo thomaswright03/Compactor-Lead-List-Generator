@@ -1,6 +1,8 @@
 # Runs on every push and pull request: lint, the dead-code check and the type check, then the whole
 # test suite on SQLite and on Postgres (like the live site), including the browser
-# tests. After a push to main it also checks that Render deployed it (job "live").
+# tests. Render deploys a commit on main only after these checks pass (render.yaml,
+# autoDeployTrigger: checksPass), and branch protection on main requires all three jobs
+# (README, "Deploying"). live.yml checks afterwards that the site runs the latest commit.
 name: CI
 
 on:
@@ -49,30 +51,3 @@ jobs:
         run: |
           python -m pytest -q -rs | tee pytest.log
           ! grep -q "SKIPPED" pytest.log
-
-  live:
-    # Render deploys every push to main by itself. This waits for that deploy and
-    # fails (so the owner gets GitHub's failure email) if the live site is still on
-    # an older commit after 20 minutes: then deploy by hand (README, "Deploying").
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [lint, test]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: The live site runs this commit (or a newer one)
-        env:
-          LIVE_URL: ${{ vars.LIVE_URL || 'https://compactor-lead-finder.onrender.com' }}
-        run: |
-          want="${GITHUB_SHA::7}"
-          for attempt in $(seq 1 40); do
-            got=$(curl -fsS -m 90 "$LIVE_URL/healthz" | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])' || true)
-            echo "Live site: ${got:-no answer}; this commit: $want"
-            if [ -n "$got" ] && git merge-base --is-ancestor "$want" "$got" 2>/dev/null; then
-              exit 0
-            fi
-            sleep 30
-          done
-          echo "::error::The live site is not running $want after 20 minutes. Deploy it by hand in Render (README, Deploying)."
-          exit 1

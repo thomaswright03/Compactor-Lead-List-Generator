@@ -17,14 +17,14 @@ from .pipeline import SOURCES, PipelineError, SearchParams, run
 from .scoring import TIER_LABELS
 
 
-def _split_keywords(values):
-    out = []
+def _split_keywords(values: list[str] | None) -> list[str]:
+    out: list[str] = []
     for v in values or []:
         out += [k.strip() for k in v.split(",") if k.strip()]
     return out
 
 
-def build_parser():
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="leadgen", description="Find businesses likely to run "
                                 "large commercial compactors or balers.")
     sub = p.add_subparsers(dest="command")
@@ -76,7 +76,7 @@ def build_parser():
     return p
 
 
-def cmd_run(args):
+def cmd_run(args: argparse.Namespace) -> int:
     params = SearchParams(
         location=args.location, radius_miles=args.radius,
         keywords=config.DEFAULT_KEYWORDS if args.keywords is None else _split_keywords(args.keywords),
@@ -132,7 +132,7 @@ def cmd_run(args):
     return 0
 
 
-def cmd_reference(args):
+def cmd_reference(args: argparse.Namespace) -> int:
     from . import reference
     if not store.database_url():
         print("Note: DATABASE_URL is not set, so the marks come from the local database, "
@@ -147,7 +147,7 @@ def cmd_reference(args):
     return 0
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     args = build_parser().parse_args(argv)
     if args.command == "web":

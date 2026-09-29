@@ -12,13 +12,14 @@
 <div class="app">
   <aside class="side">
     <div class="brand"><strong>Arco Compactor</strong><span>Lead Finder</span></div>
+    <button type="button" class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="side-bottom">Menu</button>
     <nav aria-label="Pages">
       <a href="#find" data-page="find">Find leads</a>
       <a href="#leads" data-page="leads" title="Saved businesses not yet marked Yes or No">Leads <span class="count" id="n-leads" hidden></span></a>
       <a href="#calls" data-page="calls" title="Businesses with at least one call logged">Calls <span class="count" id="n-calls" hidden></span></a>
       <a href="#stats" data-page="stats">Stats</a>
     </nav>
-    <div class="side-bottom">
+    <div class="side-bottom" id="side-bottom">
       {% if yelp %}<div id="yelp-quota" class="quota{{ ' paused' if yelp.paused }}">{{ yelp.text }}</div>{% endif %}
       <div class="theme" role="group" aria-label="Colour theme">
         <button type="button" data-theme-pick="light">Light</button>
@@ -40,17 +41,17 @@
       <div class="problem" id="paused-box"{% if not switches.search_paused %} hidden{% endif %}>
         <div><strong>Searching is paused</strong><span class="muted">{{ paused_text }}</span></div>
       </div>
-      <form id="form" class="card">
+      <form id="form" class="card" novalidate>
         <div class="form-grid">
           <label>Search around
-            <input name="location" value="{{ defaults.location }}" autocomplete="off">
+            <input name="location" value="{{ defaults.location }}" autocomplete="off" maxlength="200" required>
             <span class="hint">A ZIP code, city or street address. Distances are measured from here.</span></label>
           <label>How far (miles)
             <input name="radius" type="number" min="1" max="100" step="1" value="{{ defaults.radius|int }}">
             <span class="hint">Businesses farther away are left out.</span></label>
           <label>Extra search words
             <input name="keywords" value="{{ defaults.keywords }}">
-            <span class="hint">Separate with commas. Businesses matching them score higher.</span></label>
+            <span class="hint">Separate with commas: up to 20 words, each up to 60 characters. Businesses matching them score higher.</span></label>
         </div>
         <details class="advanced">
           <summary>More options</summary>
@@ -84,6 +85,7 @@
           <button id="go" type="submit"{% if switches.search_paused %} disabled{% endif %}>Find leads</button>
           <span id="day-note" role="status">Checking today's search...</span>
         </div>
+        <div class="error" id="go-error" role="alert" hidden></div>
       </form>
 
       <div class="card" id="progress-card" hidden>
@@ -125,6 +127,10 @@
             <option value="">All tiers</option><option value="A">A - strong</option><option value="B">B - likely</option>
             <option value="C">C - possible</option><option value="D">D - weak</option>
           </select>
+          <select id="sort-pick" class="phone-only" aria-label="Sort">
+            <option value="score:desc">Best score first</option><option value="name:asc">Name A to Z</option>
+            <option value="city:asc">City A to Z</option><option value="miles:asc">Nearest first</option>
+          </select>
           <a class="btn quiet" href="/download/saved.xlsx" data-download data-file="compactor-leads.xlsx"
              data-busy-label="Preparing Excel…">Download Excel</a>
           <a class="btn quiet" href="/download/saved.csv" data-download data-file="compactor-leads.csv"
@@ -145,7 +151,7 @@
     <!-- Calls -->
     <section class="page" id="page-calls" hidden>
       <div class="page-head"><h1>Calls</h1>
-        <p>Businesses with a baler or compactor that have been called: every call, newest first, or by how the latest call went.</p></div>
+        <p>Businesses with a baler or compactor that have been called: one row per business, latest call first, or grouped by how the latest call went. Every call is under History.</p></div>
       <div id="calls-problem"></div>
       <div id="calls-body">
         <div class="tabs" id="call-tabs"></div>

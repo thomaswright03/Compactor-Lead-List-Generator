@@ -46,14 +46,10 @@ ignore_names = ["quotePrefix", "font", "alignment", "hyperlink", "freeze_panes",
                 "permanent", "TABLES"]
 
 # Type check (mypy). Run: python -m mypy   CI runs it on every push; a type error fails it.
-# Most functions have no annotations, so check_untyped_defs makes mypy check their
-# bodies too (a None where a number is expected, a misspelt attribute on Lead).
+# Strict: every function in leadgen/ has parameter and return annotations, and mypy
+# checks the calls between modules against them (types-requests gives it requests' types).
 [tool.mypy]
 files = ["leadgen"]
 python_version = "3.11"
-check_untyped_defs = true
-strict_equality = true
+strict = true
 warn_unreachable = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-no_implicit_optional = true

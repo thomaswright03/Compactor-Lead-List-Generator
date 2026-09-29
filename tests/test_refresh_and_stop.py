@@ -2,6 +2,7 @@
 the plain words on the Find leads page."""
 
 import json
+import re
 import time
 from pathlib import Path
 
@@ -151,10 +152,12 @@ def test_progress_and_details_are_in_plain_words():
     osm_note.append(job["message"])
     assert osm_note == ["Searching the free map data (server 2 of 4)…",
                         "Searching Yelp for grocery (3 of 19)"]
-    details = web.plain_details({"osm raw results": 40, "after dedupe": 30,
-                                 "results in radius": 35, "seconds": 8.2, "google requests": 3})
-    assert details == {"Businesses from the free map data": 40, "After merging duplicates": 30,
-                       "Within the radius": 35, "Took": "8 seconds", "Google lookups": 3}
+    # An older record (no funnel numbers): labelled and put in funnel order all the same.
+    details = web.plain_details({"seconds": 8.2, "osm raw results": 40, "after dedupe": 30,
+                                 "results in radius": 35, "google requests": 3})
+    assert details == [["Businesses from the free map data", 40], ["Listings within the radius", 35],
+                       ["Businesses after merging duplicates", 30], ["Google lookups", 3],
+                       ["Took", "8 seconds"]]
 
 
 def test_an_unknown_place_reads_plainly(monkeypatch):
@@ -176,7 +179,7 @@ def test_interrupted_search_says_when_in_utah_time(monkeypatch):
     from leadgen import daily
     daily.claim({"location": "84101"})
     body = web.create_app().test_client().get("/searches").get_json()
-    assert body["current"]["free_at"].endswith("Utah time")
+    assert re.fullmatch(r"\d{1,2}:\d\d [AP]M", body["current"]["free_at"])
 
 
 def test_a_failed_mark_says_so_once(monkeypatch):

@@ -21,31 +21,31 @@ except ImportError:                    # pragma: no cover - Python without zonei
 _FALLBACK = dt.timezone(dt.timedelta(hours=-7), "MST")
 
 
-def utah(when):
+def utah(when: dt.datetime | float) -> dt.datetime:
     """An aware datetime (or epoch seconds) in Utah time."""
     if not isinstance(when, dt.datetime):
         when = dt.datetime.fromtimestamp(when, dt.UTC)
     return when.astimezone(UTAH or _FALLBACK)
 
 
-def now():
+def now() -> dt.datetime:
     return utah(dt.datetime.now(dt.UTC))
 
 
-def _clock(when, upper=False):
+def _clock(when: dt.datetime) -> str:
+    """'4:43 PM': the one way the site writes a time of day."""
     hour = when.hour % 12 or 12
-    half = "am" if when.hour < 12 else "pm"
-    return f"{hour}:{when.minute:02d} {half.upper() if upper else half}"
+    return f"{hour}:{when.minute:02d} {'AM' if when.hour < 12 else 'PM'}"
 
 
-def date_time_text(ts):
-    """'Sep 29, 2026, 10:14 am' in Utah time; '' for no time."""
+def date_time_text(ts: float | None) -> str:
+    """'Sep 29, 2026, 10:14 AM' in Utah time; '' for no time."""
     if not ts:
         return ""
     when = utah(ts)
     return f"{when:%b} {when.day}, {when.year}, {_clock(when)}"
 
 
-def clock_text(ts):
-    """'12:19 PM Utah time' for a timestamp."""
-    return f"{_clock(utah(ts), upper=True)} Utah time"
+def clock_text(ts: float) -> str:
+    """'12:19 PM' (Utah time) for a timestamp, written like date_time_text's time."""
+    return _clock(utah(ts))

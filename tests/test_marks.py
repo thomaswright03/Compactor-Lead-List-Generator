@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from leadgen import config, daily, marks, saved, web
+from leadgen import calls, config, daily, marks, saved, web
 from leadgen.dedupe import dedupe
 from leadgen.export import COLUMNS, to_csv_bytes
 from leadgen.models import Lead
@@ -105,14 +105,16 @@ def test_page_shows_saved_leads_across_searches(monkeypatch):
     client = web.create_app().test_client()
     assert client.get("/leads").get_json()["leads"] == []
     _, body = _search(client)
-    row = body["leads"][0]
-    assert body["saved"] and row["has_baler"] == "" and row["key"]
+    assert body["saved"] and body["new_leads"] == 1 and body["saved_count"] == 1
+    assert "leads" not in body                          # the page loads the list itself
+    row = client.get("/leads").get_json()["leads"][0]
+    assert row["has_baler"] == "" and row["key"]
     assert client.post("/mark", json={"key": row["key"], "value": "yes"}).get_json()["ok"]
     current["day"] = next(days)                         # searching again takes a new day
     _, body = _search(client)
     assert body["new_leads"] == 1 and body["saved_count"] == 2
-    assert {l["name"]: l["has_baler"] for l in body["leads"]} == {"Walmart": "yes", "Costco": ""}
-    assert len(client.get("/leads").get_json()["leads"]) == 2
+    listed = client.get("/leads").get_json()["leads"]
+    assert {l["name"]: l["has_baler"] for l in listed} == {"Walmart": "yes", "Costco": ""}
     csv = client.get("/download/saved.csv").data.decode("utf-8-sig")
     assert "Walmart" in csv and "Costco" in csv and ",Yes," in csv
 
@@ -166,3 +168,22 @@ def test_a_failed_save_hands_out_no_ids(monkeypatch):
     with pytest.raises(RuntimeError):
         saved.save_search([lead])
     assert lead.uid == ""
+
+
+def test_a_call_without_notes_keeps_the_earlier_notes(monkeypatch):
+    from leadgen.web.common import lead_json
+    lead = _lead()
+    saved.save_search([lead])
+    calls.log_call(lead.uid, "Follow Up", "Spoke with store manager Jim; 60-yd compactor, lease ends March")
+    now = time.time()
+    monkeypatch.setattr(time, "time", lambda: now + 60)
+    calls.log_call(lead.uid, "Interested", "")
+    row = lead_json(calls.apply(saved.load())[0])
+    assert row["call_outcome"] == "Interested" and row["call_notes"] == "" and row["call_count"] == 2
+    assert "lease ends March" in row["earlier_notes"] and row["earlier_notes_when"]
+    csv = to_csv_bytes(calls.apply(saved.load())).decode("utf-8-sig")
+    assert "(From the call on " in csv and "lease ends March" in csv
+    monkeypatch.setattr(time, "time", lambda: now + 120)
+    calls.log_call(lead.uid, "Interested", "Quote sent")        # a newer note replaces it
+    row = lead_json(calls.apply(saved.load())[0])
+    assert row["call_notes"] == "Quote sent" and row["earlier_notes"] == ""

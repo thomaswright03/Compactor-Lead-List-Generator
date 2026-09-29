@@ -6,21 +6,21 @@ import re
 import threading
 import time
 import uuid
+from collections.abc import Mapping
 from dataclasses import replace
+from typing import Any
 
-from flask import Blueprint, abort, jsonify, request
+from flask import Blueprint, Response, abort, jsonify, request
+from flask.typing import ResponseReturnValue
 
 from .. import config, daily, saved, store
 from ..geo import GeocodeError
 from ..localtime import clock_text
-from ..pipeline import GRIDS, SOURCES, PipelineError, SearchParams, run
+from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, run
 from .common import (
     NOT_USED_UP,
     SEARCH_PAUSED,
-    LoadError,
     db_message,
-    lead_json,
-    load_saved,
     same_origin,
     state,
     switches,
@@ -28,6 +28,10 @@ from .common import (
 )
 
 log = logging.getLogger("leadgen.web")
+
+# A running or finished search, as the page follows it (state, step, pct, result...).
+Job = dict[str, Any]
+Num = int | float
 
 MAX_JOBS = 20
 MAX_KEYWORDS = 20
@@ -39,21 +43,42 @@ STEPS = ["Find the location", "Search Yelp and Google", "Search map data", "Merg
 # A step running longer than this (seconds) is "taking longer than usual" on the page.
 SLOW_SECONDS = [30, 240, 75, 60, 60]
 
-# The search's numbers, as the page names them (the search history's "Details").
+# The search's numbers, as the page names them (the search history's "Details"), in the
+# order they read as a funnel: found per source, within the radius, merged, left out,
+# kept, then the kept leads by tier and what the search cost. "min score" goes into the
+# low-score line's label.
 DETAIL_LABELS = {
-    "google requests": "Google lookups",
     "google raw results": "Businesses from Google",
-    "yelp requests": "Yelp calls",
     "yelp raw results": "Businesses from Yelp",
     "osm raw results": "Businesses from the free map data",
-    "results in radius": "Within the radius",
-    "after dedupe": "After merging duplicates",
+    "results in radius": "Listings within the radius",
+    "duplicates merged": "Duplicate listings merged",
+    "after dedupe": "Businesses after merging duplicates",
+    "closed": "Left out: closed for good",
+    "below min score": "Left out: score below the minimum",
+    "not matching keywords": "Left out: not matching the search words",
+    "over limit": "Left out: over the lead limit",
     "leads kept": "Leads kept",
+    "competitors flagged": "Competitors among them (flagged)",
     "tier A": "Tier A leads",
     "tier B": "Tier B leads",
-    "competitors flagged": "Competitors (flagged)",
+    "tier C": "Tier C leads",
+    "tier D": "Tier D leads",
+    "google requests": "Google lookups",
+    "yelp requests": "Yelp calls",
     "seconds": "Took",
 }
+# Left-out lines that are only shown when something was left out that way.
+_ONLY_IF_ANY = ("closed", "not matching keywords", "over limit", "duplicates merged")
+
+
+class FormError(ValueError):
+    """A form value the server refuses; `field` names the input the page shows it next to."""
+
+    def __init__(self, message: str, field: str = "") -> None:
+        super().__init__(message)
+        self.field = field
+
 
 bp = Blueprint("finding", __name__)
 
@@ -62,7 +87,7 @@ _SOURCE_WORDS = (("Google", "Google"), ("Yelp", "Yelp"), ("OpenStreetMap", "The 
                  ("Overpass", "The map data service"))
 
 
-def plain_warning(text):
+def plain_warning(text: str) -> str:
     """A search note in words for sales staff: no URLs, error names or cap settings.
     The original goes to the log."""
     who = next((name for word, name in _SOURCE_WORDS if word.lower() in text.lower()), "")
@@ -84,18 +109,27 @@ def plain_warning(text):
     return text
 
 
-def plain_details(details):
-    """A search's numbers with plain labels (older records keep the old names)."""
-    out = {}
-    for key, value in (details or {}).items():
+def plain_details(details: dict[str, object] | None) -> list[list[object]]:
+    """A search's numbers as [label, value] pairs in funnel order (older records keep
+    their names). A list, because JSON objects lose their order on the way to the page."""
+    details = dict(details or {})
+    minimum = details.pop("min score", None)
+    order = list(DETAIL_LABELS)
+    out = []
+    for key in sorted(details, key=lambda k: order.index(k) if k in order else len(order)):
+        value = details[key]
+        if key in _ONLY_IF_ANY and not value:
+            continue
         label = DETAIL_LABELS.get(key, key)
+        if key == "below min score" and minimum is not None:
+            label = f"Left out: score below {minimum}"
         if key == "seconds" and isinstance(value, (int, float)):
             value = f"{round(value)} seconds" if value < 120 else f"{round(value / 60)} minutes"
-        out[label] = value
+        out.append([label, value])
     return out
 
 
-def plain_progress(msg):
+def plain_progress(msg: str) -> str:
     """The search's progress message in the page's words."""
     page = re.match(r"(Yelp|Google) page \d+: '(.*)' \((\d+)/(\d+)\)", msg)
     if page:
@@ -122,17 +156,19 @@ class _Progress:
     slow request, so its share of the bar fills gradually while it runs.
     """
 
-    def __init__(self, job):
+    def __init__(self, job: Job) -> None:
         self.job = job
-        self.calls, self.cap, self.map_started = 0, None, None
+        self.calls = 0
+        self.cap: int | None = None
+        self.map_started: float | None = None
         self.step_started = time.time()
         job.update(step=0, pct=1.0, started=time.time())
 
-    def slow(self):
+    def slow(self) -> bool:
         step = self.job["step"]
         return step < len(SLOW_SECONDS) and time.time() - self.step_started > SLOW_SECONDS[step]
 
-    def __call__(self, msg):
+    def __call__(self, msg: str) -> None:
         job = self.job
         job["message"] = plain_progress(msg)
         if msg.startswith("Locating"):
@@ -154,21 +190,21 @@ class _Progress:
         elif msg.startswith("Saving"):
             self._at(4, 96)
 
-    def _at(self, step, pct):
+    def _at(self, step: int, pct: float) -> None:
         if step > self.job["step"]:
             self.step_started = time.time()
         self.job["step"] = max(self.job["step"], step)
         self.job["pct"] = max(self.job["pct"], pct)
 
-    def pct(self):
+    def pct(self) -> float:
         if self.job["step"] == 2 and self.map_started:
             # Creeps toward 86% over the few minutes the map servers take.
-            return max(self.job["pct"],
+            return max(float(self.job["pct"]),
                        50 + 36 * (1 - math.exp(-(time.time() - self.map_started) / 150)))
-        return self.job["pct"]
+        return float(self.job["pct"])
 
 
-def skipped_steps(params):
+def skipped_steps(params: SearchParams) -> list[int]:
     """Steps a search won't run: Yelp and Google when neither is set up (or both are
     switched off), map data when a paid source alone was picked."""
     google, yelp_key, _ = params.resolved_keys()
@@ -177,37 +213,51 @@ def skipped_steps(params):
     return ([] if paid else [1]) + ([] if params.source in ("osm", "both", "auto") else [2])
 
 
-def _number(form, name, default, cast, lo, hi, label):
+def _number(form: Mapping[str, str], name: str, default: Num | None, cast: type, lo: float, hi: float,
+            label: str) -> Any:
     raw = (form.get(name) or "").strip()
     if not raw:
         return default
     try:
         value = float(raw)
     except ValueError:
-        raise ValueError(f"{label} must be a number") from None
+        raise FormError(f"{label} must be a number", name) from None
     if cast is int:
         if not math.isfinite(value) or not value.is_integer():
-            raise ValueError(f"{label} must be a whole number")
+            raise FormError(f"{label} must be a whole number", name)
         value = int(value)
     if not lo <= value <= hi:
-        raise ValueError(f"{label} must be between {lo} and {hi}")
+        raise FormError(f"{label} must be between {lo} and {hi}", name)
     return value
 
 
-def parse_form(form):
-    """Validate the form strictly; raise ValueError with a message for the page."""
+def parse_form(form: Mapping[str, str]) -> SearchParams:
+    """Validate the form strictly; raise FormError with a message for the page (and the
+    field it is about)."""
+    # The page always sends the field; a bare POST without it (a script) searches around Arco.
+    location = (form.get("location", config.DEFAULT_LOCATION) or "").strip()
+    if not location:
+        raise FormError("Enter where to search around: a ZIP code, city or street address.",
+                        "location")
+    if len(location) > 200:
+        raise FormError("Search around is too long: use at most 200 characters.", "location")
     keywords = [k.strip() for k in form.get("keywords", "").split(",") if k.strip()]
-    if len(keywords) > MAX_KEYWORDS or any(len(k) > MAX_KEYWORD_LEN for k in keywords):
-        raise ValueError(f"Use at most {MAX_KEYWORDS} keywords of up to "
-                         f"{MAX_KEYWORD_LEN} characters")
+    if len(keywords) > MAX_KEYWORDS:
+        raise FormError(f"Use at most {MAX_KEYWORDS} search words (you have {len(keywords)}).",
+                        "keywords")
+    long = next((k for k in keywords if len(k) > MAX_KEYWORD_LEN), None)
+    if long is not None:
+        raise FormError(f"Each search word can be up to {MAX_KEYWORD_LEN} characters; "
+                        f"“{long[:20]}…” has {len(long)}. Separate words with commas.",
+                        "keywords")
     source = form.get("source", "auto")
     if source not in SOURCES:
-        raise ValueError("Pick where to search from the list")
+        raise FormError("Pick where to search from the list", "source")
     grid = _number(form, "grid", 1, int, 1, 19, "Coverage")
     if grid not in GRIDS:
-        raise ValueError("Pick a coverage from the list")
+        raise FormError("Pick a coverage from the list", "grid")
     return SearchParams(
-        location=(form.get("location", "").strip() or config.DEFAULT_LOCATION)[:200],
+        location=location,
         radius_miles=_number(form, "radius", config.DEFAULT_RADIUS_MILES, float, 1, 100,
                              "Radius"),
         keywords=keywords,
@@ -221,7 +271,7 @@ def parse_form(form):
     )
 
 
-def _save(job, result, params, warnings):
+def _save(job: Job, result: RunResult, params: SearchParams, warnings: list[str]) -> None:
     try:
         job["progress"]("Saving leads")
         job["new_leads"], _ = saved.save_search(result.leads, params.keywords)
@@ -231,9 +281,15 @@ def _save(job, result, params, warnings):
         why = db_message(exc) if isinstance(exc, store.Unavailable) else (
             "the database had a problem")
         warnings.append(f"These leads were not saved: {why}")
+        return
+    try:
+        job["saved_count"] = saved.count()
+    except Exception:
+        # The leads are saved; only the page's "N saved leads in all" goes without its number.
+        log.exception("Counting the saved leads failed")
 
 
-def _record(day, result, job, warnings):
+def _record(day: str, result: RunResult, job: Job, warnings: list[str]) -> None:
     """The day's record is written before the job says it is done, so the page's
     search history is up to date when it reloads it."""
     try:
@@ -254,7 +310,7 @@ def _record(day, result, job, warnings):
 RETRY = "You can try again now; if it fails again, try later today."
 
 
-def _worker(job, params, day):
+def _worker(job: Job, params: SearchParams, day: str) -> None:
     try:
         # Closed places come back too, so a saved one that has since closed is updated
         # (and leaves the saved list); they are not shown.
@@ -282,12 +338,12 @@ def _worker(job, params, day):
                         "Something went wrong during the search.")
 
 
-def _fail(job, day, message, reason):
+def _fail(job: Job, day: str, message: str, reason: str) -> None:
     _give_back(day, reason)
     job.update(state="error", message=message)
 
 
-def _give_back(day, reason=None):
+def _give_back(day: str, reason: str | None = None) -> None:
     """A search that failed outright does not use up the day (it stays in the
     history as failed, with the reason)."""
     try:
@@ -296,8 +352,8 @@ def _give_back(day, reason=None):
         log.exception("Giving back today's search failed")
 
 
-def _claim(params):
-    """Claim today's search: (day, None), or (None, a response for the page)."""
+def _claim(params: SearchParams) -> str | tuple[Response, int]:
+    """Claim today's search: the day, or the response for the page when it can't be had."""
     try:
         day, done = daily.claim({"location": params.location, "radius": params.radius_miles,
                                  "keywords": ", ".join(params.keywords),
@@ -305,35 +361,37 @@ def _claim(params):
     except Exception as exc:
         log.error("Recording the search failed", exc_info=True)
         if isinstance(exc, store.Unavailable) and "DATABASE_URL" in str(exc):
-            return None, (jsonify({"error": f"Searching needs the database: {exc}."}), 503)
-        return None, (jsonify({"error": "Can't reach the saved data right now, so the search "
+            return jsonify({"error": f"Searching needs the database: {exc}."}), 503
+        return (jsonify({"error": "Can't reach the saved data right now, so the search "
                                         "didn't start. Nothing is lost. Try again in a "
                                         "minute."}), 503)
     if day is None:
-        return None, (jsonify({"error": f"Today's search was already run ({done['when']}). "
-                                        "Find Leads works once a day; the next search can "
-                                        "run tomorrow.", "searched": done}), 409)
-    return day, None
+        when = done["when"] if done else "earlier today"
+        return jsonify({"error": f"Today's search was already run ({when}). Find Leads works "
+                                 "once a day; the next search can run tomorrow.",
+                        "searched": done}), 409
+    return day
 
 
 @bp.post("/search")
-def search():
+def search() -> ResponseReturnValue:
     if not same_origin():
         abort(403)
     if config.switched_on(config.SEARCH_PAUSED_ENV):
         return jsonify({"error": SEARCH_PAUSED, "paused": True}), 503
     try:
         params = parse_form(request.form)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+    except FormError as exc:
+        return jsonify({"error": str(exc), "field": exc.field}), 400
     s = state()
     running = s.running_job()
     if running is not None:
         # The page attaches to it (e.g. after a reload) instead of starting another.
         return jsonify({"error": "A search is already running.", "job_id": running}), 429
-    day, refused = _claim(params)
-    if refused:
-        return refused
+    claimed = _claim(params)
+    if not isinstance(claimed, str):
+        return claimed
+    day = claimed
     job_id = uuid.uuid4().hex[:12]
     job = {"state": "running", "message": "Starting", "params": params,
            "skipped": skipped_steps(params)}
@@ -358,7 +416,7 @@ def search():
 
 
 @bp.get("/searches")
-def searches():
+def searches() -> ResponseReturnValue:
     """Each day's search (when, what, what it found), and whether today's is used."""
     try:
         body = daily.history()
@@ -377,7 +435,7 @@ def searches():
 
 
 @bp.get("/status/<job_id>")
-def status(job_id):
+def status(job_id: str) -> ResponseReturnValue:
     job = state().jobs.get(job_id) or abort(404)
     progress = job["progress"]
     body = {"state": job["state"], "message": job["message"], "steps": STEPS,
@@ -386,17 +444,9 @@ def status(job_id):
             "skipped": job.get("skipped", []),
             "slow": job["state"] == "running" and progress.slow()}
     if job["state"] == "done":
+        # Only what the page shows: the counts, not the leads (the Leads page loads those).
         res = job["result"]
-        leads, undo = res.leads, {}
-        warnings, shows_saved, saved_count = list(res.warnings), False, None
-        if job.get("saved"):
-            try:
-                leads, undo = load_saved()
-                saved_count, shows_saved = len(leads), True
-            except LoadError as exc:
-                warnings.append(str(exc))
-        body.update(leads=[lead_json(lead, undo) for lead in leads],
-                    stats=plain_details(res.stats), new_leads=job.get("new_leads"),
-                    saved_count=saved_count, warnings=warnings, location=res.location_label,
-                    yelp=yelp_quota(), saved=shows_saved)
+        body.update(found=len(res.leads), new_leads=job.get("new_leads"),
+                    saved_count=job.get("saved_count"), warnings=list(res.warnings),
+                    location=res.location_label, yelp=yelp_quota(), saved=bool(job.get("saved")))
     return jsonify(body)

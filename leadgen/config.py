@@ -37,10 +37,10 @@ class Category:
     label: str
     weight: int              # base likelihood this kind of site runs a compactor/baler
     why: str                 # human-readable reason shown in the export
-    google_types: list = field(default_factory=list)
-    osm_tags: list = field(default_factory=list)   # (key, value or None for "any")
-    yelp_categories: list = field(default_factory=list)   # Yelp category aliases
-    name_keywords: list = field(default_factory=list)   # whole words/phrases in the name
+    google_types: list[str] = field(default_factory=list)
+    osm_tags: list[tuple[str, str | None]] = field(default_factory=list)   # (key, value or None for "any")
+    yelp_categories: list[str] = field(default_factory=list)   # Yelp category aliases
+    name_keywords: list[str] = field(default_factory=list)   # whole words/phrases in the name
     lead_type: str = "Prospect"
     query_osm: bool = True   # False: tags classify results but are not fetched (too many)
 
@@ -429,12 +429,12 @@ GOOGLE_OFF_ENV = "LEADGEN_GOOGLE_OFF"         # searches skip Google (no Google 
 YELP_OFF_ENV = "LEADGEN_YELP_OFF"             # searches skip Yelp
 
 
-def switched_on(name):
+def switched_on(name: str) -> bool:
     """True when the environment variable `name` is set to 1 / true / yes / on."""
     return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
 
 
-def stop_reason(source=None):
+def stop_reason(source: str | None = None) -> str | None:
     """Why a running search must stop now (plain words), or None.
 
     Checked between sources and before every paid call, so switching searching

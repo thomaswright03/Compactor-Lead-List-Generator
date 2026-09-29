@@ -14,6 +14,9 @@
   --chart-bar:#5aa2ea; --chart-grid:#2c384b; --chart-base:#4a586e; --chart-text:#c3ccd8;
   --shadow:rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
 {%- endset -%}
+{#- The browser's own bar takes the sidebar's colour, light and dark. -#}
+<meta name="theme-color" content="#15304d" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
 <style>
   :root {
     /* One scale for every page: spacing and radii, and five text sizes. */

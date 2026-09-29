@@ -7,13 +7,15 @@ later by the pipeline.
 
 import json
 import re
+from collections.abc import Callable, Sequence
+from typing import Any
 
 from .. import config
 from ..geo import METERS_PER_MILE, search_grid
 from ..http import request_json
 from ..models import Lead
 from . import SourceError
-from .paging import run_searches
+from .paging import Cell, run_searches
 
 SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 FIELD_MASK = ",".join([
@@ -30,14 +32,14 @@ TOKEN_DELAY_SECONDS = 2.0   # give Google a moment before a page token is usable
 _CITY_STATE_ZIP = re.compile(r",\s*([^,]+),\s*([A-Z]{2})\s+(\d{5})(?:-\d{4})?(?:,\s*USA)?\s*$")
 
 
-def _split_formatted(address):
+def _split_formatted(address: str) -> tuple[str, str, str]:
     """'1 Main St, Salt Lake City, UT 84101, USA' -> ('Salt Lake City', 'UT', '84101')."""
     m = _CITY_STATE_ZIP.search(address or "")
     return (m.group(1).strip(), m.group(2), m.group(3)) if m else ("", "", "")
 
 
-def parse_place(place, query=""):
-    comps: dict[str, dict] = {}
+def parse_place(place: dict[str, Any], query: str = "") -> Lead:
+    comps: dict[str, dict[str, Any]] = {}
     for c in place.get("addressComponents", []):
         for t in c.get("types", []):
             comps.setdefault(t, c)
@@ -66,13 +68,14 @@ def parse_place(place, query=""):
     )
 
 
-def estimate_requests(queries, grid_cells):
+def estimate_requests(queries: Sequence[str], grid_cells: int) -> int:
     """Upper bound on requests for a run (every search following every page)."""
     return len(queries) * len(search_grid(0, 0, 1, grid_cells)) * MAX_PAGES
 
 
-def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=None,
-           progress=None):
+def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], api_key: str,
+           grid_cells: int = 1, max_requests: int | None = None,
+           progress: Callable[[str], None] | None = None) -> tuple[list[Lead], int, list[str]]:
     """Return (leads, requests_made, warnings). Put the most important queries first."""
     if not api_key:
         raise SourceError("No Google Places API key configured")
@@ -82,7 +85,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
     if max_requests is None:
         max_requests = len(queries) * len(cells) * MAX_PAGES
 
-    def fetch_page(query, cell, token):
+    def fetch_page(query: str, cell: Cell, token: str | None) -> tuple[list[Any], str | None]:
         clat, clon, crad = cell
         body = {
             "textQuery": query,
@@ -97,7 +100,7 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
         data = request_json("POST", SEARCH_URL, json_body=body, headers=headers, use_cache=False)
         return data.get("places", []), data.get("nextPageToken")
 
-    def chain_key(query, cell):
+    def chain_key(query: str, cell: Cell) -> str:
         clat, clon, crad = cell
         return json.dumps(["google-chain-v1", FIELD_MASK, query, round(clat, 5), round(clon, 5),
                            round(crad, 3)])

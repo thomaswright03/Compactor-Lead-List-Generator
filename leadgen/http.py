@@ -9,7 +9,9 @@ import json
 import os
 import re
 import time
+from collections.abc import Callable, MutableMapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import requests
 
@@ -25,7 +27,7 @@ class HttpError(RuntimeError):
 _SECRET_PARAM = re.compile(r"(?i)([?&](?:key|api_key)=)[^&\s)'\"]+")
 
 
-def redact(text) -> str:
+def redact(text: object) -> str:
     """Hide API keys that request libraries echo back inside URLs."""
     return _SECRET_PARAM.sub(r"\1REDACTED", str(text))
 
@@ -34,7 +36,7 @@ def _cache_path(key: str) -> Path:
     return CACHE_DIR / (hashlib.sha256(key.encode()).hexdigest() + ".json")
 
 
-def cache_get(key: str, ttl=None):
+def cache_get(key: str, ttl: float | None = None) -> Any:
     path = _cache_path(key)
     try:
         if time.time() - path.stat().st_mtime > (ttl or config.CACHE_TTL_SECONDS):
@@ -45,7 +47,7 @@ def cache_get(key: str, ttl=None):
         return None
 
 
-def cache_put(key: str, value) -> None:
+def cache_put(key: str, value: object) -> None:
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         _cache_path(key).write_text(json.dumps(value))
@@ -53,9 +55,14 @@ def cache_put(key: str, value) -> None:
         pass
 
 
-def request_json(method, url, *, params=None, data=None, json_body=None, headers=None,
-                 timeout=60, retries=3, use_cache=True, cache_key_extra="",
-                 cacheable=None, no_retry=(), response_headers=None, before_retry=None):
+def request_json(method: str, url: str, *, params: dict[str, Any] | None = None,
+                 data: dict[str, Any] | str | None = None, json_body: Any = None,
+                 headers: dict[str, str] | None = None,
+                 timeout: float | tuple[float, float] = 60, retries: int = 3,
+                 use_cache: bool = True, cache_key_extra: str = "",
+                 cacheable: Callable[[Any], bool] | None = None, no_retry: Sequence[str] = (),
+                 response_headers: MutableMapping[str, str] | None = None,
+                 before_retry: Callable[[], bool] | None = None) -> Any:
     """Return parsed JSON, retrying on network errors, 429 and 5xx.
 
     cacheable(value) -> bool can veto caching a response (e.g. a timeout notice).

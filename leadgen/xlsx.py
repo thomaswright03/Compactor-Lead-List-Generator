@@ -13,6 +13,7 @@ and web links. The files open in Excel, LibreOffice, Google Sheets and openpyxl
 import io
 import re
 import zipfile
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from xml.sax.saxutils import escape, quoteattr
@@ -47,7 +48,7 @@ class Cell:
 
 
 @lru_cache(maxsize=1024)
-def column_letter(n):
+def column_letter(n: int) -> str:
     """1 -> "A", 27 -> "AA"."""
     letters = ""
     while n:
@@ -56,20 +57,20 @@ def column_letter(n):
     return letters
 
 
-def clean(text):
+def clean(text: str) -> str:
     """Text without the control characters a spreadsheet can't hold."""
     return _ILLEGAL.sub("", text)
 
 
 class Sheet:
-    def __init__(self, book, name, widths, freeze=None):
+    def __init__(self, book: "Book", name: str, widths: list[float], freeze: str | None = None) -> None:
         self.book, self.name, self.widths, self.freeze = book, name, widths, freeze
-        self.rows = []                   # each row's finished XML
-        self.links = []                  # (cell reference, address)
+        self.rows: list[str] = []        # each row's finished XML
+        self.links: list[tuple[str, str]] = []   # (cell reference, address)
         self.filter = False
-        self.dropdown = None             # (column number, choices)
+        self.dropdown: tuple[int, Sequence[str]] | None = None   # (column number, choices)
 
-    def append(self, values):
+    def append(self, values: Iterable[object]) -> None:
         """Add a row: plain values (None or "" leave the cell empty) or Cells."""
         r = len(self.rows) + 1
         out = []
@@ -82,12 +83,11 @@ class Sheet:
                     continue
                 value = None
             ref = f"{column_letter(i + 1)}{r}"
-            text = isinstance(value, str)
-            style = self.book.style(cell, quote=text and value.startswith(_FORMULA_START))
+            style = self.book.style(cell, quote=isinstance(value, str) and value.startswith(_FORMULA_START))
             s = f' s="{style}"' if style else ""
             if value is None:
                 out.append(f'<c r="{ref}"{s}/>')
-            elif text:
+            elif isinstance(value, str):
                 out.append(f'<c r="{ref}"{s} t="s"><v>{self.book.text(clean(value))}</v></c>')
             elif isinstance(value, bool):
                 out.append(f'<c r="{ref}"{s} t="b"><v>{int(value)}</v></c>')
@@ -97,10 +97,10 @@ class Sheet:
                 self.links.append((ref, clean(cell.link)))
         self.rows.append(f'<row r="{r}">{"".join(out)}</row>')
 
-    def _last(self):
+    def _last(self) -> str:
         return f"{column_letter(max(len(self.widths), 1))}{max(len(self.rows), 1)}"
 
-    def xml(self):
+    def xml(self) -> str:
         parts = [_HEAD, f'<worksheet xmlns="{_MAIN}" xmlns:r="{_REL}">',
                  f'<dimension ref="A1:{self._last()}"/><sheetViews><sheetView workbookViewId="0">']
         if self.freeze:
@@ -135,7 +135,7 @@ class Sheet:
                      'footer="0.5"/></worksheet>')
         return "".join(parts)
 
-    def rels(self):
+    def rels(self) -> str:
         return (_HEAD + f'<Relationships xmlns="{_PKG}">' + "".join(
             f'<Relationship Id="rId{n}" Type="{_REL}/hyperlink" Target={quoteattr(url)} '
             'TargetMode="External"/>' for n, (_, url) in enumerate(self.links, start=1))
@@ -143,25 +143,25 @@ class Sheet:
 
 
 class Book:
-    def __init__(self):
-        self.sheets = []
-        self._texts = {}                 # shared text -> its number
-        self._fills = []                 # colours, in order (fills 0 and 1 are Excel's own)
-        self._fonts = []                 # FONTS names, in order (font 0 is the default)
-        self._styles = {(None, None, False, False): 0}
+    def __init__(self) -> None:
+        self.sheets: list[Sheet] = []
+        self._texts: dict[str, int] = {}   # shared text -> its number
+        self._fills: list[str] = []      # colours, in order (fills 0 and 1 are Excel's own)
+        self._fonts: list[str] = []      # FONTS names, in order (font 0 is the default)
+        self._styles: dict[tuple[str | None, str | None, bool, bool], int] = {(None, None, False, False): 0}
 
-    def add_sheet(self, name, widths=(), freeze=None):
+    def add_sheet(self, name: str, widths: Iterable[float] = (), freeze: str | None = None) -> Sheet:
         sheet = Sheet(self, name, list(widths), freeze)
         self.sheets.append(sheet)
         return sheet
 
-    def text(self, value):
+    def text(self, value: str) -> int:
         n = self._texts.get(value)
         if n is None:
             n = self._texts[value] = len(self._texts)
         return n
 
-    def style(self, cell, quote=False):
+    def style(self, cell: Cell | None, quote: bool = False) -> int:
         key = ((cell.fill, cell.font, cell.wrap) if cell else (None, None, False)) + (quote,)
         n = self._styles.get(key)
         if n is None:
@@ -173,7 +173,7 @@ class Book:
             n = self._styles[key] = len(self._styles)
         return n
 
-    def _styles_xml(self):
+    def _styles_xml(self) -> str:
         fonts = ['<font><sz val="11"/><name val="Calibri"/></font>'] + [FONTS[f] for f in self._fonts]
         fills = ['<fill><patternFill patternType="none"/></fill>',
                  '<fill><patternFill patternType="gray125"/></fill>'] + [
@@ -201,12 +201,12 @@ class Book:
                 '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
                 "</styleSheet>")
 
-    def _texts_xml(self):
+    def _texts_xml(self) -> str:
         items = "".join(f'<si><t xml:space="preserve">{escape(t)}</t></si>' for t in self._texts)
         return (_HEAD + f'<sst xmlns="{_MAIN}" count="{len(self._texts)}" '
                 f'uniqueCount="{len(self._texts)}">{items}</sst>')
 
-    def _workbook_xml(self):
+    def _workbook_xml(self) -> str:
         sheets = "".join(f'<sheet name={quoteattr(s.name)} sheetId="{n}" r:id="rId{n}"/>'
                          for n, s in enumerate(self.sheets, start=1))
         names = "".join(
@@ -219,7 +219,7 @@ class Book:
                 f"<sheets>{sheets}</sheets>"
                 + (f"<definedNames>{names}</definedNames>" if names else "") + "</workbook>")
 
-    def save(self):
+    def save(self) -> bytes:
         """The finished file, as bytes."""
         n = len(self.sheets)
         overrides = "".join(
@@ -256,5 +256,5 @@ class Book:
         return buf.getvalue()
 
 
-def _quoted(name):
+def _quoted(name: str) -> str:
     return "'" + name.replace("'", "''") + "'"

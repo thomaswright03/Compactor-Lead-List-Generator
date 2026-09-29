@@ -8,43 +8,45 @@ undone for UNDO_SECONDS, exactly and only while no newer click has followed.
 
 import time
 import uuid
+from collections.abc import Iterable
 
 from . import store
+from .models import Lead, Undo
 
 VALUES = ("yes", "no")
 UNDO_SECONDS = 5 * 60           # how long after a click it can still be undone
 
 
-def get_all(uids):
+def get_all(uids: Iterable[str]) -> dict[str, str]:
     """{uid: "yes"/"no"} for the given uids that have a mark.
 
     Only the marks of those businesses are read (the whole table only when most
     of it is wanted anyway). Raises store.Unavailable or a database error when
     the marks can't be read: an unreadable mark must never look like "Not checked".
     """
-    uids = [u for u in dict.fromkeys(uids) if u]
-    if not uids:
+    wanted_list = [u for u in dict.fromkeys(uids) if u]
+    if not wanted_list:
         return {}
     with store.connect() as db:
-        rows = store.rows_for(db, "SELECT uid, value FROM marks", "uid", uids)
-    wanted = set(uids)
+        rows = store.rows_for(db, "SELECT uid, value FROM marks", "uid", wanted_list)
+    wanted = set(wanted_list)
     return {uid: value for uid, value in rows if uid in wanted and value in VALUES}
 
 
-def changed_since(ts):
+def changed_since(ts: float) -> set[str]:
     """The uids whose mark was set, switched or undone after ts (epoch seconds)."""
     with store.connect() as db:
         rows = db.all("SELECT uid FROM mark_changes WHERE at > ? OR undone_at > ?", (ts, ts))
     return {uid for (uid,) in rows}
 
 
-def _current(db, uid):
+def _current(db: store.Db, uid: str) -> str:
     lock = " FOR UPDATE" if db.postgres else ""
     row = db.one("SELECT value FROM marks WHERE uid = ?" + lock, (uid,))
     return row[0] if row else ""
 
 
-def set_mark(uid, value):
+def set_mark(uid: str, value: str) -> Undo | None:
     """Save a mark ("yes" or "no"; a mark is only taken back by undo()). Returns the
     undo for the click ({"id", "until"}), or None when nothing changed.
 
@@ -69,7 +71,7 @@ def set_mark(uid, value):
     return {"id": change, "until": now + UNDO_SECONDS}
 
 
-def undo(change_id):
+def undo(change_id: str) -> bool:
     """Put back the mark a recent click replaced. False when it is too late (older
     than UNDO_SECONDS), already undone, unknown, or a newer click has followed it."""
     now = time.time()
@@ -96,7 +98,7 @@ def undo(change_id):
     return True
 
 
-def pending_undos():
+def pending_undos() -> dict[str, Undo]:
     """{uid: {"id", "until"}}: each business's latest click that can still be undone."""
     now = time.time()
     with store.connect() as db:
@@ -105,7 +107,7 @@ def pending_undos():
     return {uid: {"id": change, "until": at + UNDO_SECONDS} for change, uid, at in rows}
 
 
-def apply(leads):
+def apply(leads: list[Lead]) -> list[Lead]:
     """Set lead.has_baler from the saved marks (raises when they can't be read)."""
     found = get_all(lead.uid for lead in leads)
     for lead in leads:

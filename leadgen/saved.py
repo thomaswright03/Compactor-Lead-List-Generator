@@ -19,7 +19,9 @@ import copy
 import json
 import time
 import uuid
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, fields
+from typing import Any
 
 from . import config, store
 from .dedupe import _merge, is_duplicate, snapshot
@@ -28,50 +30,57 @@ from .models import Lead
 from .scoring import score_lead
 
 _FIELDS = {f.name for f in fields(Lead)}
+# One source listing kept with a saved lead: {"at": when it was found, "lead": its fields}.
+Part = dict[str, Any]
 
 
-def _to_lead(data):
+def _to_lead(data: dict[str, Any]) -> Lead:
     return Lead(**{k: v for k, v in data.items() if k in _FIELDS})
 
 
-def _lead_json(lead):
+def _lead_json(lead: Lead) -> str:
     return json.dumps({k: v for k, v in asdict(lead).items()
                        if k not in ("parts", "has_baler", "last_call_at", "call_outcome", "call_notes",
-                                    "call_count")}, separators=(",", ":"))
+                                    "call_count", "earlier_notes", "earlier_notes_at")}, separators=(",", ":"))
 
 
-def _part_id(part):
+def _part_id(part: Part) -> str:
     lead = part["lead"]
     return f"{lead.get('source')}:{lead.get('source_id')}"
 
 
-def _expired(part, now):
+def _expired(part: Part, now: float) -> bool:
     keep = config.SAVED_SOURCE_KEEP_SECONDS.get(part["lead"].get("source"))
     return keep is not None and now - part["at"] > keep
 
 
-def _rebuild(parts):
+def _rebuild(parts: list[Part]) -> Lead:
     lead = _merge([_to_lead(copy.deepcopy(p["lead"])) for p in parts])
     score_lead(lead, config.DEFAULT_KEYWORDS)
     return lead
 
 
-def _bucket(lead):
+def _miles_between(lead: Lead, other: Lead | None) -> float:
+    return haversine_miles(lead.lat, lead.lon, other.lat, other.lon) if other else float("inf")
+
+
+def _bucket(lead: Lead) -> tuple[float, float]:
     return (round(lead.lat, 2), round(lead.lon, 2))
 
 
 class _Row:
-    def __init__(self, uid, lead, parts, ids, first_seen, last_seen):
+    def __init__(self, uid: str, lead: Lead | None, parts: list[Part], ids: set[str],
+                 first_seen: float, last_seen: float) -> None:
         self.uid, self.lead, self.parts, self.ids = uid, lead, parts, ids
         self.first_seen, self.last_seen = first_seen, last_seen
 
-    def values(self):
+    def values(self) -> tuple[str, str, str, str, float, float]:
         return (self.uid, _lead_json(self.lead) if self.lead else "null",
                 json.dumps(self.parts, separators=(",", ":")), json.dumps(sorted(self.ids)),
                 self.first_seen, self.last_seen)
 
 
-def _read(db, uids=None):
+def _read(db: store.Db, uids: list[str] | None = None) -> list[_Row]:
     """Every saved row, or (with uids) just those rows."""
     select = "SELECT uid, lead, parts, ids, first_seen, last_seen FROM leads"
     found = db.all(select) if uids is None else store.rows_for(db, select, "uid", uids)
@@ -83,14 +92,14 @@ def _read(db, uids=None):
     return rows
 
 
-def _write(db, rows):
+def _write(db: store.Db, rows: Iterable[_Row]) -> None:
     db.many("INSERT INTO leads (uid, lead, parts, ids, first_seen, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (uid) DO UPDATE SET lead = excluded.lead, "
             "parts = excluded.parts, ids = excluded.ids, last_seen = excluded.last_seen",
             [r.values() for r in rows])
 
 
-def _drop_expired(rows, now):
+def _drop_expired(rows: list[_Row], now: float) -> list[_Row]:
     """Remove listings that may no longer be kept; returns the rows that changed."""
     changed = []
     for row in rows:
@@ -105,7 +114,7 @@ def _drop_expired(rows, now):
     return changed
 
 
-def save_search(leads, keywords=None):
+def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tuple[int, int]:
     """Merge a search's leads into the saved list; sets each lead's uid once saved.
 
     keywords: what the search was scored with; a lead scored with anything but
@@ -122,7 +131,7 @@ def save_search(leads, keywords=None):
         rows = _read(db)
         changed = {r.uid: r for r in _drop_expired(rows, now)}
         by_id = {i: r for r in rows for i in r.ids}
-        buckets: dict[tuple, list] = {}
+        buckets: dict[tuple[float, float], list[_Row]] = {}
         for r in rows:
             if r.lead:
                 buckets.setdefault(_bucket(r.lead), []).append(r)
@@ -137,9 +146,8 @@ def save_search(leads, keywords=None):
                 bx, by = _bucket(lead)
                 near = [r for dx in (-1, 0, 1) for dy in (-1, 0, 1)
                         for r in buckets.get((round(bx + dx * 0.01, 2), round(by + dy * 0.01, 2)), [])
-                        if r.uid not in claimed and is_duplicate(lead, r.lead)]
-                row = min(near, key=lambda r: haversine_miles(lead.lat, lead.lon, r.lead.lat,
-                                                              r.lead.lon), default=None)
+                        if r.uid not in claimed and r.lead is not None and is_duplicate(lead, r.lead)]
+                row = min(near, key=lambda r: _miles_between(lead, r.lead), default=None)
             if row is None:
                 row = _Row(uuid.uuid4().hex, None, [], set(), now, now)
                 rows.append(row)
@@ -171,7 +179,7 @@ def save_search(leads, keywords=None):
     return new, shown - new
 
 
-def load(uids=None):
+def load(uids: Iterable[str] | None = None) -> list[Lead]:
     """All saved leads (best first), or with uids just those, with miles from
     Arco's shop. Their marks and calls are added by marks.apply / calls.apply.
 
@@ -189,8 +197,8 @@ def load(uids=None):
             select = "SELECT uid, lead FROM leads"
             found = (db.all(select) if wanted is None
                      else store.rows_for(db, select, "uid", list(wanted)))
-            rows = [_Row(uid, _to_lead(data) if (data := json.loads(lead)) else None, None,
-                         None, None, None)
+            rows = [_Row(uid, _to_lead(data) if (data := json.loads(lead)) else None, [],
+                         set(), 0.0, 0.0)
                     for uid, lead in found]
     leads = []
     for row in rows:
@@ -205,15 +213,23 @@ def load(uids=None):
     return leads
 
 
-def changed_since(ts):
+def count() -> int:
+    """How many saved leads the list shows (every one not closed for good)."""
+    with store.connect() as db:
+        rows = db.all("SELECT lead FROM leads")
+    return sum(1 for (lead,) in rows
+               if (data := json.loads(lead)) and data.get("business_status") != "CLOSED_PERMANENTLY")
+
+
+def changed_since(ts: float) -> set[str]:
     """The uids of saved leads that a search added or updated after ts (epoch seconds)."""
     with store.connect() as db:
         return {uid for (uid,) in db.all("SELECT uid FROM leads WHERE last_seen > ?", (ts,))}
 
 
-def date_range():
+def date_range() -> tuple[float | None, float | None]:
     """(first, latest): when the first and the latest search that saved leads ran
     (epoch seconds), or (None, None) for an empty list."""
     with store.connect() as db:
-        first, latest = db.one("SELECT MIN(first_seen), MAX(last_seen) FROM leads")
-    return first, latest
+        row = db.one("SELECT MIN(first_seen), MAX(last_seen) FROM leads")
+    return (row[0], row[1]) if row else (None, None)

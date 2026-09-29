@@ -3,16 +3,21 @@
 import logging
 import math
 import time
+from collections.abc import Callable
+from typing import Any
 
 from flask import Blueprint, Response, abort, jsonify, request
+from flask.typing import ResponseReturnValue
 
 from .. import calls, config, marks, saved, stats
 from ..export import saved_list_info, to_csv_bytes, to_xlsx_bytes
 from ..localtime import date_time_text
+from ..models import Lead
 from ..pipeline import EXEMPT_TYPES
 from .common import (
     MARKS_DOWN,
     LoadError,
+    Undos,
     changed_uids,
     db_message,
     lead_json,
@@ -47,11 +52,11 @@ SORTS = {
 MAX_LIMIT = 5000
 
 
-def is_prospect(lead):
+def is_prospect(lead: Lead) -> bool:
     return lead.lead_type not in EXEMPT_TYPES
 
 
-def in_view(lead, view):
+def in_view(lead: Lead, view: str) -> bool:
     if view == "all":
         return True
     if view == "competitors":
@@ -61,7 +66,7 @@ def in_view(lead, view):
     return is_prospect(lead) and (lead.has_baler or "unchecked") == view
 
 
-def matches(lead, q, tier):
+def matches(lead: Lead, q: str, tier: str) -> bool:
     """The page's filter box and tier choice."""
     if tier and lead.tier != tier:
         return False
@@ -70,7 +75,7 @@ def matches(lead, q, tier):
     return q in text
 
 
-def view_counts(leads):
+def view_counts(leads: list[Lead]) -> dict[str, Any]:
     """How many leads each tab holds (ignoring the filter), and calls by result."""
     counts = dict.fromkeys(VIEWS, 0)
     outcomes = dict.fromkeys(calls.OUTCOMES, 0)
@@ -82,14 +87,14 @@ def view_counts(leads):
     return {**counts, "outcomes": outcomes}
 
 
-def _recent(leads, undo):
+def _recent(leads: list[Lead], undo: Undos) -> list[dict[str, Any]]:
     """The leads with a mark or call that can still be undone (Recent changes)."""
     return [lead_json(l, undo) for l in leads
             if l.uid in undo.get("mark", {}) or l.uid in undo.get("call", {})]
 
 
 @bp.get("/leads")
-def saved_leads():
+def saved_leads() -> ResponseReturnValue:
     """The saved list as the page shows it: one view (tab), filtered, sorted, and
     only the first `limit` rows, plus every tab's count. The page asks for the rows
     it shows, so opening it stays quick however long the list grows.
@@ -129,7 +134,7 @@ def saved_leads():
                     "counts": view_counts(leads), "recent": _recent(leads, undo), "now": now})
 
 
-def _page(leads, undo, view, q, tier):
+def _page(leads: list[Lead], undo: Undos, view: str, q: str, tier: str) -> dict[str, Any]:
     keep = set((request.args.get("keep") or "").split(",")[:50]) - {""}
     rows = [l for l in leads if (in_view(l, view) or l.uid in keep) and matches(l, q, tier)]
     sort = request.args.get("sort") or "score"
@@ -148,7 +153,7 @@ def _page(leads, undo, view, q, tier):
 
 
 @bp.post("/calls")
-def log_call():
+def log_call() -> ResponseReturnValue:
     """Record a call to a lead: its outcome and the conversation notes (kept for good)."""
     if not same_origin():
         abort(403)
@@ -172,7 +177,7 @@ def log_call():
 
 
 @bp.get("/calls/<uid>")
-def call_history(uid):
+def call_history(uid: str) -> ResponseReturnValue:
     try:
         return jsonify({"calls": calls.history(uid[:64])})
     except Exception as exc:
@@ -181,7 +186,7 @@ def call_history(uid):
 
 
 @bp.get("/stats")
-def stats_data():
+def stats_data() -> ResponseReturnValue:
     try:
         leads, _ = load_saved()
     except LoadError as exc:
@@ -191,7 +196,7 @@ def stats_data():
 
 
 @bp.post("/mark")
-def mark():
+def mark() -> ResponseReturnValue:
     """Save whether a business has a baler ("yes" or "no"). A mark is kept for good:
     it can be switched but not cleared (except by undoing a click within
     marks.UNDO_SECONDS), and later searches keep it with the business."""
@@ -213,7 +218,7 @@ def mark():
     return jsonify({"ok": True, "undo": undo, "now": time.time()})
 
 
-def _undo(fn, what):
+def _undo(fn: Callable[[str], bool], what: str) -> ResponseReturnValue:
     if not same_origin():
         abort(403)
     change = str((request.get_json(silent=True) or {}).get("id") or "")
@@ -231,19 +236,19 @@ def _undo(fn, what):
 
 
 @bp.post("/mark/undo")
-def undo_mark():
+def undo_mark() -> ResponseReturnValue:
     """Undo a Yes/No click made in the last few minutes (a misclick), by its id."""
     return _undo(marks.undo, "mark")
 
 
 @bp.post("/calls/undo")
-def undo_call():
+def undo_call() -> ResponseReturnValue:
     """Undo a call saved in the last few minutes (a misclick)."""
     return _undo(calls.undo, "call")
 
 
 @bp.get("/download/<job_id>.<fmt>")
-def download(job_id, fmt):
+def download(job_id: str, fmt: str) -> ResponseReturnValue:
     """A search's leads, or with job id "saved" every saved lead."""
     if fmt not in ("csv", "xlsx"):
         abort(404)

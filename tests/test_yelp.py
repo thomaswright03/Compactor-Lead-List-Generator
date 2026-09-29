@@ -108,7 +108,7 @@ def test_wide_grid_when_asked_for(monkeypatch):
     _, n, warnings = yelp.search(40.76, -111.89, 30, queries, YELP_KEY, grid_cells=7)
     assert n == len(calls) == config.YELP_DAILY_LIMIT == 50
     assert len({(c["latitude"], c["longitude"]) for c in calls}) == 4    # 16 + 16 + 16 + 2
-    assert any("Stopped after 50 Yelp calls (this site may make 50 Yelp calls a day" in w
+    assert any("Stopped after 50 Yelp calls (this site may make 50 Yelp calls in any 24 hours" in w
                for w in warnings)
     assert yelp.grid_for(30, 7) == 7 and yelp.choose_grid(30, 1, 5, 50) == 7
 

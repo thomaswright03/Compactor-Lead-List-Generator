@@ -6,32 +6,36 @@ ranked where it did and tell us which rules to adjust.
 """
 
 import re
+from collections.abc import Iterable
 from functools import lru_cache
 
 from . import config
 from .models import Lead
+
+# A matched category and how it matched ("Google category", "name", ...).
+Match = tuple[config.Category, str]
 
 TIERS = [(60, "A"), (40, "B"), (20, "C"), (0, "D")]
 TIER_LABELS = {"A": "A - strong", "B": "B - likely", "C": "C - possible", "D": "D - weak"}
 
 
 @lru_cache(maxsize=65536)
-def normalize(text):
+def normalize(text: str) -> str:
     s = re.sub(r"[^a-z0-9 ]+", "", (text or "").lower().replace("&", " and "))
     return re.sub(r"\s+", " ", s).strip()
 
 
-def compact(text):
+def compact(text: str) -> str:
     return normalize(text).replace(" ", "")
 
 
 @lru_cache(maxsize=4096)
-def _term_pattern(term, whole):
+def _term_pattern(term: str, whole: bool) -> re.Pattern[str]:
     end = r"(?![a-z0-9])" if whole else ""
     return re.compile(rf"(?<![a-z0-9]){re.escape(term)}{end}")
 
 
-def _contains_term(haystack, term, whole=False):
+def _contains_term(haystack: str, term: str, whole: bool = False) -> bool:
     """Match at a word start so 'ups' never matches 'supplies'.
 
     Prefix matches are allowed by default (user keyword 'recycl' matches
@@ -44,17 +48,17 @@ def _contains_term(haystack, term, whole=False):
     return _term_pattern(term, whole).search(haystack) is not None
 
 
-def yelp_categories(lead):
+def yelp_categories(lead: Lead) -> set[str]:
     """Yelp category aliases on a lead (stored as "yelp:alias")."""
     return {c[5:] for c in lead.raw_categories if c.startswith("yelp:")}
 
 
-def google_types(lead):
+def google_types(lead: Lead) -> set[str]:
     """Google types on a lead: anything that is not an OSM "k=v" tag or a Yelp category."""
     return {c for c in lead.raw_categories if "=" not in c and not c.startswith("yelp:")}
 
 
-def _osm_tag_matches(lead, key, value):
+def _osm_tag_matches(lead: Lead, key: str, value: str | None) -> bool:
     for c in lead.raw_categories:
         k, _, v = c.partition("=")
         if k == key and (value is None or value in v.split(";")):
@@ -62,7 +66,7 @@ def _osm_tag_matches(lead, key, value):
     return False
 
 
-def _only_generic_tags(lead, cat):
+def _only_generic_tags(lead: Lead, cat: config.Category) -> bool:
     """True if the category matched only through catch-all tags like industrial=*."""
     if set(lead.raw_categories) & set(cat.google_types):
         return False
@@ -72,13 +76,13 @@ def _only_generic_tags(lead, cat):
     return not any(_osm_tag_matches(lead, k, v) for k, v in specific)
 
 
-def _is_non_prospect(lead, types):
+def _is_non_prospect(lead: Lead, types: set[str]) -> bool:
     return (bool(types & config.NON_PROSPECT_GOOGLE_TYPES)
             or bool(yelp_categories(lead) & config.NON_PROSPECT_YELP_CATEGORIES)
             or any(_osm_tag_matches(lead, k, v) for k, v in config.NON_PROSPECT_OSM_TAGS))
 
 
-def is_non_prospect_tag(tag):
+def is_non_prospect_tag(tag: str) -> bool:
     """True for a single Google type, Yelp category or OSM tag that marks a non-prospect place."""
     if tag in config.NON_PROSPECT_GOOGLE_TYPES:
         return True
@@ -89,7 +93,7 @@ def is_non_prospect_tag(tag):
                              for nk, nv in config.NON_PROSPECT_OSM_TAGS)
 
 
-def classify(lead):
+def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
     """Return (best category, list of matched categories) as (Category, how) pairs.
 
     Order of authority: an equipment/hauler name; a specific Google type, Yelp
@@ -124,7 +128,7 @@ def classify(lead):
         if cat.key == "equipment" and hit == "name":
             return (cat, hit), matched
 
-    def best_of(options):
+    def best_of(options: list[Match]) -> Match:
         return max(options, key=lambda m: m[0].weight)
 
     tagged = [m for m in matched if m[1] in ("Google category", "Yelp category", "map tag")]
@@ -169,11 +173,11 @@ def classify(lead):
     return None, []
 
 
-def _split_hyphens(text):
+def _split_hyphens(text: str) -> str:
     return normalize(re.sub(r"[-/]", " ", text or ""))
 
 
-def _brand_bonus(lead):
+def _brand_bonus(lead: Lead) -> str | None:
     """Return the matched high-volume brand, or None."""
     name = normalize(lead.name)
     if any(_contains_term(name, ex, whole=True) for ex in config.BRAND_EXCLUDE):
@@ -202,11 +206,11 @@ def _brand_bonus(lead):
     return None
 
 
-def _all_names(lead):
+def _all_names(lead: Lead) -> list[str]:
     return [lead.name, lead.website] + list(lead.alt_names)
 
 
-def _competitor(lead):
+def _competitor(lead: Lead) -> str | None:
     hay = " ".join(compact(x) for x in _all_names(lead))
     for name, aliases in config.COMPETITORS.items():
         if any(compact(a) in hay for a in aliases):
@@ -214,12 +218,12 @@ def _competitor(lead):
     return None
 
 
-def _is_self(lead):
+def _is_self(lead: Lead) -> bool:
     hay = " ".join(compact(x) for x in _all_names(lead))
     return any(compact(a) in hay for a in config.SELF_ALIASES)
 
 
-def score_lead(lead: Lead, keywords=()):
+def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
     reasons, flags = [], []
     best, matched = classify(lead)
     score = 0

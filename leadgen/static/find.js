@@ -1,15 +1,41 @@
 /* Part 4: the Find leads page (today's search, its progress and history). */
-function setGo(enabled, note, used) {
+// The note beside Find leads says how the day stands (in plain, muted text); a refusal or a
+// problem goes in the red line under it (showError) and stays until the form is edited.
+function setGo(enabled, note) {
   $("go").disabled = !enabled;
-  if (note !== undefined) { $("day-note").textContent = note; $("day-note").className = used ? "used" : ""; }
+  if (note !== undefined) $("day-note").textContent = note;
 }
+function clearErrors() {
+  S.error = "";
+  $("go-error").textContent = ""; $("go-error").hidden = true;
+  $("form").querySelectorAll(".field-error").forEach((e) => e.remove());
+  $("form").querySelectorAll("[aria-invalid]").forEach((e) => { e.removeAttribute("aria-invalid"); e.removeAttribute("aria-describedby"); });
+}
+// Show why the search can't start: beside the field it is about (when there is one) and beside the button.
+function showError(message, field) {
+  clearErrors();
+  S.error = message;
+  const input = field && $("form").querySelector(`[name="${field}"]`);
+  if (input) {
+    const adv = input.closest("details"); if (adv) adv.open = true;
+    const err = el("span", message, "field-error"); err.id = `err-${field}`;
+    input.closest("label").append(err);
+    input.setAttribute("aria-invalid", "true"); input.setAttribute("aria-describedby", err.id);
+    input.focus();
+  }
+  $("go-error").textContent = input ? `Can't start the search: ${message}` : message;
+  $("go-error").hidden = false;
+}
+$("form").addEventListener("input", () => { if (S.error) clearErrors(); });
+// Lists and the tick box say "change" (a text box's late "change" on leaving it is not an edit).
+$("form").addEventListener("change", (e) => { if (S.error && e.target.matches("select, input[type=checkbox]")) clearErrors(); });
 async function loadSearches() {
   let body;
   try { body = await api("/searches"); }
   catch (err) {
     if (err.status === 401) return;
     problem($("history"), "Can't load the search history", err.message, () => { $("history").replaceChildren(el("div", "Loading...", "muted")); loadSearches(); });
-    if (!S.job) setGo(false, "Find leads is off until the saved data can be reached. Use Retry below.", true);
+    if (!S.job) setGo(false, "Find leads is off until the saved data can be reached. Use Retry below.");
     return;
   }
   if (body.yelp && $("yelp-quota")) {
@@ -19,14 +45,13 @@ async function loadSearches() {
   $("paused-box").hidden = !body.paused;
   const today = body.current;
   if (body.running && !S.job) follow(body.running);
+  // A refusal or failure stays in its own red line (showError, the failure box); this only says how the day stands.
   if (S.job) setGo(false, "");
-  else if (body.paused) setGo(false, "Searching is paused by the administrator.", true);
-  // The failure box above says what went wrong and when to try again; this only says the day is still free.
-  else if (S.error) setGo(!body.used_today, body.used_today ? S.error : "Today's search is still available.", body.used_today);
+  else if (body.paused) setGo(false, "Searching is paused by the administrator.");
   else if (body.used_today && today.leads === undefined && !body.running) {
-    setGo(false, `Today's search was interrupted before it finished. It can be run again after ${today.free_at}.`, true);
+    setGo(false, `Today's search was interrupted before it finished. It can be run again after ${today.free_at}.`);
   } else if (body.used_today) {
-    setGo(false, `Today's search ran ${today.when.split(", ").pop()}. The next one can run tomorrow.`, true);
+    setGo(false, `Today's search ran at ${today.when.split(", ").pop()}. The next one can run tomorrow.`);
   } else if (today) {
     setGo(true, "Today's search didn't finish, so it can be run again.");
   } else setGo(true, "One search a day. Today's is available.");
@@ -59,7 +84,9 @@ function renderHistory(searches) {
       const extra = el("tr", undefined, "more-row"); extra.hidden = true;
       const cell = el("td"); cell.colSpan = 6;
       const dl = el("dl", undefined, "details");
-      for (const [k, v] of Object.entries(s.details || {})) {
+      // [label, value] pairs in funnel order (older answers were an object).
+      const pairs = Array.isArray(s.details) ? s.details : Object.entries(s.details || {});
+      for (const [k, v] of pairs) {
         const row = el("div"); row.append(el("dt", k), el("dd", v)); dl.append(row);
       }
       cell.append(dl);
@@ -106,14 +133,13 @@ async function follow(jobId, misses = 0) {
   catch (err) {
     if (err.status !== 404 && misses < 5) { setTimeout(() => follow(jobId, misses + 1), 3000); return; }
     S.job = null; $("progress-card").hidden = true;
-    setGo(false, "Lost track of the search (the server may have restarted). Reload the page.", true); return;
+    setGo(false, "Lost track of the search (the server may have restarted). Reload the page."); return;
   }
   showProgress(job);
   if (job.state === "running") { setTimeout(() => follow(jobId), 1500); return; }
   S.job = null;
   $("progress-card").hidden = true;
   if (job.state === "error") {
-    S.error = job.message;
     $("search-failed-msg").textContent = job.message;
     $("search-failed").hidden = false;
     loadSearches();
@@ -121,9 +147,9 @@ async function follow(jobId, misses = 0) {
   }
   $("done-card").hidden = false;
   $("done-big").textContent = job.saved ? `${job.new_leads.toLocaleString()} new leads`
-                                        : `${job.leads.length.toLocaleString()} leads found`;
-  $("done-sub").textContent = job.saved ? `${job.saved_count.toLocaleString()} saved leads in all, near ${job.location}`
-                                        : `near ${job.location} (not saved)`;
+                                        : `${job.found.toLocaleString()} leads found`;
+  $("done-sub").textContent = !job.saved ? `near ${job.location} (not saved)`
+    : job.saved_count == null ? `near ${job.location}` : `${job.saved_count.toLocaleString()} saved leads in all, near ${job.location}`;
   const warn = $("done-warnings"); warn.replaceChildren();
   for (const w of job.warnings) warn.append(el("div", w, "warn"));
   if (job.yelp && $("yelp-quota")) $("yelp-quota").textContent = job.yelp.text;
@@ -135,7 +161,7 @@ const SOURCE_TEXT = { auto: "Everywhere available", osm: "Free map data only", y
                       google: "Google only (paid)", both: "Google and free map data (paid)" };
 function searchSummary(form) {
   const f = new FormData(form), rows = [];
-  rows.push(["Search around", f.get("location") || "Arco Compactor"]);
+  rows.push(["Search around", f.get("location").trim()]);
   rows.push(["How far", `${f.get("radius") || "30"} miles`]);
   rows.push(["Search words", (f.get("keywords") || "").split(",").map((k) => k.trim()).filter(Boolean).join(", ") || "None"]);
   rows.push(["Where to look", SOURCE_TEXT[f.get("source")] || "Everywhere available"]);
@@ -145,9 +171,35 @@ function searchSummary(form) {
   if (f.get("only_keyword_matches")) rows.push(["Only", "businesses matching the search words"]);
   return rows;
 }
+// The server's limits, checked here first so a mistake is caught before the confirmation.
+const MAX_KEYWORDS = 20, MAX_KEYWORD_LEN = 60;
+function number(f, name, label, lo, hi, whole) {
+  const raw = (f.get(name) || "").trim();
+  if (!raw) return null;
+  const v = Number(raw);
+  if (!Number.isFinite(v)) return `${label} must be a number`;
+  if (whole && !Number.isInteger(v)) return `${label} must be a whole number`;
+  return v < lo || v > hi ? `${label} must be between ${lo} and ${hi}` : null;
+}
+function checkForm(form) {
+  const f = new FormData(form);
+  if (!(f.get("location") || "").trim()) return ["location", "Enter where to search around: a ZIP code, city or street address."];
+  const words = (f.get("keywords") || "").split(",").map((k) => k.trim()).filter(Boolean);
+  if (words.length > MAX_KEYWORDS) return ["keywords", `Use at most ${MAX_KEYWORDS} search words (you have ${words.length}).`];
+  const long = words.find((k) => k.length > MAX_KEYWORD_LEN);
+  if (long) return ["keywords", `Each search word can be up to ${MAX_KEYWORD_LEN} characters; “${long.slice(0, 20)}…” has ${long.length}. Separate words with commas.`];
+  for (const [name, label, lo, hi, whole] of [["radius", "Radius", 1, 100, false], ["min_score", "Minimum score", 0, 100, true],
+                                              ["max_requests", "The limit on paid lookups", 1, 5000, true]]) {
+    const bad = number(f, name, label, lo, hi, whole);
+    if (bad) return [name, bad];
+  }
+  return null;
+}
 $("form").addEventListener("submit", (e) => {
   e.preventDefault();
   if ($("go").disabled) return;
+  const bad = checkForm($("form"));
+  if (bad) { showError(bad[1], bad[0]); return; }
   const dl = $("confirm-list"); dl.replaceChildren();
   for (const [k, v] of searchSummary($("form"))) { const row = el("div"); row.append(el("dt", k), el("dd", v)); dl.append(row); }
   $("confirm-dlg").showModal();
@@ -157,14 +209,14 @@ $("confirm-back").addEventListener("click", () => { $("confirm-dlg").close(); $(
 $("confirm-form").addEventListener("submit", (e) => { e.preventDefault(); $("confirm-dlg").close(); startSearch(); });
 async function startSearch() {
   setGo(false, "Starting...");
-  S.error = ""; $("search-failed").hidden = true;
+  clearErrors(); $("search-failed").hidden = true;
   try {
     const body = await api("/search", { method: "POST", body: new FormData($("form")) });
     follow(body.job_id);
   } catch (err) {
     if (err.status === 429 && err.body && err.body.job_id) return follow(err.body.job_id);
-    S.error = err.message;
-    setGo(false, err.message, true);
+    showError(err.message, err.status === 400 && err.body ? err.body.field : "");
+    setGo(false, "");
     loadSearches();
   }
 }
