@@ -210,7 +210,12 @@ def create_app(password=None):
                                    "found_near": result.location_label,
                                    "details": result.stats, "warnings": result.warnings})
             except Exception:
-                pass                     # the day stays used; only its summary is missing
+                # Try once more with just the count: without it the day would look unfinished
+                # and free up again after daily.STALE_SECONDS.
+                try:
+                    daily.finish(day, {"leads": len(result.leads)})
+                except Exception:
+                    pass
             job.update(state="done", result=result, message="Done", pct=100, step=len(STEPS))
         except (PipelineError, GeocodeError) as exc:
             _give_back(day)

@@ -311,7 +311,7 @@
 <script>
 const OUTCOMES = {{ outcomes|tojson }};
 const $ = (id) => document.getElementById(id);
-const S = { leads: [], leadView: "", callView: OUTCOMES[0], limit: 300, job: null, saved: true };
+const S = { leads: [], leadView: "", callView: OUTCOMES[0], limit: 300, job: null, saved: true, error: "" };
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);
@@ -566,16 +566,21 @@ $("call-cancel").addEventListener("click", () => $("call-dlg").close());
 $("call-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!callLead || !callOutcome) return;
+  const key = callLead.key;
   $("call-save").disabled = true;
   try {
-    const { call } = await post("/calls", { key: callLead.key, outcome: callOutcome, notes: $("call-notes").value });
-    Object.assign(callLead, { call_outcome: call.outcome, call_notes: call.notes, last_call: call.when,
-                              last_call_at: call.at, call_count: (callLead.call_count || 0) + 1 });
-    $("call-dlg").close();
+    const { call } = await post("/calls", { key, outcome: callOutcome, notes: $("call-notes").value });
+    // Update the lead as it is now (the list may have been reloaded while saving).
+    const lead = S.leads.find((l) => l.key === key);
+    if (lead) Object.assign(lead, { call_outcome: call.outcome, call_notes: call.notes, last_call: call.when,
+                                    last_call_at: call.at, call_count: (lead.call_count || 0) + 1 });
+    if (callLead && callLead.key === key) $("call-dlg").close();
     renderLeads(); renderCalls(); counts();
   } catch (err) {
-    $("call-error").textContent = `Not saved: ${err.message}`;
-    $("call-save").disabled = false;
+    if (callLead && callLead.key === key) {
+      $("call-error").textContent = `Not saved: ${err.message}`;
+      $("call-save").disabled = false;
+    }
   }
 });
 
@@ -611,7 +616,12 @@ async function loadSearches() {
   const note = $("day-note");
   if (body.running && !S.job) follow(body.running);
   if (S.job) { note.textContent = ""; }
-  else if (body.used_today) {
+  else if (S.error) { note.textContent = S.error; note.className = "used"; }
+  else if (body.used_today && today.leads === undefined && !body.running) {
+    const at = new Date((today.at + 30 * 60) * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    note.textContent = `Today's search was interrupted before it finished. It can be run again after ${at}.`;
+    note.className = "used";
+  } else if (body.used_today) {
     note.textContent = `Today's search ran ${today.when.split(", ").pop()}. The next one can run tomorrow.`;
     note.className = "used";
   } else if (today) {
@@ -673,19 +683,22 @@ function showProgress(job) {
   $("elapsed").textContent = fmtTime(job.elapsed || 0);
   $("progress-msg").textContent = job.message;
 }
-async function follow(jobId) {
+async function follow(jobId, misses = 0) {
   S.job = jobId;
   $("go").disabled = true; $("done-card").hidden = true;
   let job;
   try { job = await api(`/status/${jobId}`); }
-  catch (err) { S.job = null; $("progress-card").hidden = true; $("day-note").textContent = "Lost track of the search. Reload the page."; return; }
+  catch (err) {
+    if (err.status !== 404 && misses < 5) { setTimeout(() => follow(jobId, misses + 1), 3000); return; }
+    S.job = null; $("progress-card").hidden = true;
+    $("day-note").textContent = "Lost track of the search. Reload the page."; return;
+  }
   showProgress(job);
   if (job.state === "running") { setTimeout(() => follow(jobId), 1500); return; }
   S.job = null;
   $("progress-card").hidden = true;
   if (job.state === "error") {
-    $("day-note").textContent = `The search failed: ${job.message}`;
-    $("day-note").className = "used";
+    S.error = `The search failed: ${job.message}`;
     loadSearches();
     return;
   }
@@ -703,12 +716,14 @@ async function follow(jobId) {
 $("form").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("go").disabled = true;
+  S.error = "";
   $("day-note").textContent = "Starting..."; $("day-note").className = "";
   try {
     const body = await api("/search", { method: "POST", body: new FormData($("form")) });
     follow(body.job_id);
   } catch (err) {
     if (err.status === 429 && err.body.job_id) return follow(err.body.job_id);
+    S.error = err.message;
     $("day-note").textContent = err.message; $("day-note").className = "used";
     loadSearches();
   }
@@ -791,7 +806,7 @@ window.addEventListener("resize", () => {
 });
 
 /* ---------- start ---------- */
-(async () => { await loadLeads(); route(); })();
+(async () => { await loadLeads(); route(); if (location.hash.slice(1) !== "find") loadSearches(); })();
 </script>
 </body>
 </html>
