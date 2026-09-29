@@ -10,6 +10,7 @@ rebuilt from what is left, and a lead with nothing left is hidden but keeps
 its listing ids, so its mark comes back if a search finds it again.
 """
 
+import copy
 import json
 import time
 import uuid
@@ -44,7 +45,7 @@ def _expired(part, now):
 
 
 def _rebuild(parts, keywords):
-    lead = _merge([_to_lead(p["lead"]) for p in parts])
+    lead = _merge([_to_lead(copy.deepcopy(p["lead"])) for p in parts])
     score_lead(lead, keywords)
     return lead
 
@@ -97,9 +98,11 @@ def _drop_expired(rows, now):
 
 
 def save_search(leads, keywords):
-    """Merge a search's leads into the saved list; sets each lead's uid.
+    """Merge a search's leads into the saved list; sets each lead's uid once saved.
 
-    Returns (new, updated) counts. Raises store.Unavailable without a database.
+    Leads the search found permanently closed update their row too (it then
+    leaves the list). Returns (new, updated) counts. Raises store.Unavailable
+    without a database, or a database error; no lead gets a uid then.
     """
     now = time.time()
     with store.connect() as db:
@@ -110,11 +113,13 @@ def save_search(leads, keywords):
         for r in rows:
             if r.lead:
                 buckets.setdefault(_bucket(r.lead), []).append(r)
-        claimed, new = set(), 0
+        claimed, new, uids = set(), 0, []
         for lead in leads:
             parts = [{"at": now, "lead": p} for p in snapshot(lead)]
             ids = {_part_id(p) for p in parts}
-            row = next((by_id[i] for i in sorted(ids) if i in by_id), None)
+            # Two leads the search kept apart never share a row, even via a listing id.
+            row = next((by_id[i] for i in sorted(ids)
+                        if i in by_id and by_id[i].uid not in claimed), None)
             if row is None:
                 bx, by = _bucket(lead)
                 near = [r for dx in (-1, 0, 1) for dy in (-1, 0, 1)
@@ -125,21 +130,27 @@ def save_search(leads, keywords):
             if row is None:
                 row = _Row(uuid.uuid4().hex, None, [], set(), now, now)
                 rows.append(row)
-                new += 1
+                new += lead.business_status != "CLOSED_PERMANENTLY"
             older = [p for p in row.parts if _part_id(p) not in ids]
             row.parts = parts + older
             row.ids |= ids
             row.last_seen = now
-            row.lead = _rebuild(row.parts, keywords) if older else lead
-            row.lead.uid = lead.uid = row.uid
+            row.lead = _rebuild(row.parts, keywords) if older else copy.deepcopy(lead)
+            if lead.business_status == "CLOSED_PERMANENTLY":
+                row.lead.business_status = lead.business_status
+            row.lead.uid = row.uid
             row.lead.parts = []
+            uids.append(row.uid)
             claimed.add(row.uid)
             changed[row.uid] = row
             for i in row.ids:
                 by_id[i] = row
             buckets.setdefault(_bucket(row.lead), []).append(row)
         _write(db, changed.values())
-    return new, len(leads) - new
+    for lead, uid in zip(leads, uids):
+        lead.uid = uid
+    shown = sum(l.business_status != "CLOSED_PERMANENTLY" for l in leads)
+    return new, shown - new
 
 
 def load():
@@ -153,7 +164,7 @@ def load():
         _write(db, _drop_expired(rows, now))
     leads = []
     for row in rows:
-        if row.lead:
+        if row.lead and row.lead.business_status != "CLOSED_PERMANENTLY":
             row.lead.uid = row.uid
             row.lead.distance_miles = round(haversine_miles(
                 *config.DEFAULT_CENTER, row.lead.lat, row.lead.lon), 2)

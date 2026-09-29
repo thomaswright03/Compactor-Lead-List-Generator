@@ -131,3 +131,20 @@ def test_small_request_cap_advice_stays_within_the_daily_limit(monkeypatch):
     assert n == 10
     assert any("the request cap; up to 50 of today's 50 Yelp calls are left" in w for w in warnings)
     assert not any("--max-requests" in w for w in warnings)
+
+
+def test_unreadable_cache_stops_spending(monkeypatch):
+    calls = _fake_yelp(monkeypatch, total=10)
+    _search(["a", "b", "c"])
+    assert len(calls) == 3
+    real = store.open_db
+
+    def flaky():
+        raise store.Unavailable("the database could not be reached (OperationalError)")
+    monkeypatch.setattr(store, "open_db", flaky)
+    monkeypatch.setattr(usage.DailyBudget, "left", lambda self: 47)
+    monkeypatch.setattr(usage.DailyBudget, "take", lambda self: True)
+    _, n, warnings = _search(["a", "b", "c"])
+    assert n == 0 and len(calls) == 3
+    assert any("could not be read from the database" in w for w in warnings)
+    monkeypatch.setattr(store, "open_db", real)

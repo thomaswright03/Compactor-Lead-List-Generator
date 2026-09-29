@@ -41,7 +41,7 @@
   .baler button.no.on { background:#b42318; border-color:#b42318; color:#fff; }
   col.c-score { width:74px; } col.c-name { width:210px; } col.c-cat { width:150px; }
   col.c-addr { width:180px; } col.c-phone { width:122px; } col.c-site { width:160px; }
-  col.c-miles { width:58px; }       /* the Why column takes the rest */
+  col.c-miles { width:84px; }       /* the Why column takes the rest */
   th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { background:#eef2f6; position:sticky; top:0; font-size:12px; }
   tr.A td.score { background:var(--a); } tr.B td.score { background:var(--b); }
@@ -117,7 +117,7 @@
         <colgroup><col class="c-baler"><col class="c-score"><col class="c-name"><col class="c-cat"><col class="c-addr">
           <col class="c-phone"><col class="c-site"><col class="c-miles"><col class="c-why"></colgroup>
         <thead><tr><th>Has baler?</th><th>Score</th><th>Business</th><th>Category</th><th>Address</th>
-          <th>Phone</th><th>Website</th><th>Miles</th><th>Why</th></tr></thead>
+          <th>Phone</th><th>Website</th><th title="Miles from Arco's shop (876 Fortune Rd)">Miles from Arco</th><th>Why</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
@@ -192,7 +192,8 @@ function renderTabs() {
 
 async function setBaler(lead, value) {
   const before = lead.has_baler || "";
-  if (value === before) return;                   // an answer is kept for good (it can only be switched)
+  if (value === before || lead.saving) return;    // an answer is kept for good (it can only be switched)
+  lead.saving = true;
   lead.has_baler = value;
   render();
   try {
@@ -204,6 +205,8 @@ async function setBaler(lead, value) {
     render();
     $("status").className = "error";
     $("status").textContent = `Could not save the baler answer for ${lead.name}: ${err.message}`;
+  } finally {
+    lead.saving = false;
   }
 }
 
@@ -305,7 +308,7 @@ function show(list, stats, dl, label) {
     const res = await fetch("/leads");
     const body = await res.json().catch(() => ({}));
     if (!res.ok) { if (body.error) $("warnings").append(el("div", body.error, "warn")); return; }
-    if (body.leads.length && $("results").hidden && !$("go").disabled)
+    if (body.leads.length && $("results").hidden && !$("go").disabled && $("status").className !== "error")
       show(body.leads, {}, "saved", `${body.leads.length} saved leads`);
   } catch (err) { /* the search form still works */ }
 })();

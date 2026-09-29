@@ -393,8 +393,9 @@ YELP_DEFAULT_MAX_REQUESTS = YELP_DAILY_LIMIT
 YELP_CACHE_TTL_SECONDS = 7 * 24 * 3600
 # How long saved leads keep each source's details, by source (absent = forever).
 # Thomas chose (2026-09-29) to keep everything, although Yelp's terms allow
-# keeping its data for 24 hours and Google's for 30 days. To follow them, use
-# {"yelp": 12 * 3600, "google": 23 * 86400} and a 12-hour YELP_CACHE_TTL_SECONDS.
+# keeping its data for 24 hours and Google's for 30 days. Setting e.g.
+# {"yelp": 12 * 3600} with a 12-hour YELP_CACHE_TTL_SECONDS drops Yelp details,
+# but only when the site is next used (there is no scheduled purge).
 SAVED_SOURCE_KEEP_SECONDS = {}
 
 # Overpass mirrors tried in order when the free OpenStreetMap source is used.

@@ -45,7 +45,7 @@ def run_searches(source, queries, cells, fetch_page, parse, *, max_pages, max_re
                    else json.dumps([cache_version, q] + [round(x, 5) for x in cell]))
             cached = get(key, cache_ttl)
             chain = {"q": q, "cell": cell, "key": key, "items": [], "token": None,
-                     "token_at": 0.0, "pages": 0, "failed": False}
+                     "token_at": 0.0, "pages": 0, "failed": False, "fetched": False}
             if isinstance(cached, list):          # a complete search
                 cached_q.add(q)
                 leads += keep(cached, q)
@@ -108,6 +108,7 @@ def run_searches(source, queries, cells, fetch_page, parse, *, max_pages, max_re
                 chain["token"] = None
                 continue
             any_ok = True
+            chain["fetched"] = True
             chain["items"] += items
             chain["pages"] += 1
             chain["token"] = token
@@ -136,8 +137,8 @@ def run_searches(source, queries, cells, fetch_page, parse, *, max_pages, max_re
 
     for chain in chains:
         complete = chain["token"] is None or chain["pages"] >= max_pages
-        if not chain["pages"] or chain["failed"]:
-            continue
+        if not chain["fetched"] or chain["failed"]:
+            continue              # nothing new: leave the cached copy (and its expiry) alone
         if complete:
             put(chain["key"], chain["items"])
         elif cache_partial:

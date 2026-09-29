@@ -133,3 +133,36 @@ def test_mark_endpoint_checks_input():
     assert client.post("/mark", json={"value": "yes"}).status_code == 400
     assert client.post("/mark", json={"key": "k", "value": "yes"},
                        headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+
+
+def test_two_businesses_never_share_a_row():
+    # A saved row holds listings of both (say an old merge); the search keeps them apart.
+    both = dedupe([_lead(), _lead(name="Smiths Marketplace", source="osm", source_id="n1",
+                                  phone="", yelp_reviews=None)])[0]
+    saved.save_search([both], [])
+    a = _lead(source_id="y1")
+    b = _lead(name="Smiths Fuel", source="osm", source_id="n1", phone="(801) 555-0199",
+              yelp_reviews=None, lat=40.7503)
+    saved.save_search([a, b], [])
+    assert a.uid != b.uid and len(saved.load()) == 2
+
+
+def test_a_business_found_closed_leaves_the_list_but_keeps_its_mark():
+    lead = _lead()
+    saved.save_search([lead], [])
+    marks.set_mark(lead.uid, "yes")
+    closed = _lead(business_status="CLOSED_PERMANENTLY")
+    assert saved.save_search([closed], []) == (0, 0)
+    assert closed.uid == lead.uid and saved.load() == []
+
+
+def test_a_failed_save_hands_out_no_ids(monkeypatch):
+    def broken(db, rows):
+        raise RuntimeError("disk full")
+    monkeypatch.setattr(saved, "_write", broken)
+    lead = _lead()
+    try:
+        saved.save_search([lead], [])
+    except RuntimeError:
+        pass
+    assert lead.uid == ""

@@ -81,9 +81,11 @@ class Db:
                 raise
 
 
-@contextmanager
-def connect():
-    """A connection (autocommit); raises Unavailable when there is no database."""
+def open_db():
+    """A Db on a new connection (autocommit); close it with db.conn.close().
+
+    Raises Unavailable when there is no database.
+    """
     url = database_url()
     if url:
         import psycopg
@@ -102,10 +104,33 @@ def connect():
     try:
         with _lock:
             if ready_key not in _ready or not db.postgres:
-                for statement in SCHEMA:
-                    db.run(statement)
+                _create_tables(db)
                 if db.postgres:
                     _ready.add(ready_key)
+    except Exception:
+        conn.close()
+        raise
+    return db
+
+
+def _create_tables(db):
+    for attempt in range(3):
+        try:
+            for statement in SCHEMA:
+                db.run(statement)
+            return
+        except Exception:
+            # Two processes creating the same table at once: one of them fails; retry.
+            if attempt == 2:
+                raise
+
+
+@contextmanager
+def connect():
+    """A connection (autocommit) for a few statements; raises Unavailable when there
+    is no database."""
+    db = open_db()
+    try:
         yield db
     finally:
-        conn.close()
+        db.conn.close()

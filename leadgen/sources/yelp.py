@@ -146,7 +146,12 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
         warnings.append(f"Yelp searches at most {MAX_RADIUS_MILES:.0f} miles around each point, "
                         "so parts of this very wide area were not searched by Yelp.")
 
+    cache = usage.SharedCache()
+
     def take_call():
+        if cache.down:
+            return ("Yelp stopped because saved Yelp results could not be read from the "
+                    "database, and searching again would spend calls on them")
         if budget.take():
             return None
         if budget.problem:
@@ -188,12 +193,15 @@ def search(lat, lon, radius_miles, queries, api_key, grid_cells=1, max_requests=
                     "it resets at midnight UTC)")
         return take_call()
 
-    leads, n, w = run_searches(
+    try:
+        leads, n, w = run_searches(
         "Yelp", queries, cells, fetch_page, parse_business,
         max_pages=MAX_PAGES, max_requests=cap, progress=progress,
         cache_version=["yelp-chain-v2", config.YELP_SEARCHES],
         cache_ttl=config.YELP_CACHE_TTL_SECONDS, cache_partial=True, stop_check=stop_check,
-        key_errors=KEY_ERRORS, cache=usage.SharedCache(), cap_reason=limit_note)
+        key_errors=KEY_ERRORS, cache=cache, cap_reason=limit_note)
+    finally:
+        cache.close()
     if any(QUOTA_ERROR in x for x in w):
         w = [x for x in w if QUOTA_ERROR not in x]
         w.append("Yelp's daily limit was reached, so some Yelp searches did not run "

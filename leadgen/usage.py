@@ -99,38 +99,55 @@ def yelp_budget():
 
 
 class SharedCache:
-    """A results cache in the database, so it survives restarts. Misses on any error,
-    and after one failure stops trying (a down database would stall every lookup)."""
+    """A results cache in the database, so it survives restarts, on one connection
+    for the whole search (close() it). A failed lookup is retried once on a fresh
+    connection; after that the cache counts as down, and `down` says so (the
+    caller should then stop spending calls on searches that may be cached)."""
 
     def __init__(self):
         self.down = False
+        self._db = None
+
+    def _run(self, fn):
+        for attempt in (1, 2):
+            try:
+                if self._db is None:
+                    self._db = store.open_db()
+                return fn(self._db)
+            except Exception:
+                self.close()
+        self.down = True
+        return None
+
+    def close(self):
+        if self._db is not None:
+            try:
+                self._db.conn.close()
+            except Exception:
+                pass
+            self._db = None
 
     def get(self, key, ttl=None):
         if self.down:
             return None
-        try:
-            with store.connect() as db:
-                row = db.one("SELECT value, expires_at FROM cache WHERE key = ?", (self._key(key),))
-            if row and row[1] > time.time():
-                return json.loads(row[0])
-        except Exception:
-            self.down = True
-        return None
+        row = self._run(lambda db: db.one("SELECT value, expires_at FROM cache WHERE key = ?",
+                                          (self._key(key),)) or ())
+        return json.loads(row[0]) if row and row[1] > time.time() else None
 
     def put(self, key, value, ttl=None):
         if self.down:
             return
         now = time.time()
-        try:
-            with store.connect() as db:
-                db.run("DELETE FROM cache WHERE expires_at < ?", (now,))
-                db.run("INSERT INTO cache (key, value, expires_at) VALUES (?, ?, ?) "
-                       "ON CONFLICT (key) DO UPDATE SET value = excluded.value, "
-                       "expires_at = excluded.expires_at",
-                       (self._key(key), json.dumps(value, separators=(",", ":")),
-                        now + (ttl or config.CACHE_TTL_SECONDS)))
-        except Exception:
-            self.down = True            # a cache that cannot be written only costs a miss
+
+        def write(db):
+            db.run("DELETE FROM cache WHERE expires_at < ?", (now,))
+            db.run("INSERT INTO cache (key, value, expires_at) VALUES (?, ?, ?) "
+                   "ON CONFLICT (key) DO UPDATE SET value = excluded.value, "
+                   "expires_at = excluded.expires_at",
+                   (self._key(key), json.dumps(value, separators=(",", ":")),
+                    now + (ttl or config.CACHE_TTL_SECONDS)))
+            return True
+        self._run(write)
 
     @staticmethod
     def _key(key):

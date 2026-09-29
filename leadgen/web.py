@@ -7,6 +7,7 @@ import os
 import threading
 import uuid
 from collections import OrderedDict
+from dataclasses import replace
 from urllib.parse import urlparse
 
 from flask import Flask, Response, abort, jsonify, render_template, request
@@ -136,7 +137,9 @@ def create_app(password=None):
             job["message"] = msg
 
         try:
-            result = run(params, progress)
+            # Closed places come back too, so a saved one that has since closed is updated
+            # (and leaves the saved list); they are not shown.
+            result = run(replace(params, include_closed=True), progress)
             try:
                 progress("Saving leads")
                 job["new_leads"], _ = saved.save_search(result.leads, params.keywords)
@@ -144,6 +147,9 @@ def create_app(password=None):
             except Exception as exc:     # the search still shows; it just is not kept
                 why = str(exc) if isinstance(exc, store.Unavailable) else redact(exc)
                 result.warnings.append(f"These leads were not saved: {why}.")
+            if not params.include_closed:
+                result.leads = [l for l in result.leads
+                                if l.business_status != "CLOSED_PERMANENTLY"]
             job.update(state="done", result=result, message="Done")
         except (PipelineError, GeocodeError) as exc:
             job.update(state="error", message=str(exc))
@@ -235,16 +241,18 @@ def create_app(password=None):
         if job["state"] == "done":
             res = job["result"]
             leads, stats = res.leads, dict(res.stats)
+            warnings, shows_saved = list(res.warnings), False
             if job.get("saved"):
                 try:
                     leads = saved.load()
                     stats.update({"new leads saved": job["new_leads"], "saved leads": len(leads)})
+                    shows_saved = True
                 except Exception as exc:
-                    res.warnings.append(f"Could not load the saved leads ({exc.__class__.__name__}); "
-                                        "showing this search only.")
+                    warnings.append(f"Could not load the saved leads ({exc.__class__.__name__}); "
+                                    "showing this search only.")
             body.update(leads=[_lead_json(l) for l in leads], stats=stats,
-                        warnings=res.warnings, location=res.location_label,
-                        yelp=yelp_quota(), saved=bool(job.get("saved")))
+                        warnings=warnings, location=res.location_label,
+                        yelp=yelp_quota(), saved=shows_saved)
         return jsonify(body)
 
     @app.get("/download/<job_id>.<fmt>")
