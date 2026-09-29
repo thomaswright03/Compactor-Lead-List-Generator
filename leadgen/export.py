@@ -38,6 +38,7 @@ COLUMNS = [
     ("Map Link", lambda l: l.map_url, 30),
     ("Latitude", lambda l: round(l.lat, 6), 11),
     ("Longitude", lambda l: round(l.lon, 6), 11),
+    ("Has Baler?", lambda l: {"yes": "Yes", "no": "No"}.get(l.has_baler, ""), 11),
     ("Verified?", lambda l: "", 11),
     ("Notes", lambda l: "", 30),
 ]

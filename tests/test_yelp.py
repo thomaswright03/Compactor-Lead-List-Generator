@@ -91,11 +91,26 @@ def test_offset_plus_limit_never_passes_240(monkeypatch):
 def test_default_cap_and_wide_areas_use_grid(monkeypatch):
     calls = _fake_yelp(monkeypatch, total=10)
     queries = yelp.queries_for(["baler"])
-    assert queries[:3] == ["baler", "Pro Baler", "Action Compaction"]
-    assert queries[3:] == list(config.YELP_SEARCHES)
-    yelp.search(40.76, -111.89, 30, queries, YELP_KEY)
-    assert len(calls) == len(queries) * 7           # 30 miles needs the 7-cell grid
+    assert queries[:len(config.YELP_SEARCHES)] == list(config.YELP_SEARCHES)
+    assert queries[len(config.YELP_SEARCHES):] == ["baler", "Pro Baler", "Action Compaction"]
     assert yelp.grid_for(20, 1) == 1 and yelp.grid_for(30, 1) == 7 and yelp.grid_for(60, 7) == 19
+    # 30 miles needs 7 areas (112 first pages), more than the 50 daily calls: one
+    # 25-mile search around the center instead.
+    _, n, warnings = yelp.search(40.76, -111.89, 30, queries, YELP_KEY)
+    assert n == len(calls) == len(queries)
+    assert {(c["latitude"], c["longitude"], c["radius"]) for c in calls} == {(40.76, -111.89, 40000)}
+    assert any("searched the 25 miles around the center" in w for w in warnings)
+
+
+def test_wide_grid_when_asked_for(monkeypatch):
+    calls = _fake_yelp(monkeypatch, total=10)
+    queries = yelp.queries_for(["baler"])
+    _, n, warnings = yelp.search(40.76, -111.89, 30, queries, YELP_KEY, grid_cells=7)
+    assert n == len(calls) == config.YELP_DAILY_LIMIT == 50
+    assert len({(c["latitude"], c["longitude"]) for c in calls}) == 4    # 16 + 16 + 16 + 2
+    assert any("Stopped after 50 Yelp calls (this site may make 50 Yelp calls a day" in w
+               for w in warnings)
+    assert yelp.grid_for(30, 7) == 7 and yelp.choose_grid(30, 1, 5, 50) == 7
 
 
 def test_stops_before_daily_quota_runs_out(monkeypatch):
@@ -223,7 +238,8 @@ def test_pipeline_auto_uses_yelp_key_and_hides_it(monkeypatch):
     monkeypatch.setenv("YELP_API_KEY", YELP_KEY)
     params = SearchParams(keywords=["baler"])
     res = pipeline.run(params)
-    assert seen["key"] == YELP_KEY and seen["queries"][0] == "baler"
+    assert seen["key"] == YELP_KEY and seen["queries"][0] == "grocery stores"
+    assert "baler" in seen["queries"]
     assert res.stats["yelp requests"] == 7 and res.leads[0].sources == ["yelp"]
     info = res.run_info(params)
     assert YELP_KEY not in str(info) and "yelp_api_key" not in info

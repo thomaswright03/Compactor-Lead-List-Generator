@@ -38,3 +38,6 @@ class Lead:
     matched_keywords: list = field(default_factory=list)
     distance_miles: Optional[float] = None
     sources: list = field(default_factory=list)
+    has_baler: str = ""              # "yes" / "no" as marked on the results page (marks.py)
+    uid: str = ""                    # the saved lead's id (saved.py)
+    parts: list = field(default_factory=list)   # the source listings merged into this one
