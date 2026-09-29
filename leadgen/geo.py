@@ -10,8 +10,14 @@ from .http import HttpError, request_json
 EARTH_RADIUS_MILES = 3958.8
 METERS_PER_MILE = 1609.344
 
-# Works offline for the default area and common nearby cities.
+# Works offline for Arco's shop, the default area and common nearby cities.
 KNOWN_PLACES = {
+    config.OWN_ADDRESS.lower(): config.OWN_COORDS,
+    "876 fortune rd": config.OWN_COORDS,
+    "876 fortune road, salt lake city, ut 84104": config.OWN_COORDS,
+    "1876 w fortune rd, salt lake city, ut 84104": config.OWN_COORDS,
+    "arco": config.OWN_COORDS,
+    "arco compactor": config.OWN_COORDS,
     "salt lake city": (40.7608, -111.8910),
     "salt lake city, ut": (40.7608, -111.8910),
     "slc": (40.7608, -111.8910),
@@ -33,6 +39,14 @@ KNOWN_PLACES = {
 
 class GeocodeError(ValueError):
     pass
+
+
+def _place_key(text):
+    """'876 Fortune Rd,  Salt Lake City, UT' -> '876 fortune rd salt lake city ut'."""
+    return " ".join(re.sub(r"[,.]", " ", text.lower()).split())
+
+
+_KNOWN = {_place_key(k): v for k, v in KNOWN_PLACES.items()}
 
 
 def haversine_miles(lat1, lon1, lat2, lon2):
@@ -88,7 +102,7 @@ def geocode(location, api_key=None):
             raise GeocodeError(f"Coordinates out of range: {location}")
         return lat, lon, location
 
-    known = KNOWN_PLACES.get(location.lower())
+    known = _KNOWN.get(_place_key(location))
     if known:
         return known[0], known[1], location
 

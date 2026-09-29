@@ -7,9 +7,14 @@ pipeline code.
 
 from dataclasses import dataclass, field
 
-# Salt Lake City, UT (downtown). Used when no location is given.
-DEFAULT_LOCATION = "Salt Lake City, UT"
-DEFAULT_CENTER = (40.7608, -111.8910)
+# Arco Compactor's shop: the default point the radius and "Miles" are measured
+# from. Stored as coordinates so it never depends on an online geocoder. Utah's
+# address records have no 876 Fortune Rd; the pin is 1876 W Fortune Rd (Fortune
+# Rd is ~0.4 mi long, so any point on it gives the same distances).
+OWN_ADDRESS = "876 Fortune Rd, Salt Lake City, UT 84104"
+OWN_COORDS = (40.742060, -111.943408)
+DEFAULT_LOCATION = OWN_ADDRESS
+DEFAULT_CENTER = OWN_COORDS
 DEFAULT_RADIUS_MILES = 30.0
 DEFAULT_KEYWORDS = ["compactor", "baler", "waste", "recycling"]
 DEFAULT_MIN_SCORE = 20

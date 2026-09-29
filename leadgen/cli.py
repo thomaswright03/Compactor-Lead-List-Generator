@@ -30,7 +30,8 @@ def build_parser():
 
     r = sub.add_parser("run", help="Generate a lead list")
     r.add_argument("--location", "-l", default=config.DEFAULT_LOCATION,
-                   help="ZIP, city, address, or 'lat,lon' (default: Salt Lake City, UT)")
+                   help="ZIP, city, address, or 'lat,lon' (default: Arco Compactor, "
+                        f"{config.OWN_ADDRESS})")
     r.add_argument("--radius", "-r", type=float, default=config.DEFAULT_RADIUS_MILES,
                    help="Search radius in miles (default 30)")
     r.add_argument("--keywords", "-k", nargs="*", default=None,

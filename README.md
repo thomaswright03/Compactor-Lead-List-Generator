@@ -14,7 +14,7 @@ and Arco Compactor's own listing is flagged too.
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Command line: 30 miles around Salt Lake City, saved to output/leads.xlsx
+# Command line: 30 miles around Arco Compactor (876 Fortune Rd, SLC), saved to output/leads.xlsx
 python -m leadgen run
 
 # Web page at http://127.0.0.1:5000
@@ -67,7 +67,7 @@ python -m leadgen run --min-score 40 --limit 200                      # only str
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `--location` | Salt Lake City, UT | ZIP, city, address, or `lat,lon` |
+| `--location` | Arco Compactor (876 Fortune Rd, Salt Lake City) | ZIP, city, address, or `lat,lon`. The radius and the Miles column are measured from here |
 | `--radius` | 30 | Miles from the center; results outside are removed |
 | `--keywords` | compactor baler waste recycling | Extra search terms; matches add points |
 | `--source` | auto | `auto` = OpenStreetMap plus Google and/or Yelp when their key is set. Also `google`, `yelp`, `osm`, and `both` (Google + OpenStreetMap) |

@@ -123,3 +123,11 @@ def test_dedupe_many_copies_is_fast():
     start = time.time()
     dedupe(leads)
     assert time.time() - start < 5
+
+
+def test_default_location_is_arco_offline():
+    from leadgen import config
+    assert geocode(None)[:2] == config.OWN_COORDS
+    assert geocode("876 Fortune Rd,  Salt Lake City, UT 84104")[:2] == config.OWN_COORDS
+    assert geocode("Arco Compactor")[:2] == config.OWN_COORDS
+    assert geocode("salt lake city ut")[:2] == (40.7608, -111.8910)
