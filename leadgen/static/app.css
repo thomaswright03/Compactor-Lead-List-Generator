@@ -14,14 +14,17 @@ textarea:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; 
 input, select, textarea { font:inherit; font-weight:400; padding:var(--sp-2); border:1px solid var(--line); border-radius:var(--r-sm); color:var(--ink); background:var(--input); }
 
 /* Layout: sidebar + pages */
-.app { display:grid; grid-template-columns:210px minmax(0,1fr); min-height:100vh; }
+.app { display:grid; grid-template-columns:224px minmax(0,1fr); min-height:100vh; }
+/* "Skip to main content": off screen until a keyboard user reaches it. */
+.skip { position:absolute; left:var(--sp-3); top:-100px; z-index:60; }
+.skip:focus { top:var(--sp-3); }
 .side { background:var(--side); color:var(--side-ink); padding:var(--sp-5) var(--sp-4); display:flex; flex-direction:column; gap:var(--sp-5);
         position:sticky; top:0; height:100vh; align-self:start; z-index:5; }
 .brand strong { display:block; color:#fff; font-size:var(--fs-md); }
 .brand span { font-size:var(--fs-sm); opacity:.85; }
 nav { display:flex; flex-direction:column; gap:var(--sp-1); }
-nav a { color:var(--side-ink); text-decoration:none; padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm); display:flex; gap:var(--sp-2);
-        justify-content:space-between; align-items:center; font-weight:600; }
+nav a { color:var(--side-ink); text-decoration:none; padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm); display:flex; gap:var(--sp-1) var(--sp-2);
+        justify-content:space-between; align-items:center; font-weight:600; flex-wrap:wrap; }
 nav a:hover { background:rgba(255,255,255,.08); }
 nav a.on { background:rgba(255,255,255,.16); color:#fff; }
 nav .count { font-size:var(--fs-sm); font-weight:600; background:rgba(255,255,255,.14); border-radius:var(--r-pill); padding:0 var(--sp-2); white-space:nowrap; }
@@ -98,6 +101,9 @@ table.plain { border-collapse:collapse; width:100%; }
 table.plain th, table.plain td { text-align:left; padding:var(--sp-2) var(--sp-3); border-bottom:1px solid var(--line); vertical-align:top; }
 table.plain th { font-size:var(--fs-sm); color:var(--muted); }
 table.plain.calls { min-width:720px; }
+.problems { margin-top:var(--sp-3); font-size:var(--fs-sm); }
+.problems summary { cursor:pointer; color:var(--bad-ink); font-weight:600; }
+.problems ul { margin:var(--sp-2) 0; padding-left:var(--sp-5); }
 .scroll-x { overflow-x:auto; }
 button.link { background:none; border:0; padding:0; color:var(--accent); font-weight:600; font-size:var(--fs-sm); }
 tr.more-row td { background:var(--hover); }
@@ -201,7 +207,10 @@ dialog::backdrop { background:var(--backdrop); }
 .tile .label { color:var(--muted); font-size:var(--fs-sm); }
 .tile .value { font-size:var(--fs-xl); font-weight:700; margin-top:var(--sp-1); font-variant-numeric:tabular-nums; }
 .tile .value small { font-size:var(--fs-md); color:var(--muted); font-weight:600; }
-.viz { position:relative; max-width:760px; }
+.viz { position:relative; }
+/* Wide screens: the chart and its table side by side, so the card has no empty half. */
+.stats-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:var(--sp-4); align-items:start; }
+@media (min-width: 1000px) { .stats-grid { grid-template-columns:minmax(0,3fr) minmax(280px,2fr); } }
 .viz svg { width:100%; height:auto; display:block; }
 .viz .tip { position:absolute; pointer-events:none; background:var(--toast); color:var(--toast-ink); font-size:var(--fs-sm); padding:var(--sp-2);
             border-radius:var(--r-sm); white-space:nowrap; transform:translate(-50%,-110%); }
@@ -210,7 +219,7 @@ dialog::backdrop { background:var(--backdrop); }
 .viz rect.col:focus { outline:none; }
 /* A bar reached with the keyboard gets a clear ring (the same colour as every other focus ring). */
 .viz rect.col:focus-visible { stroke:var(--accent-2); stroke-width:3px; fill:var(--hover); fill-opacity:.35; }
-#s-table { margin-top:var(--sp-3); }
+.stats-grid #s-table { margin-top:0; }
 
 /* Touch screens: everything that can be tapped is at least 44px each way. */
 @media (pointer: coarse) {
@@ -228,6 +237,9 @@ dialog::backdrop { background:var(--backdrop); }
   label.check input { width:24px; height:24px; }
 }
 @media (max-width: 820px) {
+  /* Narrow windows (touch or not): the tick box is a full-size target too. */
+  label.check { min-height:44px; }
+  label.check input { width:24px; height:24px; }
   .app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto 1fr; align-content:start; }
   .side { position:static; height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--sp-3); padding:var(--sp-3) var(--sp-4); }
   nav { flex-direction:row; flex-wrap:wrap; }
@@ -245,9 +257,12 @@ dialog::backdrop { background:var(--backdrop); }
   .brand strong { display:inline; }
   .menu-btn { display:inline-flex; align-items:center; background:none; border:1px solid rgba(255,255,255,.3); color:var(--side-ink);
               padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); }
-  nav { grid-column:1 / -1; flex-wrap:nowrap; overflow-x:auto; gap:var(--sp-1); }
-  nav a { padding:var(--sp-1) var(--sp-2); flex:none; }
+  /* Every page's link stays in view: they wrap to a second line on the narrowest phones. */
+  nav { grid-column:1 / -1; flex-wrap:wrap; gap:var(--sp-1); }
+  nav a { padding:var(--sp-1) var(--sp-2); flex:none; font-size:var(--fs-sm); flex-wrap:nowrap; }
+  nav .count { padding:0 var(--sp-1); }
   nav .count .cw { display:none; }
+  .tabs button { font-size:var(--fs-sm); padding:var(--sp-1) var(--sp-3); }
   .side-bottom { grid-column:1 / -1; display:none; padding:var(--sp-2) 0; }
   .side.open .side-bottom { display:flex; }
   main { padding-top:var(--sp-3); }
@@ -277,4 +292,20 @@ dialog::backdrop { background:var(--backdrop); }
   button.why-toggle { display:inline-flex; }
   td.c-why:not(.open) .reasons, td.c-why:not(.open) details.explain { display:none; }
   td.c-why.open .reasons { margin-top:var(--sp-2); }
+
+  /* The Calls page: one card per business too, with Just called and History in view. */
+  table.plain.calls { display:block; min-width:0; }
+  table.plain.calls thead { display:none; }
+  table.plain.calls tbody { display:flex; flex-direction:column; gap:var(--sp-3); }
+  table.plain.calls tr { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--sp-2) var(--sp-3);
+                         grid-template-areas:"name when" "phone phone" "notes notes" "act act";
+                         background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); }
+  table.plain.calls td { display:block; border:0; padding:0; min-width:0; }
+  table.plain.calls td.c-name { grid-area:name; }
+  table.plain.calls td.c-when { grid-area:when; text-align:right; }
+  table.plain.calls td.c-phone { grid-area:phone; }
+  table.plain.calls td.notes { grid-area:notes; border-top:1px dashed var(--line); padding-top:var(--sp-2); }
+  table.plain.calls td.notes::before { content:"Conversation summary"; display:block; font-weight:600; color:var(--muted); }
+  table.plain.calls td.c-act { grid-area:act; }
+  table.plain.calls .call-cell { flex-direction:row; flex-wrap:wrap; align-items:center; }
 }

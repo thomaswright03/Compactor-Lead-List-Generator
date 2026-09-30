@@ -88,6 +88,8 @@ class RunResult:
     warnings: list[str]
     stats: dict[str, object]
     problems: list[str] = field(default_factory=list)   # technical detail of failed sources
+    # The sources that failed ("google", "yelp", "osm") while others still found businesses.
+    failed_sources: list[str] = field(default_factory=list)
 
     def run_info(self, params: SearchParams) -> dict[str, Any]:
         info = {k: v for k, v in asdict(params).items() if k not in ("api_key", "yelp_api_key", "skip_yelp")}
@@ -147,7 +149,7 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
     if params.source == "auto" and not (api_key or yelp_key):
         warnings.append("No Google Places or Yelp API key set: using free OpenStreetMap data "
                         "only. Add a key for much better phone coverage.")
-    raw, errors = _query_sources(params, (use_google, use_yelp, use_osm), (api_key, yelp_key),
+    raw, errors, failed = _query_sources(params, (use_google, use_yelp, use_osm), (api_key, yelp_key),
                                  keywords, lat, lon, progress, warnings, stats)
 
     say(f"Filtering {len(raw)} raw results to {params.radius_miles:g} miles")
@@ -212,13 +214,16 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
         **{f"tier {t}": sum(l.tier == t for l in open_kept) for t in "ABCD"},
         "seconds": round(time.time() - started, 1),
     })
-    return RunResult(kept, (lat, lon), label, warnings, stats, problems=errors)
+    return RunResult(kept, (lat, lon), label, warnings, stats, problems=errors,
+                     failed_sources=failed)
 
 
 def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tuple[str, str],
                    keywords: list[str], lat: float, lon: float, progress: Progress | None,
-                   warnings: list[str], stats: dict[str, object]) -> tuple[list[Lead], list[str]]:
-    """Ask each source in turn; returns (raw leads, technical errors). Adds plain notes to
+                   warnings: list[str], stats: dict[str, object]
+                   ) -> tuple[list[Lead], list[str], list[str]]:
+    """Ask each source in turn; returns (raw leads, technical errors, the sources that
+    failed). Adds plain notes to
     warnings and counts to stats. A source the administrator switched off since the
     search started is skipped; raises PipelineError when nothing at all was found."""
     use_google, use_yelp, use_osm = use
@@ -291,4 +296,4 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
                             detail=" | ".join(errors))
     warnings += [f"Couldn't reach {SOURCE_NAMES[s]} this time, so its businesses are missing "
                  "from this search." for s in failed]
-    return raw, errors
+    return raw, errors, failed

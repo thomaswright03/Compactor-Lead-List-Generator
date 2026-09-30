@@ -151,13 +151,16 @@ def test_two_businesses_never_share_a_row():
     assert a.uid != b.uid and len(marks.apply(saved.load())) == 2
 
 
-def test_a_business_found_closed_leaves_the_list_but_keeps_its_mark():
+def test_a_business_found_closed_stays_in_the_list_flagged_with_its_mark():
     lead = _lead()
     saved.save_search([lead])
     marks.set_mark(lead.uid, "yes")
     closed = _lead(business_status="CLOSED_PERMANENTLY")
     assert saved.save_search([closed]) == (0, 0)
-    assert closed.uid == lead.uid and marks.apply(saved.load()) == []
+    [kept] = marks.apply(saved.load())
+    assert closed.uid == lead.uid == kept.uid and kept.has_baler == "yes"
+    assert saved.is_closed(kept) and kept.flags[0] == saved.CLOSED_FLAG
+    assert saved.count() == 1
 
 
 def test_a_failed_save_hands_out_no_ids(monkeypatch):

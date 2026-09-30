@@ -14,6 +14,9 @@ async function loadStats() {
   $("stats-left-out").hidden = !s.left_out;
   $("stats-left-out").textContent = `${s.left_out.toLocaleString()} competitor and own-company listing${s.left_out === 1 ? " is" : "s are"} ` +
     "left out of these numbers: they are flagged in the list, but they aren't prospects.";
+  $("stats-closed").hidden = !s.closed;
+  $("stats-closed").textContent = `${s.closed.toLocaleString()} of the businesses checked ${s.closed === 1 ? "has" : "have"} since ` +
+    "closed for good. They still count: the mark says what they had while they were open.";
   if (!s.checked) {
     empty.replaceChildren(s.saved
       ? emptyNote("No businesses checked yet.", "Mark businesses Yes or No on the Leads page to see these numbers.", "#leads", "Go to Leads")

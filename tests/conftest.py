@@ -15,6 +15,11 @@ def no_real_keys(monkeypatch, tmp_path):
                 "LEADGEN_SUPPORT_CONTACT"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr("leadgen.http.CACHE_DIR", tmp_path / "cache")
+    # Problem reports (alerts.py) only in the tests about them, and never to a real webhook.
+    monkeypatch.delenv("LEADGEN_ALERT_WEBHOOK", raising=False)
+    monkeypatch.setattr("leadgen.alerts.ON", False)
+    monkeypatch.setattr("leadgen.alerts.BACKGROUND", False)
+    monkeypatch.setattr("leadgen.alerts._last", {})
     # Tests use a fresh SQLite file; LEADGEN_TEST_DATABASE_URL runs them on a
     # throwaway Postgres instead (its tables are emptied before every test).
     test_db = os.environ.get("LEADGEN_TEST_DATABASE_URL")

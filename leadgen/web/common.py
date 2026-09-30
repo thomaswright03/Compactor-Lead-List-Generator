@@ -102,6 +102,7 @@ def lead_json(lead: Lead, undo: Undos | None = None) -> dict[str, Any]:
         "lead_type": lead.lead_type, "flags": lead.flags, "name": lead.name,
         # Competitors and Arco's own listing are flagged, never asked Yes / No.
         "prospect": lead.lead_type not in EXEMPT_TYPES,
+        "closed": saved.is_closed(lead),
         "category": lead.category, "address": lead.address, "city": lead.city,
         "zip": lead.zip, "phone": format_phone(lead.phone), "website": lead.website,
         "distance": lead.distance_miles, "reasons": lead.reasons, "map_url": lead.map_url,

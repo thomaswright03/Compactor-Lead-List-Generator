@@ -17,7 +17,7 @@ from flask import Flask, jsonify, render_template, request, session
 from flask.typing import ResponseReturnValue
 from werkzeug.exceptions import HTTPException
 
-from .. import calls, config, localtime, marks, store
+from .. import alerts, calls, config, localtime, marks, store
 from ..pipeline import SearchParams
 from . import auth, finding, leads
 from .auth import LOGIN_DAYS, LOGIN_TRIES, LOGIN_WINDOW
@@ -136,6 +136,7 @@ def create_app(password: str | None = None, username: str | None = None) -> Flas
     every search can spend the Google or Yelp API key.
     """
     setup_logging()
+    alerts.install()
     app = Flask("leadgen", static_folder=STATIC)
     password = password if password is not None else os.environ.get("APP_PASSWORD", "")
     username = (username if username is not None else os.environ.get("APP_USERNAME", "")).strip()

@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/static/app.css?v={{ asset_version }}">
 </head>
 <body>
+<button type="button" class="skip" id="skip">Skip to main content</button>
 <div class="app">
   <aside class="side">
     <div class="brand"><strong>Arco Compactor</strong><span>Lead Finder</span></div>
@@ -32,7 +33,7 @@
     </div>
   </aside>
 
-  <main>
+  <main id="main">
    <div class="wrap">
     <!-- Find leads -->
     <section class="page" id="page-find" hidden>
@@ -111,6 +112,7 @@
       <div class="card">
         <h2>Search history</h2>
         <div id="history"><div class="muted">Loading...</div></div>
+        <div id="problems" class="problems" hidden></div>
       </div>
     </section>
 
@@ -140,9 +142,13 @@
         <p class="hint-line" id="competitor-hint" hidden>Competitors and Arco's own listing are
           flagged here so you can see who else works the area. They aren't prospects, so they aren't
           asked Yes / No and aren't counted in Stats.</p>
+        <p class="hint-line" id="closed-hint" hidden>A later search reported these businesses
+          closed for good. They keep their Yes / No marks and calls (also on the Calls page and in
+          the downloads) and are no longer listed under Not checked. Stats still counts their marks.</p>
         <p class="hint-line" id="call-hint" hidden>To log a call, mark the business Yes, then use
           <strong>Just called</strong> on the <button type="button" class="link" id="call-hint-go">Has baler or compactor</button> tab.</p>
-        <div class="recent" id="recent" hidden><h2>Recent changes (can be undone for 5 minutes)</h2><ul id="recent-list"></ul></div>
+        <div class="recent" id="recent" hidden><h2>Recent changes (can be undone for 5 minutes)</h2><ul id="recent-list"></ul>
+          <button type="button" class="link" id="recent-more" aria-controls="recent-list" hidden></button></div>
         <div class="table-wrap" id="leads-wrap"></div>
         <button class="quiet more" id="leads-more" hidden></button>
       </div>
@@ -163,7 +169,8 @@
     <section class="page" id="page-stats" hidden>
       <div class="page-head"><h1>Stats</h1>
         <p>From the businesses marked Yes or No for having a baler or compactor.</p>
-        <p id="stats-left-out" hidden></p></div>
+        <p id="stats-left-out" hidden></p>
+        <p id="stats-closed" hidden></p></div>
       <div id="stats-problem"></div>
       <div id="stats-body">
         <div class="card" id="stats-empty" hidden></div>
@@ -177,11 +184,13 @@
           <div class="card">
             <h2>Share with a baler or compactor, by tier</h2>
             <p class="muted">Out of the businesses checked (marked Yes or No) in each tier.</p>
-            <div class="viz" id="chart"></div>
-            <p class="muted" id="tier-d-note" hidden></p>
-            <div class="scroll-x"><table class="plain" id="s-table">
-              <thead><tr><th>Tier</th><th>Checked</th><th>Have one</th><th>Share</th></tr></thead><tbody></tbody>
-            </table></div>
+            <div class="stats-grid">
+              <div><div class="viz" id="chart"></div>
+                <p class="muted" id="tier-d-note" hidden></p></div>
+              <div class="scroll-x"><table class="plain" id="s-table">
+                <thead><tr><th>Tier</th><th>Checked</th><th>Have one</th><th>Share</th></tr></thead><tbody></tbody>
+              </table></div>
+            </div>
           </div>
         </div>
       </div>

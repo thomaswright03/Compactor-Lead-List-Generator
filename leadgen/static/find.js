@@ -56,6 +56,19 @@ async function loadSearches() {
     setGo(true, "Today's search didn't finish, so it can be run again.");
   } else setGo(true, "One search a day. Today's is available.");
   renderHistory(body.searches);
+  renderProblems(body.problems);
+}
+// The site's problems in the last 7 days (failed searches, errors), so they are never only in the logs.
+function renderProblems(p) {
+  const box = $("problems");
+  box.hidden = !p || !p.count;
+  if (box.hidden) return;
+  const d = el("details");
+  d.append(el("summary", `Problems in the last 7 days: ${p.count.toLocaleString()}`));
+  const list = el("ul");
+  for (const x of p.latest) { const li = el("li"); li.append(el("span", x.when, "sub"), ` ${x.text}`); list.append(li); }
+  d.append(list, el("p", "If these keep happening, tell whoever looks after the site.", "sub"));
+  box.replaceChildren(d);
 }
 function renderHistory(searches) {
   const box = $("history");
@@ -68,9 +81,12 @@ function renderHistory(searches) {
   for (const s of searches) {
     const tr = el("tr", undefined, s.failed ? "failed" : "");
     const leadsCell = el("td");
-    if (s.failed) leadsCell.append(el("span", "Failed", "tag")); else leadsCell.textContent = s.leads ?? "-";
+    // An incomplete search (a source failed) saved what the others found, and gave the day back.
+    if (s.partial) leadsCell.append(`${s.leads ?? "-"} `, el("span", "Incomplete", "tag"));
+    else if (s.failed) leadsCell.append(el("span", "Failed", "tag"));
+    else leadsCell.textContent = s.leads ?? "-";
     tr.append(el("td", s.when, "nowrap"), el("td", s.location), el("td", s.radius ? `${s.radius} mi` : ""),
-              leadsCell, el("td", s.failed ? "" : s.new ?? "-"));
+              leadsCell, el("td", s.failed && !s.partial ? "" : s.new ?? "-"));
     const td = el("td");
     tr.append(td); tbody.append(tr);
     if (s.failed) {

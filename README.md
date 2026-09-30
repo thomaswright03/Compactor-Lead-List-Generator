@@ -77,11 +77,15 @@ The sidebar has four pages, a Light / Dark / System colour switch (System
 follows the computer's setting; the choice is remembered in each browser), and
 every page carries the Wright AI Solutions copyright. The browser tab names the
 page ("Leads · Arco Compactor Lead Finder") and shows the Lead Finder icon.
-On phones and tablets every button and link is at least 44 px each way. On a
+On phones and tablets every button and link is at least 44 px each way (on a
+narrow window the "Only businesses matching the search words" tick box too). On a
 phone the navigation is one short bar at the top (the page counts show just the
-number), with the Yelp count, the colour switch and Log out under **Menu**; the
+number; on the narrowest phones the links wrap to a second line, so Stats is
+never cut off), with the Yelp count, the colour switch and Log out under **Menu**; the
 browser's own bar takes the sidebar's colour, light or dark. Times are written
 one way everywhere, in Utah time: "Sep 29, 2026, 4:43 PM", or "4:43 PM".
+The first Tab stop on every page is **Skip to main content**, which jumps past
+the sidebar to the page's list (Leads, Calls) or heading.
 
 - **Find leads**: the search form (extra settings, each explained in plain
   words, under **More options**), a step-by-step progress bar while it runs,
@@ -110,7 +114,18 @@ one way everywhere, in Utah time: "Sep 29, 2026, 4:43 PM", or "4:43 PM".
   back, says so in one or two plain sentences (with one piece of advice: "You
   can try again now; if it fails again, try later today"), and stays in the history marked
   **Failed** with the reason; so does one that never finished (the server
-  restarted), after 30 minutes (the page says when, in Utah time). The map data step gives up after two minutes
+  restarted), after 30 minutes (the page says when, in Utah time). A search
+  where one source failed while the others worked (say Google refused its key,
+  or the map data service was down) is **incomplete**: the businesses the other
+  sources found are saved, but the day is given back, so the search can be run
+  again once that source works. The page says which source is missing and that
+  today's search was not used up (for Google or Yelp: "ask whoever looks after
+  the site to check the key"), and the history shows the search's lead count
+  marked **Incomplete**, with the reason. A source switched off by the
+  administrator is not a failure (the day is used as usual). Under the history,
+  **Problems in the last 7 days** (shown only when there were some) lists failed
+  or incomplete searches and server errors, so nobody has to read the logs to
+  notice them (see "Problems: the webhook" below). The map data step gives up after two minutes
   in all (`OVERPASS_DEADLINE_SECONDS`); a map server that hasn't answered after
   25 seconds (`OVERPASS_STAGGER_SECONDS`) is not waited out: the next one is asked
   as well and the first good answer wins, so one hanging server can't use up the
@@ -119,7 +134,14 @@ one way everywhere, in Utah time: "Sep 29, 2026, 4:43 PM", or "4:43 PM".
   neither is set up) are shown as skipped.
 - **Leads**: the saved list, with **Yes** / **No** buttons for "has a baler or
   compactor" and tabs for Not checked, Has baler or compactor, No baler or
-  compactor, Competitors, and All. Competitors and Arco's own listing are
+  compactor, Competitors, Closed and All. A saved business that a later search
+  reports **closed for good** stays in the list with its mark and calls, flagged
+  "Closed for good" in red: it leaves Not checked (there is nothing left to
+  check), stays under Has / No baler or compactor if it was marked, and every
+  closed business is under the **Closed** tab. It stays on the Calls page and in
+  the downloads (the flag is in the Flags column), and Stats still counts its
+  mark: the mark says what it had while it was open. If a later search finds it
+  open again, the flag goes. Competitors and Arco's own listing are
   flagged (orange) and have their own **Competitors** tab: they aren't prospects,
   so they get no Yes / No buttons, aren't in Not checked and aren't counted in
   Stats (they still appear under All and in the downloads). The sidebar badge
@@ -135,12 +157,15 @@ one way everywhere, in Utah time: "Sep 29, 2026, 4:43 PM", or "4:43 PM".
   click can be undone for 5 minutes**: from the Undo link on the row (with the
   time left) or from **Recent changes** above the list, even after a reload.
   The server remembers what each click replaced, and refuses an undo once a
-  newer change has been made to that business (e.g. by a colleague). Click a
+  newer change has been made to that business (e.g. by a colleague). Recent
+  changes shows the latest two, with **Show all** for the rest, so the list
+  stays in view. Click a
   column heading (Score, Business, Contact, Miles) to sort; the tab, filter,
   tier and sort are kept in the address, so a reload or a shared link shows the
   same view. **Download Excel** / **Download CSV** say "Preparing Excel…" while
   the file is built (10,000 leads take about a second) and ignore a second click
-  meanwhile. Phone numbers are tap-to-call links. The list refreshes every
+  meanwhile. Phone numbers are tap-to-call links; a business without one says
+  "No phone listed". The list refreshes every
   minute and when you come back to the tab, so colleagues' marks and calls show
   up without a reload; each refresh only fetches the businesses that changed
   (`GET /leads?since=…`, which also sends the new tab counts), so it stays small
@@ -166,11 +191,17 @@ one way everywhere, in Utah time: "Sep 29, 2026, 4:43 PM", or "4:43 PM".
   latest call's notes; when the latest call had none it says so and shows the
   most recent notes from an earlier call, with that call's date (the downloads'
   Call Notes column does the same). With no calls yet it says how to log one.
+  Below 700 px wide (phones) each called business is a card like on the Leads
+  page: name and latest result, the tap-to-call phone, the Conversation summary,
+  then **Just called**, **History** and Undo, with nothing scrolling sideways. A
+  business closed for good says so under its name.
 - **Stats**: how many businesses have a baler or compactor (marked Yes), their
   average score, and a chart of the share of checked businesses (marked Yes or
   No) that have one, by tier. Competitors and Arco's own listing are left out of
   every figure (the page says how many), since the numbers measure how well the
-  scoring finds prospects. Tier D is usually empty, and the page says why:
+  scoring finds prospects. Businesses that have since closed for good still
+  count (the page says how many of the checked ones have closed). On a wide
+  screen the table sits beside the chart. Tier D is usually empty, and the page says why:
   searches only save businesses scoring at least the minimum score (20; the tier
   boundaries come from the scoring settings). Before anything is marked, the page
   shows only a note saying how to fill it, with a link to the Leads page.
@@ -209,6 +240,7 @@ them in `.env` (see `.env.example`) or the shell.
 | `LEADGEN_SEARCH_PAUSED` | No | off | Emergency stop: `1` makes Find leads refuse to start (see below) |
 | `LEADGEN_GOOGLE_OFF` | No | off | `1` stops every Google call (no Google charges); searches use the other sources |
 | `LEADGEN_YELP_OFF` | No | off | `1` stops every Yelp call; searches use the other sources |
+| `LEADGEN_ALERT_WEBHOOK` | No (recommended on the live site) | none | An https incoming-webhook address (Slack, Microsoft Teams, Google Chat or Discord) that gets a message for every failed or incomplete search and server error; see "Problems: the webhook" below |
 | `LEADGEN_SUPPORT_CONTACT` | No | "the person who manages the Lead Finder" | Who the login page tells people to ask for access, e.g. `Matt at (801) 555-0100` |
 | `LEADGEN_ALLOWED_HOSTS` | No | `localhost` | Without a password, extra host names the page answers on (comma separated) |
 | `LEADGEN_CACHE_DIR` | No | `.cache` | Folder for the API response cache and the local SQLite database |
@@ -277,6 +309,29 @@ one, change its version there, run the tests, and push.
 
 The site logs to Render's **Logs** tab: every failed search, database error and
 unexpected error, with the technical detail the pages leave out.
+
+### Problems: the webhook
+
+So that nobody has to watch the Logs tab, every failed or incomplete search and
+every error the site logs is also recorded in the database (the `problems`
+table; the Find leads page lists the last 7 days under the search history) and,
+when `LEADGEN_ALERT_WEBHOOK` is set, sent as a one-line message such as
+"Arco Compactor Lead Finder: Today's search failed: Couldn't reach the map data
+service (OpenStreetMap), so no leads were found. (Sep 29, 2026, 5:48 PM, Utah time)".
+To set it up:
+
+1. Create an incoming webhook where the person who looks after the site will
+   see it: in Slack, **Apps → Incoming Webhooks**; in Microsoft Teams, a
+   channel's **Workflows → Post to a channel when a webhook request is
+   received**; in Google Chat, a space's **Apps & integrations → Webhooks**; in
+   Discord, **Channel settings → Integrations → Webhooks**. Copy its https address.
+2. In Render, **Environment**, add `LEADGEN_ALERT_WEBHOOK` with that address and
+   **Save Changes**.
+
+The same problem is sent at most once every 15 minutes; messages hold plain
+words and error class names, never request data or settings. Reporting runs in
+the background and never slows or breaks a page; if the webhook can't be
+reached, that is only logged.
 
 To go back to the previous version:
 
@@ -390,7 +445,7 @@ Everything adjustable is in `leadgen/config.py`:
 1. **Geocode** the location (built-in table for SLC-area cities, then ZIP lookup, Google, or OpenStreetMap Nominatim).
 2. **Search**: Google Places text search for your keywords, the competitor names, then ~27 business-type phrases, across 1/7/19 grid cells; Yelp's 13 category searches (most-reviewed first), then word searches for your keywords and the competitor names; and one OpenStreetMap Overpass query for matching tags and name words (several mirror servers are tried, within two minutes in all).
 3. **Filter** to the exact radius (Haversine distance).
-4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's (then Yelp's) contact details and OpenStreetMap's building size. Different phone numbers or names that only share generic words ("Inn & Suites Airport") are kept apart. Places Google or Yelp report permanently closed are then dropped.
+4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's (then Yelp's) contact details and OpenStreetMap's building size. Different phone numbers or names that only share generic words ("Inn & Suites Airport") are kept apart. Places Google or Yelp report permanently closed are then left out of the search's results; a saved business among them is flagged "Closed for good" in the saved list (it keeps its mark and calls).
 5. **Score**, sort by score then distance, and **export**.
 
 API responses are cached for 7 days (Yelp searches in the database), so
@@ -452,7 +507,8 @@ python -m mypy                                 # strict type check (settings in 
 
 The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
 `leadgen/saved.py`, `marks.py`, `calls.py` and `daily.py` keep the saved data
-(`store.py` is the database). The website is `leadgen/web/`: `auth.py` (login),
+(`store.py` is the database); `alerts.py` records problems and sends them to the
+webhook. The website is `leadgen/web/`: `auth.py` (login),
 `finding.py` (Find leads), `leads.py` (the saved list, marks, calls, stats,
 downloads) and `common.py`. `export.py` lays out the CSV and Excel files and
 `xlsx.py` writes the Excel format; `reference.py` copies the site's marks into
@@ -470,7 +526,11 @@ competitors not asked Yes / No, the search confirmation, a refused search saying
 why (in the browser and from the server), the phone cards and the short phone
 header, Stats, downloads and their busy state, reload keeps the
 view, the colour switch fitting from 320 px up, 44 px touch targets on a
-phone); it is skipped when Playwright's Chromium is missing.
+phone, the Calls cards and every page link in view at 320 px, a closed business
+keeping its mark, the skip link and the short Recent changes); it is skipped when Playwright's Chromium is missing.
+`tests/test_closed_and_alerts.py` covers closed businesses in every view, the
+downloads and Stats, an incomplete search giving the day back, and problem
+reports (the webhook is mocked).
 `tests/test_cli.py` runs the command line with the sources mocked.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the lint, the dead-code and

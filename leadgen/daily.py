@@ -3,7 +3,9 @@
 Each day's search is recorded (when it was started, what was searched and what
 it found) in the database; the record is claimed atomically when the button is
 clicked, so two clicks can never both run. A search that fails before finding
-anything (e.g. an unknown location) gives the day back.
+anything (e.g. an unknown location) gives the day back, and so does one where a
+source failed (e.g. Google refused its key) even though others found businesses:
+what was found is saved, and the day's search can be run again.
 """
 
 import datetime as dt
@@ -60,14 +62,15 @@ def finish(day: str, info: dict[str, Any]) -> None:
         db.run("UPDATE searches SET info = ? WHERE day = ?", (json.dumps(merged), day))
 
 
-def release(day: str, reason: str | None = None) -> None:
-    """Give the day back after a search that failed outright. With a reason (plain
-    words for the page) the attempt stays in the history, marked failed."""
+def release(day: str, reason: str | None = None, extra: dict[str, Any] | None = None) -> None:
+    """Give the day back after a search that failed (outright, or a source of it).
+    With a reason (plain words for the page) the attempt stays in the history,
+    marked failed; extra adds what an incomplete search found."""
     with store.connect() as db:
         row = db.one("SELECT at, info FROM searches WHERE day = ?", (day,))
         db.run("DELETE FROM searches WHERE day = ?", (day,))
         if reason and row:
-            info = {**json.loads(row[1]), "failed": True, "reason": reason}
+            info = {**json.loads(row[1]), **(extra or {}), "failed": True, "reason": reason}
             db.run("INSERT INTO search_failures (id, day, at, info) VALUES (?, ?, ?, ?)",
                    (uuid.uuid4().hex, day, row[0], json.dumps(info)))
 

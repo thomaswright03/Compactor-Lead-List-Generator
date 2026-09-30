@@ -415,3 +415,65 @@ def test_leads_are_cards_on_a_phone(browser, site, page):
     phone.select_option("#sort-pick", "name:asc")
     phone.wait_for_function("location.hash.includes('sort=name')")
     context.close()
+
+
+def _uid(name):
+    return next(lead.uid for lead in saved.load() if lead.name.startswith(name))
+
+
+def test_calls_are_cards_and_every_page_is_in_the_bar_on_a_small_phone(browser, site, page):
+    from leadgen import calls, marks
+    uid = _uid("Smith")
+    marks.set_mark(uid, "yes")
+    calls.log_call(uid, "Follow Up", "Spoke to Dana; send a quote.")
+    context = browser.new_context(viewport={"width": 320, "height": 700}, has_touch=True, is_mobile=True)
+    phone = context.new_page()
+    phone.goto(site + "#calls")
+    phone.wait_for_selector("table.calls")
+    fits = phone.evaluate("""() => {
+        const inside = (e) => { const r = e.getBoundingClientRect();
+                                return r.width > 0 && r.left >= 0 && r.right <= window.innerWidth; };
+        const wrap = document.getElementById('calls-wrap');
+        return { wide: wrap.scrollWidth > wrap.clientWidth,
+                 page: document.documentElement.scrollWidth > window.innerWidth,
+                 parts: [...document.querySelectorAll('#calls-wrap td.notes, #calls-wrap .call-cell button')].map(inside),
+                 nav: [...document.querySelectorAll('nav a')].map(inside) }; }""")
+    assert not fits["wide"] and not fits["page"]
+    assert len(fits["parts"]) >= 3 and all(fits["parts"])    # notes, Just called, History, Undo
+    assert fits["nav"] == [True] * 4                         # Stats is never cut off
+    context.close()
+
+
+def test_a_business_closed_for_good_keeps_its_mark_in_view(page):
+    uid = _uid("Costco")
+    from leadgen import marks
+    marks.set_mark(uid, "yes")
+    closed = next(lead for lead in saved.load() if lead.uid == uid)
+    again = Lead(name=closed.name, lat=closed.lat, lon=closed.lon, source="yelp", source_id="y1",
+                 raw_categories=["yelp:wholesale_stores"], business_status="CLOSED_PERMANENTLY")
+    score_lead(again, config.DEFAULT_KEYWORDS)
+    saved.save_search([again], config.DEFAULT_KEYWORDS)
+    page.reload()
+    page.wait_for_selector("table.leads")
+    expect(page.get_by_role("button", name="Not checked (2)")).to_be_visible()
+    page.get_by_role("button", name="Closed (1)").click()
+    expect(_row(page, "Costco")).to_contain_text("Closed for good")
+    expect(page.locator("#closed-hint")).to_be_visible()
+    page.get_by_role("button", name="Has baler or compactor (1)").click()
+    expect(_row(page, "Costco").locator(".mark button.yes.on")).to_have_count(1)
+
+
+def test_skip_link_and_short_recent_changes(page):
+    for name in ("Costco", "Smith", "Hampton"):
+        _row(page, name).locator(".mark button.yes").click()
+        page.wait_for_timeout(800)                      # past the guard against double clicks
+    page.wait_for_function("document.getElementById('recent-list').children.length === 2")
+    expect(page.locator("#recent-more")).to_have_text("Show all 3")
+    page.click("#recent-more")
+    page.wait_for_function("document.getElementById('recent-list').children.length === 3")
+    page.reload()
+    page.wait_for_selector("#lead-tabs button")        # every business is checked: no table now
+    page.keyboard.press("Tab")
+    assert page.evaluate("document.activeElement.id") == "skip"
+    page.keyboard.press("Enter")
+    assert page.evaluate("document.activeElement.id") == "leads-wrap"

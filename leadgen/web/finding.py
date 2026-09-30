@@ -13,7 +13,7 @@ from typing import Any
 from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from .. import config, daily, saved, store
+from .. import alerts, config, daily, saved, store
 from ..geo import GeocodeError
 from ..localtime import clock_text
 from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, run
@@ -313,7 +313,7 @@ RETRY = "You can try again now; if it fails again, try later today."
 def _worker(job: Job, params: SearchParams, day: str) -> None:
     try:
         # Closed places come back too, so a saved one that has since closed is updated
-        # (and leaves the saved list); they are not shown.
+        # (it stays in the saved list, flagged closed for good); they are not shown here.
         result = run(replace(params, include_closed=True), job["progress"])
         for problem in result.problems:
             log.warning("Search %s: a source failed: %s", day, problem)
@@ -323,11 +323,14 @@ def _worker(job: Job, params: SearchParams, day: str) -> None:
             result.leads = [lead for lead in result.leads
                             if lead.business_status != "CLOSED_PERMANENTLY"]
         result.warnings = warnings
-        _record(day, result, job, warnings)
+        if result.failed_sources:
+            _incomplete(day, result, job, warnings)
+        else:
+            _record(day, result, job, warnings)
         job.update(state="done", result=result, message="Done", pct=100, step=len(STEPS))
     except GeocodeError as exc:
         log.info("Search %s: location not found: %s", day, exc)
-        _fail(job, day, f"{exc} {NOT_USED_UP}", str(exc))
+        _fail(job, day, f"{exc} {NOT_USED_UP}", str(exc), alert=False)
     except PipelineError as exc:
         log.warning("Search %s failed: %s %s", day, exc, exc.detail)
         _fail(job, day, f"{exc} {NOT_USED_UP} {RETRY}", str(exc))
@@ -338,16 +341,43 @@ def _worker(job: Job, params: SearchParams, day: str) -> None:
                         "Something went wrong during the search.")
 
 
-def _fail(job: Job, day: str, message: str, reason: str) -> None:
+def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str]) -> None:
+    """A search where a source failed (a paid one refused its key, say) while others
+    found businesses: what was found is saved, but the day is given back, so the
+    search can be run again once the source works."""
+    names = _source_names(result.failed_sources)
+    paid = [s for s in result.failed_sources if s in ("google", "yelp")]
+    reason = (f"Couldn't reach {names}, so its businesses are missing from this search; "
+              f"the {len(result.leads):,} businesses the other sources found were "
+              + ("saved." if job.get("saved") else "kept."))
+    advice = (f" If it keeps happening, ask whoever looks after the site to check the "
+              f"{_source_names(paid)} key." if paid else "")
+    warnings.append(f"{NOT_USED_UP} You can run it again to fill in what {names} would "
+                    f"have found.{advice}")
+    _give_back(day, reason, {"partial": True, "leads": len(result.leads),
+                             "new": job.get("new_leads"), "details": result.stats,
+                             "warnings": warnings})
+    alerts.report("search", f"Today's search was incomplete: {reason}{advice}")
+
+
+def _source_names(sources: list[str]) -> str:
+    names = [{"google": "Google", "yelp": "Yelp", "osm": "the map data service"}[s]
+             for s in sources]
+    return " and ".join(names)
+
+
+def _fail(job: Job, day: str, message: str, reason: str, alert: bool = True) -> None:
     _give_back(day, reason)
+    if alert:
+        alerts.report("search", f"Today's search failed: {reason}")
     job.update(state="error", message=message)
 
 
-def _give_back(day: str, reason: str | None = None) -> None:
-    """A search that failed outright does not use up the day (it stays in the
-    history as failed, with the reason)."""
+def _give_back(day: str, reason: str | None = None, extra: dict[str, Any] | None = None) -> None:
+    """A search that failed (outright, or a source of it) does not use up the day
+    (it stays in the history as failed, with the reason)."""
     try:
-        daily.release(day, reason)
+        daily.release(day, reason, extra)
     except Exception:
         log.exception("Giving back today's search failed")
 
@@ -426,6 +456,12 @@ def searches() -> ResponseReturnValue:
     for record in [body.get("current"), *body["searches"]]:
         if record and record.get("details"):
             record["details"] = plain_details(record["details"])
+    try:
+        problems: dict[str, Any] | None = alerts.recent()
+    except Exception:
+        log.warning("Loading the recent problems failed", exc_info=True)
+        problems = None                  # the history is still worth showing without them
+    body["problems"] = problems
     current = body.get("current")
     if current:
         # When an unfinished search stops holding the day, in Utah time like every time.

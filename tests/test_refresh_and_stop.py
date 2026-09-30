@@ -56,17 +56,20 @@ def test_refresh_sends_only_what_changed(monkeypatch):
     assert [(l["name"], l["call_count"]) for l in body["leads"]] == [(b.name, 0)]
 
 
-def test_a_lead_that_closed_is_removed_on_refresh(monkeypatch):
+def test_a_lead_that_closed_moves_to_the_closed_tab_on_refresh(monkeypatch):
     monkeypatch.setattr(web.leads, "SINCE_OVERLAP", 0.0)
     lead = _saved(1)[0]
     client = web.create_app().test_client()
-    since = client.get("/leads").get_json()["now"]
+    since = client.get("/leads?tab=unchecked").get_json()["now"]
     time.sleep(0.01)
     closed = _lead(lead.name, lead.source_id)
     closed.business_status = "CLOSED_PERMANENTLY"
     saved.save_search([closed])
-    body = client.get(f"/leads?since={since}").get_json()
-    assert body["leads"] == [] and body["removed"] == [lead.uid]
+    body = client.get(f"/leads?tab=unchecked&since={since}").get_json()
+    [changed] = body["leads"]
+    assert changed["key"] == lead.uid and changed["closed"] and not changed["in_view"]
+    assert body["removed"] == [] and body["counts"]["unchecked"] == 0
+    assert body["counts"]["closed"] == 1 and body["counts"]["all"] == 1
 
 
 def test_refresh_of_a_big_list_is_small_and_quick(monkeypatch):

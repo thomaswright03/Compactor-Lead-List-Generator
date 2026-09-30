@@ -86,6 +86,15 @@ $("menu-btn").addEventListener("click", () => {
   $("menu-btn").setAttribute("aria-expanded", open);
 });
 
+// "Skip to main content" (the first Tab stop): past the sidebar, to the page's list or heading.
+$("skip").addEventListener("click", () => {
+  const page = document.querySelector(".page:not([hidden])");
+  if (!page) return;
+  const target = { "page-leads": $("leads-wrap"), "page-calls": $("calls-wrap") }[page.id] || page.querySelector("h1");
+  target.setAttribute("tabindex", "-1");
+  target.focus();
+});
+
 /* ---------- pages and the address bar ---------- */
 function parseHash() {
   const [page, query] = (location.hash || "").slice(1).split("?");

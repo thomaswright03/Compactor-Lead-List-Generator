@@ -38,9 +38,11 @@ bp = Blueprint("leads", __name__)
 
 
 # The page's views of the saved list (its tabs): prospects not yet checked, marked
-# Yes, marked No; competitors and Arco's own listing (never asked Yes / No); every
-# lead; and the businesses with a call logged (the Calls page).
-VIEWS = ("unchecked", "yes", "no", "competitors", "all", "called")
+# Yes, marked No; competitors and Arco's own listing (never asked Yes / No);
+# businesses closed for good; every lead; and the businesses with a call logged
+# (the Calls page). A closed business keeps its mark (so it stays under Yes or No,
+# flagged) but is no longer offered for checking.
+VIEWS = ("unchecked", "yes", "no", "competitors", "closed", "all", "called")
 # Column sorts: the value to sort by. Equal values keep the saved order (best first).
 SORTS = {
     "score": lambda l: l.score,
@@ -63,6 +65,10 @@ def in_view(lead: Lead, view: str) -> bool:
         return not is_prospect(lead)
     if view == "called":
         return bool(lead.call_count)
+    if view == "closed":
+        return saved.is_closed(lead)
+    if view == "unchecked" and saved.is_closed(lead):
+        return False
     return is_prospect(lead) and (lead.has_baler or "unchecked") == view
 
 

@@ -74,10 +74,12 @@ function updateLead(data) {
 function addRecent(lead) {
   S.recent = [lead, ...S.recent.filter((l) => l.key !== lead.key)];
 }
-// A Yes / No click moves a business between tabs; the counts follow at once.
-function moveCount(from, to) {
+// A Yes / No click moves a business between tabs; the counts follow at once. A business
+// closed for good is never under Not checked (it has its own tab).
+function moveCount(lead, from, to) {
   if (!S.counts) return;
-  S.counts[from || "unchecked"]--; S.counts[to || "unchecked"]++;
+  if (from || !lead.closed) S.counts[from || "unchecked"]--;
+  if (to || !lead.closed) S.counts[to || "unchecked"]++;
 }
 function renderAll() { renderLeads(); renderCalls(); renderRecent(); counts(); }
 function counts() {
@@ -89,8 +91,10 @@ function counts() {
 }
 
 // Competitors and Arco's own listing have their own tab: they are flagged, never asked Yes / No.
+// Businesses a later search found closed for good keep their mark (and stay under Yes or No,
+// flagged); the Closed tab lists them all, and they leave Not checked.
 const LEAD_TABS = [["", "Not checked"], ["yes", "Has baler or compactor"], ["no", "No baler or compactor"],
-                   ["competitors", "Competitors"], ["all", "All"]];
+                   ["competitors", "Competitors"], ["closed", "Closed"], ["all", "All"]];
 // Column sorts (done by the server) and the first direction a click picks.
 const SORTS = { score: { dir: "desc" }, name: { dir: "asc" }, city: { dir: "asc" }, miles: { dir: "asc" } };
 
@@ -161,7 +165,9 @@ const leadByKey = (key) => [...S.leads, ...S.called, ...S.recent].find((l) => l.
 const pinnedNow = (key) => S.pinned.has(key);
 function unpinAll() { S.pinned.clear(); }
 // Does the row belong in the tab shown (a row just marked may stay for a moment when it doesn't)?
-const inTab = (l) => S.leadView === "all" || (S.leadView === "competitors" ? !l.prospect : l.prospect && (l.has_baler || "") === S.leadView);
+const inTab = (l) => S.leadView === "all" || (S.leadView === "competitors" ? !l.prospect
+  : S.leadView === "closed" ? l.closed
+  : l.prospect && (l.has_baler || "") === S.leadView && !(l.closed && !S.leadView));
 // Just-marked rows stay while the mouse is over the list (or focus is in it), and PIN_MS after.
 // The hover is read from the page itself, so no pointer event can be missed.
 let pointerKind = "mouse";
@@ -193,7 +199,7 @@ async function setMark(lead, value) {
   // Keep the row where it is (with its new answer) instead of letting the next one slide under the pointer.
   if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);
   lead.saving = true; S.busy++;
-  updateLead({ key, has_baler: value }); moveCount(before, value);
+  updateLead({ key, has_baler: value }); moveCount(lead, before, value);
   renderAll();
   try {
     const { undo } = await post("/mark", { key, value });
@@ -202,7 +208,7 @@ async function setMark(lead, value) {
     renderAll();
     toast(`${lead.name}: marked ${value === "yes" ? "Yes" : "No"}.`, () => undoMark(key));
   } catch (err) {
-    updateLead({ key, has_baler: before }); moveCount(value, before);
+    updateLead({ key, has_baler: before }); moveCount(lead, value, before);
     renderAll();
     toast(`${lead.name}: answer not saved. ${err.message}`, null, true);
   } finally { lead.saving = false; S.busy--; }
@@ -300,7 +306,7 @@ function leadRow(l, withCall) {
     addr.append(" ", map);
   }
   contact.append(addr);
-  if (l.phone) { const p = el("div"); p.append(phoneLink(l.phone)); contact.append(p); }
+  const p = el("div"); p.append(l.phone ? phoneLink(l.phone) : el("span", "No phone listed", "sub")); contact.append(p);
   if (l.website) {
     const a = link(l.website, l.website.replace(/^https?:\/\/(www\.)?/i, "").split("/")[0]);
     a.classList.add("site"); a.title = l.website; contact.append(a);
@@ -357,15 +363,17 @@ function renderLeads() {
   $("leads-note").replaceChildren(...(S.refreshError ? [el("div", S.refreshError, "warn")] : []));
   const c = S.counts || {};
   tabs($("lead-tabs"), LEAD_TABS.map(([v, t]) => [v, t, c[v || "unchecked"] || 0]), S.leadView, pickTab);
-  $("call-hint").hidden = S.leadView === "yes" || S.leadView === "competitors" || !c.all;
+  $("call-hint").hidden = ["yes", "competitors", "closed"].includes(S.leadView) || !c.all;
   $("competitor-hint").hidden = S.leadView !== "competitors";
+  $("closed-hint").hidden = S.leadView !== "closed";
   const wrap = $("leads-wrap");
   wrap.classList.toggle("stale", S.viewLoading);
   wrap.setAttribute("aria-busy", S.viewLoading);
   if (!S.leads.length) {
     const empty = !c.all ? "No saved leads yet. Run a search on the Find leads page."
       : S.q || S.tier ? "Nothing here with these filters."
-      : S.leadView === "" ? "Every business has been checked." : "Nothing here yet.";
+      : S.leadView === "" ? "Every business has been checked."
+      : S.leadView === "closed" ? "No saved business has been reported closed for good." : "Nothing here yet.";
     wrap.replaceChildren(el("div", empty, "empty"));
   } else {
     wrap.replaceChildren(leadTable(S.leads, S.leadView === "yes"));
@@ -389,8 +397,16 @@ function renderRecent() {
   }
   items.sort((a, b) => b[0] - a[0]);
   $("recent").hidden = !items.length;
-  $("recent-list").replaceChildren(...items.slice(0, 8).map(([, text, b]) => { const li = el("li"); li.append(el("span", text), b); return li; }));
+  // The latest two, so the list stays in view; the rest behind "Show all".
+  const shown = S.recentOpen ? items : items.slice(0, RECENT_SHOWN);
+  $("recent-list").replaceChildren(...shown.map(([, text, b]) => { const li = el("li"); li.append(el("span", text), b); return li; }));
+  const more = $("recent-more");
+  more.hidden = items.length <= RECENT_SHOWN;
+  more.textContent = S.recentOpen ? "Show fewer" : `Show all ${items.length}`;
+  more.setAttribute("aria-expanded", !!S.recentOpen);
 }
+const RECENT_SHOWN = 2;
+$("recent-more").addEventListener("click", () => { S.recentOpen = !S.recentOpen; renderRecent(); });
 $("leads-more").addEventListener("click", () => { S.limit += 300; S.viewLoading = true; renderLeads(); loadLeads(); });
 let filterTimer = null;
 $("filter").addEventListener("input", () => {

@@ -9,6 +9,9 @@ allowing them to be kept (config.SAVED_SOURCE_KEEP_SECONDS); the lead is then
 rebuilt from what is left, and a lead with nothing left is hidden but keeps
 its listing ids, so its mark comes back if a search finds it again.
 
+A business a later search reports closed for good stays in the list (with its
+mark and calls), flagged CLOSED_FLAG; it is not offered for checking any more.
+
 A saved lead is always scored with the default keywords
 (config.DEFAULT_KEYWORDS), never with what someone typed into a later search,
 so its score and tier depend only on facts about the business and the Stats
@@ -30,6 +33,9 @@ from .models import Lead
 from .scoring import score_lead
 
 _FIELDS = {f.name for f in fields(Lead)}
+CLOSED = "CLOSED_PERMANENTLY"
+# The flag a saved business that closed for good carries (on the page and in downloads).
+CLOSED_FLAG = "Closed for good"
 # One source listing kept with a saved lead: {"at": when it was found, "lead": its fields}.
 Part = dict[str, Any]
 
@@ -121,7 +127,8 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
     the default keywords is scored again with them before it is saved.
 
     Leads the search found permanently closed update their row too (it then
-    leaves the list). Returns (new, updated) counts. Raises store.Unavailable
+    stays in the list flagged CLOSED_FLAG, with its mark and calls). Returns
+    (new, updated) counts of open businesses. Raises store.Unavailable
     without a database, or a database error; no lead gets a uid then.
     """
     now = time.time()
@@ -179,9 +186,14 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
     return new, shown - new
 
 
+def is_closed(lead: Lead) -> bool:
+    return lead.business_status == CLOSED
+
+
 def load(uids: Iterable[str] | None = None) -> list[Lead]:
     """All saved leads (best first), or with uids just those, with miles from
     Arco's shop. Their marks and calls are added by marks.apply / calls.apply.
+    Businesses closed for good are included, flagged CLOSED_FLAG.
 
     Raises store.Unavailable without a database, or a database error when the
     leads can't be read.
@@ -204,7 +216,9 @@ def load(uids: Iterable[str] | None = None) -> list[Lead]:
     for row in rows:
         if wanted is not None and row.uid not in wanted:
             continue
-        if row.lead and row.lead.business_status != "CLOSED_PERMANENTLY":
+        if row.lead:
+            if is_closed(row.lead) and CLOSED_FLAG not in row.lead.flags:
+                row.lead.flags = [CLOSED_FLAG, *row.lead.flags]
             row.lead.uid = row.uid
             row.lead.distance_miles = round(haversine_miles(
                 *config.DEFAULT_CENTER, row.lead.lat, row.lead.lon), 2)
@@ -214,11 +228,10 @@ def load(uids: Iterable[str] | None = None) -> list[Lead]:
 
 
 def count() -> int:
-    """How many saved leads the list shows (every one not closed for good)."""
+    """How many saved leads the list shows (those closed for good too)."""
     with store.connect() as db:
         rows = db.all("SELECT lead FROM leads")
-    return sum(1 for (lead,) in rows
-               if (data := json.loads(lead)) and data.get("business_status") != "CLOSED_PERMANENTLY")
+    return sum(1 for (lead,) in rows if json.loads(lead))
 
 
 def changed_since(ts: float) -> set[str]:

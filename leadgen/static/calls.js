@@ -46,15 +46,17 @@ function renderCalls() {
   rows.sort((a, b) => (b.last_call_at || 0) - (a.last_call_at || 0));   // latest call first
   for (const l of rows) {
     const tr = el("tr");
-    const name = el("td"); name.append(el("strong", l.name)); name.append(el("div", [l.address, l.city].filter(Boolean).join(", "), "sub"));
+    const name = el("td", undefined, "c-name"); name.append(el("strong", l.name)); name.append(el("div", [l.address, l.city].filter(Boolean).join(", "), "sub"));
+    if (l.closed) name.append(el("div", "Closed for good", "flag"));
     tr.append(name);
-    const phone = el("td"); phone.append(phoneLink(l.phone)); tr.append(phone);
-    const when = el("td");
+    const phone = el("td", undefined, "c-phone");
+    phone.append(l.phone ? phoneLink(l.phone) : el("span", "No phone listed", "sub")); tr.append(phone);
+    const when = el("td", undefined, "c-when");
     when.append(el("span", l.call_outcome, "badge"), el("div", l.last_call));
     when.append(el("div", `${l.call_count} call${l.call_count > 1 ? "s" : ""}`, "sub"));
     tr.append(when);
     tr.append(notesCell(l));
-    const act = el("td"); const box = el("div", undefined, "call-cell");
+    const act = el("td", undefined, "c-act"); const box = el("div", undefined, "call-cell");
     box.append(button("Just called", "", () => openCall(l)));
     box.append(button("History", "quiet", () => openHistory(l)));
     if (l.undo_call && leftOf(l.undo_call) > 0) box.append(undoButton(l.undo_call, "Undo call", () => undoCall(l.key)));

@@ -2,12 +2,15 @@
 
 They measure how well the scoring finds prospects, so competitors and Arco's own
 listing (flagged in the list, never asked Yes / No) are left out of every figure.
+A business that has since closed for good still counts: its mark says what it
+had while it was open, which is what the tiers are measured on.
 """
 
 from typing import Any
 
 from .models import Lead
 from .pipeline import EXEMPT_TYPES
+from .saved import is_closed
 from .scoring import TIERS
 
 TIER_ORDER = ("A", "B", "C", "D")
@@ -35,6 +38,7 @@ def summarize(leads: list[Lead]) -> dict[str, Any]:
                         if avg is not None else None,
         "by_tier": by_tier,
         "left_out": left_out,
+        "closed": sum(is_closed(l) for l in checked),
         # The lowest score of every tier but D, for the page's note about tier D.
         "tier_floors": {t: threshold for threshold, t in TIERS},
     }
