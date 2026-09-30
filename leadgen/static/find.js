@@ -46,6 +46,7 @@ async function loadSearches() {
   catch (err) {
     if (err.status === 401) return;
     problem($("history"), "Can't load the search history", err.message, () => { $("history").replaceChildren(el("div", "Loading...", "muted")); loadSearches(); });
+    if (!$("admin-content").hidden) adminUnread();
     if (!S.job) setGo(false, "Find leads is off until the saved data can be reached. Use Retry below.");
     return;
   }
@@ -73,7 +74,7 @@ async function loadSearches() {
     setGo(true, `Today's search was incomplete, so it can be run again: ${n} re-run${n === 1 ? "" : "s"} left today.`);
   } else setGo(true, "One search a day. Today's is available.");
   renderHistory(body.searches);
-  renderProblems(body.problems);
+  renderProblems(body.problems, body.problems_unread);
   if (body.admin && body.admin !== "open") showAdmin(false);   // locked again elsewhere
   if (body.switches) { S.switches = body.switches; renderSwitches(body.switches); }
 }
@@ -109,7 +110,10 @@ const SWITCH_TEXT = {
   yelp_off: ["Yelp", "In use", "Stopped", "Stop using Yelp", "Use Yelp again"],
 };
 function renderSwitches(list) {
-  const box = $("switch-list"); box.replaceChildren();
+  const box = $("switch-list");
+  // A switch the database didn't answer for can be neither shown nor flipped: say so, never an empty list.
+  if (Object.values(list).some((s) => s.unread)) { problem(box, "Couldn't load the site switches", ADMIN_UNREAD, adminRetry); return; }
+  box.replaceChildren();
   for (const [key, s] of Object.entries(list)) {
     if (!SWITCH_SHOWN[key]() || !SWITCH_TEXT[key]) continue;
     const [thing, offText, onText, turnOn, turnOff] = SWITCH_TEXT[key];
@@ -132,11 +136,26 @@ function renderSwitches(list) {
     box.append(row);
   }
 }
+// When the saved data doesn't answer, the administrator's section says so (with the way to stop
+// searches without it), instead of an all-clear or an empty list of switches.
+const ADMIN_UNREAD = "The saved data isn't answering. Try again in a minute. If you need to stop searches now, set LEADGEN_SEARCH_PAUSED to 1 in Render → Environment.";
+function adminRetry() {
+  renderProblems(null);
+  $("switch-list").replaceChildren(el("p", "Loading...", "muted"));
+  loadSearches();
+}
+function adminUnread() {
+  problem($("problems"), "Couldn't load recent problems", ADMIN_UNREAD, adminRetry);
+  problem($("switch-list"), "Couldn't load the site switches", ADMIN_UNREAD, adminRetry);
+}
 // The site's problems in the last 7 days (failed searches, errors), so they are never only in the
 // logs. They sit in the administrator's section (closed by default): a note, not an alarm.
-function renderProblems(p) {
+// "Nothing went wrong" only when the problems were read and there were none.
+function renderProblems(p, unread) {
   const box = $("problems");
-  if (!p || !p.count) { box.replaceChildren(el("p", "Nothing went wrong in the last 7 days.", "muted")); return; }
+  if (unread) { problem(box, "Couldn't load recent problems", ADMIN_UNREAD, adminRetry); return; }
+  if (!p) { box.replaceChildren(el("p", "Loading...", "muted")); return; }
+  if (!p.count) { box.replaceChildren(el("p", "Nothing went wrong in the last 7 days.", "muted")); return; }
   const list = el("ul");
   for (const x of p.latest) { const li = el("li"); li.append(el("span", x.when, "sub"), ` ${x.text}`); list.append(li); }
   box.replaceChildren(el("p", `${p.count.toLocaleString()} in the last 7 days (the latest first):`), list,

@@ -991,3 +991,51 @@ def test_the_administrators_section_unlocks_with_its_password(browser):
         context.close()
     finally:
         server.shutdown()
+
+
+def test_the_administrators_section_says_when_it_cannot_read_the_saved_data(browser, monkeypatch):
+    from werkzeug.serving import make_server
+
+    from leadgen import alerts, daily, switches
+    server = make_server("127.0.0.1", 0, web.create_app(password="pw", username="Matt", admin_password="adm1n"),
+                         threaded=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        context = _context(browser, viewport={"width": 1280, "height": 900})
+        tab = context.new_page()
+        url = f"http://127.0.0.1:{server.server_port}/"
+        tab.goto(url + "login")
+        tab.fill("input[name=username]", "Matt")
+        tab.fill("input[name=password]", "pw")
+        tab.locator("form button[type=submit]").click()
+        tab.goto(url + "#find")
+        tab.locator("#admin-card summary").click()
+        tab.fill("#admin-pass", "adm1n")
+        tab.keyboard.press("Enter")
+        expect(tab.locator("#problems")).to_have_text("Nothing went wrong in the last 7 days.")
+
+        def down(*args, **kw):
+            raise ConnectionError("the database isn't answering")
+        # The problems and the switches can't be read, the history can.
+        monkeypatch.setattr(alerts, "recent", down)
+        monkeypatch.setattr(switches, "_read", lambda name: (False, "", None, False))
+        tab.reload()
+        tab.locator("#admin-card summary").click()
+        expect(tab.locator("#problems")).to_contain_text("Couldn't load recent problems")
+        expect(tab.locator("#switch-list")).to_contain_text("LEADGEN_SEARCH_PAUSED to 1")
+        assert "Nothing went wrong" not in tab.locator("#admin-content").inner_text()
+
+        # Nothing can be read: the history's own request fails too.
+        monkeypatch.setattr(daily, "history", down)
+        tab.locator("#problems button", has_text="Retry").click()
+        expect(tab.locator("#history")).to_contain_text("Can't load the search history")
+        expect(tab.locator("#problems")).to_contain_text("Couldn't load recent problems")
+        expect(tab.locator("#switch-list")).to_contain_text("Couldn't load the site switches")
+
+        monkeypatch.undo()
+        tab.locator("#switch-list button", has_text="Retry").click()
+        expect(tab.locator("#problems")).to_have_text("Nothing went wrong in the last 7 days.")
+        expect(tab.locator("#switch-list button", has_text="Pause searching")).to_be_visible()
+        context.close()
+    finally:
+        server.shutdown()

@@ -532,12 +532,16 @@ def searches() -> ResponseReturnValue:
         if record and record.get("details"):
             record["details"] = plain_details(record["details"])
     problems: dict[str, Any] | None = None           # only for an unlocked administrator
+    unread = False
     if admin_open():
         try:
             problems = alerts.recent()
         except Exception:
             log.warning("Loading the recent problems failed", exc_info=True)   # the history is still worth showing
+            unread = True
     body["problems"] = problems
+    # Never an all-clear that wasn't read: the page says the problems couldn't be loaded.
+    body["problems_unread"] = unread
     current = body.get("current")
     if current:
         # When an unfinished search stops holding the day, in Utah time like every time.

@@ -56,3 +56,28 @@ def test_without_an_admin_password_a_live_site_keeps_it_locked_and_a_local_copy_
     assert client.post("/switches", json={"key": "search_paused", "on": True}).status_code == 403
     local = web.create_app(admin_password="").test_client()
     assert local.get("/searches").get_json()["admin"] == "open"
+
+
+def test_an_unreadable_database_is_never_an_all_clear(monkeypatch):
+    from leadgen import alerts, switches
+
+    client = _client()
+    client.post("/admin/unlock", json={"password": "open-sesame"})
+    body = client.get("/searches").get_json()
+    assert body["problems"] == {"count": 0, "latest": []} and body["problems_unread"] is False
+    assert not any(s["unread"] for s in body["switches"].values())
+
+    def down(*args, **kw):
+        raise ConnectionError("the database isn't answering")
+    monkeypatch.setattr(alerts, "recent", down)
+    monkeypatch.setattr(switches.store, "connect", down)
+    body = client.get("/searches")
+    # The history itself needs the database too: the page is told it couldn't load.
+    assert body.status_code == 503
+    monkeypatch.setattr("leadgen.web.finding.daily.history",
+                        lambda: {"today": "2026-09-30", "used_today": False, "current": None,
+                                 "searches": [], "reruns_left": None})
+    body = client.get("/searches").get_json()
+    assert body["problems"] is None and body["problems_unread"] is True
+    assert all(s["unread"] for s in body["switches"].values())
+    assert body["switches"]["search_paused"]["on"] is False

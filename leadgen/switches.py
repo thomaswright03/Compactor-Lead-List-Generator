@@ -32,15 +32,22 @@ def env_on(name: str) -> bool:
 
 def _site(name: str) -> tuple[bool, str, float | None]:
     """(on, who, when) for the site's own switch; off when the database can't be read."""
+    on, who, at, _ = _read(name)
+    return on, who, at
+
+
+def _read(name: str) -> tuple[bool, str, float | None, bool]:
+    """(on, who, when, read) for the site's own switch; read is False when the
+    database was there but didn't answer (the switch then counts as off)."""
     try:
         with store.connect() as db:
             row = db.one("SELECT value, by_name, at FROM switches WHERE name = ?", (name,))
     except store.Unavailable:
-        return False, "", None          # no database (the command line on Render): env only
+        return False, "", None, True    # no database (the command line on Render): env only
     except Exception:
         log.warning("Reading the site's switches failed; only the environment's count", exc_info=True)
-        return False, "", None
-    return (bool(row[0]), row[1] or "", row[2]) if row else (False, "", None)
+        return False, "", None, False
+    return (bool(row[0]), row[1] or "", row[2], True) if row else (False, "", None, True)
 
 
 def is_on(name: str) -> bool:
@@ -63,10 +70,11 @@ def set_switch(name: str, on: bool, by: str = "") -> None:
 
 
 def state() -> dict[str, dict[str, Any]]:
-    """Every switch for the page: on, whether the environment holds it on, who / when."""
+    """Every switch for the page: on, whether the environment holds it on, who / when,
+    and "unread" when the database didn't answer (the page then can't show or flip it)."""
     out = {}
     for key, name in KEYS.items():
-        site_on, who, at = _site(name)
+        site_on, who, at, read = _read(name)
         out[key] = {"on": env_on(name) or site_on, "env": env_on(name), "site": site_on,
-                    "by": who, "at": at, "label": NAMES[name]}
+                    "by": who, "at": at, "label": NAMES[name], "unread": not read}
     return out
