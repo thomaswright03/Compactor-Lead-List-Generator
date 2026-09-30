@@ -348,6 +348,29 @@ _PREMERGE_MIN = 8
 _PREMERGE_MILES = SAME_NAME_MILES * 0.9
 
 
+# A candidate duplicate pair: (its merge rank, see _pair_rank; one lead's index; the other's).
+Pair = tuple[tuple[int, float, float], int, int]
+
+
+class _Groups:
+    """Union-find over lead indexes: find(i) is i's group, members[root] its indexes."""
+
+    def __init__(self, n: int) -> None:
+        self.parent = list(range(n))
+        self.members = {i: [i] for i in range(n)}
+
+    def find(self, i: int) -> int:
+        parent = self.parent
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(self, ri: int, rj: int) -> None:
+        self.parent[rj] = ri
+        self.members[ri] += self.members.pop(rj)
+
+
 def dedupe(leads: list[Lead]) -> list[Lead]:
     """Return merged leads.
 
@@ -357,35 +380,38 @@ def dedupe(leads: list[Lead]) -> list[Lead]:
     order. A spatial grid keeps it fast on thousands of rows, and many copies of
     one listing are grouped up front (see _same_listing_groups).
     """
-    parent = list(range(len(leads)))
-    members = {i: [i] for i in range(len(leads))}
-
-    def find(i: int) -> int:
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    def union(ri: int, rj: int) -> None:
-        parent[rj] = ri
-        members[ri] += members.pop(rj)
-
+    g = _Groups(len(leads))
     # Same record from the same source (found by several queries) is always one place.
     seen: dict[tuple[str, str], int] = {}
     for i, lead in enumerate(leads):
         key = (lead.source, lead.source_id)
         if key in seen:
-            ri, rj = find(seen[key]), find(i)
+            ri, rj = g.find(seen[key]), g.find(i)
             if ri != rj:
-                union(ri, rj)
+                g.union(ri, rj)
         else:
             seen[key] = i
-    _same_listing_groups(leads, union, find)
+    _same_listing_groups(leads, g.union, g.find)
+    links = _link(leads, g, _candidate_pairs(leads, g))
 
+    groups: dict[int, list[Lead]] = {}
+    for i in range(len(leads)):
+        groups.setdefault(g.find(i), []).append(leads[i])
+    closed = _closed_by_links(links, groups, g)
+    out = []
+    for root, group in groups.items():
+        lead = merge(group)
+        if root in closed:
+            lead.business_status = "CLOSED_PERMANENTLY"
+        out.append(lead)
+    return merge_sites(out)
+
+
+def _candidate_pairs(leads: list[Lead], g: _Groups) -> list[Pair]:
+    """Duplicate pairs in different groups, strongest first, found on a spatial grid."""
     buckets: dict[tuple[float, float], list[int]] = {}
     for i, lead in enumerate(leads):
         buckets.setdefault((round(lead.lat, 2), round(lead.lon, 2)), []).append(i)
-
     pairs = []
     for (bx, by), idxs in buckets.items():
         # Neighbours by group, so a big pre-merged group is skipped in one step.
@@ -393,9 +419,9 @@ def dedupe(leads: list[Lead]) -> list[Lead]:
         for dx in (-1, 0, 1):
             for dy in (-1, 0, 1):
                 for j in buckets.get((round(bx + dx * 0.01, 2), round(by + dy * 0.01, 2)), []):
-                    near.setdefault(find(j), []).append(j)
+                    near.setdefault(g.find(j), []).append(j)
         for i in idxs:
-            ri = find(i)
+            ri = g.find(i)
             for rj, js in near.items():
                 if rj == ri:
                     continue
@@ -403,36 +429,41 @@ def dedupe(leads: list[Lead]) -> list[Lead]:
                     if j > i and is_duplicate(leads[i], leads[j]):
                         pairs.append((_pair_rank(leads[i], leads[j]), i, j))
     pairs.sort()
+    return pairs
 
-    links = []            # duplicate pairs that complete linkage kept apart
+
+def _link(leads: list[Lead], g: _Groups, pairs: list[Pair]) -> list[tuple[int, int]]:
+    """Merge the pairs' groups when every member of one is a duplicate of every member
+    of the other; returns the duplicate pairs that complete linkage kept apart."""
+    links = []
     rejected = set()      # group pairs already found not to match (groups only grow)
     for _, i, j in pairs:
-        ri, rj = find(i), find(j)
+        ri, rj = g.find(i), g.find(j)
         if ri == rj:
             continue
-        state = (ri, rj, len(members[ri]), len(members[rj]))
+        state = (ri, rj, len(g.members[ri]), len(g.members[rj]))
         if state in rejected:
             links.append((i, j))
             continue
-        if all(is_duplicate(leads[x], leads[y]) for x in members[ri] for y in members[rj]):
-            union(ri, rj)
+        if all(is_duplicate(leads[x], leads[y]) for x in g.members[ri] for y in g.members[rj]):
+            g.union(ri, rj)
         else:
             rejected.add(state)
             links.append((i, j))
+    return links
 
-    groups: dict[int, list[Lead]] = {}
-    for i in range(len(leads)):
-        groups.setdefault(find(i), []).append(leads[i])
 
-    # A copy linked to a listing from a more trusted source (Google over Yelp over
-    # the map) that reports it permanently closed is closed too, unless it is also
-    # linked to one such listing that reports it open.
+def _closed_by_links(links: list[tuple[int, int]], groups: dict[int, list[Lead]],
+                     g: _Groups) -> set[int]:
+    """A copy linked to a listing from a more trusted source (Google over Yelp over
+    the map) that reports it permanently closed is closed too, unless it is also
+    linked to one such listing that reports it open. Returns those groups' roots."""
     def trust(group: list[Lead]) -> int:
         return min(_source_rank(l) for l in group)
 
     closed, still_open = set(), set()
     for i, j in links:
-        ri, rj = find(i), find(j)
+        ri, rj = g.find(i), g.find(j)
         for a, b in ((ri, rj), (rj, ri)):
             if a == b or trust(groups[a]) >= trust(groups[b]):
                 continue
@@ -441,12 +472,4 @@ def dedupe(leads: list[Lead]) -> list[Lead]:
                 closed.add(b)
             elif status == "OPERATIONAL":
                 still_open.add(b)
-    closed -= still_open
-
-    out = []
-    for root, group in groups.items():
-        lead = merge(group)
-        if root in closed:
-            lead.business_status = "CLOSED_PERMANENTLY"
-        out.append(lead)
-    return merge_sites(out)
+    return closed - still_open

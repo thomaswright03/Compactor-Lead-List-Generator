@@ -190,6 +190,6 @@ def test_interrupted_search_says_when_in_utah_time(monkeypatch):
 def test_a_failed_mark_says_so_once(monkeypatch):
     lead = _saved(1)[0]
     monkeypatch.setattr(marks, "set_mark", lambda *a: (_ for _ in ()).throw(store.Unavailable("x")))
-    res = web.create_app().test_client().post("/mark", json={"key": lead.uid, "value": "yes"})
+    res = web.create_app().test_client().post("/mark", json={"by": "Sam", "key": lead.uid, "value": "yes"})
     assert res.status_code == 503
     assert "wasn't saved" not in res.get_json()["error"]         # the page says that part

@@ -57,6 +57,8 @@ def no_real_keys(monkeypatch, tmp_path):
                 "LEADGEN_SUPPORT_CONTACT"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr("leadgen.http.CACHE_DIR", tmp_path / "cache")
+    # The map data's catch-up rounds don't wait for busy servers to cool down.
+    monkeypatch.setattr("leadgen.config.OVERPASS_RETRY_PAUSE_SECONDS", 0)
     # Problem reports (alerts.py) only in the tests about them, and never to a real webhook.
     monkeypatch.delenv("LEADGEN_ALERT_WEBHOOK", raising=False)
     monkeypatch.setattr("leadgen.alerts.ON", False)

@@ -37,11 +37,16 @@ Good to know:
 
 - There is **one search a day** for the whole team (Utah time). The next one can
   run from midnight.
-- If a search fails, or a source was missing, the page says so and the day is
-  not used up: you can run it again. An incomplete map-data search says how much
-  of the area answered ("about 8 of 9 areas searched"); the re-run keeps what
-  answered and asks only for the missing areas, so it is much quicker. Run it
-  again with the same **Search around** and **How far**.
+- When the free map servers are busy, the search asks again by itself for the
+  areas they missed (the progress bar says so), so you don't need to do anything.
+  It can then take up to about 10 minutes.
+- If a search fails, or a source was still missing, the page says so and the day
+  is not used up: you can run it again once that day (an exception to the
+  one-a-day rule added by the developer; the owner has still to confirm it). An
+  incomplete map-data search says how much of the area answered ("about 8 of 9
+  areas searched"); the re-run keeps what answered and asks only for the missing
+  areas, so it is much quicker. Run it again with the same **Search around** and
+  **How far**.
 - If the page says Google and Yelp aren't set up, most businesses found will
   have no phone number.
 
@@ -71,6 +76,9 @@ Good to know:
 - The row shows who marked it ("Marked by Dana"). A business marked more than
   once (or joined from listings that were marked apart) has **Earlier marks**,
   which lists every Yes / No it was given, when and by whom; the latest one counts.
+- A business joined from buildings that were marked differently (one Yes, one No)
+  is kept as Yes and says so in red. Check with the business, then press Yes or
+  No to confirm; the note goes away.
 - Competitors (Pro Baler, Action Compaction) and Arco's own listing are shown in
   orange under **Competitors**. They are not prospects, so they have no Yes / No.
   When none has been found yet, the tab says so.

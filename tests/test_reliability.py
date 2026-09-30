@@ -52,10 +52,15 @@ def test_map_data_step_has_one_overall_deadline(monkeypatch):
     monkeypatch.setattr(osm, "request_json", slow_failure)
     with pytest.raises(osm.SourceError):
         osm.search(40.76, -111.89, 5)
-    # The whole query, then its quarters, until the step's time is used up; no part
-    # waits longer than a part's share (two parts run at once, so one may overrun).
-    assert clock["now"] - 1000 <= config.OVERPASS_DEADLINE_SECONDS + config.OVERPASS_PART_SECONDS
-    assert all(t[1] <= config.OVERPASS_PART_SECONDS for t in timeouts) and len(timeouts) <= 5
+    # The whole query, then its quarters, until the first round's time is used up, then
+    # the catch-up rounds, each with its own time; no part waits longer than a part's
+    # share (two parts run at once, so one may overrun each round).
+    rounds = config.OVERPASS_RETRY_ROUNDS
+    assert clock["now"] - 1000 <= (config.OVERPASS_DEADLINE_SECONDS
+                                   + rounds * config.OVERPASS_RETRY_SECONDS
+                                   + (rounds + 1) * config.OVERPASS_PART_SECONDS)
+    assert all(t[1] <= config.OVERPASS_PART_SECONDS for t in timeouts)
+    assert len(timeouts) <= 5 * (rounds + 1)
     assert f"[timeout:{config.OVERPASS_PART_SECONDS}]" in osm.build_query(40.76, -111.89, 30)
 
 
@@ -198,7 +203,7 @@ def test_database_errors_never_show_class_names(monkeypatch):
     monkeypatch.setattr(store, "open_db", down)
     client = web.create_app().test_client()
     for res in (client.get("/leads"), client.get("/stats"), client.get("/searches"),
-                client.post("/mark", json={"key": "k", "value": "yes"}),
+                client.post("/mark", json={"by": "Sam", "key": "k", "value": "yes"}),
                 client.post("/search", data={})):
         error = res.get_json()["error"]
         assert res.status_code == 503 and "Error" not in error and "(" not in error

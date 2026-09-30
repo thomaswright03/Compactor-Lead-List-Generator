@@ -20,7 +20,7 @@ def in_tmp(tmp_path, monkeypatch):
 
 
 def _fake_osm(monkeypatch):
-    def search(lat, lon, radius, keywords=(), progress=None):
+    def search(lat, lon, radius, keywords=(), progress=None, stats=None):
         if progress:
             progress("OpenStreetMap: searching the free map data (server 1 of 4)")
         return [Lead(name="Smith's Marketplace", lat=lat + 0.01, lon=lon, source="osm",

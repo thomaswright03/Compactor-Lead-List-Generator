@@ -9,7 +9,7 @@ from typing import Any
 from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from .. import calls, config, marks, saved, stats
+from .. import calls, config, marks, reference, saved, stats, store
 from ..export import saved_list_info, to_csv_bytes, to_xlsx_bytes
 from ..localtime import date_time_text
 from ..models import Lead
@@ -184,6 +184,11 @@ def _page(leads: list[Lead], undo: Undos, view: str, q: str, tier: str,
             "counts": view_counts(leads), "recent": _recent(leads, undo)}
 
 
+# Every mark and call says who made it (so colleagues know whom to ask), as the page asks.
+NO_NAME = ("Enter your name first (Your name, in the side bar, or under Menu on a phone), so the team can see "
+           "who made this change. Nothing was saved.")
+
+
 @bp.post("/calls")
 def log_call() -> ResponseReturnValue:
     """Record a call to a lead: its outcome and the conversation notes (kept for good)."""
@@ -194,6 +199,8 @@ def log_call() -> ResponseReturnValue:
     if not uid or len(uid) > 64:
         return jsonify({"error": "Unknown lead"}), 400
     call_id = str(data["id"]) if data.get("id") else None
+    if not store.person(data.get("by")):
+        return jsonify({"error": NO_NAME}), 400
     try:
         call = calls.log_call(uid, str(data.get("outcome") or ""), str(data.get("notes") or ""),
                               call_id, str(data.get("by") or ""))
@@ -238,6 +245,8 @@ def mark() -> ResponseReturnValue:
     uid, value = str(data.get("key") or ""), str(data.get("value") or "")
     if not uid or len(uid) > 64 or value not in marks.VALUES:
         return jsonify({"error": "Bad mark"}), 400
+    if not store.person(data.get("by")):
+        return jsonify({"error": NO_NAME}), 400
     try:
         undo = marks.set_mark(uid, value, str(data.get("by") or ""))
     except ValueError:
@@ -277,6 +286,20 @@ def undo_mark() -> ResponseReturnValue:
 def undo_call() -> ResponseReturnValue:
     """Undo a call saved in the last few minutes (a misclick)."""
     return _undo(calls.undo, "call")
+
+
+@bp.get("/download/scoring-reference.json")
+def scoring_reference() -> ResponseReturnValue:
+    """The scoring check file (tests/fixtures/scoring_reference.json) with every business
+    marked Yes / No on the site in it (only the facts the scoring reads: no phone
+    numbers, addresses or call notes), for the developer to commit (reference.py)."""
+    try:
+        data, _, _ = reference.build()
+    except Exception as exc:
+        log.error("Building the scoring check file failed", exc_info=True)
+        unavailable(db_message(exc))
+    return Response(reference.dumps(data), mimetype="application/json", headers={
+        "Content-Disposition": "attachment; filename=scoring_reference.json"})
 
 
 @bp.get("/download/<job_id>.<fmt>")

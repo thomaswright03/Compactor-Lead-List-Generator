@@ -2,6 +2,10 @@
 
     python -m leadgen reference                  # DATABASE_URL = the website's database
 
+or, with no database address needed, download the same file from the site (Find leads,
+"For the site administrator", Scoring check file: /download/scoring-reference.json) and
+put it in place of tests/fixtures/scoring_reference.json.
+
 tests/fixtures/scoring_reference.json keeps typical examples ("businesses") and,
 under "confirmed", real businesses marked on the Leads page, each with the tier
 it had when it was copied. The tests fail if a scoring change moves a business
@@ -34,13 +38,25 @@ def confirmed_entries(leads: list[Lead]) -> list[dict[str, Any]]:
     return sorted(out, key=lambda e: (e["marked"], e["name"].lower()))
 
 
-def export(path: str | Path = DEFAULT_PATH) -> tuple[int, int]:
-    """Replace the "confirmed" list in the reference file with the marks saved now.
-    Returns (yes, no) counts. Raises store.Unavailable without a database."""
+def build(path: str | Path = DEFAULT_PATH) -> tuple[dict[str, Any], int, int]:
+    """The reference file with its "confirmed" list replaced by the marks saved now:
+    (its data, how many marked Yes, how many No). Raises store.Unavailable without a
+    database."""
     path = Path(path)
     data = json.loads(path.read_text()) if path.exists() else {"businesses": []}
     entries = confirmed_entries(marks.apply(saved.load()))
     data["confirmed"] = entries
-    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
     yes = sum(e["marked"] == "yes" for e in entries)
-    return yes, len(entries) - yes
+    return data, yes, len(entries) - yes
+
+
+def dumps(data: dict[str, Any]) -> str:
+    return json.dumps(data, indent=1, ensure_ascii=False) + "\n"
+
+
+def export(path: str | Path = DEFAULT_PATH) -> tuple[int, int]:
+    """Replace the "confirmed" list in the reference file with the marks saved now.
+    Returns (yes, no) counts. Raises store.Unavailable without a database."""
+    data, yes, no = build(path)
+    Path(path).write_text(dumps(data))
+    return yes, no

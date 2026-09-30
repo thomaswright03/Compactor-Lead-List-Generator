@@ -1,8 +1,8 @@
 # Runs on every push and pull request: lint, the dead-code check and the type check, then the whole
 # test suite on SQLite and on Postgres (like the live site), including the browser
-# tests. Render deploys a commit on main only after these checks pass (render.yaml,
-# autoDeployTrigger: checksPass), and branch protection on main requires all three jobs
-# (docs/operator-runbook.md, "Deploying"). live.yml checks afterwards that the site runs the latest commit.
+# tests. Deploy a commit to Render only once all three jobs are green, and check
+# /healthz afterwards (docs/operator-runbook.md, "Deploying"; branch protection on
+# main should require all three jobs).
 name: CI
 
 on:

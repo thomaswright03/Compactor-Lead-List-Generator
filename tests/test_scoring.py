@@ -254,29 +254,99 @@ def test_reference_businesses_rank_where_they_should():
     assert min(lead.score for lead in have) > max(lead.score for lead in lack)
 
 
-def test_confirmed_businesses_keep_their_tier():
-    """Businesses Arco marked Yes never drop a tier, and ones marked No never rise one,
-    after a scoring change ("confirmed" in scoring_reference.json, copied from the
-    site by `python -m leadgen reference`)."""
-    import json
-    from pathlib import Path
-
+def _moved_tiers(entries):
+    """The confirmed entries whose tier moved the wrong way under the scoring now: a
+    business marked Yes that dropped a tier, or one marked No that rose one."""
     from leadgen import config
     from leadgen.models import Lead
     from leadgen.reference import FACTS
     from leadgen.scoring import TIERS, score_lead
 
     rank = {tier: n for n, (_, tier) in enumerate(TIERS)}       # A = 0 ... D = 3
-    data = json.loads((Path(__file__).parent / "fixtures" / "scoring_reference.json").read_text())
     moved = []
-    for item in data.get("confirmed", []):
+    for item in entries:
         lead = Lead(lat=40.7, lon=-111.9, source_id=item["name"],
                     **{k: item[k] for k in FACTS if k in item})
         score_lead(lead, config.DEFAULT_KEYWORDS)
         if (item["marked"] == "yes" and rank[lead.tier] > rank[item["tier"]]) or \
                 (item["marked"] == "no" and rank[lead.tier] < rank[item["tier"]]):
             moved.append(f"{item['name']} (marked {item['marked']}): {item['tier']} -> {lead.tier}")
+    return moved
+
+
+def test_confirmed_businesses_keep_their_tier():
+    """Businesses Arco marked Yes never drop a tier, and ones marked No never rise one,
+    after a scoring change ("confirmed" in scoring_reference.json, copied from the
+    site by `python -m leadgen reference` or its scoring check file download)."""
+    import json
+    from pathlib import Path
+
+    data = json.loads((Path(__file__).parent / "fixtures" / "scoring_reference.json").read_text())
+    moved = _moved_tiers(data.get("confirmed", []))
     assert not moved, moved
+
+
+def test_the_confirmed_check_catches_a_weight_that_demotes_a_yes(monkeypatch):
+    """What the check above does once real marks are in the file: copied from the
+    saved list, the entries pass; lowering the weight a Yes depends on fails them."""
+    from dataclasses import replace
+
+    from leadgen import config, marks, reference, saved
+    from leadgen.models import Lead
+    from leadgen.scoring import score_lead
+
+    lead = Lead(name="Harmons Grocery", lat=40.7, lon=-111.9, source="google", source_id="h1",
+                raw_categories=["supermarket", "grocery_store"], rating_count=2400,
+                phone="801-555-0100", address="1 Main St")
+    score_lead(lead, config.DEFAULT_KEYWORDS)
+    saved.save_search([lead])
+    marks.set_mark(lead.uid, "yes", by="Sam")
+    entries = reference.confirmed_entries(marks.apply(saved.load()))
+    assert len(entries) == 1 and entries[0]["marked"] == "yes"
+    assert "phone" not in entries[0] and "address" not in entries[0]
+    assert _moved_tiers(entries) == []
+    weakened = [replace(c, weight=1) if c.key == lead.category_key else c
+                for c in config.CATEGORIES]
+    monkeypatch.setattr(config, "CATEGORIES", weakened)
+    monkeypatch.setattr(config, "CATEGORY_BY_KEY", {c.key: c for c in weakened})
+    assert _moved_tiers(entries), "a demoted Yes must fail the check"
+
+
+def test_the_site_offers_the_scoring_check_file():
+    from leadgen import marks, saved, web
+    from leadgen.models import Lead
+
+    lead = Lead(name="Costco Wholesale", lat=40.7, lon=-111.9, source="google", source_id="c1",
+                raw_categories=["warehouse_store"], phone="801-555-0101")
+    saved.save_search([lead])
+    marks.set_mark(lead.uid, "no", by="Sam")
+    res = web.create_app().test_client().get("/download/scoring-reference.json")
+    assert res.status_code == 200 and "attachment" in res.headers["Content-Disposition"]
+    body = res.get_json()
+    assert body["businesses"] and [e["name"] for e in body["confirmed"]] == ["Costco Wholesale"]
+    assert "801" not in res.get_data(as_text=True)
+
+
+def test_small_shops_with_a_production_word_are_not_plants():
+    """A name like "Day Dairy Barn" (a small shop) never makes a food & beverage plant
+    ("not_production" in scoring_reference.json); "Meadow Gold Dairy" still does."""
+    import json
+    from pathlib import Path
+
+    from leadgen import config
+    from leadgen.models import Lead
+    from leadgen.scoring import score_lead
+
+    data = json.loads((Path(__file__).parent / "fixtures" / "scoring_reference.json").read_text())
+    assert any(item["name"] == "Day Dairy Barn" for item in data["not_production"])
+    for item in data["not_production"]:
+        lead = Lead(name=item["name"], lat=40.7, lon=-111.9, source=item["source"],
+                    source_id=item["name"], raw_categories=item["raw_categories"])
+        score_lead(lead, config.DEFAULT_KEYWORDS)
+        assert lead.category_key != "food_production", (lead.name, lead.reasons)
+    plant = Lead(name="Meadow Gold Dairy", lat=40.7, lon=-111.9, source="osm", source_id="m")
+    score_lead(plant, config.DEFAULT_KEYWORDS)
+    assert plant.category_key == "food_production"
 
 
 def test_police_fire_impound_yards_and_lockers_are_not_prospects():

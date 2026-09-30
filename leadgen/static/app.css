@@ -11,6 +11,10 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .btn.busy { opacity:.7; cursor:progress; }
 button:focus-visible, .btn:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
 textarea:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
+/* Text people type or sources supply (call notes, names, addresses, reasons) always wraps:
+   a pasted web address or email breaks inside its card or cell instead of widening the page. */
+.card, .history, dialog, .warn, .recent, .toast, table.plain td, .notes { overflow-wrap:anywhere; }
+.tag, .badge { white-space:nowrap; }                /* short labels ("Incomplete") never break */
 input, select, textarea { font:inherit; font-weight:400; padding:var(--sp-2); border:1px solid var(--line); border-radius:var(--r-sm); color:var(--ink); background:var(--input); }
 
 /* Layout: sidebar + pages */
@@ -125,6 +129,7 @@ button.danger { background:var(--bad); color:#fff; }
 .switch-row button { flex:none; }
 .problems ul { margin:var(--sp-2) 0; padding-left:var(--sp-5); }
 .scroll-x { overflow-x:auto; }
+.h-label { display:none; }                          /* the history's column names, phones only */
 button.link { background:none; border:0; padding:0; color:var(--accent); font-weight:600; font-size:var(--fs-sm); }
 tr.more-row td { background:var(--hover); }
 tr.failed td { color:var(--muted); }
@@ -258,6 +263,7 @@ dialog::backdrop { background:var(--backdrop); }
 .tiles .card { margin-bottom:0; }
 .tile .label { color:var(--muted); font-size:var(--fs-sm); }
 .tile .value { font-size:var(--fs-xl); font-weight:700; margin-top:var(--sp-1); font-variant-numeric:tabular-nums; }
+.tile .value.says { font-size:var(--fs-md); font-weight:600; color:var(--muted); }
 .tile .value small { font-size:var(--fs-md); color:var(--muted); font-weight:600; }
 .viz { position:relative; }
 /* Wide screens: the chart and its table side by side, so the card has no empty half. */
@@ -357,4 +363,19 @@ dialog::backdrop { background:var(--backdrop); }
   table.plain.calls td.notes::before { content:"Conversation summary"; display:block; font-weight:600; color:var(--muted); }
   table.plain.calls td.c-act { grid-area:act; }
   table.plain.calls .call-cell { flex-direction:row; flex-wrap:wrap; align-items:center; }
+
+  /* Find leads' search history: one stacked card per search, every field in view. */
+  table.plain.hist { display:block; }
+  table.plain.hist thead { display:none; }
+  table.plain.hist tbody { display:block; border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); margin-bottom:var(--sp-3); }
+  table.plain.hist tr { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--sp-1) var(--sp-3); }
+  table.plain.hist td { display:block; border:0; padding:0; min-width:0; }
+  table.plain.hist td.h-when { grid-column:1 / -1; font-weight:600; white-space:normal; }
+  table.plain.hist td.h-where, table.plain.hist td.h-act { grid-column:1 / -1; }
+  table.plain.hist td.h-act:empty { display:none; }
+  table.plain.hist .h-label { display:block; font-size:var(--fs-sm); color:var(--muted); }
+  table.plain.hist tr + tr { margin-top:var(--sp-2); }
+  table.plain.hist tr + tr > td { grid-column:1 / -1; }
+  table.plain.hist tr.more-row td { background:none; }
+  .scroll-x:has(table.plain.hist) { overflow:visible; }
 }

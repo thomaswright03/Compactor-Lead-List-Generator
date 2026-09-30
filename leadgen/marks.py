@@ -6,6 +6,7 @@ is also logged with the mark it replaced (mark_changes), so a misclick can be
 undone for UNDO_SECONDS, exactly and only while no newer click has followed.
 """
 
+import json
 import time
 import uuid
 from collections.abc import Iterable
@@ -48,10 +49,22 @@ def _current(db: store.Db, uid: str) -> str:
     return row[0] if row else ""
 
 
+def _unconfirmed(db: store.Db, uid: str) -> bool:
+    """True for a lead joined from buildings marked Yes and No that nobody has marked
+    since: clicking its current answer then confirms it (and is recorded)."""
+    rows = db.all("SELECT at, row FROM merged_leads WHERE into_uid = ?", (uid,))
+    since = max((at for at, row in rows if json.loads(row).get("marks_disagreed")), default=None)
+    if since is None:
+        return False
+    last = db.one("SELECT MAX(at) FROM mark_changes WHERE uid = ? AND undone_at IS NULL", (uid,))
+    return not last or last[0] is None or last[0] < since
+
+
 def set_mark(uid: str, value: str, by: str = "") -> Undo | None:
     """Save a mark ("yes" or "no"; a mark is only taken back by undo()) made by `by`
     (a name, or "" when unknown). Returns the undo for the click ({"id", "until"}),
-    or None when nothing changed.
+    or None when nothing changed. Clicking the current answer changes nothing, except
+    on a lead whose joined buildings were marked differently: that confirms it.
 
     Raises ValueError for a bad value or a business that isn't saved, and
     store.Unavailable or a database error when it can't be saved.
@@ -63,7 +76,7 @@ def set_mark(uid: str, value: str, by: str = "") -> Undo | None:
         if db.one("SELECT uid FROM leads WHERE uid = ?", (uid,)) is None:
             raise ValueError("Unknown lead")
         previous = _current(db, uid)
-        if previous == value:
+        if previous == value and not _unconfirmed(db, uid):
             return None
         db.run("INSERT INTO marks (uid, value, updated_at) VALUES (?, ?, ?) "
                "ON CONFLICT (uid) DO UPDATE SET value = excluded.value, "
@@ -111,16 +124,35 @@ def pending_undos() -> dict[str, Undo]:
     return {uid: {"id": change, "until": at + UNDO_SECONDS} for change, uid, at in rows}
 
 
-def _clicks(uids: Iterable[str]) -> list[tuple[str, str, float | None]]:
-    """(uid, who, undone_at) of every Yes / No click on these businesses, oldest first."""
+def _clicks(uids: Iterable[str]) -> list[tuple[str, str, str, float, float | None]]:
+    """(uid, value, who, at, undone_at) of every Yes / No click on these businesses,
+    oldest first."""
     wanted = [u for u in dict.fromkeys(uids) if u]
     if not wanted:
         return []
     with store.connect() as db:
-        return [(uid, name or "", undone_at) for uid, name, undone_at in store.rows_for(
-            db, "SELECT mark_changes.uid, made_by.name, mark_changes.undone_at FROM mark_changes "
-                "LEFT JOIN made_by ON made_by.id = mark_changes.id", "mark_changes.uid", wanted,
-            order="ORDER BY mark_changes.at")]
+        return [(uid, value, name or "", at, undone_at)
+                for uid, value, name, at, undone_at in store.rows_for(
+            db, "SELECT mark_changes.uid, mark_changes.value, made_by.name, mark_changes.at, "
+                "mark_changes.undone_at "
+                "FROM mark_changes LEFT JOIN made_by ON made_by.id = mark_changes.id",
+            "mark_changes.uid", wanted, order="ORDER BY mark_changes.at")]
+
+
+def _disagreed_since(uids: Iterable[str]) -> dict[str, float]:
+    """{uid: when} for the leads that `python -m leadgen merge-sites` joined from
+    buildings marked Yes and No (saved._join_sites keeps Yes and records this)."""
+    wanted = [u for u in dict.fromkeys(uids) if u]
+    if not wanted:
+        return {}
+    with store.connect() as db:
+        rows = store.rows_for(db, "SELECT into_uid, at, row FROM merged_leads", "into_uid", wanted)
+    found: dict[str, float] = {}
+    keep = set(wanted)
+    for uid, at, row in rows:
+        if uid in keep and json.loads(row).get("marks_disagreed"):
+            found[uid] = max(found.get(uid, 0.0), at)
+    return found
 
 
 def history(uid: str) -> list[dict[str, Any]]:
@@ -136,18 +168,26 @@ def history(uid: str) -> list[dict[str, Any]]:
 
 
 def apply(leads: list[Lead]) -> list[Lead]:
-    """Set lead.has_baler (who marked it, and how many clicks its mark history holds)
-    from the saved marks (raises when they can't be read)."""
+    """Set lead.has_baler (who marked it, how many clicks its mark history holds, and
+    whether the buildings it was joined from were marked differently and nobody has
+    marked it since) from the saved marks (raises when they can't be read)."""
     found = get_all(lead.uid for lead in leads)
-    clicks = _clicks(lead.uid for lead in leads if lead.uid in found)
+    marked = [lead.uid for lead in leads if lead.uid in found]
+    clicks = _clicks(marked)
+    disagreed = _disagreed_since(marked)
     latest: dict[str, str] = {}
     kept: dict[str, int] = {}
-    for uid, name, undone_at in clicks:
+    last_at: dict[str, float] = {}
+    for uid, value, name, at, undone_at in clicks:
         if undone_at is None:
-            latest[uid] = name
+            if value == found.get(uid):        # who gave the answer it has now
+                latest[uid] = name
             kept[uid] = kept.get(uid, 0) + 1
+            last_at[uid] = at
     for lead in leads:
         lead.has_baler = found.get(lead.uid, "")
         lead.marked_by = latest.get(lead.uid, "") if lead.has_baler else ""
         lead.mark_clicks = kept.get(lead.uid, 0) if lead.has_baler else 0
+        since = disagreed.get(lead.uid)
+        lead.marks_disagreed = since is not None and last_at.get(lead.uid, 0.0) < since
     return leads

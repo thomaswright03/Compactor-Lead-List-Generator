@@ -763,3 +763,70 @@ def test_log_out_stays_on_one_line(browser, width):
         context.close()
     finally:
         server.shutdown()
+
+
+LONG_WORD = "https://example.com/" + "x" * 80         # a pasted address with no place to break
+
+
+@pytest.mark.parametrize("width", [375, 1440])
+def test_long_unbroken_notes_wrap_and_nothing_scrolls_sideways(browser, site, page, width):
+    from leadgen import calls, marks
+    uid = _uid("Smith")
+    marks.set_mark(uid, "yes", by="Dana")
+    calls.log_call(uid, "Follow Up", f"Send the quote to {LONG_WORD} today.", by="Dana")
+    context = _context(browser, viewport={"width": width, "height": 800})
+    tab = context.new_page()
+    check = """() => {
+        const wide = document.documentElement.scrollWidth > window.innerWidth;
+        const cut = [...document.querySelectorAll('#calls-wrap td.notes, #hist-list .item')]
+            .filter((e) => e.getClientRects().length)
+            .some((e) => e.scrollWidth > e.clientWidth + 1 || e.getBoundingClientRect().right > window.innerWidth);
+        return { wide, cut }; }"""
+    tab.goto(site + "#calls")
+    tab.wait_for_selector("#calls-wrap td.notes")
+    expect(tab.locator("#calls-wrap")).to_contain_text("x" * 40)
+    assert tab.evaluate(check) == {"wide": False, "cut": False}
+    tab.locator("#calls-wrap").get_by_role("button", name="History").first.click()
+    expect(tab.locator("#hist-list")).to_contain_text("x" * 40)
+    assert tab.evaluate(check) == {"wide": False, "cut": False}
+    context.close()
+
+
+def test_search_history_is_stacked_cards_on_a_phone(browser, site, page):
+    from leadgen import daily
+    day, _ = daily.claim({"location": "876 Fortune Rd, Salt Lake City, UT 84104", "radius": 30})
+    daily.release(day, "The map data service answered for only part of the area (about 8 of 9 areas "
+                       "searched), so some of its businesses are missing from this search.",
+                  {"partial": True, "leads": 1038, "new": 1038})
+    context = _context(browser, viewport={"width": 375, "height": 800})
+    tab = context.new_page()
+    tab.goto(site + "#find")
+    tab.wait_for_selector("#history table.hist")
+    card = tab.locator("#history tbody").first
+    text = card.inner_text()
+    for part in ("Fortune Rd", "Radius", "30 mi", "Leads", "1,038", "Incomplete", "New",
+                 "about 8 of 9 areas", "didn't use up the day's search"):
+        assert part in text, part
+    fits = tab.evaluate("""() => {
+        const out = (e) => { const r = e.getBoundingClientRect();
+                             return r.width > 0 && (r.left < 0 || r.right > window.innerWidth); };
+        return { page: document.documentElement.scrollWidth > window.innerWidth,
+                 out: [...document.querySelectorAll('#history td')].some(out),
+                 head: getComputedStyle(document.querySelector('#history thead')).display }; }""")
+    assert fits == {"page": False, "out": False, "head": "none"}
+    context.close()
+
+
+def test_the_confirmation_names_the_sources_and_stats_explain_a_missing_average(page):
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    page.click("#go")
+    expect(page.locator("#confirm-list")).to_contain_text(
+        "Free map data only (Google and Yelp aren't set up)")
+    assert "Everywhere available" not in page.inner_text("#confirm-list")
+    page.click("#confirm-back")
+    page.click("nav a[data-page=leads]")
+    _row(page, "Costco").locator(".mark button.no").click()
+    page.wait_for_selector("#recent:not([hidden])")
+    page.click("nav a[data-page=stats]")
+    expect(page.locator("#s-avg")).to_have_text("No businesses marked Yes yet.")

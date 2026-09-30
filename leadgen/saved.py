@@ -221,7 +221,9 @@ def _join_sites(db: store.Db, rows: list[_Row], now: float) -> tuple[dict[str, s
 
     Every source listing, mark and call is kept: the listings join that row (so a
     later search finds it), the calls and the Yes / No clicks move to it, and it takes
-    the latest mark (the older marks stay in its mark history). The merged rows stay
+    the latest mark (the older marks stay in its mark history), except that when some
+    rows were marked Yes and others No it takes the latest Yes, and shows that its
+    marks disagreed (marks.apply) until someone marks it again. The merged rows stay
     in the table, hidden (like a lead with no listings left), and are recorded in
     merged_leads as they were. Returns ({merged uid: uid it joined}, rows changed).
     """
@@ -255,8 +257,16 @@ def _join_sites(db: store.Db, rows: list[_Row], now: float) -> tuple[dict[str, s
             keep.lead.uid = keep.uid
             keep.last_seen = now
             changed += [keep, *others]
-            latest = max(((marked[r.uid][1], marked[r.uid][0], r.uid) for r in [keep, *others]
-                          if r.uid in marked), default=None)
+            group_marks = [(marked[r.uid][1], marked[r.uid][0], r.uid) for r in [keep, *others]
+                           if r.uid in marked]
+            # One building having a baler usually means the site does: when the marks
+            # disagree the site keeps Yes (the latest Yes), and the lead says so.
+            disagreed = {value for _, value, _ in group_marks} >= {"yes", "no"}
+            if disagreed:
+                group_marks = [m for m in group_marks if m[1] == "yes"]
+                for r in others:
+                    record[r.uid]["marks_disagreed"] = True
+            latest = max(group_marks, default=None)
             if latest and latest[2] != keep.uid:
                 db.run("INSERT INTO marks (uid, value, updated_at) VALUES (?, ?, ?) "
                        "ON CONFLICT (uid) DO UPDATE SET value = excluded.value, "

@@ -4,6 +4,7 @@ import pytest
 from test_yelp import YELP_KEY, _fake_yelp
 
 from leadgen import config, http, store, usage, web
+from leadgen.localtime import day_clock_text
 from leadgen.sources import yelp
 
 
@@ -173,3 +174,16 @@ def test_unreadable_cache_stops_spending(monkeypatch):
     assert n == 0 and len(calls) == 3
     assert any("could not be read from the database" in w for w in warnings)
     monkeypatch.setattr(store, "open_db", real)
+
+
+# ---- the Yelp reset names its day
+
+def test_a_time_names_today_or_tomorrow_in_utah():
+    import datetime as dt
+    noon = dt.datetime(2026, 9, 29, 18, 0, tzinfo=dt.UTC).timestamp()        # 12:00 PM in Utah
+    assert day_clock_text(noon + 3600, noon) == "today at 1:00 PM"
+    assert day_clock_text(noon + 24 * 3600, noon) == "tomorrow at 12:00 PM"
+    assert day_clock_text(noon + 3 * 24 * 3600, noon) == "Oct 2 at 12:00 PM"
+    # 11 PM in Utah is already the next day in UTC: still "today" in Utah.
+    late = dt.datetime(2026, 9, 30, 5, 0, tzinfo=dt.UTC).timestamp()
+    assert day_clock_text(late, noon) == "today at 11:00 PM"

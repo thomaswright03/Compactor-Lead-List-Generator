@@ -200,14 +200,15 @@ setInterval(() => {
 
 async function setMark(lead, value) {
   const before = lead.has_baler || "";
-  if (value === before || lead.saving || !lead.key || !lead.prospect) return;   // clearing is only via Undo
+  // Clearing is only via Undo; clicking the current answer only confirms a lead whose buildings disagreed.
+  if ((value === before && !lead.marks_disagreed) || lead.saving || !lead.key || !lead.prospect) return;
   if (Date.now() - S.shiftedAt < SHIFT_GUARD_MS) return;     // aimed at a row that just left
   const key = lead.key;
   // Keep the row where it is (with its new answer) instead of letting the next one slide under the pointer.
   if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);
   lead.saving = true; S.busy++;
-  const beforeBy = lead.marked_by || "";
-  updateLead({ key, has_baler: value, marked_by: myName() }); moveCount(lead, before, value);
+  const beforeBy = lead.marked_by || "", beforeDisagreed = lead.marks_disagreed;
+  updateLead({ key, has_baler: value, marked_by: myName(), marks_disagreed: false }); moveCount(lead, before, value);
   renderAll();
   try {
     const { undo } = await post("/mark", { key, value, by: myName() });
@@ -216,7 +217,7 @@ async function setMark(lead, value) {
     renderAll();
     toast(`${lead.name}: marked ${value === "yes" ? "Yes" : "No"}.`, () => undoMark(key));
   } catch (err) {
-    updateLead({ key, has_baler: before, marked_by: beforeBy }); moveCount(lead, value, before);
+    updateLead({ key, has_baler: before, marked_by: beforeBy, marks_disagreed: beforeDisagreed }); moveCount(lead, value, before);
     renderAll();
     toast(`${lead.name}: answer not saved. ${err.message}`, null, true);
   } finally { lead.saving = false; S.busy--; }
@@ -274,6 +275,11 @@ function markCell(lead, withCall) {
   }
   td.append(box);
   if (lead.has_baler && lead.marked_by) td.append(el("div", `Marked by ${lead.marked_by}`, "sub by"));
+  // Joined from buildings marked Yes and No (python -m leadgen merge-sites keeps Yes).
+  if (lead.marks_disagreed) {
+    td.append(el("div", "Its buildings were marked differently (Yes and No), so it was kept as Yes. " +
+                        "Check with the business, then press Yes or No to confirm.", "flag by"));
+  }
   // Marked more than once (changed, or merged from listings marked apart): the earlier marks.
   if (lead.has_baler && lead.mark_clicks > 1) {
     const more = el("div", undefined, "sub by");

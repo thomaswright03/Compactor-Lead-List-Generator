@@ -142,6 +142,9 @@ def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
             hit = "search query"
         if hit and cat.key == "education" and _not_campus(name):
             hit = None          # "University Heights Condominiums", "University of Utah Press"
+        if hit == "name" and cat.key == "food_production" and any(
+                _contains_term(name, w, whole=True) for w in config.NOT_PRODUCTION_NAME_WORDS):
+            hit = None          # "Day Dairy Barn" is a small shop, not a plant
         if hit:
             matched.append((cat, hit))
 

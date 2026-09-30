@@ -24,8 +24,9 @@ async function loadStats() {
     return;
   }
   $("s-total").textContent = s.with_equipment.toLocaleString();
-  const avg = $("s-avg"); avg.replaceChildren();
-  if (s.average_score === null) avg.textContent = "-";
+  const avg = $("s-avg"); avg.replaceChildren(); avg.classList.remove("says");
+  // No number yet: say why in words (a bare dash reads as broken).
+  if (s.average_score === null) { avg.textContent = "No businesses marked Yes yet."; avg.classList.add("says"); }
   else { avg.append(String(s.average_score)); avg.append(el("small", ` / 100 · tier ${s.average_tier}`)); }
   drawChart(s.by_tier);
   const d = s.by_tier.find((t) => t.tier === "D");
@@ -35,7 +36,7 @@ async function loadStats() {
   const tbody = $("s-table").querySelector("tbody"); tbody.replaceChildren();
   for (const t of s.by_tier) {
     const tr = el("tr");
-    tr.append(el("td", t.tier), el("td", t.checked), el("td", t.yes), el("td", t.pct === null ? "-" : `${t.pct}%`));
+    tr.append(el("td", t.tier), el("td", t.checked), el("td", t.yes), el("td", t.pct === null ? "None checked yet" : `${t.pct}%`));
     tbody.append(tr);
   }
 }

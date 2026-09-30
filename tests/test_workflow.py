@@ -76,10 +76,10 @@ def test_calls_are_logged_for_good_and_set_the_outcome():
     saved.save_search([lead])
     marks.set_mark(lead.uid, "yes")
     client = web.create_app().test_client()
-    first = client.post("/calls", json={"key": lead.uid, "outcome": "Follow Up",
+    first = client.post("/calls", json={"by": "Sam", "key": lead.uid, "outcome": "Follow Up",
                                         "notes": "Talked to the manager; call back Friday."})
     assert first.get_json()["ok"]
-    client.post("/calls", json={"key": lead.uid, "outcome": "Interested", "notes": "Wants a quote"})
+    client.post("/calls", json={"by": "Sam", "key": lead.uid, "outcome": "Interested", "notes": "Wants a quote"})
     row = client.get("/leads").get_json()["leads"][0]
     assert row["call_outcome"] == "Interested" and row["call_count"] == 2
     assert row["call_notes"] == "Wants a quote" and row["last_call"]
@@ -101,7 +101,7 @@ def test_a_call_sent_twice_is_recorded_once():
     answers = []
 
     def send():
-        answers.append(app.test_client().post("/calls", json={
+        answers.append(app.test_client().post("/calls", json={"by": "Sam",
             "key": lead.uid, "outcome": "Follow Up", "notes": "Call back Friday", "id": call_id}))
     threads = [threading.Thread(target=send) for _ in range(2)]
     for t in threads:
@@ -112,10 +112,11 @@ def test_a_call_sent_twice_is_recorded_once():
     assert {a.get_json()["call"]["id"] for a in answers} == {call_id}
     assert len(calls.history(lead.uid)) == 1
     client = app.test_client()
-    assert client.post("/calls", json={"key": lead.uid, "outcome": "Interested", "id": "x"}).status_code == 400
+    assert client.post("/calls", json={"by": "Sam", "key": lead.uid, "outcome": "Interested",
+                                       "id": "x"}).status_code == 400
     # Undone, and then a late copy arrives: it stays undone.
     assert client.post("/calls/undo", json={"id": call_id}).get_json()["ok"]
-    late = client.post("/calls", json={"key": lead.uid, "outcome": "Follow Up", "id": call_id})
+    late = client.post("/calls", json={"by": "Sam", "key": lead.uid, "outcome": "Follow Up", "id": call_id})
     assert late.status_code == 400 and "already undone" in late.get_json()["error"]
     assert calls.history(lead.uid) == []
 
@@ -124,9 +125,9 @@ def test_call_input_is_checked():
     lead = _lead("Costco", "c")
     saved.save_search([lead])
     client = web.create_app().test_client()
-    assert client.post("/calls", json={"key": lead.uid, "outcome": "Maybe"}).status_code == 400
-    assert client.post("/calls", json={"key": "nope", "outcome": "Interested"}).status_code == 400
-    assert client.post("/calls", json={"key": lead.uid, "outcome": "Interested"},
+    assert client.post("/calls", json={"by": "Sam", "key": lead.uid, "outcome": "Maybe"}).status_code == 400
+    assert client.post("/calls", json={"by": "Sam", "key": "nope", "outcome": "Interested"}).status_code == 400
+    assert client.post("/calls", json={"by": "Sam", "key": lead.uid, "outcome": "Interested"},
                        headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
     assert set(calls.OUTCOMES) == {"Interested", "Follow Up", "Not Interested", "Not Qualified",
                                    "No Contact", "Bad Lead"}
@@ -217,16 +218,16 @@ def test_misclicks_can_be_undone_right_after(monkeypatch):
     lead = _lead("Costco", "c")
     saved.save_search([lead])
     client = web.create_app().test_client()
-    undo = client.post("/mark", json={"key": lead.uid, "value": "yes"}).get_json()["undo"]
+    undo = client.post("/mark", json={"by": "Sam", "key": lead.uid, "value": "yes"}).get_json()["undo"]
     assert client.post("/mark/undo", json={"id": undo["id"]}).get_json()["ok"]
     assert client.get("/leads").get_json()["leads"][0]["has_baler"] == ""     # back to Not checked
     assert client.post("/mark/undo", json={"id": undo["id"]}).status_code == 409   # only once
-    client.post("/mark", json={"key": lead.uid, "value": "yes"})
-    undo = client.post("/mark", json={"key": lead.uid, "value": "no"}).get_json()["undo"]
+    client.post("/mark", json={"by": "Sam", "key": lead.uid, "value": "yes"})
+    undo = client.post("/mark", json={"by": "Sam", "key": lead.uid, "value": "no"}).get_json()["undo"]
     client.post("/mark/undo", json={"id": undo["id"]})
     assert client.get("/leads").get_json()["leads"][0]["has_baler"] == "yes"
-    first = client.post("/calls", json={"key": lead.uid, "outcome": "Interested"}).get_json()["call"]
-    second = client.post("/calls", json={"key": lead.uid, "outcome": "Bad Lead"}).get_json()["call"]
+    first = client.post("/calls", json={"by": "Sam", "key": lead.uid, "outcome": "Interested"}).get_json()["call"]
+    second = client.post("/calls", json={"by": "Sam", "key": lead.uid, "outcome": "Bad Lead"}).get_json()["call"]
     assert client.post("/calls/undo", json={"id": second["undo"]["id"]}).get_json()["ok"]
     row = client.get("/leads").get_json()["leads"][0]
     assert row["call_outcome"] == "Interested" and row["call_count"] == 1
@@ -247,8 +248,8 @@ def test_undo_lasts_five_minutes_per_business_and_never_undoes_a_newer_change(mo
     client = web.create_app().test_client()
     clock = {"now": time.time()}
     monkeypatch.setattr(marks.time, "time", lambda: clock["now"])
-    undo_a = client.post("/mark", json={"key": a.uid, "value": "yes"}).get_json()["undo"]
-    undo_b = client.post("/mark", json={"key": b.uid, "value": "no"}).get_json()["undo"]
+    undo_a = client.post("/mark", json={"by": "Sam", "key": a.uid, "value": "yes"}).get_json()["undo"]
+    undo_b = client.post("/mark", json={"by": "Sam", "key": b.uid, "value": "no"}).get_json()["undo"]
     assert undo_a["until"] - clock["now"] == marks.UNDO_SECONDS
     # The page offers both undos, on each business's row, after a reload too.
     rows = {r["name"]: r for r in client.get("/leads").get_json()["leads"]}
@@ -264,17 +265,17 @@ def test_undo_lasts_five_minutes_per_business_and_never_undoes_a_newer_change(mo
     rows = {r["name"]: r for r in client.get("/leads").get_json()["leads"]}
     assert rows["Walmart"]["has_baler"] == "no" and rows["Walmart"]["undo_mark"] is None
     # A colleague's newer click can't be overwritten by undoing an older one.
-    old = client.post("/mark", json={"key": a.uid, "value": "yes"}).get_json()["undo"]
-    client.post("/mark", json={"key": a.uid, "value": "no"})
+    old = client.post("/mark", json={"by": "Sam", "key": a.uid, "value": "yes"}).get_json()["undo"]
+    client.post("/mark", json={"by": "Sam", "key": a.uid, "value": "no"})
     assert client.post("/mark/undo", json={"id": old["id"]}).status_code == 409
     assert marks.get_all([a.uid]) == {a.uid: "no"}
     # Clicking the mark it already has changes nothing and offers no undo.
-    assert client.post("/mark", json={"key": a.uid, "value": "no"}).get_json()["undo"] is None
+    assert client.post("/mark", json={"by": "Sam", "key": a.uid, "value": "no"}).get_json()["undo"] is None
 
 
 def test_marks_only_for_saved_businesses():
     client = web.create_app().test_client()
-    res = client.post("/mark", json={"key": "no-such-lead", "value": "yes"})
+    res = client.post("/mark", json={"by": "Sam", "key": "no-such-lead", "value": "yes"})
     assert res.status_code == 404 and "saved list" in res.get_json()["error"]
     from leadgen import store
     with store.connect() as db:

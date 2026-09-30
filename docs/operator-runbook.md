@@ -47,41 +47,62 @@ switches are kept in the database (the additive `switches` table).
 
 ## Deploying
 
-A push to `main` deploys automatically, but only once GitHub's CI checks have
-passed on it: `render.yaml` sets `autoDeployTrigger: checksPass` (in Render:
-**Settings** > **Build & Deploy** > **Auto-Deploy** = **After CI Checks Pass**).
-A commit whose lint or tests fail is never deployed. A deploy takes about 5
-minutes. To see which version is live, open
-`https://compactor-lead-finder.onrender.com/healthz`: `version` is the first
-seven characters of the deployed commit (`git log -1 --format=%h`). Every 15
-minutes GitHub Actions' **Live site** workflow (`.github/workflows/live.yml`, also
-runnable by hand from the Actions tab) checks that the latest commit on `main`
-that passed CI is live, and fails, which emails the owner, if it still isn't
-20 minutes after its checks passed (a deploy takes about 5; set a repository
-variable `LIVE_URL` if the address changes).
+**How it is done today: by hand.** A push to `main` does not reliably go live on
+its own (on 2026-09-30 the live site was four commits behind `main`), so after a
+push:
+
+1. On GitHub, open the commit (or the **Actions** tab) and wait until all three
+   CI checks, `lint`, `test (sqlite)` and `test (postgres)`, are green (about 5
+   minutes). Never deploy a commit whose checks are red or still running.
+2. In Render, open the **compactor-lead-finder** service and click **Manual
+   Deploy** > **Deploy latest commit**. Wait for "Live" (about 5 minutes).
+3. Check the version: open
+   `https://compactor-lead-finder.onrender.com/healthz`; `version` must be the
+   first seven characters of the commit you deployed (`git log -1 --format=%h`).
+   If it isn't, **Events** in Render shows whether the deploy failed (its log says
+   why) or never started.
+
+`render.yaml` asks for automatic deploys after CI passes (`autoDeployTrigger:
+checksPass`), but Render applies that only to a service managed as a Blueprint;
+to switch it on for this service, set Render **Settings** > **Build & Deploy** >
+**Auto-Deploy** = **After CI Checks Pass**. Until someone has seen a push go live
+on its own, keep deploying by hand as above. There is no automatic "is the live
+site up to date" check or email: step 3 is that check.
 
 Protect `main` so that nothing reaches it without green checks (a one-time
 setting only the repository owner can make): GitHub → **Settings** →
 **Branches** → **Add branch protection rule** for `main` → **Require status
 checks to pass before merging**, and pick `lint`, `test (sqlite)` and
-`test (postgres)`. **Status (2026-09-30): not confirmed as set.** Whoever
-sets it should change this line to say so, with the date. Until then Render still
-deploys only green commits, but a red commit can land on `main`.
-
-If it didn't deploy (the Live site workflow failed, or `/healthz` shows an old version):
-
-1. In Render, open the **compactor-lead-finder** service. **Events** shows
-   whether the last deploy failed (its log says why) or never started.
-2. Check the commit's checks on GitHub are green (a red one is not deployed:
-   fix it and push), that **Settings** > **Auto-Deploy** is **After CI Checks
-   Pass** and that the branch is `main`.
-3. Click **Manual Deploy** > **Deploy latest commit**, wait for "Live", and
-   check `/healthz` again.
+`test (postgres)`. **Status (2026-09-30): not set** (GitHub shows `main` as not
+protected). Whoever sets it should change this line to say so, with the date.
+Until then a red commit can land on `main`, so step 1 above matters.
 
 The Python packages are pinned to exact versions in `requirements.txt`, so a
 deploy never picks up a new Flask or psycopg by surprise (the Excel files are
 written by the site itself, `leadgen/xlsx.py`; openpyxl is only used by the tests). To upgrade
 one, change its version there, run the tests, and push.
+
+## Monthly: the scoring check
+
+Once a month the owner (Thomas) opens Find leads > **For the site administrator** >
+**Scoring check**, downloads the scoring check file and sends it to whoever looks
+after the code. It holds the businesses marked Yes or No (names and categories only,
+no phone numbers, addresses or notes). They replace
+`tests/fixtures/scoring_reference.json` with it, run the tests and commit it: from
+then on a scoring change that pushes a business marked Yes to a lower tier (or one
+marked No to a higher tier) fails the tests. The command
+`python -m leadgen reference` (with `DATABASE_URL` set) does the same from a
+computer. If the Stats page shows tier A's Yes share not above tier C's, ask for the
+weights to be looked at.
+
+## The one-search-a-day rule
+
+Find leads runs once per Utah calendar day. The one exception: a search that
+came back incomplete (a source failed, or map areas never answered even after the
+automatic retries) gives the day back once, so it can be run again the same day
+(`INCOMPLETE_RERUNS = 1` in `leadgen/daily.py`). The developer added this exception;
+**it is awaiting the owner's confirmation** (status 2026-09-30). To remove it, set
+`INCOMPLETE_RERUNS = 0`; once the owner agrees, change this line to say so, with the date.
 
 ## Logs, and rolling back a bad deploy
 
@@ -93,9 +114,10 @@ To go back to the previous version:
 1. In Render, open the service and click **Events** (or **Deploys**).
 2. Find the last deploy that worked, open its menu and choose **Rollback**
    (or **Redeploy** on older dashboards). Render builds and starts that commit.
-3. Turn off **Auto-Deploy** (service **Settings**) until the fix is on `main`,
-   or the next push deploys again; then fix forward with a new commit
-   (`git revert <bad commit>` and push) and turn Auto-Deploy back on.
+3. If Auto-Deploy is on (service **Settings**), turn it off until the fix is on
+   `main`, or the next push deploys again; then fix forward with a new commit
+   (`git revert <bad commit>` and push), deploy it (see Deploying) and turn
+   Auto-Deploy back on.
 
 Rolling back is safe for the data: database changes are only ever additive
 (new tables or columns, created on first use), so an older version keeps
@@ -202,7 +224,9 @@ this rule are left alone by searches, because joining them moves calls and
 Yes / No clicks. To join them, run `python -m leadgen merge-sites` (with
 `DATABASE_URL` set) once the owner agrees: each group becomes the row saved first,
 keeping every source listing, moving the calls and Yes / No clicks to it and keeping
-the latest mark (the earlier ones stay in its history). Nothing is deleted: the
+the latest mark (the earlier ones stay in its history), except that when the group's
+marks disagree (some Yes, some No) it keeps Yes and the lead says the marks
+disagreed until a salesperson presses Yes or No on it again. Nothing is deleted: the
 merged rows stay in the table, hidden, and are recorded in `merged_leads`. The page shows the saved list when it opens, and the downloads
 contain all of it. Everything is kept, including Yelp's details, although
 Yelp's terms allow keeping its data for 24 hours (and Google's for 30 days);

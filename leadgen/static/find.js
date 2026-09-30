@@ -63,7 +63,7 @@ async function loadSearches() {
   } else setGo(true, "One search a day. Today's is available.");
   renderHistory(body.searches);
   renderProblems(body.problems);
-  if (body.switches) renderSwitches(body.switches);
+  if (body.switches) { S.switches = body.switches; renderSwitches(body.switches); }
 }
 // The emergency switches (web/finding.py flip_switch): each takes effect on the next request.
 const SWITCH_SHOWN = { search_paused: () => true, google_off: () => CONFIG.google_on, yelp_off: () => CONFIG.yelp_on };
@@ -123,44 +123,55 @@ function renderProblems(p) {
 }
 // Every count on the page reads the same way: 1,135.
 const num = (v) => typeof v === "number" ? v.toLocaleString() : v ?? "-";
+// Each search is its own <tbody> (its row, then its reason or details), so on a phone
+// each becomes one stacked card with every field in view (app.css, table.plain.hist).
 function renderHistory(searches) {
   const box = $("history");
   if (!searches.length) { box.replaceChildren(el("div", "No searches yet.", "muted")); return; }
-  const table = el("table", undefined, "plain");
+  const table = el("table", undefined, "plain hist");
   const head = el("tr");
   for (const t of ["When", "Location", "Radius", "Leads", "New", ""]) head.append(el("th", t));
   const thead = el("thead"); thead.append(head);
-  const tbody = el("tbody");
+  table.append(thead);
+  // On a phone each value gets its column's name above it (the table's header is hidden there).
+  const cell = (text, cls, label) => {
+    const td = el("td", undefined, cls);
+    if (label) td.append(el("span", label, "h-label"));
+    if (text !== undefined) td.append(text);
+    return td;
+  };
   for (const s of searches) {
+    const tbody = el("tbody", undefined, s.failed ? "failed" : "");
     const tr = el("tr", undefined, s.failed ? "failed" : "");
-    const leadsCell = el("td");
+    const leadsCell = cell(undefined, "h-leads", "Leads");
     // An incomplete search (a source failed) saved what the others found, and gave the day back.
     if (s.partial) leadsCell.append(`${num(s.leads)} `, el("span", "Incomplete", "tag"));
     else if (s.failed) leadsCell.append(el("span", "Failed", "tag"));
-    else leadsCell.textContent = num(s.leads);
-    tr.append(el("td", s.when, "nowrap"), el("td", s.location), el("td", s.radius ? `${s.radius} mi` : ""),
-              leadsCell, el("td", s.failed && !s.partial ? "" : num(s.new)));
-    const td = el("td");
-    tr.append(td); tbody.append(tr);
+    else leadsCell.append(num(s.leads));
+    tr.append(cell(s.when, "nowrap h-when"), cell(s.location, "h-where"),
+              cell(s.radius ? `${s.radius} mi` : "", "h-radius", "Radius"),
+              leadsCell, cell(s.failed && !s.partial ? "" : num(s.new), "h-new", "New"));
+    const td = cell(undefined, "h-act");
+    tr.append(td); tbody.append(tr); table.append(tbody);
     if (s.failed) {
       const extra = el("tr", undefined, "failed");
-      const cell = el("td"); cell.colSpan = 6; cell.className = "sub";
-      cell.textContent = `${s.reason || "The search didn't finish."} It didn't use up the day's search.`;
-      extra.append(cell); tbody.append(extra);
+      const why = el("td"); why.colSpan = 6; why.className = "sub h-why";
+      why.textContent = `${s.reason || "The search didn't finish."} It didn't use up the day's search.`;
+      extra.append(why); tbody.append(extra);
       continue;
     }
     if (s.details || (s.warnings || []).length) {
       const extra = el("tr", undefined, "more-row"); extra.hidden = true;
-      const cell = el("td"); cell.colSpan = 6;
+      const more = el("td"); more.colSpan = 6;
       const dl = el("dl", undefined, "details");
       // [label, value] pairs in funnel order (older answers were an object).
       const pairs = Array.isArray(s.details) ? s.details : Object.entries(s.details || {});
       for (const [k, v] of pairs) {
         const row = el("div"); row.append(el("dt", k), el("dd", num(v))); dl.append(row);
       }
-      cell.append(dl);
-      for (const w of s.warnings || []) cell.append(el("div", w, "warn"));
-      extra.append(cell); tbody.append(extra);
+      more.append(dl);
+      for (const w of s.warnings || []) more.append(el("div", w, "warn"));
+      extra.append(more); tbody.append(extra);
       const toggle = button("Details", "link", () => {
         extra.hidden = !extra.hidden;
         toggle.textContent = extra.hidden ? "Details" : "Hide details";
@@ -170,7 +181,6 @@ function renderHistory(searches) {
       td.append(toggle);
     }
   }
-  table.append(thead, tbody);
   const wrap = el("div", undefined, "scroll-x"); wrap.append(table);
   box.replaceChildren(wrap);
 }
@@ -237,7 +247,17 @@ async function follow(jobId, misses = 0) {
   await loadLeads();
   loadSearches();
 }
-// Today's only search: show what it will do and ask first.
+// Today's only search: show what it will do and ask first. "Everywhere available" is
+// spelled out as the sources that will actually be asked.
+function autoSources() {
+  const off = (key) => Boolean(S.switches && S.switches[key] && S.switches[key].on);
+  const google = CONFIG.google_on && !off("google_off"), yelp = CONFIG.yelp_on && !off("yelp_off");
+  if (!google && !yelp) {
+    return `Free map data only (${CONFIG.google_on || CONFIG.yelp_on ? "Google and Yelp are switched off" : "Google and Yelp aren't set up"})`;
+  }
+  const names = [google && "Google (paid)", yelp && "Yelp", "free map data"].filter(Boolean);
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
 const SOURCE_TEXT = { auto: "Everywhere available", osm: "Free map data only", yelp: "Yelp only",
                       google: "Google only (paid)", both: "Google and free map data (paid)" };
 function searchSummary(form) {
@@ -245,7 +265,8 @@ function searchSummary(form) {
   rows.push(["Search around", f.get("location").trim()]);
   rows.push(["How far", `${f.get("radius") || "30"} miles`]);
   rows.push(["Also look for", (f.get("keywords") || "").split(",").map((k) => k.trim()).filter(Boolean).join(", ") || "Nothing extra"]);
-  rows.push(["Where to look", SOURCE_TEXT[f.get("source")] || "Everywhere available"]);
+  const source = f.get("source") || "auto";
+  rows.push(["Where to look", source === "auto" ? autoSources() : SOURCE_TEXT[source] || autoSources()]);
   rows.push(["Leave out scores below", f.get("min_score")]);
   if (f.get("grid") && f.get("grid") !== "1") rows.push(["Coverage for Google and Yelp", `${f.get("grid")} searches`]);
   if (f.get("max_requests")) rows.push(["Most paid lookups", f.get("max_requests")]);

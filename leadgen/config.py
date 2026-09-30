@@ -258,6 +258,14 @@ NOT_CAMPUS_INNER = ["college of", "school of"]
 GENERIC_OSM_TAGS = {("industrial", None), ("building", "industrial"), ("landuse", "industrial"),
                     ("landuse", "residential")}
 
+# A production word in a name ("dairy", "foods", "meats") alone doesn't make a plant when
+# the name also says it is a small shop or eatery ("Day Dairy Barn", "Sunrise Meats
+# Market", "Dairy Queen"): such a name gives no food & beverage production category.
+NOT_PRODUCTION_NAME_WORDS = ["barn", "shop", "shoppe", "store", "market", "mart", "cafe",
+                             "deli", "bar", "grill", "kitchen", "diner", "stand", "queen",
+                             "freeze", "drive in", "treats", "ice cream", "corner",
+                             "express", "restaurant", "eatery", "bistro"]
+
 # When a place's own tag/type says it is one of these, words in its name do
 # not make it a prospect ("Pet Hospital" is a vet, "Dairy Queen" is fast food).
 NON_PROSPECT_OSM_TAGS = (
@@ -435,8 +443,8 @@ YELP_CACHE_TTL_SECONDS = 7 * 24 * 3600
 # but only when the site is next used (there is no scheduled purge).
 SAVED_SOURCE_KEEP_SECONDS: dict[str, float] = {}
 
-# The whole map-data step (every part, every mirror) gives up after this long, so a
-# search never hangs for many minutes when the free map servers are down.
+# The map-data step's first round (every part, every mirror) gives up after this long,
+# so a search never hangs when the free map servers are down (see OVERPASS_RETRY_*).
 OVERPASS_DEADLINE_SECONDS = 240
 # The public map servers often refuse or time out on one query for a whole 30-mile
 # circle, so a wide search is asked in parts: a grid of boxes up to this many miles
@@ -448,6 +456,13 @@ OVERPASS_PART_MILES = 20
 OVERPASS_PARALLEL = 2
 OVERPASS_PART_SECONDS = 90
 OVERPASS_SPLITS = 1
+# Parts still missing after OVERPASS_DEADLINE_SECONDS (busy or throttling servers) are
+# asked again automatically, in up to this many more rounds, each after a pause (so a
+# throttling server cools down) and with its own time. The whole map-data step is so
+# bounded by 240 + 2 x (20 + 150) seconds, under 10 minutes; most searches need none.
+OVERPASS_RETRY_ROUNDS = 2
+OVERPASS_RETRY_PAUSE_SECONDS = 20
+OVERPASS_RETRY_SECONDS = 150
 # A mirror that hasn't answered after this long is not waited out: the next one is
 # asked as well, and the first good answer wins (a normal 30-mile query takes 10 to
 # 40 seconds, and the slow mirror can still answer until the deadline).

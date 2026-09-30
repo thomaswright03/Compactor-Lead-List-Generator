@@ -1,6 +1,10 @@
+from pathlib import Path
+
+from leadgen import config, saved
 from leadgen.dedupe import dedupe, names_match
 from leadgen.geo import geocode, haversine_miles, search_grid
 from leadgen.models import Lead
+from leadgen.scoring import score_lead
 
 
 def test_haversine_slc_to_ogden():
@@ -108,7 +112,6 @@ def test_closed_status_prefers_temporary_and_spreads_to_map_copies():
 
 
 def test_merged_parking_tag_does_not_veto_prospect():
-    from leadgen.scoring import score_lead
     g = _l("Associated Food Stores Distribution Center", 40.76, -111.9, source="google", sid="g")
     g.raw_categories = ["point_of_interest"]
     o = _l("Associated Food Stores Distribution Center", 40.7602, -111.9)
@@ -140,8 +143,14 @@ def test_dedupe_many_spread_out_copies_stay_apart():
 
 
 def test_default_location_is_arco_offline():
-    from leadgen import config
     assert geocode(None)[:2] == config.OWN_COORDS
     assert geocode("876 Fortune Rd,  Salt Lake City, UT 84104")[:2] == config.OWN_COORDS
     assert geocode("Arco Compactor")[:2] == config.OWN_COORDS
     assert geocode("salt lake city ut")[:2] == (40.7608, -111.8910)
+
+
+def test_merging_is_a_public_function_of_dedupe():
+    from leadgen import dedupe as dedupe_module
+
+    assert callable(dedupe_module.merge)
+    assert "_merge" not in Path(saved.__file__).read_text()

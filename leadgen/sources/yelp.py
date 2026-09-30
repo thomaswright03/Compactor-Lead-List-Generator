@@ -111,6 +111,66 @@ def used_up(budget: usage.DailyBudget) -> str:
             f"{_resets(budget)}")
 
 
+def _limit_note(budget: usage.DailyBudget, left: int, cap: int, n_queries: int,
+                radius_miles: float, grid_cells: int) -> str | None:
+    """What limits this search's Yelp calls, when raising the request cap wouldn't help
+    (or how far it could be raised), for the warning when the calls run out."""
+    if left == 0:
+        return used_up(budget)
+    if left <= cap:                   # the daily limit, not the request cap, is what binds
+        return (f"this site may make {budget.limit} Yelp calls in any 24 hours and {left} "
+                f"were left{_resets(budget)}")
+    if n_queries * len(search_grid(0, 0, radius_miles, grid_for(radius_miles, grid_cells))) > cap:
+        return (f"the request cap; up to {left} of the {budget.limit} Yelp calls for 24 hours are "
+                "left if you raise it")
+    return None
+
+
+def _area_warnings(fewer_areas: bool, cell_radius: float, radius_miles: float) -> list[str]:
+    if fewer_areas:
+        return [f"Yelp searched the {MAX_RADIUS_MILES:.0f} miles around the center (the "
+                f"most one Yelp search reaches). Covering all {radius_miles:g} miles "
+                "takes 7 areas, more calls than this search could make."]
+    if cell_radius > MAX_RADIUS_MILES:
+        return [f"Yelp searches at most {MAX_RADIUS_MILES:.0f} miles around each point, "
+                "so parts of this very wide area were not searched by Yelp."]
+    return []
+
+
+def _fetch_page(query: str, cell: Cell, offset: int | None, headers: dict[str, str],
+                quota: dict[str, int | None],
+                take_call: Callable[[], str | None]) -> tuple[list[Any], int | None]:
+    """One page of one Yelp search: (its businesses, the next offset or None). Notes
+    Yelp's own count of calls left in quota["left"]."""
+    clat, clon, crad = cell
+    offset = offset or 0
+    params: dict[str, Any] = {"latitude": round(clat, 6), "longitude": round(clon, 6),
+                              "radius": int(min(crad * METERS_PER_MILE, MAX_RADIUS_M)),
+                              "limit": min(PAGE_SIZE, MAX_RESULTS - offset), "offset": offset}
+    if query in config.YELP_SEARCHES:
+        params.update(categories=",".join(config.YELP_SEARCHES[query]),
+                      sort_by="review_count")
+    else:
+        params["term"] = query
+    got: CaseInsensitiveDict[str] = CaseInsensitiveDict()       # header names may arrive in any case
+    try:
+        data = request_json("GET", SEARCH_URL, params=params, headers=headers,
+                            use_cache=False, no_retry=(QUOTA_ERROR,), response_headers=got,
+                            before_retry=lambda: take_call() is None)
+    except HttpError as exc:
+        if QUOTA_ERROR in str(exc):
+            quota["left"] = 0
+        raise
+    finally:
+        left_now = str(got.get("RateLimit-Remaining", "")).strip()
+        if left_now.isdigit() and quota["left"] != 0:
+            quota["left"] = int(left_now)
+    items = data.get("businesses") or []
+    nxt = offset + len(items)
+    more = len(items) == params["limit"] and nxt < min(data.get("total") or 0, MAX_RESULTS)
+    return [slim(b) for b in items], (nxt if more else None)
+
+
 def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], api_key: str,
            grid_cells: int = 1, max_requests: int | None = None,
            progress: Callable[[str], None] | None = None) -> tuple[list[Lead], int, list[str]]:
@@ -128,31 +188,17 @@ def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], 
     cap = config.YELP_DEFAULT_MAX_REQUESTS if max_requests is None else max_requests
     if budget.problem:                # no count means no calls, and no usable cache either
         return [], 0, [f"Yelp was skipped: Yelp is paused because {budget.problem}."]
-    limit_note = None
-    if left == 0:
-        limit_note = used_up(budget)
-    elif left <= cap:                 # the daily limit, not the request cap, is what binds
-        limit_note = (f"this site may make {budget.limit} Yelp calls in any 24 hours and {left} "
-                      f"were left{_resets(budget)}")
-    elif len(queries) * len(search_grid(0, 0, radius_miles, grid_for(radius_miles, grid_cells))) > cap:
-        limit_note = (f"the request cap; up to {left} of the {budget.limit} Yelp calls for 24 hours are "
-                      "left if you raise it")
+    limit_note = _limit_note(budget, left, cap, len(queries), radius_miles, grid_cells)
     cap = min(cap, left)
     n_cells = choose_grid(radius_miles, grid_cells, len(queries), cap)
     cells = search_grid(lat, lon, min(radius_miles, MAX_RADIUS_MILES) if n_cells == 1
                         else radius_miles, n_cells)
     quota: dict[str, int | None] = {"left": None}
-    warnings = []
     if progress:
         progress(f"Yelp: {len(queries)} searches x {n_cells} area(s), up to {cap} calls "
                  f"({left} of {budget.limit} left in the last 24 hours)")
-    if n_cells < grid_for(radius_miles, grid_cells) and cap:
-        warnings.append(f"Yelp searched the {MAX_RADIUS_MILES:.0f} miles around the center (the "
-                        f"most one Yelp search reaches). Covering all {radius_miles:g} miles "
-                        "takes 7 areas, more calls than this search could make.")
-    elif cells[0][2] > MAX_RADIUS_MILES:
-        warnings.append(f"Yelp searches at most {MAX_RADIUS_MILES:.0f} miles around each point, "
-                        "so parts of this very wide area were not searched by Yelp.")
+    warnings = _area_warnings(n_cells < grid_for(radius_miles, grid_cells) and cap > 0,
+                              cells[0][2], radius_miles)
 
     cache = usage.SharedCache()
 
@@ -167,33 +213,7 @@ def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], 
         return used_up(budget)
 
     def fetch_page(query: str, cell: Cell, offset: int | None) -> tuple[list[Any], int | None]:
-        clat, clon, crad = cell
-        offset = offset or 0
-        params: dict[str, Any] = {"latitude": round(clat, 6), "longitude": round(clon, 6),
-                  "radius": int(min(crad * METERS_PER_MILE, MAX_RADIUS_M)),
-                  "limit": min(PAGE_SIZE, MAX_RESULTS - offset), "offset": offset}
-        if query in config.YELP_SEARCHES:
-            params.update(categories=",".join(config.YELP_SEARCHES[query]),
-                          sort_by="review_count")
-        else:
-            params["term"] = query
-        got: CaseInsensitiveDict[str] = CaseInsensitiveDict()       # header names may arrive in any case
-        try:
-            data = request_json("GET", SEARCH_URL, params=params, headers=headers,
-                                use_cache=False, no_retry=(QUOTA_ERROR,), response_headers=got,
-                                before_retry=lambda: take_call() is None)
-        except HttpError as exc:
-            if QUOTA_ERROR in str(exc):
-                quota["left"] = 0
-            raise
-        finally:
-            left_now = str(got.get("RateLimit-Remaining", "")).strip()
-            if left_now.isdigit() and quota["left"] != 0:
-                quota["left"] = int(left_now)
-        items = data.get("businesses") or []
-        nxt = offset + len(items)
-        more = len(items) == params["limit"] and nxt < min(data.get("total") or 0, MAX_RESULTS)
-        return [slim(b) for b in items], (nxt if more else None)
+        return _fetch_page(query, cell, offset, headers, quota, take_call)
 
     def stop_check() -> str | None:
         stop = config.stop_reason("yelp")

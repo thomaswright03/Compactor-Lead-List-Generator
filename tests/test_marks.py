@@ -109,7 +109,7 @@ def test_page_shows_saved_leads_across_searches(monkeypatch):
     assert "leads" not in body                          # the page loads the list itself
     row = client.get("/leads").get_json()["leads"][0]
     assert row["has_baler"] == "" and row["key"]
-    assert client.post("/mark", json={"key": row["key"], "value": "yes"}).get_json()["ok"]
+    assert client.post("/mark", json={"by": "Sam", "key": row["key"], "value": "yes"}).get_json()["ok"]
     current["day"] = next(days)                         # searching again takes a new day
     _, body = _search(client)
     assert body["new_leads"] == 1 and body["saved_count"] == 2
@@ -126,17 +126,33 @@ def test_without_a_database_on_render_nothing_runs(monkeypatch):
     assert "DATABASE_URL" in client.get("/leads").get_json()["error"]
     res = client.post("/search", data={"location": "84101"})
     assert res.status_code == 503 and "DATABASE_URL" in res.get_json()["error"]
-    res = client.post("/mark", json={"key": "abc", "value": "yes"})
+    res = client.post("/mark", json={"by": "Sam", "key": "abc", "value": "yes"})
     assert res.status_code == 503 and "DATABASE_URL" in res.get_json()["error"]
 
 
 def test_mark_endpoint_checks_input():
     client = web.create_app().test_client()
-    assert client.post("/mark", json={"key": "k", "value": "maybe"}).status_code == 400
-    assert client.post("/mark", json={"key": "k", "value": ""}).status_code == 400   # kept for good
-    assert client.post("/mark", json={"value": "yes"}).status_code == 400
-    assert client.post("/mark", json={"key": "k", "value": "yes"},
+    assert client.post("/mark", json={"by": "Sam", "key": "k", "value": "maybe"}).status_code == 400
+    assert client.post("/mark", json={"by": "Sam", "key": "k", "value": ""}).status_code == 400   # kept for good
+    assert client.post("/mark", json={"by": "Sam", "value": "yes"}).status_code == 400
+    assert client.post("/mark", json={"by": "Sam", "key": "k", "value": "yes"},
                        headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+
+
+def test_a_mark_or_call_without_a_name_is_refused_and_not_saved():
+    saved.save_search([_lead(name="Walmart", source_id="w1")])
+    [lead] = saved.load()
+    client = web.create_app().test_client()
+    for by in ("", "   ", None):
+        res = client.post("/mark", json={"key": lead.uid, "value": "yes", "by": by})
+        assert res.status_code == 400 and "Enter your name first" in res.get_json()["error"]
+        res = client.post("/calls", json={"key": lead.uid, "outcome": "Interested", "by": by})
+        assert res.status_code == 400 and "Nothing was saved" in res.get_json()["error"]
+    [row] = calls.apply(marks.apply(saved.load()))
+    assert row.has_baler == "" and row.call_count == 0
+    assert client.post("/mark", json={"key": lead.uid, "value": "yes", "by": "Sam"}).status_code == 200
+    assert client.post("/calls", json={"key": lead.uid, "outcome": "Interested",
+                                       "by": "Sam"}).status_code == 200
 
 
 def test_two_businesses_never_share_a_row():

@@ -53,6 +53,7 @@ DETAIL_LABELS = {
     "yelp raw results": "Businesses from Yelp",
     "osm raw results": "Businesses from the free map data",
     "osm areas searched": "Free map data: areas that answered",
+    "osm areas asked again": "Free map data: areas asked again automatically",
     "results in radius": "Listings within the radius",
     "duplicates merged": "Duplicate listings merged",
     "after dedupe": "Businesses after merging duplicates",

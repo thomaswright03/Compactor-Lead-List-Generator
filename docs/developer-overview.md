@@ -84,12 +84,18 @@ keeping its mark, the skip link and the short Recent changes); it is skipped whe
 `tests/test_closed_and_alerts.py` covers closed businesses in every view, the
 downloads and Stats, an incomplete search giving the day back, and problem
 reports (the webhook is mocked).
-`tests/test_round6.py` covers the map data asked in parts (every query bigger than
-one part fails, a failed part is asked again in quarters, a part that never answers
-leaves the search incomplete with the other parts' businesses saved), closed
-businesses never being added, refreshes after a big search staying one page at
-most, the parsed saved list being reused, calls on unmarked businesses, and the
-one re-run after an incomplete search. The browser tests also log a call on Not
+Tests are named for the feature they protect: `tests/test_map_data.py` covers the
+map data asked in parts (every query bigger than one part fails, a failed part is
+asked again in quarters, areas busy servers missed are asked again automatically and
+the search ends complete, a part that never answers leaves the search incomplete
+with the other parts' businesses saved, the catch-up rounds' time limit);
+`tests/test_saved_list.py` closed businesses never being added, refreshes after a
+big search staying one page at most and the parsed saved list being reused;
+`tests/test_calls.py` calls on unmarked businesses and who made each mark and call;
+`tests/test_daily_search.py` the one re-run after an incomplete search;
+`tests/test_find_page.py`, `tests/test_search_words.py`, `tests/test_campus.py`,
+`tests/test_downloads.py`, `tests/test_switches.py` and `tests/test_offline.py`
+what their names say. The browser tests also log a call on Not
 checked, double-click Start search (nothing gets selected), and check "No street
 address" and the tier words at desktop and 390 px.
 `tests/test_cli.py` runs the command line with the sources mocked.
@@ -206,7 +212,9 @@ the sidebar to the page's list (Leads, Calls) or heading.
   today's search was not used up (for Google or Yelp: "ask whoever looks after
   the site to check the key"), and the history shows the search's lead count
   marked **Incomplete**, with the reason. An incomplete search can be re-run
-  **once** that day (`INCOMPLETE_RERUNS` in `leadgen/daily.py`); the note beside
+  **once** that day (`INCOMPLETE_RERUNS` in `leadgen/daily.py`; an exception to the
+  owner's once-a-day rule that the developer added, awaiting the owner's
+  confirmation: set it to 0 to remove it); the note beside
   the button says "1 re-run left today". If the re-run is incomplete too, what
   it found is saved and it uses up the day like a complete search, so a key that
   stays broken can't turn the day into unlimited searches (each spending Yelp
@@ -228,8 +236,15 @@ the sidebar to the page's list (Leads, Calls) or heading.
   search's Details show it too). Answers are kept for 7 days whichever mirror gave
   them, and an area that had to be asked in quarters is asked in quarters straight
   away on a re-run, so a re-run with the same location and radius only asks for the
-  areas still missing. The map data step gives up after four minutes in all
-  (`OVERPASS_DEADLINE_SECONDS`), an area after 90 seconds; a map server that
+  areas still missing. The first round gets four minutes (`OVERPASS_DEADLINE_SECONDS`),
+  an area 90 seconds. Areas still missing after it (the servers were busy or
+  throttling) are asked again automatically in up to two more rounds
+  (`OVERPASS_RETRY_ROUNDS`), each after a 20-second pause (`OVERPASS_RETRY_PAUSE_SECONDS`)
+  with 150 seconds of its own (`OVERPASS_RETRY_SECONDS`), so the map-data step
+  never takes more than about 10 minutes; the progress text says "asking again for
+  the areas the busy map servers missed", and the search's Details show how many
+  areas were asked again. Only an area that still never answers makes the search
+  incomplete; a map server that
   hasn't answered an area after 25 seconds (`OVERPASS_STAGGER_SECONDS`) is not
   waited out: the next one is asked as well and the first good answer wins. The progress bar says when a step
   is taking longer than usual. Steps that don't apply (Google and Yelp when
@@ -367,7 +382,16 @@ Arco's staff marked Yes / No on the Leads page, with the tier each had:
 database) refreshes it from the site's marks, copying only the facts the
 scoring reads (no phone numbers, addresses or call notes). A test then fails
 if a scoring change moves a business marked Yes to a lower tier, or one marked
-No to a higher one. Refresh it every month or so, run the tests, and commit it.
+No to a higher one. The site offers the same file with no database address
+needed: **For the site administrator** > **Scoring check** > **Download the scoring
+check file** (`/download/scoring-reference.json`). **Routine:** once a month, the
+owner (Thomas) downloads it and sends it to whoever looks after the code, who puts
+it in place of `tests/fixtures/scoring_reference.json`, runs the tests and commits
+it; if the tests fail, or on the Stats page tier A's Yes share is not above tier
+C's, the weights in `leadgen/config.py` need adjusting (say so in the commit).
+Its **not_production** list holds small shops and eateries whose name has a
+production word ("Day Dairy Barn"): `config.NOT_PRODUCTION_NAME_WORDS` keeps a name
+alone from making them a food & beverage plant.
 
 ## The downloads' columns (details)
 

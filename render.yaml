@@ -3,8 +3,8 @@ services:
     name: compactor-lead-finder
     runtime: python
     plan: free
-    # A push to main goes live only after GitHub's CI checks pass on it (lint, and the tests on
-    # SQLite and Postgres); a red commit is never deployed. The "Live site" workflow checks it went live.
+    # Asks Render to deploy a push to main only after GitHub's CI checks pass on it. Render applies
+    # this only to a Blueprint-managed service: today deploys are done by hand (docs/operator-runbook.md).
     autoDeployTrigger: checksPass
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn wsgi:app --workers 1 --threads 8 --timeout 0 --bind 0.0.0.0:$PORT

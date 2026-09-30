@@ -1,0 +1,250 @@
+"""The free map data (OpenStreetMap via the Overpass mirrors): asked in parts, parts
+that fail asked again in quarters, and parts busy servers missed asked again
+automatically, so an ordinary search finishes complete without a manual re-run."""
+
+import re
+import time
+
+import pytest
+
+from leadgen import config, pipeline, web
+from leadgen.http import HttpError
+from leadgen.models import Lead
+from leadgen.scoring import score_lead
+from leadgen.sources import osm
+
+
+def _box_of(query):
+    m = re.search(r"\(around:[^)]*\)\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)", query)
+    return tuple(map(float, m.groups())) if m else None
+
+
+def _place(n, lat, lon):
+    return {"type": "node", "id": n, "lat": lat, "lon": lon,
+            "tags": {"name": f"Market {n}", "shop": "supermarket"}}
+
+
+def _answer(box):
+    lat, lon = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+    return {"elements": [_place(int(lat * 1e5) + int(-lon * 1e5), lat, lon)]}
+
+
+def _throttled(fail_rounds):
+    """Mirrors that refuse every query about the northern third of the area for the
+    first `fail_rounds` times each is asked (as a throttling server does), then answer."""
+    tries: dict = {}
+
+    def servers(method, url, data, **kw):
+        box = _box_of(data["data"])
+        if box[0] > 40.8:
+            tries[box] = tries.get(box, 0) + 1
+            if tries[box] <= fail_rounds:
+                raise HttpError(f"{url}: ConnectionResetError(104, 'Connection reset by peer')")
+        return _answer(box)
+    return servers, tries
+
+
+def test_areas_that_fail_at_first_are_asked_again_and_the_search_is_complete(monkeypatch):
+    monkeypatch.setattr(config, "OVERPASS_ENDPOINTS", config.OVERPASS_ENDPOINTS[:1])
+    servers, tries = _throttled(fail_rounds=1)
+    monkeypatch.setattr(osm, "request_json", servers)
+    said, stats = [], {}
+    leads, warnings = osm.search(40.76, -111.89, 30, progress=said.append, stats=stats)
+    # The 6 southern parts at once; the 3 northern ones as 12 quarters, asked again.
+    assert len(leads) == 6 + 12 and warnings == []
+    assert stats == {"osm areas asked again": "12 (all answered)"}
+    assert any("asking again for the areas the busy map servers missed" in s for s in said)
+
+
+def test_a_part_that_never_answers_still_leaves_an_honest_incomplete_result(monkeypatch):
+    monkeypatch.setattr(config, "OVERPASS_ENDPOINTS", config.OVERPASS_ENDPOINTS[:1])
+    servers, tries = _throttled(fail_rounds=99)
+    monkeypatch.setattr(osm, "request_json", servers)
+    stats = {}
+    with pytest.raises(osm.PartialResult) as got:
+        osm.search(40.76, -111.89, 30, stats=stats)
+    assert got.value.coverage == "about 6 of 9 areas"
+    # Every quarter was asked once in the first round and once in each catch-up round.
+    assert set(tries.values()) == {config.OVERPASS_RETRY_ROUNDS + 1} | {1}
+    assert stats["osm areas asked again"] == "12 (some never answered)"
+
+
+def test_the_catch_up_rounds_are_bounded_in_time(monkeypatch):
+    clock = {"now": 5000.0}
+    monkeypatch.setattr(osm.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(osm.time, "sleep", lambda s: clock.__setitem__("now", clock["now"] + s))
+    monkeypatch.setattr(config, "OVERPASS_RETRY_PAUSE_SECONDS", 20)
+
+    def hanging(method, url, **kw):
+        clock["now"] += kw["timeout"][1]
+        raise HttpError(f"{url}: ReadTimeout")
+    monkeypatch.setattr(osm, "request_json", hanging)
+    with pytest.raises(osm.SourceError):
+        osm.search(40.76, -111.89, 30)
+    rounds = config.OVERPASS_RETRY_ROUNDS
+    bound = (config.OVERPASS_DEADLINE_SECONDS
+             + rounds * (config.OVERPASS_RETRY_PAUSE_SECONDS + config.OVERPASS_RETRY_SECONDS)
+             + (rounds + 1) * config.OVERPASS_PART_SECONDS)
+    assert clock["now"] - 5000 <= bound <= 15 * 60
+
+
+def _wait(client, job):
+    for _ in range(400):
+        body = client.get(f"/status/{job}").get_json()
+        if body["state"] != "running":
+            return body
+        time.sleep(0.05)
+    raise AssertionError("the search never finished")
+
+
+def test_a_search_whose_map_servers_are_throttling_finishes_complete(monkeypatch):
+    """The day's search, with some areas refused once: it ends done, complete (not
+    incomplete), the day is used, and the details say areas were asked again."""
+    monkeypatch.setattr(pipeline, "geocode", lambda location, key: (40.76, -111.89, "Salt Lake City"))
+    monkeypatch.setattr(config, "OVERPASS_ENDPOINTS", config.OVERPASS_ENDPOINTS[:1])
+    servers, _ = _throttled(fail_rounds=1)
+    monkeypatch.setattr(osm, "request_json", servers)
+    client = web.create_app().test_client()
+    job = client.post("/search", data={"location": "84101", "radius": "30"}).get_json()["job_id"]
+    body = _wait(client, job)
+    assert body["state"] == "done" and not body.get("note")
+    assert not any("part of the area" in w for w in body["warnings"])
+    history = client.get("/searches").get_json()
+    assert history["used_today"] and not history["searches"][0].get("partial")
+    details = dict(history["searches"][0]["details"])
+    assert details["Free map data: areas asked again automatically"] == "12 (all answered)"
+
+
+def _lead(name="Costco", sid="c", **kw):
+    kw.setdefault("lat", 40.72)
+    kw.setdefault("lon", -111.9)
+    kw.setdefault("raw_categories", ["shop=wholesale"])
+    lead = Lead(name=name, source="osm", source_id=sid, **kw)
+    score_lead(lead, config.DEFAULT_KEYWORDS)
+    return lead
+
+
+# ---- the map data is asked in parts
+
+def test_a_wide_search_is_asked_in_parts_and_a_big_query_is_never_needed(monkeypatch):
+    """Every query covering more than one part's size fails (as busy public servers
+    do); the 30-mile search still finds the businesses in every part."""
+    asked = []
+
+    def servers(method, url, data, **kw):
+        box = _box_of(data["data"])
+        asked.append(box)
+        if box is None or box[2] - box[0] > 0.3:
+            raise HttpError(f"{url} returned HTTP 504")
+        lat, lon = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+        return {"elements": [_place(int(abs(lat * 1e4) + abs(lon * 1e4)), lat, lon)]}
+    monkeypatch.setattr(osm, "request_json", servers)
+    leads, warnings = osm.search(40.76, -111.89, 30)
+    assert len(asked) == 9 and None not in asked and warnings == []
+    assert len({l.source_id for l in leads}) == 9
+
+
+def test_a_failed_part_is_asked_again_in_quarters(monkeypatch):
+    first = []
+
+    def servers(method, url, data, **kw):
+        box = _box_of(data["data"])
+        if box and not first:
+            first.append(box)
+        if box == first[0]:
+            raise HttpError(f"{url} returned HTTP 504")
+        lat, lon = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+        return {"elements": [_place(int(lat * 1e5) + int(-lon * 1e5), lat, lon)]}
+    monkeypatch.setattr(osm, "request_json", servers)
+    monkeypatch.setattr(config, "OVERPASS_ENDPOINTS", config.OVERPASS_ENDPOINTS[:1])
+    leads, _ = osm.search(40.76, -111.89, 30)
+    assert len(leads) == 8 + 4                     # the other 8 parts, and the failed one's quarters
+
+
+def test_parts_no_server_answers_leave_the_map_data_incomplete(monkeypatch):
+    monkeypatch.setattr(config, "OVERPASS_ENDPOINTS", config.OVERPASS_ENDPOINTS[:1])
+
+    def servers(method, url, data, **kw):
+        box = _box_of(data["data"])
+        if box[0] > 40.8:                           # the northern parts never answer
+            raise HttpError(f"{url}: ReadTimeout")
+        lat, lon = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+        return {"elements": [_place(int(lat * 1e5) + int(-lon * 1e5), lat, lon)]}
+    monkeypatch.setattr(osm, "request_json", servers)
+    with pytest.raises(osm.PartialResult) as got:
+        osm.search(40.76, -111.89, 30)
+    assert len(got.value.leads) == 6                # the southern and middle rows of parts
+    assert "part of the area (about 33% missing)" in str(got.value)
+
+
+def test_a_partial_map_result_is_saved_and_the_search_marked_incomplete(monkeypatch):
+    monkeypatch.setattr(pipeline, "geocode", lambda location, key: (40.72, -111.9, "Salt Lake City"))
+
+    def partial(*a, **k):
+        raise osm.PartialResult("OpenStreetMap answered for only part of the area",
+                                [_lead()], [])
+    monkeypatch.setattr(pipeline.osm, "search", partial)
+    client = web.create_app().test_client()
+    job = client.post("/search", data={"location": "84101"}).get_json()["job_id"]
+    body = _wait(client, job)
+    assert body["state"] == "done" and body["saved"] and body["found"] == 1
+    assert "answered for only part of the area" in " ".join(body["warnings"])
+    record = client.get("/searches").get_json()["searches"][0]
+    assert record["partial"] and "only part of the area" in record["reason"]
+    assert [l["name"] for l in client.get("/leads").get_json()["leads"]] == ["Costco"]
+
+
+def test_progress_says_how_many_parts_of_the_map_are_done():
+    job = {}
+    progress = web._Progress(job)
+    progress("OpenStreetMap: searching the free map data (3 of 9 areas done)")
+    assert job["message"] == "Searching the free map data: 3 of 9 areas done…"
+    assert job["step"] == 2 and job["pct"] == pytest.approx(62, abs=1)
+
+
+# ---- the map data's progress only moves forward
+
+def test_map_progress_never_counts_backwards():
+    job = {}
+    progress = web._Progress(job)
+    seen = []
+    for msg in ["(8 of 17 areas done)", "(7 of 17 areas done)",
+                "(9 of 21 areas done, some areas asked again in smaller parts)",
+                "(10 of 25 areas done, some areas asked again in smaller parts)",
+                "(9 of 21 areas done, some areas asked again in smaller parts)"]:
+        progress(f"OpenStreetMap: searching the free map data {msg}")
+        seen.append(job["message"])
+    done = [int(m.split(": ")[1].split(" of ")[0]) for m in seen]
+    assert done == sorted(done) == [8, 8, 9, 10, 10]
+    assert seen[0] == "Searching the free map data: 8 of 17 areas done…"
+    assert seen[-1] == ("Searching the free map data: 10 of 25 areas done (some areas are being "
+                        "asked again in smaller parts)…")
+
+
+def test_the_map_search_reports_parts_done(monkeypatch):
+    monkeypatch.setattr(osm, "request_json", lambda *a, **k: {"elements": []})
+    said = []
+    osm.search(40.76, -111.89, 30, progress=said.append)
+    counts = [m for m in said if "areas done" in m]
+    assert counts[0].endswith("(0 of 9 areas done)") and counts[-1].endswith("(9 of 9 areas done)")
+    numbers = [int(m.rsplit("(", 1)[1].split()[0]) for m in counts]
+    assert numbers == sorted(numbers)
+
+
+# ---- building labels are left out; OSM-only searches say phones will be few
+
+@pytest.mark.parametrize("name", ["Building B", "Bldg. 3", "BUILDING 12A", "Tower 2", "C Building",
+                                  "Suite 100", "Wing C"])
+def test_labels_for_part_of_a_complex_are_left_out(name):
+    element = {"type": "way", "id": 5, "bounds": {"minlat": 40.7, "maxlat": 40.71,
+                                                  "minlon": -111.9, "maxlon": -111.89},
+               "tags": {"name": name, "building": "apartments"}}
+    assert osm.parse_element(element) is None
+
+
+@pytest.mark.parametrize("name", ["Tower Records", "Building Supply Co", "Suite Dreams Bakery",
+                                  "Harmons", "3M", "The Block Restaurant"])
+def test_real_business_names_are_kept(name):
+    element = {"type": "node", "id": 6, "lat": 40.7, "lon": -111.9,
+               "tags": {"name": name, "shop": "supermarket"}}
+    assert osm.parse_element(element).name == name

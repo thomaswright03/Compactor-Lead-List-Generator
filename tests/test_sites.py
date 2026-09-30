@@ -97,14 +97,15 @@ def test_saved_duplicates_merge_once_keeping_marks_and_calls(monkeypatch):
     assert len({first, second, third}) == 3
     marks.set_mark(first, "yes", by="Dana")
     time.sleep(0.01)
-    marks.set_mark(second, "no", by="Sam")         # the latest mark wins
+    marks.set_mark(second, "no", by="Sam")         # newer, but a Yes on one building wins
     calls.log_call(third, "Follow Up", "Call back Monday", by="Dana")
 
     assert saved.merge_sites() == 2
     assert saved.merge_sites() == 0                # once only
     [lead] = calls.apply(marks.apply(saved.load()))
     assert lead.uid == first and lead.name == "Benchmark Plaza"
-    assert lead.has_baler == "no" and lead.marked_by == "Sam" and lead.mark_clicks == 2
+    assert lead.has_baler == "yes" and lead.marked_by == "Dana" and lead.mark_clicks == 2
+    assert lead.marks_disagreed                    # the row says the marks disagreed
     assert lead.call_count == 1 and lead.call_outcome == "Follow Up"
     assert [m["value"] for m in marks.history(first)] == ["no", "yes"]
     with store.connect() as db:
@@ -218,3 +219,47 @@ def test_has_phone_filter_and_phone_first_among_equal_scores():
     body = client.get("/leads?tab=unchecked&limit=300&phone=1").get_json()
     assert [l["name"] for l in body["leads"]] == ["Beta Grocery"] and body["total"] == 1
     assert body["counts"]["unchecked"] == 3             # the tab counts ignore the filter
+
+
+def _two_buildings(monkeypatch):
+    with monkeypatch.context() as m:
+        m.setattr(saved, "site_groups", lambda sites: [])
+        m.setattr(saved, "same_site", lambda a, b: False)
+        rows = [_b(f"Granite Yard {n}", 40.7300 + k * 0.0004, sid=f"way/g{n}")
+                for k, n in enumerate((830, 831))]
+        for lead in rows:
+            saved.save_search([lead])
+    return [l.uid for l in rows]
+
+
+def test_merged_buildings_marked_yes_then_no_stay_yes_and_are_flagged(monkeypatch):
+    older, newer = _two_buildings(monkeypatch)
+    marks.set_mark(older, "yes", by="Dana")
+    time.sleep(0.01)
+    marks.set_mark(newer, "no", by="Sam")
+    assert saved.merge_sites() == 1
+    client = web.create_app().test_client()
+    body = client.get("/leads?view=yes").get_json()
+    [row] = [l for l in body["leads"] if l["key"] == older]
+    assert row["has_baler"] == "yes" and row["marks_disagreed"] and row["marked_by"] == "Dana"
+    history = client.get(f"/calls/{older}").get_json()["marks"]
+    assert [(m["value"], m["by"]) for m in history] == [("no", "Sam"), ("yes", "Dana")]
+    # Pressing Yes again confirms it: recorded, and the flag goes.
+    undo = client.post("/mark", json={"key": older, "value": "yes", "by": "Lee"}).get_json()["undo"]
+    assert undo is not None
+    [lead] = marks.apply(saved.load([older]))
+    assert lead.has_baler == "yes" and not lead.marks_disagreed and lead.marked_by == "Lee"
+    # Undoing the confirmation brings the flag back; a plain repeat click changes nothing.
+    assert client.post("/mark/undo", json={"id": undo["id"]}).get_json()["ok"]
+    assert marks.apply(saved.load([older]))[0].marks_disagreed
+    marks.set_mark(older, "no", by="Lee")
+    assert marks.set_mark(older, "no", by="Lee") is None
+
+
+def test_merged_buildings_that_agree_are_not_flagged(monkeypatch):
+    a, b = _two_buildings(monkeypatch)
+    marks.set_mark(a, "no", by="Dana")
+    marks.set_mark(b, "no", by="Sam")
+    assert saved.merge_sites() == 1
+    [lead] = marks.apply(saved.load([a]))
+    assert lead.has_baler == "no" and not lead.marks_disagreed

@@ -29,8 +29,10 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 - **Find leads** once a day (Utah calendar day) around Arco's shop or any ZIP or
   city, from Google Places, Yelp (at most 50 calls in any 24 hours, with the reset
   time shown, "today at ..." or "tomorrow at ...") and the free OpenStreetMap data
-  (asked in parts, so busy public servers still answer; a re-run asks only for the
-  areas still missing, and an incomplete search says how many areas answered).
+  (asked in parts, so busy public servers still answer; areas a busy server missed
+  are asked again automatically, twice at most, so an ordinary search finishes
+  complete with no re-run; only an area that never answers leaves it incomplete,
+  saying how many areas answered).
   The standard words (compactor, baler, waste, recycling) are always searched;
   **Extra search words** (empty to start) are searched as well. Scores always use
   the standard words, so the minimum score, the list and Stats all use the same number.
@@ -38,6 +40,11 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   The buildings of one site (an apartment complex's numbered buildings, a campus's
   parts, one name spread over a site up to half a mile across) are one lead.
   Police, fire, impound and trailer yards and parcel lockers are not prospects.
+  A name word alone never makes a small shop a plant ("Day Dairy Barn" is not a
+  dairy). When the buildings of one site marked Yes and No are joined
+  (`python -m leadgen merge-sites`), the lead keeps Yes and says the marks
+  disagreed until someone presses Yes or No on it again.
+- Every Yes / No mark and call needs **Your name**: the server refuses one without it.
 - **Yes / No** "has a baler or compactor" marks (permanent; a click can be undone
   for 5 minutes), **Just called** notes with six results and a Calls tab for each,
   a **Stats** page, and Excel / CSV downloads (in plain words; columns empty for
