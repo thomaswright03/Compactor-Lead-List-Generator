@@ -263,17 +263,35 @@ GENERIC_OSM_TAGS = {("industrial", None), ("building", "industrial"), ("landuse"
 NON_PROSPECT_OSM_TAGS = (
     [("amenity", v) for v in ("veterinary", "parking", "parking_entrance", "pharmacy",
                               "clinic", "doctors", "dentist", "fuel", "library", "shelter",
-                              "school", "kindergarten", "place_of_worship", "bank", "atm")]
+                              "school", "kindergarten", "place_of_worship", "bank", "atm",
+                              "police", "fire_station", "parcel_locker", "vehicle_impound",
+                              "parking_space")]
     + [("aeroway", "helipad"), ("aeroway", "heliport"), ("tourism", "artwork"),
        ("tourism", "information"), ("leisure", None), ("healthcare", None),
        ("building", "parking"), ("building", "construction"), ("landuse", "construction")]
 )
+# Names that say a place is not a prospect whatever its tags or other words say:
+# police, fire and impound sites, trailer and truck yards, public fleet yards and
+# parcel lockers ("Herriman Police Impound Lot", "Salt Lake City Fire Department
+# Training and Logistics Center", "Amazon DUT2 Trailer Yard", "Luxer One"). Only a
+# specific recycling or transfer-station tag (NAME_BLOCK_RESCUE_TAGS) still counts.
+NON_PROSPECT_NAME_WORDS = [
+    "police", "sheriff", "sheriffs", "fire department", "fire station", "fire training",
+    "fire rescue", "impound", "tow yard", "towing yard", "trailer yard", "trailer parking",
+    "trailer storage", "truck parking", "truck yard", "parking lot", "park and ride",
+    "fleet maintenance", "fleet management", "fleet services", "maintenance yard",
+    "luxer", "luxer one", "parcel locker", "parcel lockers", "package locker",
+    "package lockers", "amazon locker", "amazon hub",
+]
+NAME_BLOCK_RESCUE_TAGS = {("amenity", "recycling"), ("amenity", "waste_transfer_station"),
+                          ("landuse", "landfill")}
+NAME_BLOCK_RESCUE_GOOGLE_TYPES = {"waste_transfer_station", "recycling_center"}
 NON_PROSPECT_GOOGLE_TYPES = {
     "veterinary_care", "dentist", "dental_clinic", "doctor", "medical_clinic", "pharmacy",
     "drugstore", "church", "place_of_worship", "park", "parking", "gas_station", "library",
     "school", "primary_school", "secondary_school", "bank", "atm", "insurance_agency",
     "lawyer", "real_estate_agency", "beauty_salon", "hair_salon", "barber_shop",
-    "car_repair", "car_wash", "health", "optician",
+    "car_repair", "car_wash", "health", "optician", "police", "fire_station",
 }
 NON_PROSPECT_YELP_CATEGORIES = {
     "vet", "emergencypethospital", "pharmacy", "drugstores", "dentists", "generaldentistry",
@@ -283,6 +301,7 @@ NON_PROSPECT_YELP_CATEGORIES = {
     "libraries", "elementaryschools", "highschools", "preschools", "privateschools",
     "montessori", "childcare", "banks", "insurance", "lawyers", "realestateagents",
     "apartmentagents", "hair", "barbers", "othersalons", "beautysvc", "selfstorage", "movers",
+    "policedepartments", "firedepartments", "towing",
 } | {  # Yelp's doctor specialties (children of "physicians")
     "addictionmedicine", "allergist", "anesthesiologists", "audiologist", "cardiology",
     "cosmeticsurgeons", "dermatology", "earnosethroat", "emergencymedicine",

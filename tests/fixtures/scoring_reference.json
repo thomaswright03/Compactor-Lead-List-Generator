@@ -1,5 +1,5 @@
 {
- "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses Arco's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests. \"not_campus\": places named after a university or college that are not the campus (a garden, house, condo, department, press...); they must never score as a campus prospect.",
+ "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses Arco's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests. \"not_campus\": places named after a university or college that are not the campus (a garden, house, condo, department, press...); they must never score as a campus prospect. Businesses with \"not_prospect\": true (police, fire, impound, trailer yards, parcel lockers) must get no prospect category and score below the default minimum.",
  "businesses": [
   {
    "name": "Smith's Marketplace",
@@ -220,6 +220,46 @@
    ],
    "has_equipment": false,
    "yelp_reviews": 60
+  },
+  {
+   "name": "Herriman Police Impound Lot",
+   "source": "osm",
+   "raw_categories": [
+    "industrial=auto_wrecker",
+    "landuse=industrial"
+   ],
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Luxer One",
+   "source": "osm",
+   "raw_categories": [
+    "amenity=parcel_locker",
+    "building=apartments"
+   ],
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Salt Lake City Fire Department Training and Logistics Center",
+   "source": "osm",
+   "raw_categories": [
+    "building=warehouse",
+    "amenity=fire_station"
+   ],
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Amazon DUT2 Trailer Yard",
+   "source": "osm",
+   "raw_categories": [
+    "landuse=industrial",
+    "industrial=logistics"
+   ],
+   "has_equipment": false,
+   "not_prospect": true
   }
  ],
  "confirmed": [],

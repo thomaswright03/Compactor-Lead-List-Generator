@@ -73,10 +73,16 @@ SCHEMA = [
     """CREATE TABLE IF NOT EXISTS switches (
         name TEXT PRIMARY KEY, value INTEGER NOT NULL, by_name TEXT,
         at DOUBLE PRECISION)""",
+    # Saved leads merged into another because they were parts of one site (saved.py
+    # merge_sites): the merged row's id, the lead it joined, when, and the row as it
+    # was then (with its mark), so nothing about it is lost.
+    """CREATE TABLE IF NOT EXISTS merged_leads (
+        uid TEXT PRIMARY KEY, into_uid TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
+        row TEXT NOT NULL)""",
 ]
 # Every table, for tests that empty them.
 TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "mark_changes",
-          "search_failures", "call_undos", "problems", "made_by", "switches")
+          "search_failures", "call_undos", "problems", "made_by", "switches", "merged_leads")
 # Up to this many ids are looked up by id (in chunks); more read the whole table.
 BY_ID_LIMIT = 1000
 _CHUNK = 500

@@ -9,8 +9,10 @@ undone for UNDO_SECONDS, exactly and only while no newer click has followed.
 import time
 import uuid
 from collections.abc import Iterable
+from typing import Any
 
 from . import store
+from .localtime import date_time_text
 from .models import Lead, Undo
 
 VALUES = ("yes", "no")
@@ -109,31 +111,43 @@ def pending_undos() -> dict[str, Undo]:
     return {uid: {"id": change, "until": at + UNDO_SECONDS} for change, uid, at in rows}
 
 
-def makers(uids: Iterable[str]) -> dict[str, str]:
-    """{uid: name}: who made each business's current mark (its latest click not undone),
-    for the marks whose maker is known."""
+def _clicks(uids: Iterable[str]) -> list[tuple[str, str, float | None]]:
+    """(uid, who, undone_at) of every Yes / No click on these businesses, oldest first."""
     wanted = [u for u in dict.fromkeys(uids) if u]
     if not wanted:
-        return {}
+        return []
     with store.connect() as db:
-        rows = store.rows_for(
+        return [(uid, name or "", undone_at) for uid, name, undone_at in store.rows_for(
             db, "SELECT mark_changes.uid, made_by.name, mark_changes.undone_at FROM mark_changes "
                 "LEFT JOIN made_by ON made_by.id = mark_changes.id", "mark_changes.uid", wanted,
-            order="ORDER BY mark_changes.at")
-    latest: dict[str, str] = {}
-    for uid, name, undone_at in rows:
-        if undone_at is None:
-            latest[uid] = name or ""
-    keep = set(wanted)
-    return {uid: name for uid, name in latest.items() if name and uid in keep}
+            order="ORDER BY mark_changes.at")]
+
+
+def history(uid: str) -> list[dict[str, Any]]:
+    """Every Yes / No click on a business that was not undone, newest first (with who
+    made it): what it was marked before, including the marks of listings merged into it."""
+    with store.connect() as db:
+        rows = db.all("SELECT mark_changes.at, mark_changes.value, made_by.name FROM mark_changes "
+                      "LEFT JOIN made_by ON made_by.id = mark_changes.id "
+                      "WHERE mark_changes.uid = ? AND mark_changes.undone_at IS NULL "
+                      "ORDER BY mark_changes.at DESC", (uid,))
+    return [{"at": at, "when": date_time_text(at), "value": value, "by": by or ""}
+            for at, value, by in rows]
 
 
 def apply(leads: list[Lead]) -> list[Lead]:
-    """Set lead.has_baler (and who marked it) from the saved marks (raises when they
-    can't be read)."""
+    """Set lead.has_baler (who marked it, and how many clicks its mark history holds)
+    from the saved marks (raises when they can't be read)."""
     found = get_all(lead.uid for lead in leads)
-    by = makers(lead.uid for lead in leads if lead.uid in found)
+    clicks = _clicks(lead.uid for lead in leads if lead.uid in found)
+    latest: dict[str, str] = {}
+    kept: dict[str, int] = {}
+    for uid, name, undone_at in clicks:
+        if undone_at is None:
+            latest[uid] = name
+            kept[uid] = kept.get(uid, 0) + 1
     for lead in leads:
         lead.has_baler = found.get(lead.uid, "")
-        lead.marked_by = by.get(lead.uid, "") if lead.has_baler else ""
+        lead.marked_by = latest.get(lead.uid, "") if lead.has_baler else ""
+        lead.mark_clicks = kept.get(lead.uid, 0) if lead.has_baler else 0
     return leads

@@ -647,3 +647,119 @@ def test_reading_text_is_at_least_14px(page):
         .map((s) => document.querySelector(s)).filter(Boolean)
         .map((e) => parseFloat(getComputedStyle(e).fontSize))""")
     assert len(sizes) >= 4 and min(sizes) >= 14
+
+
+# ---- one site, admin controls out of the way, a name on every mark
+
+def test_the_name_cannot_be_skipped(browser, site, page):
+    context = _context(browser, name=None, viewport={"width": 1280, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("table.leads")
+    sent = _posts(tab, "/mark")
+    _row(tab, "Costco").locator(".mark button.yes").click()
+    expect(tab.locator("#name-dlg")).to_be_visible()
+    assert tab.locator("#name-dlg").get_by_role("button", name="Not now").count() == 0
+    tab.click("#name-save")                             # empty: not saved, asked again
+    expect(tab.locator("#name-error")).to_be_visible()
+    assert sent == []
+    tab.click("#name-cancel")                           # Cancel drops the click
+    expect(tab.locator("#name-dlg")).to_be_hidden()
+    assert sent == []
+    _row(tab, "Costco").locator(".mark button.yes").click()
+    expect(tab.locator("#name-dlg")).to_be_visible()     # still asked: no name yet
+    tab.fill("#name-input", "Dana")
+    tab.click("#name-save")
+    tab.wait_for_selector("#recent:not([hidden])")
+    assert "Costco Wholesale: marked Yes by Dana" in tab.inner_text("#recent")
+    context.close()
+
+
+def test_admin_controls_are_closed_and_switches_ask_first(page):
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    assert not page.locator("#switch-list").is_visible()
+    assert not page.locator("#problems").is_visible()
+    page.click("#admin-card summary")
+    row = page.locator(".switch-row", has_text="Pause searching")
+    expect(row).to_contain_text("Off.")
+    sent = _posts(page, "/switches")
+    row.get_by_role("button", name="Turn on: Pause searching").click()
+    dialog = page.locator("#switch-dlg")
+    expect(dialog).to_contain_text("Pause all searching for everyone?")
+    expect(dialog.locator("#switch-go")).to_have_text("Pause searching")
+    page.click("#switch-cancel")
+    expect(dialog).to_be_hidden()
+    assert sent == []
+    expect(row).to_contain_text("Off.")
+    row.get_by_role("button", name="Turn on: Pause searching").click()
+    page.click("#switch-go")
+    expect(row).to_contain_text("On")
+    assert len(sent) == 1
+    expect(page.locator("#paused-box")).to_be_visible()
+
+
+def test_extra_search_words_start_empty_and_the_confirmation_says_so(page):
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    assert page.input_value("input[name=keywords]") == ""
+    assert "are always searched" in page.inner_text("#form")
+    page.click("#go")
+    expect(page.locator("#confirm-dlg")).to_contain_text("Nothing extra")
+    page.click("#confirm-back")
+    page.fill("input[name=keywords]", "pallets")
+    page.click("#go")
+    expect(page.locator("#confirm-list")).to_contain_text("pallets")
+    page.click("#confirm-back")
+
+
+def test_no_competitors_names_them_and_has_phone_filters(browser, site):
+    leads = []
+    for i, (name, phone) in enumerate([("Harmons Grocery", "(801) 555-0199"), ("Maceys", ""),
+                                       ("Smiths Marketplace", "(801) 555-0100")]):
+        lead = Lead(name=name, lat=40.72 + i * 0.01, lon=-111.9, source="yelp", source_id=f"p{i}",
+                    phone=phone, raw_categories=["yelp:grocery"], yelp_reviews=200)
+        score_lead(lead, config.DEFAULT_KEYWORDS)
+        leads.append(lead)
+    saved.save_search(leads, config.DEFAULT_KEYWORDS)
+    context = _context(browser, viewport={"width": 1280, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("table.leads")
+    rows = tab.locator("table.leads tbody tr")
+    expect(rows).to_have_count(3)
+    assert "Maceys" in rows.nth(2).inner_text()        # same score: the ones with a phone first
+    tab.check("#has-phone")
+    expect(rows).to_have_count(2)
+    assert "Maceys" not in tab.inner_text("#leads-wrap")
+    assert "phone=1" in tab.url
+    tab.uncheck("#has-phone")
+    tab.get_by_role("button", name="Competitors (0)").click()
+    expect(tab.locator("#leads-wrap .empty")).to_contain_text(
+        "No Pro Baler, Action Compaction or Arco Compactor listings found in the saved leads yet.")
+    context.close()
+
+
+@pytest.mark.parametrize("width", [1100, 1440, 2560])
+def test_log_out_stays_on_one_line(browser, width):
+    from werkzeug.serving import make_server
+    server = make_server("127.0.0.1", 0, web.create_app(password="pw", username="Maximilian Johannsen"),
+                         threaded=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        context = _context(browser, viewport={"width": width, "height": 900})
+        tab = context.new_page()
+        url = f"http://127.0.0.1:{server.server_port}/"
+        tab.goto(url + "login")
+        tab.fill("input[name=username]", "Maximilian Johannsen")
+        tab.fill("input[name=password]", "pw")
+        tab.locator("form button[type=submit]").click()
+        tab.wait_for_selector(".side .who button")
+        button = tab.locator(".side .who button")
+        box = button.bounding_box()
+        line = tab.evaluate("parseFloat(getComputedStyle(document.querySelector('.side .who button')).lineHeight)")
+        assert box["height"] < 2 * line, "Log out wrapped onto two lines"
+        context.close()
+    finally:
+        server.shutdown()

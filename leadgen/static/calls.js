@@ -158,13 +158,13 @@ $("call-form").addEventListener("submit", async (e) => {
 });
 
 async function openHistory(lead) {
-  $("hist-title").textContent = `Calls to ${lead.name}`;
+  $("hist-title").textContent = `History of ${lead.name}`;
   const list = $("hist-list");
   list.replaceChildren(el("div", "Loading...", "muted"));
   $("hist-dlg").showModal();
   try {
-    const { calls } = await api(`/calls/${encodeURIComponent(lead.key)}`);
-    list.replaceChildren();
+    const { calls, marks } = await api(`/calls/${encodeURIComponent(lead.key)}`);
+    list.replaceChildren(el("h3", "Calls", "hist-head"));
     for (const c of calls) {
       const item = el("div", undefined, "item");
       const top = el("div"); top.append(el("span", c.outcome, "badge")); top.append(el("span", `  ${c.when}${byWho(c.by)}`, "sub"));
@@ -172,6 +172,16 @@ async function openHistory(lead) {
       list.append(item);
     }
     if (!calls.length) list.append(el("div", "No calls yet.", "muted"));
+    // Every Yes / No it was given (newest first): a business merged from several listings
+    // keeps the marks each of them had.
+    if ((marks || []).length) {
+      list.append(el("h3", "Yes / No marks", "hist-head"));
+      for (const m of marks) {
+        const item = el("div", undefined, "item");
+        item.append(el("span", m.value === "yes" ? "Yes" : "No", "badge"), el("span", `  ${m.when}${byWho(m.by)}`, "sub"));
+        list.append(item);
+      }
+    }
   } catch (err) { list.replaceChildren(el("div", err.message, "error")); }
 }
 $("hist-close").addEventListener("click", () => $("hist-dlg").close());

@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from difflib import SequenceMatcher
 from functools import lru_cache
 from typing import Any
@@ -23,6 +23,14 @@ _GENERIC = {"apartments", "apartment", "apts", "main", "downtown", "recycling", 
 SAME_PLACE_MILES = 0.12      # ~200 m: two listings this close with similar names are one site
 SAME_NAME_MILES = 0.2        # identical cleaned names
 SAME_PHONE_MILES = 0.5       # the widest merge distance of all rules
+# One named site spread over many listings (the buildings of an apartment complex,
+# the parts of a campus): each listing within SAME_NAME_MILES of the next, the whole
+# site at most SITE_MILES across (see merge_sites).
+SITE_MILES = 0.5
+# Words that name a part of a site, not the site ("Westpointe Center" / "Westpointe
+# Campus", "Adagio Building A"), left out of the site's name.
+_SITE_WORDS = {"campus", "center", "centre", "complex", "building", "buildings", "bldg",
+               "unit", "units", "phase", "tower", "towers", "wing"}
 # Sources that report whether a place is open, most trusted first. The merged
 # record is built on the first of these (best phone/website coverage).
 PAID_SOURCES = ("google", "yelp")
@@ -67,6 +75,18 @@ def names_match(a: str, b: str) -> bool:
     # Both the distinctive part and the full name must be close.
     return (bool(da and db) and SequenceMatcher(None, da, db).ratio() >= 0.85
             and SequenceMatcher(None, ca, cb).ratio() >= 0.85)
+
+
+@lru_cache(maxsize=65536)
+def site_name(name: str) -> str:
+    """The name of the site a listing is part of: its cleaned name without building
+    numbers or letters and without words like "campus" or "building" ("Shoreline Ridge
+    825" -> "shoreline ridge"). "" when that leaves only generic words ("343
+    Apartments", "Building 2"): such names say nothing about which site it is."""
+    tokens = [t for t in normalize(name).split()
+              if t not in _STOPWORDS and t not in _SITE_WORDS and len(t) > 1
+              and not re.fullmatch(r"\d+[a-z]?", t)]
+    return " ".join(tokens) if set(tokens) - _GENERIC else ""
 
 
 def is_duplicate(a: Lead, b: Lead) -> bool:
@@ -115,6 +135,19 @@ def snapshot(lead: Lead) -> list[dict[str, Any]]:
     return lead.parts or [{k: v for k, v in asdict(lead).items() if k != "parts"}]
 
 
+def _site_title(parts: list[dict[str, Any]], name: str) -> str:
+    """The name a lead merged from several buildings of one site shows: without the
+    building number ("Shoreline Ridge 825" + "826" -> "Shoreline Ridge")."""
+    names = {str(p.get("name") or "") for p in parts}
+    if len(names) < 2 or len({_numbers(n) for n in names}) < 2:
+        return name
+    if len({site_name(n) for n in names}) != 1 or not site_name(name):
+        return name
+    title = re.sub(r"(?:^|\s)#?\s*\d+[A-Za-z]?(?=\s|$|[,)])", "", name)
+    title = re.sub(r"\s+", " ", title).strip(" -,#")
+    return title if re.search(r"[A-Za-z]", title) else name
+
+
 def merge(group: list[Lead]) -> Lead:
     parts = [p for lead in group for p in snapshot(lead)]
     # Open listings first, then Google, then Yelp records (phone/website coverage),
@@ -147,7 +180,121 @@ def merge(group: list[Lead]) -> Lead:
     base.business_status = _resolve_status(group)
     base.sources = sorted({l.source for l in group})
     base.parts = parts if len(parts) > 1 else []
+    title = _site_title(parts, base.name)
+    if title != base.name:
+        base.alt_names = [n for n in base.alt_names if n not in (title, base.name)] + [base.name]
+        base.name = title
     return base
+
+
+@dataclass(frozen=True)
+class Site:
+    """What says which site a lead (or a saved row) is part of: its site name, its
+    phone numbers and where its listings are."""
+
+    name: str
+    phones: frozenset[str]
+    points: tuple[tuple[float, float], ...]
+
+
+def site_of(lead: Lead, points: list[tuple[float, float]] | None = None) -> Site | None:
+    """The lead's Site (points: where its listings are; default its parts, or its pin),
+    or None when its name says nothing about which site it is."""
+    name = site_name(lead.name)
+    if not name:
+        return None
+    if points is None:
+        points = [(float(p["lat"]), float(p["lon"])) for p in lead.parts
+                  if p.get("lat") is not None and p.get("lon") is not None]
+    return Site(name, phone_numbers(lead.phone), tuple(points or [(lead.lat, lead.lon)]))
+
+
+def _box(points: list[tuple[float, float]]) -> tuple[float, float, float, float]:
+    lats, lons = [p[0] for p in points], [p[1] for p in points]
+    return min(lats), min(lons), max(lats), max(lons)
+
+
+def _phones_agree(a: frozenset[str], b: frozenset[str]) -> bool:
+    return not (a and b and a.isdisjoint(b))
+
+
+def _gap(a: Site, b: Site) -> float:
+    """Miles between the nearest listings of two sites."""
+    return min(haversine_miles(p[0], p[1], q[0], q[1]) for p in a.points for q in b.points)
+
+
+def same_site(a: Site | None, b: Site | None) -> bool:
+    """Two parts of one named site: the same site name, no phone numbers that differ,
+    a listing of one within SAME_NAME_MILES of a listing of the other, and the two
+    together at most SITE_MILES across."""
+    if a is None or b is None or a.name != b.name or not _phones_agree(a.phones, b.phones):
+        return False
+    if haversine_miles(*_box(list(a.points + b.points))) > SITE_MILES:
+        return False
+    return _gap(a, b) <= SAME_NAME_MILES
+
+
+def site_groups(sites: list[Site | None]) -> list[list[int]]:
+    """Group the sites that are parts of one site (same_site, closest first), keeping
+    every group within SITE_MILES across and free of differing phone numbers. Returns
+    the groups of more than one, by index."""
+    by_name: dict[str, list[int]] = {}
+    for i, site in enumerate(sites):
+        if site is not None:
+            by_name.setdefault(site.name, []).append(i)
+    out = []
+    lat_span = SITE_MILES / 69.0 + 1e-9
+    for idxs in by_name.values():
+        if len(idxs) < 2:
+            continue
+        pairs = []
+        idxs.sort(key=lambda i: min(p[0] for p in sites[i].points))    # type: ignore[union-attr]
+        for n, i in enumerate(idxs):
+            a = sites[i]
+            assert a is not None
+            top = max(p[0] for p in a.points)
+            for j in idxs[n + 1:]:
+                b = sites[j]
+                assert b is not None
+                if min(p[0] for p in b.points) - top > lat_span:
+                    break
+                if same_site(a, b):
+                    pairs.append((_gap(a, b), i, j))
+        pairs.sort()
+        group = {i: [i] for i in idxs}
+        root = {i: i for i in idxs}
+        for _, i, j in pairs:
+            ri, rj = root[i], root[j]
+            if ri == rj:
+                continue
+            members = group[ri] + group[rj]
+            points = [p for m in members for p in sites[m].points]    # type: ignore[union-attr]
+            if haversine_miles(*_box(points)) > SITE_MILES:
+                continue
+            if not all(_phones_agree(sites[x].phones, sites[y].phones)   # type: ignore[union-attr]
+                       for x in group[ri] for y in group[rj]):
+                continue
+            group[ri] = members
+            for m in group.pop(rj):
+                root[m] = ri
+        out += [sorted(g) for g in group.values() if len(g) > 1]
+    return out
+
+
+def merge_sites(leads: list[Lead]) -> list[Lead]:
+    """Merge the listings that are parts of one named site into one lead: the
+    numbered buildings of an apartment complex ("Shoreline Ridge 825" ... "834"),
+    a same-named site whose outlines spread wider than SAME_NAME_MILES, a campus's
+    "Center" and "Campus" listings. Separate businesses whose names are only numbers
+    and generic words ("343 Apartments", "525 Apartments") stay apart."""
+    groups = site_groups([site_of(lead) for lead in leads])
+    if not groups:
+        return leads
+    joined = {i for g in groups for i in g}
+    out = [lead for i, lead in enumerate(leads) if i not in joined]
+    for g in groups:
+        out.append(merge([leads[i] for i in g]))
+    return out
 
 
 def _pair_rank(a: Lead, b: Lead) -> tuple[int, float, float]:
@@ -302,4 +449,4 @@ def dedupe(leads: list[Lead]) -> list[Lead]:
         if root in closed:
             lead.business_status = "CLOSED_PERMANENTLY"
         out.append(lead)
-    return out
+    return merge_sites(out)

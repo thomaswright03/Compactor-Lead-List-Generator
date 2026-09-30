@@ -67,6 +67,27 @@ async function loadSearches() {
 }
 // The emergency switches (web/finding.py flip_switch): each takes effect on the next request.
 const SWITCH_SHOWN = { search_paused: () => true, google_off: () => CONFIG.google_on, yelp_off: () => CONFIG.yelp_on };
+// What turning each switch on or off does, for the confirmation: [question, effect, button].
+const SWITCH_ASK = {
+  search_paused: [["Pause all searching for everyone?", "Find leads will refuse to start, for everyone, until this is turned off. Saved leads, marks and calls keep working.", "Pause searching"],
+                  ["Let everyone search again?", "Find leads works again for everyone straight away.", "Turn searching back on"]],
+  google_off: [["Stop using Google for everyone?", "Searches will skip Google (no paid Google lookups) until this is turned off.", "Stop using Google"],
+               ["Use Google again?", "Searches will use Google (paid lookups) again straight away.", "Use Google again"]],
+  yelp_off: [["Stop using Yelp for everyone?", "Searches will skip Yelp until this is turned off.", "Stop using Yelp"],
+             ["Use Yelp again?", "Searches will use Yelp again straight away.", "Use Yelp again"]],
+};
+let switchThen = null;
+function askSwitch(key, on, then) {
+  const [title, why, label] = SWITCH_ASK[key][on ? 0 : 1];
+  $("switch-title").textContent = title; $("switch-why").textContent = why; $("switch-go").textContent = label;
+  $("switch-go").className = on ? "danger" : "";
+  switchThen = then;
+  $("switch-dlg").showModal();
+  $("switch-cancel").focus();
+}
+$("switch-form").addEventListener("submit", (e) => { e.preventDefault(); $("switch-dlg").close(); const then = switchThen; switchThen = null; if (then) then(); });
+$("switch-cancel").addEventListener("click", () => { switchThen = null; $("switch-dlg").close(); });
+$("switch-dlg").addEventListener("cancel", () => { switchThen = null; });
 function renderSwitches(list) {
   const box = $("switch-list"); box.replaceChildren();
   for (const [key, s] of Object.entries(list)) {
@@ -78,29 +99,27 @@ function renderSwitches(list) {
       : s.on ? `On${s.when ? ` since ${s.when}` : ""}${s.by ? `, by ${s.by}` : ""}.` : "Off.", "sub"));
     row.append(text);
     if (!s.env) {
-      const b = button(s.on ? "Turn off" : "Turn on", s.on ? "" : "quiet", async () => {
+      const b = button(s.on ? "Turn off" : "Turn on", "quiet", () => askSwitch(key, !s.on, async () => {
         b.disabled = true;
         try { await post("/switches", { key, on: !s.on, by: myName() }); }
         catch (err) { box.append(el("div", err.message, "error")); }
         loadSearches();
-      });
+      }));
       b.setAttribute("aria-label", `${s.on ? "Turn off" : "Turn on"}: ${s.label}`);
       row.append(b);
     }
     box.append(row);
   }
 }
-// The site's problems in the last 7 days (failed searches, errors), so they are never only in the logs.
+// The site's problems in the last 7 days (failed searches, errors), so they are never only in the
+// logs. They sit in the administrator's section (closed by default): a note, not an alarm.
 function renderProblems(p) {
   const box = $("problems");
-  box.hidden = !p || !p.count;
-  if (box.hidden) return;
-  const d = el("details");
-  d.append(el("summary", `Problems in the last 7 days: ${p.count.toLocaleString()}`));
+  if (!p || !p.count) { box.replaceChildren(el("p", "Nothing went wrong in the last 7 days.", "muted")); return; }
   const list = el("ul");
   for (const x of p.latest) { const li = el("li"); li.append(el("span", x.when, "sub"), ` ${x.text}`); list.append(li); }
-  d.append(list, el("p", "If these keep happening, tell whoever looks after the site.", "sub"));
-  box.replaceChildren(d);
+  box.replaceChildren(el("p", `${p.count.toLocaleString()} in the last 7 days (the latest first):`), list,
+                      el("p", "If these keep happening, tell whoever looks after the site.", "sub"));
 }
 // Every count on the page reads the same way: 1,135.
 const num = (v) => typeof v === "number" ? v.toLocaleString() : v ?? "-";
@@ -225,7 +244,7 @@ function searchSummary(form) {
   const f = new FormData(form), rows = [];
   rows.push(["Search around", f.get("location").trim()]);
   rows.push(["How far", `${f.get("radius") || "30"} miles`]);
-  rows.push(["Also look for", (f.get("keywords") || "").split(",").map((k) => k.trim()).filter(Boolean).join(", ") || "None"]);
+  rows.push(["Also look for", (f.get("keywords") || "").split(",").map((k) => k.trim()).filter(Boolean).join(", ") || "Nothing extra"]);
   rows.push(["Where to look", SOURCE_TEXT[f.get("source")] || "Everywhere available"]);
   rows.push(["Leave out scores below", f.get("min_score")]);
   if (f.get("grid") && f.get("grid") !== "1") rows.push(["Coverage for Google and Yelp", `${f.get("grid")} searches`]);

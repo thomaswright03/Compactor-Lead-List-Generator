@@ -101,6 +101,18 @@ def _not_campus(name: str) -> bool:
                for m in _term_pattern(normalize(w), True).finditer(name))
 
 
+def non_prospect_name(lead: Lead) -> bool:
+    """True when the name says the place is not a prospect (config.NON_PROSPECT_NAME_WORDS:
+    police, fire, impound, trailer yards, parcel lockers...), unless a specific tag says
+    it is a recycling site or transfer station."""
+    name = normalize(lead.name)
+    if not any(_contains_term(name, w, whole=True) for w in config.NON_PROSPECT_NAME_WORDS):
+        return False
+    rescued = (any(_osm_tag_matches(lead, k, v) for k, v in config.NAME_BLOCK_RESCUE_TAGS)
+               or bool(google_types(lead) & config.NAME_BLOCK_RESCUE_GOOGLE_TYPES))
+    return not rescued
+
+
 def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
     """Return (best category, list of matched categories) as (Category, how) pairs.
 
@@ -137,6 +149,11 @@ def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
     for cat, hit in matched:
         if cat.key == "equipment" and hit == "name":
             return (cat, hit), matched
+
+    # A police impound lot, a fire department's logistics centre, a trailer yard or a
+    # parcel-locker brand: no prospect category, whatever its tags or other words say.
+    if non_prospect_name(lead):
+        return None, matched
 
     def best_of(options: list[Match]) -> Match:
         return max(options, key=lambda m: m[0].weight)
@@ -258,7 +275,8 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
         reasons.append("+0 category not on the high-volume list")
 
     # A brand's helipad, pharmacy or parking lot is not the store.
-    blocked = best is None and _is_non_prospect(lead, set(lead.raw_categories))
+    blocked = best is None and (_is_non_prospect(lead, set(lead.raw_categories))
+                                or non_prospect_name(lead))
     brand = None if blocked else _brand_bonus(lead)
     if brand:
         score += 20

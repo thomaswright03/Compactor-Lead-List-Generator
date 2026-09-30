@@ -125,17 +125,22 @@ def test_marks_and_calls_record_who_made_them():
     assert by_name["Walmart"]["Called By"] == ""
 
 
+def _maker(uid):
+    [lead] = marks.apply(saved.load([uid]))
+    return lead.marked_by
+
+
 def test_a_mark_switched_by_someone_else_names_them_and_undo_names_the_first():
     lead = _lead()
     saved.save_search([lead])
     marks.set_mark(lead.uid, "yes", "Dana")
     undo = marks.set_mark(lead.uid, "no", "Lee")
-    assert marks.makers([lead.uid]) == {lead.uid: "Lee"}
+    assert _maker(lead.uid) == "Lee"
     assert marks.undo(undo["id"])
-    assert marks.makers([lead.uid]) == {lead.uid: "Dana"}
+    assert _maker(lead.uid) == "Dana"
     # A click with no name (or from before names were kept) names nobody.
     marks.set_mark(lead.uid, "no")
-    assert marks.makers([lead.uid]) == {}
+    assert _maker(lead.uid) == ""
     assert store.person("x" * 100) == "x" * store.MAX_NAME and store.person(None) == ""
 
 

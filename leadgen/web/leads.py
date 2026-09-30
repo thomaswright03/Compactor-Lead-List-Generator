@@ -72,9 +72,11 @@ def in_view(lead: Lead, view: str) -> bool:
     return is_prospect(lead) and (lead.has_baler or "unchecked") == view
 
 
-def matches(lead: Lead, q: str, tier: str) -> bool:
-    """The page's filter box and tier choice."""
+def matches(lead: Lead, q: str, tier: str, phone: bool = False) -> bool:
+    """The page's filter box, tier choice and "Has phone" tick."""
     if tier and lead.tier != tier:
+        return False
+    if phone and not lead.phone.strip():
         return False
     text = " ".join([lead.name, lead.city, lead.category, lead.address, lead.lead_type,
                      " ".join(lead.flags)]).lower()
@@ -85,11 +87,20 @@ def view_counts(leads: list[Lead]) -> dict[str, Any]:
     """How many leads each tab holds (ignoring the filter), and calls by result."""
     counts = dict.fromkeys(VIEWS, 0)
     outcomes = dict.fromkeys(calls.OUTCOMES, 0)
-    for lead in leads:
-        for view in VIEWS:
-            counts[view] += in_view(lead, view)
-        if lead.call_count and lead.call_outcome in outcomes:
-            outcomes[lead.call_outcome] += 1
+    counts["all"] = len(leads)
+    for lead in leads:                    # one pass, the same rules as in_view
+        closed = saved.is_closed(lead)
+        counts["closed"] += closed
+        if lead.call_count:
+            counts["called"] += 1
+            if lead.call_outcome in outcomes:
+                outcomes[lead.call_outcome] += 1
+        if not is_prospect(lead):
+            counts["competitors"] += 1
+        elif lead.has_baler in ("yes", "no"):
+            counts[lead.has_baler] += 1
+        elif not closed:
+            counts["unchecked"] += 1
     return {**counts, "outcomes": outcomes}
 
 
@@ -124,17 +135,18 @@ def saved_leads() -> ResponseReturnValue:
         view = "all"
     q = (request.args.get("q") or "").strip().lower()[:200]
     tier = request.args.get("tier") or ""
+    phone = request.args.get("phone") == "1"
     try:
         if since is None or not math.isfinite(since) or since <= 0:
             leads, undo = load_saved()
-            return jsonify({**_page(leads, undo, view, q, tier), "now": now})
+            return jsonify({**_page(leads, undo, view, q, tier, phone), "now": now})
         uids = changed_uids(since - SINCE_OVERLAP)
         if not uids:
             return jsonify({"leads": [], "changes": True, "removed": [], "now": now})
         leads, undo = load_saved()
     except LoadError as exc:
         return jsonify({"error": str(exc)}), 503
-    shown = [l for l in leads if in_view(l, view) and matches(l, q, tier)]
+    shown = [l for l in leads if in_view(l, view) and matches(l, q, tier, phone)]
     body = {"changes": True, "total": len(shown), "counts": view_counts(leads),
             "recent": _recent(leads, undo), "now": now}
     changed = [l for l in leads if l.uid in uids]
@@ -145,14 +157,15 @@ def saved_leads() -> ResponseReturnValue:
     pinned = set((request.args.get("keep") or "").split(",")[:50]) - {""}
     wanted = ({l.uid for l in shown} | pinned) & kept
     return jsonify({**body, "removed": sorted(uids - kept),
-                    "leads": [{**lead_json(l, undo), "in_view": in_view(l, view) and matches(l, q, tier)}
+                    "leads": [{**lead_json(l, undo), "in_view": in_view(l, view) and matches(l, q, tier, phone)}
                               if l.uid in wanted
                               else {"key": l.uid, "in_view": False} for l in changed]})
 
 
-def _page(leads: list[Lead], undo: Undos, view: str, q: str, tier: str) -> dict[str, Any]:
+def _page(leads: list[Lead], undo: Undos, view: str, q: str, tier: str,
+          phone: bool = False) -> dict[str, Any]:
     keep = set((request.args.get("keep") or "").split(",")[:50]) - {""}
-    rows = [l for l in leads if (in_view(l, view) or l.uid in keep) and matches(l, q, tier)]
+    rows = [l for l in leads if (in_view(l, view) or l.uid in keep) and matches(l, q, tier, phone)]
     sort = request.args.get("sort") or "score"
     if sort not in SORTS:
         sort = "score"
@@ -160,6 +173,9 @@ def _page(leads: list[Lead], undo: Undos, view: str, q: str, tier: str) -> dict[
     desc = {"asc": False, "desc": True}.get(request.args.get("dir") or "", default_desc)
     if sort != "score" or not desc:
         rows.sort(key=SORTS[sort], reverse=desc)      # stable: ties keep the best-first order
+    elif view == "unchecked":
+        # Among equal scores, the leads that can be phoned from the page come first.
+        rows.sort(key=lambda l: (-l.score, not l.phone.strip()))
     shown = rows                                      # no limit asked for: every row
     if "limit" in request.args:
         limit = request.args.get("limit", type=int) or MAX_LIMIT
@@ -195,7 +211,7 @@ def log_call() -> ResponseReturnValue:
 @bp.get("/calls/<uid>")
 def call_history(uid: str) -> ResponseReturnValue:
     try:
-        return jsonify({"calls": calls.history(uid[:64])})
+        return jsonify({"calls": calls.history(uid[:64]), "marks": marks.history(uid[:64])})
     except Exception as exc:
         log.error("Loading a call history failed", exc_info=True)
         return jsonify({"error": f"Couldn't load the calls. {db_message(exc)}"}), 503

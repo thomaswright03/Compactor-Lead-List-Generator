@@ -53,9 +53,9 @@
           <label>How far (miles)
             <input name="radius" type="number" min="1" max="100" step="1" value="{{ defaults.radius|int }}">
             <span class="hint">Businesses farther away are left out.</span></label>
-          <label>Extra search words
-            <input name="keywords" value="{{ defaults.keywords }}">
-            <span class="hint">Separate with commas: up to 20 words, each up to 60 characters. They add businesses to look for; scores always use the standard words (compactor, baler, waste, recycling), so they stay comparable.</span></label>
+          <label>Extra search words (optional)
+            <input name="keywords" value="" placeholder="For example: cardboard, pallets" autocomplete="off">
+            <span class="hint">The standard words ({{ defaults.keywords }}) are always searched. Anything you type here is searched as well. Separate with commas: up to 20 words, each up to 60 characters.</span></label>
         </div>
         <details class="advanced">
           <summary>More options</summary>
@@ -118,15 +118,19 @@
       <div class="card">
         <h2>Search history</h2>
         <div id="history"><div class="muted">Loading...</div></div>
-        <div id="problems" class="problems" hidden></div>
       </div>
 
-      <details class="card switches" id="switches-card">
-        <summary>Site switches</summary>
-        <p class="muted">For whoever looks after the site: stop searches (or the paid sources) straight
-          away, for example if something goes wrong. It works at once, with no restart; saved leads,
-          marks and calls keep working.</p>
-        <div id="switch-list"></div>
+      <!-- Kept out of the sales team's way: closed until the administrator opens it. -->
+      <details class="admin" id="admin-card">
+        <summary>For the site administrator</summary>
+        <div class="admin-body">
+          <h2>Recent problems</h2>
+          <div id="problems" class="problems"><p class="muted">Nothing went wrong in the last 7 days.</p></div>
+          <h2>Site switches</h2>
+          <p class="muted">Stop searches (or the paid sources) straight away, for example if something
+            goes wrong. It works at once, with no restart; saved leads, marks and calls keep working.</p>
+          <div id="switch-list"></div>
+        </div>
       </details>
     </section>
 
@@ -151,6 +155,7 @@
               <option value="city:asc">City A to Z</option><option value="miles:asc">Nearest first</option>
             </select>
           </div>
+          <label class="check phone-pick"><input type="checkbox" id="has-phone"> Has phone</label>
           <div class="downloads" id="downloads">
             <a class="btn quiet" href="/download/saved.xlsx" data-download data-file="compactor-leads.xlsx"
                data-busy-label="Preparing Excel…">Download Excel</a>
@@ -260,9 +265,21 @@
     <label for="name-input">Your name
       <input id="name-input" maxlength="60" autocomplete="name" placeholder="For example, Dana">
       <span class="hint">It is saved with each Yes / No and call you make here, so colleagues know who to ask. This browser remembers it; change it any time from the menu.</span></label>
+    <div class="error" id="name-error" role="alert" hidden>Enter your name to save marks and calls.</div>
     <div class="dlg-actions">
-      <button type="button" class="quiet" id="name-skip">Not now</button>
+      <button type="button" class="quiet" id="name-cancel">Cancel</button>
       <button type="submit" id="name-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="switch-dlg" aria-labelledby="switch-title" aria-describedby="switch-why">
+  <form class="dlg" method="dialog" id="switch-form">
+    <h2 id="switch-title"></h2>
+    <p id="switch-why"></p>
+    <div class="dlg-actions">
+      <button type="button" class="quiet" id="switch-cancel">Cancel</button>
+      <button type="submit" id="switch-go"></button>
     </div>
   </form>
 </dialog>
@@ -275,7 +292,7 @@
   </div>
 </dialog>
 
-<script id="page-config" type="application/json">{{ {"outcomes": outcomes, "paused": switches.search_paused, "google_on": google_on, "yelp_on": yelp_on}|tojson }}</script>
+<script id="page-config" type="application/json">{{ {"outcomes": outcomes, "paused": switches.search_paused, "google_on": google_on, "yelp_on": yelp_on, "flagged": flagged}|tojson }}</script>
 <script src="/static/core.js?v={{ asset_version }}" defer></script>
 <script src="/static/leads.js?v={{ asset_version }}" defer></script>
 <script src="/static/calls.js?v={{ asset_version }}" defer></script>

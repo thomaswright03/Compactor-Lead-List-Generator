@@ -17,7 +17,7 @@ from typing import Any
 
 from .. import config
 from ..geo import METERS_PER_MILE, haversine_miles
-from ..http import HttpError, request_json
+from ..http import HttpError, cache_get, cache_put, request_json
 from ..models import Lead
 from . import SourceError
 
@@ -51,9 +51,11 @@ class PartialResult(SourceError):
     """The map data came back for only part of the area: `leads` and `warnings` hold
     what the parts that answered found (the search keeps them, marked incomplete)."""
 
-    def __init__(self, message: str, leads: list[Lead], warnings: list[str]) -> None:
+    def __init__(self, message: str, leads: list[Lead], warnings: list[str],
+                 coverage: str = "") -> None:
         super().__init__(message)
         self.leads, self.warnings = leads, warnings
+        self.coverage = coverage          # "about 7 of 9 areas": how much of the radius answered
 
 
 def _tag_filters() -> tuple[dict[str, set[str]], set[str]]:
@@ -234,6 +236,10 @@ def _quarters(box: Box) -> list[Box]:
             (mid_lat, w, n, mid_lon), (mid_lat, mid_lon, n, e)]
 
 
+def _answer_key(query: str) -> str:
+    return "overpass-answer\n" + query
+
+
 def _fetch(query: str, deadline: float, first: int = 0,
            said: Callable[[int, int], None] | None = None) -> tuple[Any, list[str]]:
     """Ask the mirrors (starting with mirror `first`) for one query's answer before
@@ -244,6 +250,10 @@ def _fetch(query: str, deadline: float, first: int = 0,
     answer is not waited out: after config.OVERPASS_STAGGER_SECONDS the next one is
     asked as well (the slow one may still answer), and the first good answer wins.
     """
+    # An answer from any mirror today serves a re-run, whichever mirror it asks first.
+    known = cache_get(_answer_key(query))
+    if known is not None:
+        return known, []
     endpoints = list(config.OVERPASS_ENDPOINTS)
     endpoints = endpoints[first % len(endpoints):] + endpoints[:first % len(endpoints)]
     answers: queue.Queue[tuple[str, Any, BaseException | None]] = queue.Queue()
@@ -301,6 +311,8 @@ def _fetch(query: str, deadline: float, first: int = 0,
             log.warning("OpenStreetMap server %s: %s", endpoint, data["remark"])
             errors.append(f"{endpoint}: {data['remark']}")
             continue
+        if not data.get("remark"):
+            cache_put(_answer_key(query), data)
         return data, errors
     raise SourceError(" | ".join(errors) or "no server answered")
 
@@ -356,6 +368,11 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
         return _fetch(build_query(lat, lon, radius_miles, keywords, box=box), budget,
                       first=n, said=said(n + 1))
 
+    def _split_before(box: Box, whole_circle: bool) -> bool:
+        return not whole_circle and any(
+            cache_get(_answer_key(build_query(lat, lon, radius_miles, keywords, box=q))) is not None
+            for q in _quarters(box))
+
     with ThreadPoolExecutor(max_workers=config.OVERPASS_PARALLEL) as pool:
         running: dict[Any, tuple[Box | None, float, int]] = {}
         started = 0
@@ -369,6 +386,11 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
                     todo = []
                     break
                 box, share, depth = todo.pop(0)
+                if depth < config.OVERPASS_SPLITS and _split_before(box or first_box, box is None):
+                    # An earlier run today had to ask this part in quarters: go straight to them.
+                    todo += [(q, share / 4, depth + 1) for q in _quarters(box or first_box)]
+                    total += 3
+                    continue
                 running[pool.submit(one, started, box)] = (box, share, depth)
                 started += 1
             if not running:
@@ -406,7 +428,11 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
         raise SourceError("All OpenStreetMap (Overpass) servers failed: " + " | ".join(errors))
     if missing > 0.001:
         share = max(1, round(missing * 100))
+        n_boxes = len(boxes)
+        answered = min(n_boxes - 1, round((1 - missing) * n_boxes))
+        coverage = (f"about {answered} of {n_boxes} areas" if n_boxes > 1
+                    else f"about {100 - share}% of the area")
         raise PartialResult(
             f"OpenStreetMap answered for only part of the area (about {share}% missing): "
-            + " | ".join(errors[-5:]), leads, warnings)
+            + " | ".join(errors[-5:]), leads, warnings, coverage)
     return leads, warnings

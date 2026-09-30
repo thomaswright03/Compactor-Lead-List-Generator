@@ -72,7 +72,7 @@ def test_only_matching_the_search_words_still_filters(monkeypatch):
 def test_the_form_says_what_search_words_do():
     page = web.create_app().test_client().get("/").get_data(as_text=True)
     assert "score higher" not in page
-    assert "scores always use the standard words" in page
+    assert "are always searched" in page
 
 
 # ---- a university's units and neighbours are not campus prospects

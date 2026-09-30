@@ -5,19 +5,28 @@ comes from here, so they always agree.
 """
 
 import datetime as dt
+import logging
 
-UTAH: dt.tzinfo | None
-try:
-    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+log = logging.getLogger(__name__)
 
+
+def _load_utah() -> dt.tzinfo | None:
+    """America/Denver, from the system's time zone data or the pinned tzdata package
+    (requirements.txt), so the day always changes at Utah's midnight. None, logged as
+    an error, only when neither is there."""
     try:
-        UTAH = ZoneInfo("America/Denver")
-    except ZoneInfoNotFoundError:      # no time zone data on this machine
-        UTAH = None
-except ImportError:                    # pragma: no cover - Python without zoneinfo
-    UTAH = None
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-# Without time zone data, Mountain Standard Time (Utah in winter) is close enough.
+        return ZoneInfo("America/Denver")
+    except (ImportError, ZoneInfoNotFoundError):
+        log.error("No time zone data for America/Denver (install tzdata): Utah times are "
+                  "shown as UTC-7 all year, an hour off in summer")
+        return None
+
+
+UTAH = _load_utah()
+
+# Without time zone data, Mountain Standard Time (Utah in winter) is the fallback.
 _FALLBACK = dt.timezone(dt.timedelta(hours=-7), "MST")
 
 

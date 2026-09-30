@@ -6,6 +6,7 @@ requests==2.33.1
 gunicorn==26.2.0; platform_system != "Windows"
 psycopg[binary]==3.3.6
 werkzeug==3.1.9
+tzdata==2025.2          # Utah's time zone even on a server without it (localtime.py)
   blinker==1.9.0
   certifi==2026.2.25
   charset-normalizer==3.4.6

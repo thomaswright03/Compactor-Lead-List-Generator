@@ -16,8 +16,9 @@ and Arco Compactor's own listing is flagged too.
 | Looking after the live site | [Operator runbook](docs/operator-runbook.md): **emergency switches** (pause searching), deploying, rollback, alerts, settings, the database |
 | Changing the code | [Developer overview](docs/developer-overview.md): a diagram of search → sources → merge/score → saved list → pages, tests and checks, the command line, and every page's behaviour in detail |
 
-**Emergency stop:** on the site, **Find leads** → **Site switches** → **Pause
-searching** → **Turn on** (or switch just Google or Yelp off). It works on the next
+**Emergency stop:** on the site, **Find leads** → **For the site administrator**
+(at the bottom, closed until opened) → **Pause searching** → **Turn on** → confirm
+**Pause searching** (or switch just Google or Yelp off). It works on the next
 request, with no restart. The backup, if the site itself won't load: in Render, the
 service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Changes**
 (`LEADGEN_GOOGLE_OFF` / `LEADGEN_YELP_OFF` stop just one paid source). See the
@@ -28,15 +29,22 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 - **Find leads** once a day (Utah calendar day) around Arco's shop or any ZIP or
   city, from Google Places, Yelp (at most 50 calls in any 24 hours, with the reset
   time shown, "today at ..." or "tomorrow at ...") and the free OpenStreetMap data
-  (asked in parts, so busy public servers still answer). Extra search words add
-  businesses to look for; scores always use the standard words, so the minimum
-  score, the list and Stats all use the same number.
+  (asked in parts, so busy public servers still answer; a re-run asks only for the
+  areas still missing, and an incomplete search says how many areas answered).
+  The standard words (compactor, baler, waste, recycling) are always searched;
+  **Extra search words** (empty to start) are searched as well. Scores always use
+  the standard words, so the minimum score, the list and Stats all use the same number.
 - One **saved list**, one row per business, kept for good with its source details.
+  The buildings of one site (an apartment complex's numbered buildings, a campus's
+  parts, one name spread over a site up to half a mile across) are one lead.
+  Police, fire, impound and trailer yards and parcel lockers are not prospects.
 - **Yes / No** "has a baler or compactor" marks (permanent; a click can be undone
   for 5 minutes), **Just called** notes with six results and a Calls tab for each,
   a **Stats** page, and Excel / CSV downloads (in plain words; columns empty for
   every lead in the file are left out and named on the Run Info sheet). Each mark and call records who made
-  it (the name set under **Your name** in that browser).
+  it (the name set under **Your name** in that browser, asked before the first
+  mark or call and not skippable). **Has phone** on Leads shows only businesses
+  that can be phoned; under Not checked, among equal scores, those come first.
 - Works on phones, tablets and laptops: below 1,100 px wide each lead is a card,
   so the reasons for its score are always in view without scrolling sideways.
 - A login from `APP_USERNAME` / `APP_PASSWORD` in the environment.
@@ -52,6 +60,9 @@ python -m leadgen run
 
 # Web page at http://127.0.0.1:5000
 python -m leadgen web
+
+# Merge saved leads that are buildings of one site (every search also does this)
+python -m leadgen merge-sites
 ```
 
 It works with **no API key** (free OpenStreetMap data). For much better

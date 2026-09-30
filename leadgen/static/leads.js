@@ -4,6 +4,7 @@ function viewQuery() {
   const p = new URLSearchParams({ tab: S.leadView || "unchecked", sort: S.sort, dir: S.dir });
   if (S.q) p.set("q", S.q);
   if (S.tier) p.set("tier", S.tier);
+  if (S.phone) p.set("phone", "1");
   return p;
 }
 async function loadLeads(quiet) {
@@ -273,6 +274,12 @@ function markCell(lead, withCall) {
   }
   td.append(box);
   if (lead.has_baler && lead.marked_by) td.append(el("div", `Marked by ${lead.marked_by}`, "sub by"));
+  // Marked more than once (changed, or merged from listings marked apart): the earlier marks.
+  if (lead.has_baler && lead.mark_clicks > 1) {
+    const more = el("div", undefined, "sub by");
+    more.append(button("Earlier marks", "link", () => openHistory(lead)));
+    td.append(more);
+  }
   if (pinnedNow(lead.key) && !inTab(lead)) {
     const tab = LEAD_TABS.find(([v]) => v === (lead.has_baler || ""));
     td.append(el("div", `Saved. Moves to “${tab ? tab[1] : "All"}”.`, "sub moved"));
@@ -366,8 +373,12 @@ function leadTable(rows, withCall) {
   return table;
 }
 
+// "Pro Baler, Action Compaction or Arco Compactor".
+function orList(names) {
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
+}
 function clearFilters() {
-  S.q = ""; S.tier = ""; $("filter").value = ""; $("tier").value = "";
+  S.q = ""; S.tier = ""; S.phone = false; $("filter").value = ""; $("tier").value = ""; $("has-phone").checked = false;
   S.limit = 300; unpinAll(); changeView();
   $("filter").focus();
 }
@@ -397,10 +408,10 @@ function renderLeads() {
     if (!c.all) {
       wrap.replaceChildren(emptyNote("No saved leads yet.",
         "Run today's search on the Find leads page: the businesses it finds are saved here.", "#find", "Go to Find leads"));
-    } else if (S.q || S.tier) {
+    } else if (S.q || S.tier || S.phone) {
       // Say what was filtered, and offer the way back to the whole list.
       const tab = (LEAD_TABS.find(([v]) => v === S.leadView) || ["", "All"])[1];
-      const what = [S.q && `“${S.q}”`, S.tier && `tier ${S.tier} (${TIER_WORDS[S.tier]})`].filter(Boolean).join(" and ");
+      const what = [S.q && `“${S.q}”`, S.tier && `tier ${S.tier} (${TIER_WORDS[S.tier]})`, S.phone && "a phone number"].filter(Boolean).join(" and ");
       const box = el("div", undefined, "empty");
       box.append(el("strong", `No leads match ${what} in ${tab}.`),
                  el("p", "Check the spelling, pick another tab, or clear the filters to see the whole list."),
@@ -408,7 +419,11 @@ function renderLeads() {
       wrap.replaceChildren(box);
     } else {
       wrap.replaceChildren(el("div", S.leadView === "" ? "Every business has been checked."
-        : S.leadView === "closed" ? "No saved business has been reported closed for good." : "Nothing here yet.", "empty"));
+        : S.leadView === "closed" ? "No saved business has been reported closed for good."
+        : S.leadView === "competitors" ? `No ${orList(CONFIG.flagged || [])} listings found in the saved leads yet. When a search finds one, it is listed here, flagged, and never asked Yes / No.`
+        : S.leadView === "yes" ? "No business has been marked Yes yet. Mark leads under Not checked."
+        : S.leadView === "no" ? "No business has been marked No yet. Mark leads under Not checked."
+        : "Nothing here yet.", "empty"));
     }
   } else {
     // Every prospect can be called (a call is how staff find out); competitors have no buttons.
@@ -458,6 +473,7 @@ $("sort-pick").addEventListener("change", () => {
 });
 $("tab-pick").addEventListener("change", () => pickTab($("tab-pick").value));
 $("tier").addEventListener("change", () => { S.tier = $("tier").value; S.limit = 300; unpinAll(); changeView(); });
+$("has-phone").addEventListener("change", () => { S.phone = $("has-phone").checked; S.limit = 300; unpinAll(); changeView(); });
 
 /* The downloads: building a big Excel file takes a moment, so the button says so and a second
    click doesn't start another. The server's answer is fetched and saved as a file. */

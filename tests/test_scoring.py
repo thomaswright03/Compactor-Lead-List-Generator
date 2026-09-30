@@ -277,3 +277,30 @@ def test_confirmed_businesses_keep_their_tier():
                 (item["marked"] == "no" and rank[lead.tier] < rank[item["tier"]]):
             moved.append(f"{item['name']} (marked {item['marked']}): {item['tier']} -> {lead.tier}")
     assert not moved, moved
+
+
+def test_police_fire_impound_yards_and_lockers_are_not_prospects():
+    """The reference's "not_prospect" places (a police impound lot, a fire department's
+    training and logistics centre, a trailer yard, a parcel-locker brand) get no prospect
+    category and fall below the default minimum score, whatever their tags say."""
+    import json
+    from pathlib import Path
+
+    from leadgen import config
+    from leadgen.models import Lead
+    from leadgen.scoring import score_lead
+
+    data = json.loads((Path(__file__).parent / "fixtures" / "scoring_reference.json").read_text())
+    cases = [item for item in data["businesses"] if item.get("not_prospect")]
+    assert len(cases) >= 4
+    for item in cases:
+        lead = Lead(name=item["name"], lat=40.7, lon=-111.9, source=item["source"],
+                    source_id=item["name"], raw_categories=item["raw_categories"])
+        score_lead(lead, config.DEFAULT_KEYWORDS)
+        assert lead.category_key == "", (lead.name, lead.category)
+        assert lead.score < config.DEFAULT_MIN_SCORE, (lead.name, lead.score)
+    # A public yard still counts when its own tag says it is a recycling site.
+    yard = Lead(name="County Fleet Maintenance Recycling Drop-off", lat=40.7, lon=-111.9,
+                source="osm", source_id="n1", raw_categories=["amenity=recycling"])
+    score_lead(yard, config.DEFAULT_KEYWORDS)
+    assert yard.category_key == "recycling"

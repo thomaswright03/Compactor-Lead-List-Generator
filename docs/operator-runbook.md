@@ -18,8 +18,10 @@ in Render → the service → **Environment** → **Save Changes**. Details just
 If searches misbehave (unexpected Google charges, bad data going into the saved
 list), whoever looks after the site can stop them without a code change.
 
-**On the site (first choice, works at once):** open **Find leads**, then **Site
-switches** at the bottom. **Pause searching** → **Turn on** stops all searching;
+**On the site (first choice, works at once):** open **Find leads**, then **For the
+site administrator** at the bottom (closed until opened; it also lists the problems
+of the last 7 days). **Pause searching** → **Turn on**, then confirm with **Pause
+searching** in the box that asks first ("Pause all searching for everyone?"), stops all searching;
 **Switch Google off** / **Switch Yelp off** (shown when that source is set up) stop
 just that paid source. It takes effect on the next request, with no restart: Find
 leads says "Searching is paused by the administrator" and refuses to start, and a
@@ -185,13 +187,22 @@ not expire (Render's free Postgres is deleted after 30 days):
 The tables are created on first use, and new ones are added the same way on
 the next start (never by changing or dropping an existing table): for example
 `made_by`, which holds the name set under "Your name" for each Yes / No click
-and call, and `switches`, which holds the emergency switches flipped on the site. Without `DATABASE_URL` on Render, searches
+and call, `switches`, which holds the emergency switches flipped on the site, and
+`merged_leads`, which records each saved lead merged into another of the same site
+(its id, the lead it joined, when, and the row as it was, with its mark). Without `DATABASE_URL` on Render, searches
 still run, but nothing is saved and Yelp is paused (its daily limit could not be
 kept). Off Render, a SQLite file in `.cache/` is used instead.
 
 **Saved leads.** Every search merges into one saved list: a business found again
 (the same listing, or the duplicate rules in the [developer overview](developer-overview.md)) updates its row instead of
-adding one. The page shows the saved list when it opens, and the downloads
+adding one. The buildings of one site (an apartment complex's numbered buildings,
+a campus's parts, one name spread over up to half a mile) are one lead: after
+every save, saved rows that are parts of one site are merged into the one saved
+first, keeping every source listing, moving the calls and Yes / No clicks to it
+and keeping the latest mark (the earlier ones stay in its history). Nothing is
+deleted: the merged rows stay in the table, hidden, and are recorded in
+`merged_leads`. `python -m leadgen merge-sites` (with `DATABASE_URL` set) does the
+same merge on demand. The page shows the saved list when it opens, and the downloads
 contain all of it. Everything is kept, including Yelp's details, although
 Yelp's terms allow keeping its data for 24 hours (and Google's for 30 days);
 `SAVED_SOURCE_KEEP_SECONDS` in `leadgen/config.py` drops a source's details

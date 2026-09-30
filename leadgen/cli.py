@@ -3,6 +3,7 @@
     python -m leadgen run --location 84101 --radius 30 --out leads.xlsx
     python -m leadgen web
     python -m leadgen reference      # copy the site's Yes / No marks into the scoring tests
+    python -m leadgen merge-sites    # merge saved leads that are buildings of one site
 """
 
 import argparse
@@ -68,6 +69,10 @@ def build_parser() -> argparse.ArgumentParser:
                          "into the scoring reference set (needs DATABASE_URL)")
     ref.add_argument("--out", default=None, help="Reference file (default "
                      "tests/fixtures/scoring_reference.json)")
+
+    sub.add_parser("merge-sites", help="Merge saved leads that are parts of one site (the "
+                   "numbered buildings of one complex) into one lead, keeping every mark and "
+                   "call; every search also does this after saving")
 
     w = sub.add_parser("web", help="Start the web page")
     w.add_argument("--host", default="127.0.0.1")
@@ -156,6 +161,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "reference":
         return cmd_reference(args)
+    if args.command == "merge-sites":
+        from . import saved
+        try:
+            n = saved.merge_sites()
+        except store.Unavailable as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2
+        print(f"{n} saved lead{'' if n == 1 else 's'} merged into another of the same site.")
+        return 0
     if args.command != "run":
         build_parser().print_help()
         return 1

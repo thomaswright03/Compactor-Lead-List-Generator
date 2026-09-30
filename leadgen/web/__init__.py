@@ -125,7 +125,8 @@ def _register_pages(app: Flask) -> None:
             "keywords": ", ".join(config.DEFAULT_KEYWORDS), "min_score": config.DEFAULT_MIN_SCORE,
         }, yelp=yelp_quota(), outcomes=list(calls.OUTCOMES), google_on=bool(google),
             yelp_on=bool(yelp_key), switches=switches(), paused_text=SEARCH_PAUSED,
-            undo_seconds=marks.UNDO_SECONDS)
+            undo_seconds=marks.UNDO_SECONDS,
+            flagged=[*config.COMPETITORS, config.OWN_COMPANY])
 
 
 def create_app(password: str | None = None, username: str | None = None) -> Flask:

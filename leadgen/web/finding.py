@@ -52,6 +52,7 @@ DETAIL_LABELS = {
     "google raw results": "Businesses from Google",
     "yelp raw results": "Businesses from Yelp",
     "osm raw results": "Businesses from the free map data",
+    "osm areas searched": "Free map data: areas that answered",
     "results in radius": "Listings within the radius",
     "duplicates merged": "Duplicate listings merged",
     "after dedupe": "Businesses after merging duplicates",
@@ -281,7 +282,9 @@ def parse_form(form: Mapping[str, str]) -> SearchParams:
         location=location,
         radius_miles=_number(form, "radius", config.DEFAULT_RADIUS_MILES, float, 1, 100,
                              "How far", " miles"),
-        keywords=keywords,
+        # The standard words are always searched; the ones typed are searched as well.
+        keywords=list(dict.fromkeys(config.DEFAULT_KEYWORDS
+                                    + [k for k in keywords if k.lower() not in config.DEFAULT_KEYWORDS])),
         source=source,
         min_score=_number(form, "min_score", config.DEFAULT_MIN_SCORE, int, 0, 100,
                           "The score to leave out weak leads below"),
@@ -379,9 +382,11 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str]) -> N
     paid = [s for s in result.failed_sources if s in ("google", "yelp")]
     whole = [s for s in result.failed_sources if s not in result.partial_sources]
     parts = [f"Couldn't reach {_source_names(whole)}, so its businesses are missing"] if whole else []
+    coverage = result.stats.get("osm areas searched")
     if result.partial_sources:
         parts.append(f"{_source_names(result.partial_sources)} answered for only part of the "
-                     "area, so some of its businesses are missing")
+                     f"area{f' ({coverage} searched)' if coverage else ''}, so some of its "
+                     "businesses are missing")
     reason = (" and ".join(parts)[:1].upper() + " and ".join(parts)[1:]
               + f" from this search; the {len(result.leads):,} businesses found were "
               + ("saved." if job.get("saved") else "kept."))
@@ -389,7 +394,8 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str]) -> N
               f"{_source_names(paid)} key." if paid else "")
     how = ("answered for only part of the area" if not whole
            else "couldn't be reached" if not result.partial_sources else "didn't fully answer")
-    missing = f"Some businesses are missing: {names} {how}."
+    missing = (f"Some businesses are missing: {names} {how}"
+               + (f" ({coverage} searched)." if coverage and not whole else "."))
     try:
         earlier = daily.incomplete_count(day)
     except Exception:

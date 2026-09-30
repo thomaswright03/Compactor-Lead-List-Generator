@@ -43,6 +43,7 @@ class Lead:
     sources: list[str] = field(default_factory=list)
     has_baler: str = ""              # "yes" / "no" as marked on the results page (marks.py)
     marked_by: str = ""              # who set that mark ("Your name" in their browser), if known
+    mark_clicks: int = 0             # Yes / No clicks kept in its mark history (not undone)
     uid: str = ""                    # the saved lead's id (saved.py)
     # The latest call (calls.py): when (epoch seconds), its result and notes, and how many.
     last_call_at: float | None = None

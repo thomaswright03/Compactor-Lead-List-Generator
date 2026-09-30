@@ -29,7 +29,7 @@ from dataclasses import asdict, fields
 from typing import Any
 
 from . import config, store
-from .dedupe import is_duplicate, merge, snapshot
+from .dedupe import Site, is_duplicate, merge, same_site, site_groups, site_of, snapshot
 from .geo import haversine_miles
 from .models import Lead
 from .scoring import score_lead
@@ -48,7 +48,7 @@ def _to_lead(data: dict[str, Any]) -> Lead:
 
 def _lead_json(lead: Lead) -> str:
     return json.dumps({k: v for k, v in asdict(lead).items()
-                       if k not in ("parts", "has_baler", "last_call_at", "call_outcome", "call_notes",
+                       if k not in ("parts", "has_baler", "mark_clicks", "last_call_at", "call_outcome", "call_notes",
                                     "call_count", "earlier_notes", "earlier_notes_at")}, separators=(",", ":"))
 
 
@@ -145,7 +145,8 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
         for r in rows:
             if r.lead:
                 buckets.setdefault(_bucket(r.lead), []).append(r)
-        claimed, new, uids = set(), 0, []
+        claimed, uids = set(), []
+        fresh: set[str] = set()                  # rows this search added
         for lead in leads:
             parts = [{"at": now, "lead": p} for p in snapshot(lead)]
             ids = {_part_id(p) for p in parts}
@@ -159,12 +160,21 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
                         if r.uid not in claimed and r.lead is not None and is_duplicate(lead, r.lead)]
                 row = min(near, key=lambda r: _miles_between(lead, r.lead), default=None)
             if row is None:
+                # A building of a site already saved ("Shoreline Ridge 830" beside the
+                # saved "Shoreline Ridge"): it joins that row.
+                site = site_of(lead)
+                near = [r for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                        for r in buckets.get((round(bx + dx * 0.01, 2), round(by + dy * 0.01, 2)), [])
+                        if site and r.uid not in claimed and r.lead is not None
+                        and same_site(site, _row_site(r))]
+                row = min(near, key=lambda r: _miles_between(lead, r.lead), default=None)
+            if row is None:
                 if lead.business_status == CLOSED:
                     uids.append("")             # closed before anyone saw it: not added
                     continue
                 row = _Row(uuid.uuid4().hex, None, [], set(), now, now)
                 rows.append(row)
-                new += 1
+                fresh.add(row.uid)
             older = [p for p in row.parts if _part_id(p) not in ids]
             row.parts = parts + older
             row.ids |= ids
@@ -185,11 +195,93 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
             for i in row.ids:
                 by_id[i] = row
             buckets.setdefault(_bucket(row.lead), []).append(row)
+        moved, merged = _join_sites(db, rows, now)
+        changed.update((r.uid, r) for r in merged)
         _write(db, changed.values())
+    uids = [moved.get(uid, uid) for uid in uids]
     for lead, uid in zip(leads, uids):
         lead.uid = uid
+    new = len(fresh - set(moved))
     shown = sum(l.business_status != CLOSED for l in leads)
-    return new, shown - new
+    return new, max(0, shown - new)
+
+
+def _row_site(row: _Row) -> Site | None:
+    """The site a saved row is part of, placed by all its source listings."""
+    if row.lead is None:
+        return None
+    points = [(float(p["lead"]["lat"]), float(p["lead"]["lon"])) for p in row.parts
+              if p["lead"].get("lat") is not None and p["lead"].get("lon") is not None]
+    return site_of(row.lead, points)
+
+
+def _join_sites(db: store.Db, rows: list[_Row], now: float) -> tuple[dict[str, str], list[_Row]]:
+    """Merge saved rows that are parts of one site (dedupe.site_groups: the numbered
+    buildings of one complex, one name spread over a site) into the row saved first.
+
+    Every source listing, mark and call is kept: the listings join that row (so a
+    later search finds it), the calls and the Yes / No clicks move to it, and it takes
+    the latest mark (the older marks stay in its mark history). The merged rows stay
+    in the table, hidden (like a lead with no listings left), and are recorded in
+    merged_leads as they were. Returns ({merged uid: uid it joined}, rows changed).
+    """
+    live = [r for r in rows if r.lead is not None and r.parts]
+    groups = site_groups([_row_site(r) for r in live])
+    if not groups:
+        return {}, []
+    moved: dict[str, str] = {}
+    changed: list[_Row] = []
+    plan: list[tuple[_Row, list[_Row]]] = []
+    for group in groups:
+        members = sorted((live[i] for i in group), key=lambda r: (r.first_seen, r.uid))
+        plan.append((members[0], members[1:]))
+    uids = [r.uid for keep, others in plan for r in [keep, *others]]
+    with db.transaction():
+        marked = {uid: (value, at) for uid, value, at in store.rows_for(
+            db, "SELECT uid, value, updated_at FROM marks", "uid", uids)}
+        for keep, others in plan:
+            record = {r.uid: {"row": list(r.values()), "mark": marked.get(r.uid, ("", 0))[0]}
+                      for r in others}
+            seen = {_part_id(p) for p in keep.parts}
+            for r in others:
+                for p in r.parts:
+                    if _part_id(p) not in seen:
+                        keep.parts.append(p)
+                        seen.add(_part_id(p))
+                keep.ids |= r.ids
+                r.lead, r.parts, r.ids, r.last_seen = None, [], set(), now
+                moved[r.uid] = keep.uid
+            keep.lead = _rebuild(keep.parts)
+            keep.lead.uid = keep.uid
+            keep.last_seen = now
+            changed += [keep, *others]
+            latest = max(((marked[r.uid][1], marked[r.uid][0], r.uid) for r in [keep, *others]
+                          if r.uid in marked), default=None)
+            if latest and latest[2] != keep.uid:
+                db.run("INSERT INTO marks (uid, value, updated_at) VALUES (?, ?, ?) "
+                       "ON CONFLICT (uid) DO UPDATE SET value = excluded.value, "
+                       "updated_at = excluded.updated_at", (keep.uid, latest[1], latest[0]))
+            for r in others:
+                for table in ("calls", "call_undos", "mark_changes"):
+                    db.run(f"UPDATE {table} SET uid = ? WHERE uid = ?", (keep.uid, r.uid))
+                db.run("INSERT INTO merged_leads (uid, into_uid, at, row) VALUES (?, ?, ?, ?) "
+                       "ON CONFLICT (uid) DO NOTHING",
+                       (r.uid, keep.uid, now, json.dumps(record[r.uid], separators=(",", ":"))))
+        for r in changed:
+            db.run("INSERT INTO leads (uid, lead, parts, ids, first_seen, last_seen) "
+                   "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (uid) DO UPDATE SET lead = excluded.lead, "
+                   "parts = excluded.parts, ids = excluded.ids, last_seen = excluded.last_seen",
+                   r.values())
+    return moved, changed
+
+
+def merge_sites() -> int:
+    """Merge the saved leads that are parts of one site (see _join_sites), as every
+    search does after saving; returns how many rows were merged into another. For the
+    command line (`python -m leadgen merge-sites`)."""
+    with store.connect() as db:
+        moved, _ = _join_sites(db, _read(db), time.time())
+    return len(moved)
 
 
 def is_closed(lead: Lead) -> bool:
@@ -235,7 +327,14 @@ def _whole_list(db: store.Db) -> list[Lead]:
         cached = (fingerprint, _best_first([l for r in rows if (l := _ready(r))]))
         with _parsed_lock:
             _parsed[db.key] = cached
-    return [copy.copy(lead) for lead in cached[1]]
+    return [_shallow(lead) for lead in cached[1]]
+
+
+def _shallow(lead: Lead) -> Lead:
+    """A shallow copy (like copy.copy, about three times faster over a long list)."""
+    new = Lead.__new__(Lead)
+    new.__dict__.update(lead.__dict__)
+    return new
 
 
 def load(uids: Iterable[str] | None = None) -> list[Lead]:

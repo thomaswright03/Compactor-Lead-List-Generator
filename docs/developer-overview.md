@@ -34,7 +34,7 @@ never touch the saved row. Problems go to `alerts.py`.
 1. **Geocode** the location (built-in table for SLC-area cities, then ZIP lookup, Google, or OpenStreetMap Nominatim).
 2. **Search**: Google Places text search for your keywords, the competitor names, then ~27 business-type phrases, across 1/7/19 grid cells; Yelp's 13 category searches (most-reviewed first), then word searches for your keywords and the competitor names; and OpenStreetMap Overpass queries for matching tags and name words, one per area of up to 20 miles (several mirror servers are tried; a failed area is asked again in quarters; four minutes in all).
 3. **Filter** to the exact radius (Haversine distance).
-4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's (then Yelp's) contact details and OpenStreetMap's building size. Different phone numbers or names that only share generic words ("Inn & Suites Airport") are kept apart. Places Google or Yelp report permanently closed are then left out of the search's results and are never added to the saved list; a business already saved that is among them is flagged "Closed for good" there (it keeps its mark and calls).
+4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's (then Yelp's) contact details and OpenStreetMap's building size. Different phone numbers or names that only share generic words ("Inn & Suites Airport") are kept apart. Then the parts of one named site become one lead (`merge_sites`): listings with the same *site name* (the cleaned name without building numbers or letters and words like "campus", "center", "building": "Shoreline Ridge 825" → "shoreline ridge"), each within 0.2 mi of the next and the whole site at most 0.5 mi across (`SITE_MILES`), with no phone numbers that differ. Names that are only numbers and generic words ("343 Apartments", "Building 2") never merge this way. The lead is named after the site ("Shoreline Ridge"), keeps every listing (the building names go into its other names) and the largest footprint. The saved list uses the same rule (`saved.py`): a later search's building joins the saved site, and after every save saved rows that are parts of one site are merged into the one saved first (calls and Yes / No clicks move to it, the latest mark wins, the merged rows stay hidden and are recorded in `merged_leads`; `python -m leadgen merge-sites` runs it on demand). Places Google or Yelp report permanently closed are then left out of the search's results and are never added to the saved list; a business already saved that is among them is flagged "Closed for good" there (it keeps its mark and calls).
 5. **Score**, sort by score then distance, and **export**.
 
 API responses are cached for 7 days (Yelp searches in the database), so
@@ -212,9 +212,11 @@ the sidebar to the page's list (Leads, Calls) or heading.
   stays broken can't turn the day into unlimited searches (each spending Yelp
   calls); a third search that day is refused with "the next search can run
   tomorrow, from midnight Utah time". A source switched off by the
-  administrator is not a failure (the day is used as usual). Under the history,
-  **Problems in the last 7 days** (shown only when there were some) lists failed
-  or incomplete searches and server errors, so nobody has to read the logs to
+  administrator is not a failure (the day is used as usual). At the bottom of the
+  page, **For the site administrator** (a quiet section, closed until opened)
+  holds **Recent problems** (failed or incomplete searches and server errors of the
+  last 7 days) and the **site switches**; each switch asks first, naming its effect
+  ("Pause all searching for everyone? ..."), and Cancel leaves it as it was. The problems list is there so nobody has to read the logs to
   notice them (see "Problems: the webhook" in the [operator runbook](operator-runbook.md)). The public map servers often
   refuse or time out on one big query, so a wide search asks the free map data
   **in parts**: a grid of areas up to 20 miles wide (`OVERPASS_PART_MILES`; a
@@ -222,8 +224,11 @@ the sidebar to the page's list (Leads, Calls) or heading.
   server (the progress text says "3 of 9 areas done"; the count only moves forward, and when areas are asked again in smaller parts the total grows with a short note saying so). An area no server answers is
   asked again as four smaller ones; if one still gets no answer, the search is
   **incomplete** (the businesses from the areas that answered are saved, as
-  above). Answers are kept for 7 days, so a re-run only asks for the areas still
-  missing. The map data step gives up after four minutes in all
+  above), and it says how much answered ("about 8 of 9 areas searched"; the
+  search's Details show it too). Answers are kept for 7 days whichever mirror gave
+  them, and an area that had to be asked in quarters is asked in quarters straight
+  away on a re-run, so a re-run with the same location and radius only asks for the
+  areas still missing. The map data step gives up after four minutes in all
   (`OVERPASS_DEADLINE_SECONDS`), an area after 90 seconds; a map server that
   hasn't answered an area after 25 seconds (`OVERPASS_STAGGER_SECONDS`) is not
   waited out: the next one is asked as well and the first good answer wins. The progress bar says when a step
@@ -257,8 +262,10 @@ the sidebar to the page's list (Leads, Calls) or heading.
   newer change has been made to that business (e.g. by a colleague). Recent
   changes shows the latest two (one on a phone), with **Show all** for the rest, so the list
   stays in view. Click a
-  column heading (Score, Business, Contact, Miles) to sort; the tab, filter,
-  tier and sort are kept in the address, so a reload or a shared link shows the
+  column heading (Score, Business, Contact, Miles) to sort. **Has phone** shows only
+  businesses with a phone number (`phone=1`), and under Not checked the best-score
+  order puts, among equal scores, the ones with a phone first. The tab, filter,
+  tier, Has phone and sort are kept in the address, so a reload or a shared link shows the
   same view. **Download Excel** / **Download CSV** say "Preparing Excel…" while
   the file is built (10,000 leads take about a second) and ignore a second click
   meanwhile. Phone numbers are tap-to-call links; a business without one says
@@ -289,8 +296,8 @@ the sidebar to the page's list (Leads, Calls) or heading.
   page offers **Go to Find leads** and hides the downloads; a filter that
   matches nothing says what was filtered, in which tab, with **Clear filters**.
   Each mark and call records the name set under **Your name** in that browser
-  (asked once, before the first mark or call; **Not now** skips it for the
-  visit); the name shows under the row ("Marked by Dana"), in Recent changes,
+  (asked once, before the first mark or call; it can't be skipped: **Cancel**
+  drops the click, and saving an empty name is refused); the name shows under the row ("Marked by Dana"), in Recent changes,
   in the call History, on the Calls page and in the downloads' **Marked By** and
   **Called By** columns. Names are kept in their own table (`made_by`, by the
   mark change's or call's id), so marks and calls from before it simply have
@@ -347,7 +354,14 @@ whether they run a baler or compactor; a test fails if a scoring change stops
 ranking them where they should. Its **not_campus** list holds places named after a
 university or college that are not the campus (a community garden, a president's
 house, condominiums, a department, a press, a library): `config.NOT_CAMPUS_WORDS`
-keeps them from scoring as a campus prospect, so one campus is one lead. Its **confirmed** list holds real businesses
+keeps them from scoring as a campus prospect, so one campus is one lead. Businesses
+marked **not_prospect** (a police impound lot, a fire department's training and
+logistics centre, a trailer yard, a parcel-locker brand) must get no prospect
+category and score below the default minimum: `config.NON_PROSPECT_NAME_WORDS`
+(police, sheriff, fire department, impound, trailer yard, fleet maintenance, parcel
+lockers, Luxer...) outrank every tag and name word, unless a specific recycling or
+transfer-station tag says otherwise, and police / fire-station / parcel-locker tags
+are non-prospect tags. Its **confirmed** list holds real businesses
 Arco's staff marked Yes / No on the Leads page, with the tier each had:
 `python -m leadgen reference` (with `DATABASE_URL` set to the website's
 database) refreshes it from the site's marks, copying only the facts the

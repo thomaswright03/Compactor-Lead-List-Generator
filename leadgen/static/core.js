@@ -16,7 +16,7 @@ const SHIFT_GUARD_MS = 700;
 // the first `limit` of them), every tab's count, and the leads that can still be undone.
 const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "",
             loaded: false, loadError: "", refreshError: "", viewLoading: false, seq: 0,
-            leadView: "", callView: "", q: "", tier: "", sort: "score", dir: "desc", limit: 300,
+            leadView: "", callView: "", q: "", tier: "", phone: false, sort: "score", dir: "desc", limit: 300,
             job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0 };
 
 function el(tag, text, cls) {
@@ -82,7 +82,7 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 /* Who is using this browser: the name saved with each Yes / No and call made here, so the
    team can see who to ask. Kept in this browser; asked once before the first mark or call. */
 const NAME_KEY = "my-name";
-let nameMemory = "", nameAsked = false, nameThen = null;
+let nameMemory = "", nameThen = null;
 function myName() {
   try { return localStorage.getItem(NAME_KEY) || nameMemory; } catch (e) { return nameMemory; }
 }
@@ -100,20 +100,29 @@ function showMyName() {
 function askName(then) {
   nameThen = then || null;
   $("name-input").value = myName();
+  $("name-error").hidden = true;
   $("name-dlg").showModal();
   $("name-input").focus();
 }
-// Runs fn once the name is known; "Not now" goes ahead without one (and asks again next visit).
-function withName(fn) { if (myName() || nameAsked) fn(); else askName(fn); }
-function finishName() {
-  nameAsked = true;
+// Runs fn once the name is known: every mark and call says who made it, so there is no skipping.
+function withName(fn) { if (myName()) fn(); else askName(fn); }
+$("name-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!$("name-input").value.trim()) {
+    $("name-error").hidden = false;
+    $("name-input").setAttribute("aria-invalid", "true");
+    $("name-input").focus();
+    return;
+  }
+  $("name-input").removeAttribute("aria-invalid");
+  setMyName($("name-input").value);
   const then = nameThen; nameThen = null;
   $("name-dlg").close();
   if (then) then();
-}
-$("name-form").addEventListener("submit", (e) => { e.preventDefault(); setMyName($("name-input").value); finishName(); });
-$("name-skip").addEventListener("click", finishName);
-$("name-dlg").addEventListener("cancel", () => { nameThen = null; });   // Escape: the click is dropped
+});
+// Cancel (or Escape): nothing is saved, and the click that asked is dropped.
+$("name-cancel").addEventListener("click", () => { nameThen = null; $("name-dlg").close(); });
+$("name-dlg").addEventListener("cancel", () => { nameThen = null; });
 $("me-change").addEventListener("click", () => askName());
 showMyName();
 const byWho = (name) => name ? ` by ${name}` : "";
@@ -141,14 +150,14 @@ function parseHash() {
 }
 // Take the Leads view (tab, filter, tier, sort) from the address; true when it changed.
 function readLeadView(params) {
-  const before = [S.leadView, S.q, S.tier, S.sort, S.dir].join("|");
+  const before = [S.leadView, S.q, S.tier, S.phone, S.sort, S.dir].join("|");
   S.leadView = params.get("tab") || "";
   if (!LEAD_TABS.some(([v]) => v === S.leadView)) S.leadView = "";
-  S.q = params.get("q") || ""; S.tier = params.get("tier") || "";
+  S.q = params.get("q") || ""; S.tier = params.get("tier") || ""; S.phone = params.get("phone") === "1";
   S.sort = SORTS[params.get("sort")] ? params.get("sort") : "score";
   S.dir = params.get("dir") === "asc" ? "asc" : params.get("dir") === "desc" ? "desc" : SORTS[S.sort].dir;
-  $("filter").value = S.q; $("tier").value = S.tier;
-  return before !== [S.leadView, S.q, S.tier, S.sort, S.dir].join("|");
+  $("filter").value = S.q; $("tier").value = S.tier; $("has-phone").checked = S.phone;
+  return before !== [S.leadView, S.q, S.tier, S.phone, S.sort, S.dir].join("|");
 }
 function route() {
   const { page: asked, params } = parseHash();
@@ -176,6 +185,7 @@ function writeHash(page) {
     if (S.leadView) params.set("tab", S.leadView);
     if (S.q) params.set("q", S.q);
     if (S.tier) params.set("tier", S.tier);
+    if (S.phone) params.set("phone", "1");
     if (S.sort !== "score" || S.dir !== "desc") { params.set("sort", S.sort); params.set("dir", S.dir); }
   } else if (page === "calls" && S.callView) params.set("tab", S.callView);
   const hash = `#${page}${params.toString() ? "?" + params : ""}`;

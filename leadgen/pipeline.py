@@ -293,6 +293,8 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
             raw += exc.leads
             warnings += exc.warnings
             stats["osm raw results"] = len(exc.leads)
+            if exc.coverage:
+                stats["osm areas searched"] = exc.coverage
             errors.append(str(exc))
             failed.append("osm")
             partly.append("osm")
