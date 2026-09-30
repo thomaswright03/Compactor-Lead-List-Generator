@@ -3,9 +3,9 @@ services:
     name: compactor-lead-finder
     runtime: python
     plan: free
-    # Asks Render to deploy a push to main only after GitHub's CI checks pass on it. Render applies
-    # this only to a Blueprint-managed service: today deploys are done by hand (docs/operator-runbook.md).
-    autoDeployTrigger: checksPass
+    # Deploy every push to main straight away (Render's Settings > Auto-Deploy > "On Commit",
+    # chosen by the owner 2026-09-30). "After CI Checks Pass" never fired for this service.
+    autoDeployTrigger: commit
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn wsgi:app --workers 1 --threads 8 --timeout 0 --bind 0.0.0.0:$PORT
     envVars:
