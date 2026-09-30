@@ -83,6 +83,7 @@ CATEGORIES = [
                          "mattresses", "homedecor", "electronics", "computers", "appliances",
                          "sportgoods", "outdoorgear", "thrift_stores", "artsandcrafts",
                          "fabricstores", "hobbyshops", "officeequipment"],
+        name_keywords=["thrift store", "thrift stores", "thrift shop", "deseret industries"],
     ),
     Category(
         "distribution", "Warehouse / distribution / logistics", 34,
@@ -291,6 +292,50 @@ NON_PROSPECT_NAME_WORDS = [
     "luxer", "luxer one", "parcel locker", "parcel lockers", "package locker",
     "package lockers", "amazon locker", "amazon hub",
 ]
+# Utility and infrastructure structures: a pumping station, water well, substation or
+# water tank is not a business with a waste stream ("6th East Well", tagged
+# building=industrial and man_made=pumping_station). No prospect category, whatever
+# catch-all tag or other word says so; only a NAME_BLOCK_RESCUE_TAGS tag still counts.
+UTILITY_OSM_TAGS = [
+    ("man_made", "pumping_station"), ("man_made", "water_well"), ("man_made", "water_tower"),
+    ("man_made", "reservoir_covered"), ("man_made", "storage_tank"), ("man_made", "street_cabinet"),
+    ("man_made", "monitoring_station"), ("man_made", "telephone_office"),
+    ("power", "substation"), ("power", "transformer"), ("power", "switch"),
+    ("building", "transformer_tower"), ("building", "pumping_station"),
+    ("pumping_station", None), ("substation", None), ("telecom", None),
+]
+# A place known only by a catch-all industrial tag (building=industrial,
+# landuse=industrial) is a utility structure when its name or its operator tag says
+# so ("Salt Lake City Corp", "Utah Power & Light Co", "Pacificorp", "UTA Station";
+# operator "American Fork City"). A telling name ("... Recycling") or a specific tag
+# still decides first.
+UTILITY_NAME_WORDS = [
+    "well", "pump station", "pumping station", "pump house", "lift station",
+    "booster station", "substation", "sub station", "water tank", "reservoir",
+    "power and light", "power light", "pacificorp", "rocky mountain power", "dominion energy",
+    "questar", "enbridge", "uta", "trax", "frontrunner", "city corp", "city corporation",
+    "irrigation", "canal company", "water district", "water conservancy",
+    "improvement district", "sewer district", "telephone", "centurylink", "qwest",
+]
+UTILITY_OPERATOR_WORDS = [
+    "city", "town", "county", "district", "state of utah", "utah department",
+    "department of transportation", "udot", "uta", "utah transit authority", "power",
+    "light", "energy", "gas", "water", "utility", "utilities", "pacificorp", "questar",
+    "dominion", "enbridge", "irrigation", "canal", "sewer", "telephone", "centurylink",
+    "qwest", "lumen",
+]
+# A building with only a catch-all industrial tag and a footprint under this many
+# square feet is a shed, pump house or small utility building, not a plant: no
+# prospect category (a specific tag, a telling name or a footprint this big or more
+# still counts).
+SMALL_GENERIC_BUILDING_SQFT = 5_000
+
+# A manufacturing word in a name ("industries") doesn't make a plant when the name or
+# the map says it is a shop ("Deseret Industries Thrift Store", tagged landuse=retail).
+NOT_MANUFACTURING_NAME_WORDS = ["store", "stores", "thrift", "outlet", "boutique",
+                                "showroom", "retail"]
+RETAIL_OSM_TAGS = [("landuse", "retail")]
+
 NAME_BLOCK_RESCUE_TAGS = {("amenity", "recycling"), ("amenity", "waste_transfer_station"),
                           ("landuse", "landfill")}
 NAME_BLOCK_RESCUE_GOOGLE_TYPES = {"waste_transfer_station", "recycling_center"}
@@ -368,6 +413,15 @@ HIGH_VOLUME_BRANDS = [
     "kraft heinz", "dannon", "sysco", "us foods", "northrop grumman", "l3harris", "boeing",
     "hill air force base",
 ]
+# High-volume "brands" that are also place names: a name counts for them only when it
+# starts with the brand ("Tru by Hilton Clearfield Hill Air Force Base" is a hotel near
+# the base, not the base). The map's own brand or operator tag always counts.
+PLACE_NAME_BRANDS = ["hill air force base", "intermountain medical center",
+                     "university of utah hospital"]
+# Words before a brand in a name that make it a location, not the business
+# ("Hotel near Costco", "Parking at Walmart").
+BRAND_LOCATION_WORDS = ["near", "at", "by", "across from", "behind", "next to", "inside",
+                        "off", "opposite"]
 # Brands that are also surnames or ordinary words ("Smith's Plumbing",
 # "Grown Ups Daycare", "Kraft Electric"). They only count when the map's brand
 # tag or the website's name says so, or the category fits (for plain retail,

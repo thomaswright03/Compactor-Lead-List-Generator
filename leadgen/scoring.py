@@ -113,6 +113,40 @@ def non_prospect_name(lead: Lead) -> bool:
     return not rescued
 
 
+def utility_structure(lead: Lead) -> bool:
+    """True for a pumping station, water well, substation or similar (config.UTILITY_OSM_TAGS),
+    unless a specific tag says it is a recycling site or transfer station."""
+    if not any(_osm_tag_matches(lead, k, v) for k, v in config.UTILITY_OSM_TAGS):
+        return False
+    return not any(_osm_tag_matches(lead, k, v) for k, v in config.NAME_BLOCK_RESCUE_TAGS)
+
+
+def _utility_named(lead: Lead) -> bool:
+    """True when the name or operator tag says a catch-all industrial building belongs to
+    a utility, a city or a transit agency (config.UTILITY_NAME_WORDS / _OPERATOR_WORDS)."""
+    name = normalize(lead.name)
+    if any(_contains_term(name, w, whole=True) for w in config.UTILITY_NAME_WORDS):
+        return True
+    operators = normalize(" ".join(c.split("=", 1)[1] for c in lead.raw_categories
+                                   if c.startswith("operator=")))
+    return any(_contains_term(operators, w, whole=True) for w in config.UTILITY_OPERATOR_WORDS)
+
+
+def _small_generic_building(lead: Lead) -> bool:
+    """True for a building known only as building=industrial / landuse=industrial (no
+    industrial=* use tag) whose footprint is under config.SMALL_GENERIC_BUILDING_SQFT."""
+    if not lead.footprint_sqft or lead.footprint_sqft >= config.SMALL_GENERIC_BUILDING_SQFT:
+        return False
+    return not any(c.startswith(("industrial=", "man_made=works")) for c in lead.raw_categories)
+
+
+def _shop_named(lead: Lead, name: str) -> bool:
+    """True when the name or the map says the place is a shop (config.NOT_MANUFACTURING_NAME_WORDS,
+    config.RETAIL_OSM_TAGS), so a manufacturing word in its name says nothing."""
+    return (any(_contains_term(name, w, whole=True) for w in config.NOT_MANUFACTURING_NAME_WORDS)
+            or any(_osm_tag_matches(lead, k, v) for k, v in config.RETAIL_OSM_TAGS))
+
+
 def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
     """Return (best category, list of matched categories) as (Category, how) pairs.
 
@@ -145,6 +179,8 @@ def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
         if hit == "name" and cat.key == "food_production" and any(
                 _contains_term(name, w, whole=True) for w in config.NOT_PRODUCTION_NAME_WORDS):
             hit = None          # "Day Dairy Barn" is a small shop, not a plant
+        if hit == "name" and cat.key == "manufacturing" and _shop_named(lead, name):
+            hit = None          # "Deseret Industries Thrift Store" is a shop, not a plant
         if hit:
             matched.append((cat, hit))
 
@@ -156,6 +192,9 @@ def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
     # A police impound lot, a fire department's logistics centre, a trailer yard or a
     # parcel-locker brand: no prospect category, whatever its tags or other words say.
     if non_prospect_name(lead):
+        return None, matched
+    # A pumping station, water well or substation has no waste stream to compact.
+    if utility_structure(lead):
         return None, matched
 
     def best_of(options: list[Match]) -> Match:
@@ -195,6 +234,12 @@ def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
                   "Google category" if "store" in gtypes else "map tag")
         return retail, matched + [retail]
 
+    telling_name = by_name or any(_contains_term(name, kw, whole=True)
+                                  for cat, _ in tagged for kw in cat.name_keywords)
+    if tagged and not telling_name and (_small_generic_building(lead) or _utility_named(lead)):
+        # Only a catch-all industrial tag on a shed-sized building, or on a city's or a
+        # utility's structure ("Pacificorp", 900 sq ft): not a plant.
+        return None, matched
     if tagged or by_name:
         # Only catch-all tags; a telling name ("... Waste Management District") may say more.
         return best_of(tagged + by_name), matched
@@ -207,6 +252,25 @@ def _split_hyphens(text: str) -> str:
     return normalize(re.sub(r"[-/]", " ", text or ""))
 
 
+def _name_is_brand(raw_name: str, brand: str, own_brand: str) -> bool:
+    """True when a name that contains `brand` is that brand's business, not another
+    business named after it: its own map brand tag is not a different brand ("Tru", for
+    "Tru by Hilton Clearfield Hill Air Force Base"), a place-name brand opens the name,
+    and no location word comes just before it ("Hotel near Costco")."""
+    if own_brand and not _contains_term(normalize(own_brand), brand, whole=True):
+        return False
+    for name in (normalize(raw_name), _split_hyphens(raw_name)):
+        pattern = _term_pattern(normalize(brand), True)
+        for m in pattern.finditer(name):
+            before = name[:m.start()].strip()
+            if brand in config.PLACE_NAME_BRANDS and before:
+                continue
+            if any(before == w or before.endswith(" " + w) for w in config.BRAND_LOCATION_WORDS):
+                continue
+            return True
+    return False
+
+
 def _brand_bonus(lead: Lead) -> str | None:
     """Return the matched high-volume brand, or None."""
     name = normalize(lead.name)
@@ -215,11 +279,14 @@ def _brand_bonus(lead: Lead) -> str | None:
     tag_raw = " ".join(c.split("=", 1)[1] for c in lead.raw_categories
                        if c.startswith(("brand=", "operator=")))
     tag_text = f"{normalize(tag_raw)} {_split_hyphens(tag_raw)}".strip()
+    own_brand = " ".join(c.split("=", 1)[1] for c in lead.raw_categories if c.startswith("brand="))
     # Match both "Pepsi-Cola" -> "pepsicola" and "pepsi cola".
     names = f"{name} {_split_hyphens(lead.name)}"
     text = f"{names} {tag_text}".strip()
     for brand in config.HIGH_VOLUME_BRANDS:
-        if _contains_term(text, brand, whole=True):
+        if _contains_term(tag_text, brand, whole=True):
+            return brand
+        if _contains_term(names, brand, whole=True) and _name_is_brand(lead.name, brand, own_brand):
             return brand
     host = re.sub(r"^(https?://)?(www\d?\.)?", "", (lead.website or "").lower()).split("/")[0]
     site_label = compact(host.split(".")[0]) if host else ""
@@ -279,7 +346,7 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
 
     # A brand's helipad, pharmacy or parking lot is not the store.
     blocked = best is None and (_is_non_prospect(lead, set(lead.raw_categories))
-                                or non_prospect_name(lead))
+                                or non_prospect_name(lead) or utility_structure(lead))
     brand = None if blocked else _brand_bonus(lead)
     if brand:
         score += 20

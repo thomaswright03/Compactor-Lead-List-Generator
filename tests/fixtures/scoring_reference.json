@@ -1,5 +1,5 @@
 {
- "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses Arco's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests. \"not_campus\": places named after a university or college that are not the campus (a garden, house, condo, department, press...); they must never score as a campus prospect. Businesses with \"not_prospect\": true (police, fire, impound, trailer yards, parcel lockers) must get no prospect category and score below the default minimum. \"not_production\": small shops and eateries whose name has a production word (\"Day Dairy Barn\"); a name alone must never make them a food & beverage plant.",
+ "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses Arco's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests. \"not_campus\": places named after a university or college that are not the campus (a garden, house, condo, department, press...); they must never score as a campus prospect. Businesses with \"not_prospect\": true (police, fire, impound, trailer yards, parcel lockers) must get no prospect category and score below the default minimum. \"not_production\": small shops and eateries whose name has a production word (\"Day Dairy Barn\"); a name alone must never make them a food & beverage plant. Map listings known only by a catch-all industrial tag on a small building (under 5,000 sq ft), and pumping stations, water wells, substations or a utility's or city's structures, are \"not_prospect\" too (with their footprint_sqft). \"name_traps\": listings whose name holds another business's name or a misleading word (a hotel named after the air base beside it, a thrift store called \"... Industries\"); each must get \"category\" and must never show a reason containing \"never_reason\".",
  "businesses": [
   {
    "name": "Smith's Marketplace",
@@ -260,6 +260,68 @@
    ],
    "has_equipment": false,
    "not_prospect": true
+  },
+  {
+   "name": "6th East Well",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial",
+    "man_made=pumping_station",
+    "operator=American Fork City"
+   ],
+   "footprint_sqft": 300,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Salt Lake City Corp",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "footprint_sqft": 400,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Utah Power & Light Co",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "footprint_sqft": 600,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Pacificorp",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "footprint_sqft": 900,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "UTA Station",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "footprint_sqft": 800,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "D04",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "footprint_sqft": 4500,
+   "has_equipment": false,
+   "not_prospect": true
   }
  ],
  "confirmed": [],
@@ -340,6 +402,27 @@
    "name": "Creamery Corner Ice Cream",
    "source": "osm",
    "raw_categories": []
+  }
+ ],
+ "name_traps": [
+  {
+   "name": "Tru by Hilton Clearfield Hill Air Force Base",
+   "source": "osm",
+   "raw_categories": [
+    "tourism=hotel",
+    "brand=Tru"
+   ],
+   "category": "hospitality",
+   "never_reason": "hill air force base"
+  },
+  {
+   "name": "Deseret Industries Thrift Store",
+   "source": "osm",
+   "raw_categories": [
+    "landuse=retail"
+   ],
+   "category": "specialty_retail",
+   "never_reason": "Manufacturing"
   }
  ]
 }

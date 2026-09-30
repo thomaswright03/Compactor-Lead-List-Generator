@@ -243,7 +243,8 @@ def test_reference_businesses_rank_where_they_should():
     for item in data["businesses"]:
         lead = Lead(name=item["name"], lat=40.7, lon=-111.9, source=item["source"],
                     source_id=item["name"], raw_categories=item["raw_categories"],
-                    rating_count=item.get("rating_count"), yelp_reviews=item.get("yelp_reviews"))
+                    rating_count=item.get("rating_count"), yelp_reviews=item.get("yelp_reviews"),
+                    footprint_sqft=item.get("footprint_sqft"))
         score_lead(lead, config.DEFAULT_KEYWORDS)
         scored.append((item["has_equipment"], lead))
     have = [lead for has, lead in scored if has]
@@ -365,7 +366,8 @@ def test_police_fire_impound_yards_and_lockers_are_not_prospects():
     assert len(cases) >= 4
     for item in cases:
         lead = Lead(name=item["name"], lat=40.7, lon=-111.9, source=item["source"],
-                    source_id=item["name"], raw_categories=item["raw_categories"])
+                    source_id=item["name"], raw_categories=item["raw_categories"],
+                    footprint_sqft=item.get("footprint_sqft"))
         score_lead(lead, config.DEFAULT_KEYWORDS)
         assert lead.category_key == "", (lead.name, lead.category)
         assert lead.score < config.DEFAULT_MIN_SCORE, (lead.name, lead.score)
@@ -374,3 +376,70 @@ def test_police_fire_impound_yards_and_lockers_are_not_prospects():
                 source="osm", source_id="n1", raw_categories=["amenity=recycling"])
     score_lead(yard, config.DEFAULT_KEYWORDS)
     assert yard.category_key == "recycling"
+
+
+def test_small_industrial_sheds_and_utility_structures_are_not_prospects():
+    """A pumping station, water well or substation, and a catch-all industrial building
+    under 5,000 sq ft, get no prospect category (the reference's "6th East Well",
+    "Pacificorp", "UTA Station"...); a real plant keeps its score."""
+    import json
+    from pathlib import Path
+
+    from leadgen import config
+
+    data = json.loads((Path(__file__).parent / "fixtures" / "scoring_reference.json").read_text())
+    names = {item["name"] for item in data["businesses"] if item.get("not_prospect")}
+    assert {"6th East Well", "Salt Lake City Corp", "Utah Power & Light Co", "Pacificorp",
+            "UTA Station", "D04"} <= names
+    well = score_lead(make("Pump", ["building=industrial", "man_made=pumping_station"], "osm",
+                           footprint_sqft=300))
+    assert well.category_key == "" and well.score < config.DEFAULT_MIN_SCORE
+    big_well = score_lead(make("Station 4", ["building=industrial", "power=substation"], "osm",
+                               footprint_sqft=60_000))
+    assert big_well.category_key == ""
+    city = score_lead(make("Maintenance Building", ["building=industrial",
+                                                    "operator=Sandy City"], "osm",
+                           footprint_sqft=20_000))
+    assert city.category_key == ""
+    plant = score_lead(make("Acme", ["building=industrial"], "osm", footprint_sqft=45_000))
+    assert plant.category_key == "manufacturing" and plant.score >= 38
+    unknown_size = score_lead(make("Acme", ["building=industrial"], "osm"))
+    assert unknown_size.category_key == "manufacturing"
+    factory = score_lead(make("Acme", ["building=industrial", "industrial=factory"], "osm",
+                              footprint_sqft=3_000))
+    assert factory.category_key == "manufacturing"
+    named = score_lead(make("Wasatch Plastics", ["building=industrial"], "osm",
+                            footprint_sqft=3_000))
+    assert named.category_key == "manufacturing"
+    recycling = score_lead(make("City Recycling", ["amenity=recycling", "man_made=storage_tank"],
+                                "osm"))
+    assert recycling.category_key == "recycling"
+
+
+def test_names_that_hold_another_business_or_a_misleading_word():
+    """The reference's "name_traps": a hotel named after the air base beside it gets no
+    base brand bonus; a thrift store called "... Industries" is retail, not a plant."""
+    import json
+    from pathlib import Path
+
+    from leadgen import config
+
+    data = json.loads((Path(__file__).parent / "fixtures" / "scoring_reference.json").read_text())
+    assert len(data["name_traps"]) >= 2
+    for item in data["name_traps"]:
+        lead = score_lead(make(item["name"], item["raw_categories"], item["source"]),
+                          config.DEFAULT_KEYWORDS)
+        assert lead.category_key == item["category"], (lead.name, lead.reasons)
+        assert not [r for r in lead.reasons if item["never_reason"].lower() in r.lower()], lead.reasons
+    # The brand still counts when the business is the brand.
+    base = score_lead(make("Hill Air Force Base", ["landuse=military"], "osm"))
+    assert any("hill air force base" in r for r in base.reasons)
+    tagged = score_lead(make("Clearfield Store", ["shop=supermarket", "brand=Walmart"], "osm"))
+    assert any("(walmart)" in r for r in tagged.reasons)
+    near = score_lead(make("Motel near Costco", ["tourism=hotel"], "osm"))
+    assert not any("costco" in r for r in near.reasons)
+    other_brand = score_lead(make("Walmart Supercenter", ["shop=supermarket", "brand=Target"],
+                                  "osm"))
+    assert not any("(walmart)" in r for r in other_brand.reasons)
+    plant = score_lead(make("Deseret Industries Manufacturing", ["building=industrial"], "osm"))
+    assert plant.category_key == "manufacturing"
