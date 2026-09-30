@@ -12,10 +12,11 @@ import re
 import threading
 import time
 from collections.abc import Callable, Sequence
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import Any
 
 from .. import config
-from ..geo import METERS_PER_MILE
+from ..geo import METERS_PER_MILE, haversine_miles
 from ..http import HttpError, request_json
 from ..models import Lead
 from . import SourceError
@@ -41,6 +42,18 @@ _NOT_PLACES = ["highway", "waterway", "railway", "route", "boundary", "natural",
 MAX_BUILDING_SQFT = 3_000_000   # bigger bounding boxes are campuses/resorts, not buildings
 # A mirror is only asked when at least this many seconds of the map-data time are left.
 MIN_SECONDS_LEFT = 5
+# An area to search, as Overpass writes it: (south, west, north, east) in degrees.
+Box = tuple[float, float, float, float]
+MILES_PER_DEGREE_LAT = 69.05
+
+
+class PartialResult(SourceError):
+    """The map data came back for only part of the area: `leads` and `warnings` hold
+    what the parts that answered found (the search keeps them, marked incomplete)."""
+
+    def __init__(self, message: str, leads: list[Lead], warnings: list[str]) -> None:
+        super().__init__(message)
+        self.leads, self.warnings = leads, warnings
 
 
 def _tag_filters() -> tuple[dict[str, set[str]], set[str]]:
@@ -66,9 +79,12 @@ def _ql_string(text: str) -> str:
 
 
 def build_query(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] = (),
-                timeout: int | None = None) -> str:
+                timeout: int | None = None, box: "Box | None" = None) -> str:
+    """The Overpass query for the circle, or (with box) for the part of it inside the box."""
     r = int(radius_miles * METERS_PER_MILE)
     around = f"(around:{r},{lat:.6f},{lon:.6f})"
+    if box is not None:
+        around += "({:.6f},{:.6f},{:.6f},{:.6f})".format(*box)
     by_key, any_value = _tag_filters()
     parts = []
     for key in sorted(by_key):
@@ -84,7 +100,7 @@ def build_query(lat: float, lon: float, radius_miles: float, keywords: Sequence[
     not_places = "".join(f'[!"{k}"]' for k in _NOT_PLACES)
     parts.append(f'nwr["name"~"{regex}",i]{not_places}{around};')
     body = "\n  ".join(parts)
-    timeout = int(timeout or config.OVERPASS_DEADLINE_SECONDS)
+    timeout = int(timeout or config.OVERPASS_PART_SECONDS)
     return (f"[out:json][timeout:{timeout}];\n(\n  {body}\n)->.all;\n"
             "node.all->.n;\n.n out body;\n"
             "(way.all; relation.all;)->.w;\n.w out tags bb;")
@@ -178,22 +194,49 @@ def parse_element(el: dict[str, Any]) -> Lead | None:
     )
 
 
-def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] = (),
-           progress: Callable[[str], None] | None = None) -> tuple[list[Lead], list[str]]:
-    """Return (leads, warnings).
+def _parts(lat: float, lon: float, radius_miles: float) -> list[Box]:
+    """The search circle's bounding square cut into a grid of boxes no wider than
+    config.OVERPASS_PART_MILES, keeping only the boxes that reach into the circle."""
+    n = max(1, math.ceil(2 * radius_miles / config.OVERPASS_PART_MILES))
+    dlat = radius_miles / MILES_PER_DEGREE_LAT
+    dlon = dlat / max(0.01, math.cos(math.radians(lat)))
+    south, west = lat - dlat, lon - dlon
+    step_lat, step_lon = 2 * dlat / n, 2 * dlon / n
+    boxes = []
+    for i in range(n):
+        for j in range(n):
+            box = (south + i * step_lat, west + j * step_lon,
+                   south + (i + 1) * step_lat, west + (j + 1) * step_lon)
+            # The box's point nearest the centre is inside the circle.
+            near_lat = min(max(lat, box[0]), box[2])
+            near_lon = min(max(lon, box[1]), box[3])
+            if haversine_miles(lat, lon, near_lat, near_lon) <= radius_miles:
+                boxes.append(box)
+    return boxes
 
-    Every mirror together gets config.OVERPASS_DEADLINE_SECONDS: when the map
-    servers are down the search fails within about two minutes, not ten. A mirror
-    that fails is followed at once by the next one; a mirror that is slow to
-    answer is not waited out: after config.OVERPASS_STAGGER_SECONDS the next one
-    is asked as well (the slow one may still answer), and the first good answer
-    wins. So one hanging server can't use up the time the others need.
+
+def _quarters(box: Box) -> list[Box]:
+    s, w, n, e = box
+    mid_lat, mid_lon = (s + n) / 2, (w + e) / 2
+    return [(s, w, mid_lat, mid_lon), (s, mid_lon, mid_lat, e),
+            (mid_lat, w, n, mid_lon), (mid_lat, mid_lon, n, e)]
+
+
+def _fetch(query: str, deadline: float, first: int = 0,
+           said: Callable[[int, int], None] | None = None) -> tuple[Any, list[str]]:
+    """Ask the mirrors (starting with mirror `first`) for one query's answer before
+    `deadline` (time.monotonic()); returns (the answer, errors of mirrors that failed
+    first) or raises SourceError when none answered.
+
+    A mirror that fails is followed at once by the next one; a mirror that is slow to
+    answer is not waited out: after config.OVERPASS_STAGGER_SECONDS the next one is
+    asked as well (the slow one may still answer), and the first good answer wins.
     """
-    query = build_query(lat, lon, radius_miles, keywords)
-    deadline = time.monotonic() + config.OVERPASS_DEADLINE_SECONDS
     endpoints = list(config.OVERPASS_ENDPOINTS)
+    endpoints = endpoints[first % len(endpoints):] + endpoints[:first % len(endpoints)]
     answers: queue.Queue[tuple[str, Any, BaseException | None]] = queue.Queue()
-    errors, asked, waiting, next_at = [], 0, 0, 0.0
+    errors: list[str] = []
+    asked, waiting, next_at = 0, 0, 0.0
 
     def ask(endpoint: str, left: float) -> None:
         try:
@@ -223,9 +266,8 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
             asked += 1
             waiting += 1
             next_at = now + config.OVERPASS_STAGGER_SECONDS
-            if progress:
-                progress(f"OpenStreetMap: searching the free map data (server {asked} of "
-                         f"{len(endpoints)})")
+            if said:
+                said(asked, len(endpoints))
             log.info("OpenStreetMap: querying %s", endpoint.split("/")[2])
             threading.Thread(target=ask, args=(endpoint, left), daemon=True).start()
             continue
@@ -247,11 +289,102 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
             log.warning("OpenStreetMap server %s: %s", endpoint, data["remark"])
             errors.append(f"{endpoint}: {data['remark']}")
             continue
-        leads = [lead for lead in map(parse_element, data.get("elements", [])) if lead]
-        warnings = []
-        if data.get("remark"):
-            log.warning("OpenStreetMap note: %s", data["remark"])
-            warnings.append("The map data service returned only part of its results "
+        return data, errors
+    raise SourceError(" | ".join(errors) or "no server answered")
+
+
+def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] = (),
+           progress: Callable[[str], None] | None = None) -> tuple[list[Lead], list[str]]:
+    """Return (leads, warnings).
+
+    One big query for a whole 30-mile circle is what the free public map servers
+    most often refuse or time out on, so a wide search is cut into parts (a grid of
+    boxes up to config.OVERPASS_PART_MILES wide), asked config.OVERPASS_PARALLEL at a
+    time, each part starting at a different mirror to spread the load. A part that
+    fails is asked again once as four smaller quarters; only the parts that failed are
+    asked again, and answers are cached, so a re-run the same day asks only for what
+    is still missing. Everything together gets config.OVERPASS_DEADLINE_SECONDS.
+
+    Raises SourceError when no part answered, and PartialResult (holding what was
+    found) when only some did.
+    """
+    deadline = time.monotonic() + config.OVERPASS_DEADLINE_SECONDS
+    boxes = _parts(lat, lon, radius_miles)
+    whole = len(boxes) == 1
+    # (box or None for the whole circle, its share of the area, how many times split)
+    todo: list[tuple[Box | None, float, int]] = (
+        [(None, 1.0, 0)] if whole else [(b, 1 / len(boxes), 0) for b in boxes])
+    first_box = boxes[0]
+    found: dict[str, Lead] = {}
+    warnings: list[str] = []
+    errors: list[str] = []
+    missing = 0.0                                # share of the area no server answered for
+    done, total = 0, len(todo)
+
+    def said(part: int) -> Callable[[int, int], None]:
+        def note(server: int, servers: int) -> None:
+            if not progress:
+                return
+            if total == 1:
+                progress(f"OpenStreetMap: searching the free map data (server {server} of {servers})")
+            else:
+                progress(f"OpenStreetMap: searching the free map data (part {part} of {total})")
+        return note
+
+    def one(n: int, box: Box | None) -> tuple[Any, list[str]]:
+        # The query's text doesn't depend on the time left, so a part answered on an
+        # earlier run today comes from the cache.
+        budget = min(deadline, time.monotonic() + config.OVERPASS_PART_SECONDS)
+        return _fetch(build_query(lat, lon, radius_miles, keywords, box=box), budget,
+                      first=n, said=said(n + 1))
+
+    with ThreadPoolExecutor(max_workers=config.OVERPASS_PARALLEL) as pool:
+        running: dict[Any, tuple[Box | None, float, int]] = {}
+        started = 0
+        while todo or running:
+            while todo and len(running) < config.OVERPASS_PARALLEL:
+                if deadline - time.monotonic() < MIN_SECONDS_LEFT:
+                    for _, share, _ in todo:
+                        missing += share
+                    errors.append("out of time before asking for every part")
+                    todo = []
+                    break
+                box, share, depth = todo.pop(0)
+                running[pool.submit(one, started, box)] = (box, share, depth)
+                started += 1
+            if not running:
+                break
+            finished, _ = wait(running, return_when=FIRST_COMPLETED)
+            for future in finished:
+                box, share, depth = running.pop(future)
+                try:
+                    data, _ = future.result()
+                except Exception as exc:  # noqa: BLE001 - SourceError, or a thread that broke
+                    errors.append(str(exc))
+                    if depth < config.OVERPASS_SPLITS:
+                        # Smaller parts are what busy servers still answer: ask again, split.
+                        parts = _quarters(box if box is not None else first_box)
+                        todo += [(q, share / 4, depth + 1) for q in parts]
+                        total += 4
+                    else:
+                        missing += share
+                    continue
+                done += 1
+                for lead in map(parse_element, data.get("elements", [])):
+                    if lead:
+                        found.setdefault(lead.source_id, lead)
+                if data.get("remark"):
+                    log.warning("OpenStreetMap note: %s", data["remark"])
+                    note = ("The map data service returned only part of its results "
                             "(it was busy).")
-        return leads, warnings
-    raise SourceError("All OpenStreetMap (Overpass) servers failed: " + " | ".join(errors))
+                    if note not in warnings:
+                        warnings.append(note)
+    leads = list(found.values())
+    if not done:
+        raise SourceError("All OpenStreetMap (Overpass) servers failed: " + " | ".join(errors))
+    if missing > 0.001:
+        share = max(1, round(missing * 100))
+        raise PartialResult(
+            f"OpenStreetMap answered for only part of the area (about {share}% missing): "
+            + " | ".join(errors[-5:]), leads, warnings)
+    return leads, warnings

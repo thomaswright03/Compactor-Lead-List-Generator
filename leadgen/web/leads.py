@@ -107,12 +107,15 @@ def saved_leads() -> ResponseReturnValue:
 
     ?tab= one of VIEWS (default all), q= filter text, tier=, sort= / dir=, limit=
     (default: every row), keep= uids shown even outside the tab (rows just marked,
-    which stay put for a few seconds).
+    which stay put for a few seconds; a refresh sends them in full too).
 
     With ?since=<the "now" of an earlier answer> only the leads whose details, mark
-    or calls changed since then come back (each saying whether it belongs in the
-    view asked about), with "removed": the ones that left the list, so keeping an
-    open page up to date costs little however long the list grows.
+    or calls changed since then come back: in full when they belong in the view
+    asked about, as just {"key", "in_view": false} when they don't (so the page can
+    drop them if it shows them), with "removed": the ones that left the list. When
+    more leads changed than the page shows (`limit`, e.g. after a search touched
+    them all), the answer is {"reload": true} with the counts instead, and the page
+    asks for its rows again: a refresh never sends more than one page of rows.
     """
     now = time.time()
     since = request.args.get("since", type=float)
@@ -131,13 +134,20 @@ def saved_leads() -> ResponseReturnValue:
         leads, undo = load_saved()
     except LoadError as exc:
         return jsonify({"error": str(exc)}), 503
+    shown = [l for l in leads if in_view(l, view) and matches(l, q, tier)]
+    body = {"changes": True, "total": len(shown), "counts": view_counts(leads),
+            "recent": _recent(leads, undo), "now": now}
     changed = [l for l in leads if l.uid in uids]
+    limit = request.args.get("limit", type=int) or 300
+    if len(changed) > max(1, min(limit, MAX_LIMIT)):
+        return jsonify({**body, "reload": True, "leads": [], "removed": []})
     kept = {lead.uid for lead in changed}
-    return jsonify({"leads": [{**lead_json(l, undo), "in_view": in_view(l, view) and matches(l, q, tier)}
-                              for l in changed],
-                    "changes": True, "removed": sorted(uids - kept),
-                    "total": sum(in_view(l, view) and matches(l, q, tier) for l in leads),
-                    "counts": view_counts(leads), "recent": _recent(leads, undo), "now": now})
+    pinned = set((request.args.get("keep") or "").split(",")[:50]) - {""}
+    wanted = ({l.uid for l in shown} | pinned) & kept
+    return jsonify({**body, "removed": sorted(uids - kept),
+                    "leads": [{**lead_json(l, undo), "in_view": in_view(l, view) and matches(l, q, tier)}
+                              if l.uid in wanted
+                              else {"key": l.uid, "in_view": False} for l in changed]})
 
 
 def _page(leads: list[Lead], undo: Undos, view: str, q: str, tier: str) -> dict[str, Any]:

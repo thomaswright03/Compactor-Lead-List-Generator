@@ -54,6 +54,10 @@ async function loadSearches() {
     setGo(false, `Today's search ran at ${today.when.split(", ").pop()}. The next one can run tomorrow.`);
   } else if (today) {
     setGo(true, "Today's search didn't finish, so it can be run again.");
+  } else if (body.reruns_left) {
+    // After an incomplete search (a source failed) it may run again, a set number of times.
+    const n = body.reruns_left;
+    setGo(true, `Today's search was incomplete, so it can be run again: ${n} re-run${n === 1 ? "" : "s"} left today.`);
   } else setGo(true, "One search a day. Today's is available.");
   renderHistory(body.searches);
   renderProblems(body.problems);

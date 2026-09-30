@@ -33,8 +33,8 @@ function renderCalls() {
   const wrap = $("calls-wrap");
   if (!called.length) {
     wrap.replaceChildren(emptyNote("No calls logged yet.",
-      "Log a call with Just called on a business marked Yes (the Leads page's Has baler or compactor tab).",
-      "#leads?tab=yes", "Go to Has baler or compactor"));
+      "Log a call with Just called on any business on the Leads page. It doesn't change the business's Yes / No answer.",
+      "#leads", "Go to Leads"));
     return;
   }
   if (!rows.length) { wrap.replaceChildren(el("div", `No calls with the result “${S.callView}” yet.`, "empty")); return; }

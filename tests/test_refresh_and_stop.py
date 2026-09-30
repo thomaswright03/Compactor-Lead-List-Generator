@@ -66,10 +66,12 @@ def test_a_lead_that_closed_moves_to_the_closed_tab_on_refresh(monkeypatch):
     closed.business_status = "CLOSED_PERMANENTLY"
     saved.save_search([closed])
     body = client.get(f"/leads?tab=unchecked&since={since}").get_json()
-    [changed] = body["leads"]
-    assert changed["key"] == lead.uid and changed["closed"] and not changed["in_view"]
+    # It left the view asked about, so only its key comes back (the page drops the row).
+    assert body["leads"] == [{"key": lead.uid, "in_view": False}]
     assert body["removed"] == [] and body["counts"]["unchecked"] == 0
     assert body["counts"]["closed"] == 1 and body["counts"]["all"] == 1
+    [changed] = client.get(f"/leads?tab=closed&since={since}").get_json()["leads"]
+    assert changed["key"] == lead.uid and changed["closed"] and changed["in_view"]
 
 
 def test_refresh_of_a_big_list_is_small_and_quick(monkeypatch):

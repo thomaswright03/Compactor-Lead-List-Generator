@@ -247,7 +247,7 @@ def test_typed_call_notes_survive_closing_the_box(page):
 
 def test_titles_hints_and_empty_pages(page):
     assert page.title() == "Leads · Arco Compactor Lead Finder"
-    assert "mark the business Yes" in page.inner_text("#call-hint")
+    assert "whatever its answer" in page.inner_text("#call-hint")
     page.click("nav a[data-page=calls]")
     page.wait_for_function("document.title === 'Calls · Arco Compactor Lead Finder'")
     expect(page.locator("#calls-wrap")).to_contain_text("Log a call with Just called")
@@ -268,8 +268,10 @@ def test_a_colleagues_mark_arrives_without_reloading_everything(page, monkeypatc
     with page.expect_response(lambda r: "/leads?" in r.url and "since=" in r.url) as info:
         page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
     body = info.value.json()
-    assert [l["name"] for l in body["leads"]] == ["Costco Wholesale"]
+    # It left Not checked, so only its key comes back (the page drops the row).
+    assert body["leads"] == [{"key": costco.uid, "in_view": False}]
     page.wait_for_selector("text=No baler or compactor (1)")
+    expect(_row(page, "Costco")).to_have_count(0)
 
 
 def test_touch_targets_on_a_phone(browser, site, page):
@@ -477,3 +479,54 @@ def test_skip_link_and_short_recent_changes(page):
     assert page.evaluate("document.activeElement.id") == "skip"
     page.keyboard.press("Enter")
     assert page.evaluate("document.activeElement.id") == "leads-wrap"
+
+
+def test_a_call_can_be_logged_before_the_business_is_marked(page):
+    _row(page, "Smith").get_by_role("button", name="Just called").click()
+    page.fill("#call-notes", "No answer; try the morning.")
+    page.locator("#outcomes").get_by_role("button", name="No Contact").click()
+    page.click("#call-save")
+    page.wait_for_selector("#call-dlg:not([open])", state="attached")
+    expect(_row(page, "Smith")).to_contain_text("No Contact")
+    expect(page.get_by_role("button", name="Not checked (3)")).to_be_visible()   # still to check
+    page.click("nav a[data-page=calls]")
+    page.get_by_role("button", name="No Contact (1)").click()
+    expect(page.locator("#calls-wrap")).to_contain_text("No answer; try the morning.")
+
+
+def test_a_double_click_on_start_search_selects_nothing(page, monkeypatch):
+    from leadgen.pipeline import RunResult
+    monkeypatch.setattr(web.finding, "run", lambda params, progress: RunResult(
+        [], (40.76, -111.89), "SLC", [], {"leads kept": 0, "seconds": 3.2}))
+    sent = _posts(page, "/search")
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    page.click("#go")
+    page.dblclick("#confirm-go")
+    page.wait_for_selector("#done-card:not([hidden])")
+    assert len(sent) == 1
+    assert page.evaluate("window.getSelection().toString()") == ""
+
+
+def test_missing_address_and_tier_meaning_are_written_out(browser, site, page):
+    lead = Lead(name="Nowhere Foods", lat=40.7, lon=-111.9, source="yelp", source_id="y9",
+                phone="(801) 555-0199", city="", raw_categories=["yelp:grocery"], yelp_reviews=200,
+                map_url="https://www.google.com/maps/search/?api=1&query=y9")
+    score_lead(lead, config.DEFAULT_KEYWORDS)
+    saved.save_search([lead], config.DEFAULT_KEYWORDS)
+    page.reload()
+    row = _row(page, "Nowhere Foods")
+    expect(row.locator("td.contact")).to_contain_text("No street address")
+    expect(row.locator("td.contact a.map")).to_have_count(1)
+    words = {"A": "strong", "B": "likely", "C": "possible", "D": "weak"}
+    score = row.locator("td.score")
+    tier = score.inner_text().split()[1]
+    assert score.inner_text().split()[2] == words[tier] and words[tier] in score.get_attribute("title")
+    phone = browser.new_context(viewport={"width": 390, "height": 844}, has_touch=True)
+    tab = phone.new_page()
+    tab.goto(site + "#leads")
+    card = tab.locator("table.leads tbody tr", has_text="Nowhere Foods")
+    expect(card).to_contain_text("No street address")
+    expect(card.locator("td.score")).to_contain_text(f"{tier} {words[tier]}")
+    assert tab.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    phone.close()

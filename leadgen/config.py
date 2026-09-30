@@ -400,9 +400,19 @@ YELP_CACHE_TTL_SECONDS = 7 * 24 * 3600
 # but only when the site is next used (there is no scheduled purge).
 SAVED_SOURCE_KEEP_SECONDS: dict[str, float] = {}
 
-# The whole map-data step (every mirror together) gives up after this long, so a
+# The whole map-data step (every part, every mirror) gives up after this long, so a
 # search never hangs for many minutes when the free map servers are down.
-OVERPASS_DEADLINE_SECONDS = 120
+OVERPASS_DEADLINE_SECONDS = 240
+# The public map servers often refuse or time out on one query for a whole 30-mile
+# circle, so a wide search is asked in parts: a grid of boxes up to this many miles
+# wide (a 30-mile search is 9 parts), this many at a time. A part gets at most
+# OVERPASS_PART_SECONDS; one that fails is asked again as four smaller quarters
+# (OVERPASS_SPLITS times at most), and a part no server answered leaves the search
+# incomplete (what the other parts found is kept).
+OVERPASS_PART_MILES = 20
+OVERPASS_PARALLEL = 2
+OVERPASS_PART_SECONDS = 90
+OVERPASS_SPLITS = 1
 # A mirror that hasn't answered after this long is not waited out: the next one is
 # asked as well, and the first good answer wins (a normal 30-mile query takes 10 to
 # 40 seconds, and the slow mirror can still answer until the deadline).
@@ -423,7 +433,7 @@ CACHE_TTL_SECONDS = 7 * 24 * 3600
 
 
 # Off switches for whoever runs the site, read on every request (set them in
-# Render > Environment; see the README). Any of 1 / true / yes / on counts as set.
+# Render > Environment; see docs/operator-runbook.md). Any of 1 / true / yes / on counts as set.
 SEARCH_PAUSED_ENV = "LEADGEN_SEARCH_PAUSED"   # Find leads refuses to start
 GOOGLE_OFF_ENV = "LEADGEN_GOOGLE_OFF"         # searches skip Google (no Google charges)
 YELP_OFF_ENV = "LEADGEN_YELP_OFF"             # searches skip Yelp

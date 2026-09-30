@@ -5,7 +5,10 @@ it found) in the database; the record is claimed atomically when the button is
 clicked, so two clicks can never both run. A search that fails before finding
 anything (e.g. an unknown location) gives the day back, and so does one where a
 source failed (e.g. Google refused its key) even though others found businesses:
-what was found is saved, and the day's search can be run again.
+what was found is saved, and the day's search can be run again, but only
+INCOMPLETE_RERUNS more times that day: when the last re-run is incomplete too,
+it keeps the day (so a broken key can't turn the day into unlimited searches,
+each spending Yelp calls and map-server time).
 """
 
 import datetime as dt
@@ -29,6 +32,9 @@ def today() -> str:
 # A search takes minutes. One that never finished (the server restarted mid-search)
 # stops holding the day after this long, so the day's search can be run again.
 STALE_SECONDS = 30 * 60
+
+# After an incomplete search the day's search can be run this many more times.
+INCOMPLETE_RERUNS = 1
 
 # A day's search as the page shows it: day, at, when, and what was searched and found.
 Record = dict[str, Any]
@@ -75,6 +81,13 @@ def release(day: str, reason: str | None = None, extra: dict[str, Any] | None = 
                    (uuid.uuid4().hex, day, row[0], json.dumps(info)))
 
 
+def incomplete_count(day: str) -> int:
+    """How many of the day's searches were incomplete and gave the day back."""
+    with store.connect() as db:
+        rows = db.all("SELECT info FROM search_failures WHERE day = ?", (day,))
+    return sum(1 for (info,) in rows if json.loads(info).get("partial"))
+
+
 def _abandoned(record: Record | None, now: float) -> bool:
     return record is not None and "leads" not in record and now - record["at"] > STALE_SECONDS
 
@@ -98,5 +111,8 @@ def history(limit: int = 60) -> dict[str, Any]:
     records = [_as_record(r) for r in rows]
     current = records[0] if records and records[0]["day"] == today() else None
     searches = sorted(records + [_as_record(r) for r in failed], key=lambda r: -r["at"])[:limit]
-    return {"today": today(), "used_today": bool(current) and not _abandoned(current, time.time()),
-            "current": current, "searches": searches}
+    day = today()
+    partial = sum(1 for r in failed if r[0] == day and json.loads(r[2]).get("partial"))
+    return {"today": day, "used_today": bool(current) and not _abandoned(current, time.time()),
+            "current": current, "searches": searches,
+            "reruns_left": max(0, INCOMPLETE_RERUNS - partial + 1) if partial else None}

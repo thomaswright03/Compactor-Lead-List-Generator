@@ -133,6 +133,7 @@ table.leads th button.sort { background:none; border:0; padding:0; color:inherit
 table.leads th button.sort .arrow { color:var(--muted); }
 tr.A td.score { background:var(--a); } tr.B td.score { background:var(--b); }
 tr.C td.score { background:var(--c); } tr.D td.score { background:var(--d); }
+td.score .tier-word { display:block; font-size:var(--fs-sm); font-weight:400; }   /* "B likely" under the score */
 tr.competitor td { background:var(--comp); }
 .nowrap { white-space:nowrap; }
 .flag { color:var(--bad-ink); font-weight:600; font-size:var(--fs-sm); }
@@ -280,6 +281,7 @@ dialog::backdrop { background:var(--backdrop); }
   table.leads td { display:block; border:0; padding:0; min-width:0; }
   table.leads td.c-name { grid-area:name; }
   table.leads td.score { grid-area:score; align-self:start; border-radius:var(--r-pill); padding:0 var(--sp-2); font-weight:700; }
+  table.leads td.score .tier-word { display:inline; }
   table.leads td.c-mark { grid-area:mark; }
   table.leads td.contact { grid-area:contact; }
   table.leads td.c-miles { grid-area:miles; color:var(--muted); font-size:var(--fs-sm); }

@@ -51,10 +51,12 @@ def test_map_data_step_has_one_overall_deadline(monkeypatch):
         raise HttpError(f"{url}: ConnectionResetError(104, 'reset')")
     monkeypatch.setattr(osm, "request_json", slow_failure)
     with pytest.raises(osm.SourceError):
-        osm.search(40.76, -111.89, 30)
-    assert clock["now"] - 1000 <= config.OVERPASS_DEADLINE_SECONDS
-    assert len(timeouts) == 1                      # no time was left for another mirror
-    assert f"[timeout:{config.OVERPASS_DEADLINE_SECONDS}]" in osm.build_query(40.76, -111.89, 30)
+        osm.search(40.76, -111.89, 5)
+    # The whole query, then its quarters, until the step's time is used up; no part
+    # waits longer than a part's share (two parts run at once, so one may overrun).
+    assert clock["now"] - 1000 <= config.OVERPASS_DEADLINE_SECONDS + config.OVERPASS_PART_SECONDS
+    assert all(t[1] <= config.OVERPASS_PART_SECONDS for t in timeouts) and len(timeouts) <= 5
+    assert f"[timeout:{config.OVERPASS_PART_SECONDS}]" in osm.build_query(40.76, -111.89, 30)
 
 
 def test_quick_mirror_failures_try_the_next_one(monkeypatch):
@@ -66,7 +68,7 @@ def test_quick_mirror_failures_try_the_next_one(monkeypatch):
             raise HttpError(f"{url} returned HTTP 504: <html><title>504 Gateway Time-out")
         return {"elements": []}
     monkeypatch.setattr(osm, "request_json", fail_then_answer)
-    assert osm.search(40.76, -111.89, 30) == ([], [])
+    assert osm.search(40.76, -111.89, 5) == ([], [])
     assert tried == config.OVERPASS_ENDPOINTS[:3]
 
 
@@ -92,7 +94,7 @@ def test_a_hanging_mirror_does_not_stop_the_others(monkeypatch):
     monkeypatch.setattr(osm, "request_json", mirrors)
     started = time.monotonic()
     try:
-        leads, warnings = osm.search(40.76, -111.89, 30)
+        leads, warnings = osm.search(40.76, -111.89, 5)
     finally:
         released.set()
     assert [l.name for l in leads] == ["Harmons"] and warnings == []

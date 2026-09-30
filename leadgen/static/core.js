@@ -143,3 +143,14 @@ function writeHash(page) {
   if (location.hash !== hash) history.replaceState(null, "", hash);
 }
 window.addEventListener("hashchange", route);
+
+// A double-click on a dialog's button (Start search, Save, Close) closes the dialog with the
+// first click; the second must not land on the page underneath and select its text.
+let dialogClickAt = 0;
+document.addEventListener("click", (e) => { if (e.target.closest("dialog button")) dialogClickAt = Date.now(); }, true);
+document.addEventListener("mousedown", (e) => {
+  if (e.detail > 1 && (Date.now() - dialogClickAt < 800 || e.target.closest("dialog button"))) e.preventDefault();
+}, true);
+document.addEventListener("dblclick", () => {
+  if (Date.now() - dialogClickAt < 800) window.getSelection().removeAllRanges();
+}, true);

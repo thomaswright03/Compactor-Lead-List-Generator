@@ -1,15 +1,16 @@
 # Is the live site running the latest commit on main that passed CI?
 #
 # Render deploys a commit only after CI passes on it (render.yaml, autoDeployTrigger:
-# checksPass). This runs every hour (and by hand from the Actions tab) and fails, so the
-# owner gets GitHub's failure email, when the latest green commit on main has not gone
-# live 40 minutes after it was pushed: then deploy it by hand (README, "Deploying").
+# checksPass), in about 5 minutes. This runs every 15 minutes (and by hand from the
+# Actions tab) and fails, so the owner gets GitHub's failure email, when the latest green
+# commit on main has not gone live 20 minutes after its checks passed: then deploy it by
+# hand (docs/operator-runbook.md, "Deploying").
 # It never waits on a deploy, so it can't hold one up.
 name: Live site
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -30,17 +31,17 @@ jobs:
           LIVE_URL: ${{ vars.LIVE_URL || 'https://compactor-lead-finder.onrender.com' }}
         run: |
           run=$(gh run list --workflow ci.yml --branch main --event push --limit 1 \
-                  --json headSha,conclusion,createdAt \
-                  --jq '.[0] | "\(.headSha) \(.conclusion) \(.createdAt)"')
+                  --json headSha,conclusion,updatedAt \
+                  --jq '.[0] | "\(.headSha) \(.conclusion) \(.updatedAt)"')
           read -r sha conclusion created <<< "$run"
-          echo "Latest CI run on main: ${sha::7} ($conclusion, pushed $created)"
+          echo "Latest CI run on main: ${sha::7} ($conclusion, finished $created)"
           if [ "$conclusion" != "success" ]; then
             echo "Not green (or still running), so Render doesn't deploy it: nothing to check."
             exit 0
           fi
           age=$(( $(date +%s) - $(date -d "$created" +%s) ))
-          if [ "$age" -lt 2400 ]; then
-            echo "Pushed less than 40 minutes ago; Render may still be deploying it."
+          if [ "$age" -lt 1200 ]; then
+            echo "Its checks passed less than 20 minutes ago; Render may still be deploying it."
             exit 0
           fi
           got=$(curl -fsS -m 90 "$LIVE_URL/healthz" | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])' || true)
@@ -48,5 +49,5 @@ jobs:
           if [ -n "$got" ] && git merge-base --is-ancestor "$sha" "$got" 2>/dev/null; then
             exit 0
           fi
-          echo "::error::The live site is not running ${sha::7}, which passed CI. Deploy it by hand in Render (README, Deploying)."
+          echo "::error::The live site is not running ${sha::7}, which passed CI. Deploy it by hand in Render (docs/operator-runbook.md, Deploying)."
           exit 1

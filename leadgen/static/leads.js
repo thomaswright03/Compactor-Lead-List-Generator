@@ -38,9 +38,13 @@ async function loadChanges() {
   const seq = S.seq, wrap = $("leads-wrap"), top = wrap.scrollTop;
   const p = viewQuery();
   p.set("since", S.since);
+  p.set("limit", S.limit);
+  if (S.pinned.size) p.set("keep", [...S.pinned.keys()].join(","));
   try {
     const body = await api(`/leads?${p}`);
     if (seq !== S.seq) return;
+    // More changed than this page shows (a search touched them all): fetch the page's rows again.
+    if (body.reload) { if (!$("page-calls").hidden) loadCalled(); else S.calledLoaded = false; return loadLeads(true); }
     S.since = body.now; S.refreshError = "";
     if (!body.leads.length && !body.removed.length) { renderLeads(); return; }
     let missing = false;
@@ -96,6 +100,8 @@ function counts() {
 const LEAD_TABS = [["", "Not checked"], ["yes", "Has baler or compactor"], ["no", "No baler or compactor"],
                    ["competitors", "Competitors"], ["closed", "Closed"], ["all", "All"]];
 // Column sorts (done by the server) and the first direction a click picks.
+// What each tier means (the tier list's words).
+const TIER_WORDS = { A: "strong", B: "likely", C: "possible", D: "weak" };
 const SORTS = { score: { dir: "desc" }, name: { dir: "asc" }, city: { dir: "asc" }, miles: { dir: "asc" } };
 
 function tabs(box, items, current, onPick) {
@@ -290,8 +296,11 @@ function leadRow(l, withCall) {
   tr.className = l.tier + (l.lead_type === "Competitor" ? " competitor" : "")
     + (pinnedNow(l.key) && !inTab(l) ? " just-marked" : "");
   tr.append(markCell(l, withCall));
-  const score = el("td", `${l.score} (${l.tier})`, "score nowrap");
-  score.title = `Score ${l.score} of 100, tier ${l.tier}`;
+  // The tier's meaning is written next to the score (A strong, B likely, C possible, D weak).
+  const word = TIER_WORDS[l.tier] || "";
+  const score = el("td", String(l.score), "score nowrap");
+  score.append(el("span", ` ${l.tier} ${word}`.trimEnd(), "tier-word"));
+  score.title = `Score ${l.score} of 100, tier ${l.tier}${word ? `: ${word} to have a baler or compactor` : ""}`;
   tr.append(score);
   const name = el("td", undefined, "c-name");
   name.append(el("strong", l.name));
@@ -300,7 +309,9 @@ function leadRow(l, withCall) {
   for (const f of l.flags) name.append(el("div", f, "flag"));
   tr.append(name);
   const contact = el("td", undefined, "contact");
+  // A lead without a street address says so (like "No phone listed"), next to its map link.
   const addr = el("div", [l.address, l.city, l.zip].filter(Boolean).join(", "));
+  if (!l.address) addr.prepend(el("span", "No street address", "sub"), l.city || l.zip ? " · " : "");
   if (l.map_url) {
     const map = link(l.map_url, "map"); map.classList.add("map"); map.setAttribute("aria-label", `${l.name} on a map`);
     addr.append(" ", map);
@@ -363,7 +374,7 @@ function renderLeads() {
   $("leads-note").replaceChildren(...(S.refreshError ? [el("div", S.refreshError, "warn")] : []));
   const c = S.counts || {};
   tabs($("lead-tabs"), LEAD_TABS.map(([v, t]) => [v, t, c[v || "unchecked"] || 0]), S.leadView, pickTab);
-  $("call-hint").hidden = ["yes", "competitors", "closed"].includes(S.leadView) || !c.all;
+  $("call-hint").hidden = ["competitors", "closed"].includes(S.leadView) || !c.all;
   $("competitor-hint").hidden = S.leadView !== "competitors";
   $("closed-hint").hidden = S.leadView !== "closed";
   const wrap = $("leads-wrap");
@@ -376,7 +387,8 @@ function renderLeads() {
       : S.leadView === "closed" ? "No saved business has been reported closed for good." : "Nothing here yet.";
     wrap.replaceChildren(el("div", empty, "empty"));
   } else {
-    wrap.replaceChildren(leadTable(S.leads, S.leadView === "yes"));
+    // Every prospect can be called (a call is how staff find out); competitors have no buttons.
+    wrap.replaceChildren(leadTable(S.leads, true));
   }
   $("sort-pick").value = `${S.sort}:${S.dir}`;
   if (!$("sort-pick").value) $("sort-pick").value = "score:desc";
@@ -420,7 +432,6 @@ $("sort-pick").addEventListener("change", () => {
   S.limit = 300; unpinAll(); changeView();
 });
 $("tier").addEventListener("change", () => { S.tier = $("tier").value; S.limit = 300; unpinAll(); changeView(); });
-$("call-hint-go").addEventListener("click", () => pickTab("yes"));
 
 /* The downloads: building a big Excel file takes a moment, so the button says so and a second
    click doesn't start another. The server's answer is fetched and saved as a file. */

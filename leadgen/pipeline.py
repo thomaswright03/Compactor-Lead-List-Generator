@@ -90,6 +90,8 @@ class RunResult:
     problems: list[str] = field(default_factory=list)   # technical detail of failed sources
     # The sources that failed ("google", "yelp", "osm") while others still found businesses.
     failed_sources: list[str] = field(default_factory=list)
+    # Of those, the ones that answered for part of the area (the map data, asked in parts).
+    partial_sources: list[str] = field(default_factory=list)
 
     def run_info(self, params: SearchParams) -> dict[str, Any]:
         info = {k: v for k, v in asdict(params).items() if k not in ("api_key", "yelp_api_key", "skip_yelp")}
@@ -149,7 +151,7 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
     if params.source == "auto" and not (api_key or yelp_key):
         warnings.append("No Google Places or Yelp API key set: using free OpenStreetMap data "
                         "only. Add a key for much better phone coverage.")
-    raw, errors, failed = _query_sources(params, (use_google, use_yelp, use_osm), (api_key, yelp_key),
+    raw, errors, failed, partly = _query_sources(params, (use_google, use_yelp, use_osm), (api_key, yelp_key),
                                  keywords, lat, lon, progress, warnings, stats)
 
     say(f"Filtering {len(raw)} raw results to {params.radius_miles:g} miles")
@@ -215,15 +217,15 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
         "seconds": round(time.time() - started, 1),
     })
     return RunResult(kept, (lat, lon), label, warnings, stats, problems=errors,
-                     failed_sources=failed)
+                     failed_sources=failed, partial_sources=partly)
 
 
 def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tuple[str, str],
                    keywords: list[str], lat: float, lon: float, progress: Progress | None,
                    warnings: list[str], stats: dict[str, object]
-                   ) -> tuple[list[Lead], list[str], list[str]]:
+                   ) -> tuple[list[Lead], list[str], list[str], list[str]]:
     """Ask each source in turn; returns (raw leads, technical errors, the sources that
-    failed). Adds plain notes to
+    failed, those of them that failed for only part of the area). Adds plain notes to
     warnings and counts to stats. A source the administrator switched off since the
     search started is skipped; raises PipelineError when nothing at all was found."""
     use_google, use_yelp, use_osm = use
@@ -232,6 +234,7 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
     raw: list[Lead] = []
     errors: list[str] = []
     failed: list[str] = []
+    partly: list[str] = []          # failed for only part of the area (some businesses found)
     stopped: list[str] = []
 
     def halted(source: str) -> bool:
@@ -278,6 +281,14 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
             raw += found
             warnings += w
             stats["osm raw results"] = len(found)
+        except osm.PartialResult as exc:
+            # Some parts of the area answered: keep what they found; the search is incomplete.
+            raw += exc.leads
+            warnings += exc.warnings
+            stats["osm raw results"] = len(exc.leads)
+            errors.append(str(exc))
+            failed.append("osm")
+            partly.append("osm")
         except SourceError as exc:
             errors.append(str(exc))
             failed.append("osm")
@@ -294,6 +305,9 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
     if errors and not raw:
         raise PipelineError(f"Couldn't reach {_names(failed)}, so no leads were found.",
                             detail=" | ".join(errors))
-    warnings += [f"Couldn't reach {SOURCE_NAMES[s]} this time, so its businesses are missing "
+    warnings += [f"{SOURCE_NAMES[s][0].upper()}{SOURCE_NAMES[s][1:]} answered for only part of "
+                 "the area this time, so some of its businesses are missing from this search."
+                 if s in partly else
+                 f"Couldn't reach {SOURCE_NAMES[s]} this time, so its businesses are missing "
                  "from this search." for s in failed]
-    return raw, errors, failed
+    return raw, errors, failed, partly

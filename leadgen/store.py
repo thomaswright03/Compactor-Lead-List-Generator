@@ -93,9 +93,10 @@ def database_url() -> str:
 
 
 class Db:
-    def __init__(self, conn: Any, postgres: bool) -> None:
+    def __init__(self, conn: Any, postgres: bool, key: str = "") -> None:
         self.conn = conn
         self.postgres = postgres
+        self.key = key          # which database this is (for caches kept per database)
 
     def _sql(self, sql: str) -> str:
         return sql.replace("?", "%s") if self.postgres else sql
@@ -174,14 +175,15 @@ def open_db() -> Db:
         except (psycopg.Error, OSError) as exc:
             log.warning("Database connection failed: %s", exc.__class__.__name__)
             raise Unavailable("the database could not be reached") from exc
-        db, ready_key = Db(conn, True), url
+        db, ready_key = Db(conn, True, url), url
     elif on_render():
         raise Unavailable("no database is connected yet (DATABASE_URL is not set in Render)")
     else:
         http.CACHE_DIR.mkdir(parents=True, exist_ok=True)
         path = http.CACHE_DIR / "leadgen.db"
         conn = sqlite3.connect(path, timeout=30, isolation_level=None, check_same_thread=False)
-        db, ready_key = Db(conn, False), str(path.resolve())
+        ready_key = str(path.resolve())
+        db = Db(conn, False, ready_key)
     try:
         with _lock:
             if ready_key not in _ready or not db.postgres:

@@ -41,7 +41,7 @@ MAX_REQUESTS_LIMIT = 5000
 STEPS = ["Find the location", "Search Yelp and Google", "Search map data", "Merge and score",
          "Save"]
 # A step running longer than this (seconds) is "taking longer than usual" on the page.
-SLOW_SECONDS = [30, 240, 75, 60, 60]
+SLOW_SECONDS = [30, 240, 150, 60, 60]
 
 # The search's numbers, as the page names them (the search history's "Details"), in the
 # order they read as a funnel: found per source, within the radius, merged, left out,
@@ -139,9 +139,10 @@ def plain_progress(msg: str) -> str:
     if msg.startswith(("Yelp: ", "Google: ")):
         return f"Searching {msg.split(':')[0]}"
     if msg.startswith("OpenStreetMap"):
-        server = re.search(r"server (\d+) of (\d+)", msg)
+        server = re.search(r"(server|part) (\d+) of (\d+)", msg)
+        what = {"server": "server", "part": "area"}[server.group(1)] if server else ""
         return ("Searching the free map data"
-                + (f" (server {server.group(1)} of {server.group(2)})" if server else "") + "…")
+                + (f" ({what} {server.group(2)} of {server.group(3)})" if server else "") + "…")
     if msg.startswith("Filtering"):
         return "Keeping the businesses within the radius"
     if msg.startswith("Merging"):
@@ -182,7 +183,9 @@ class _Progress:
             self._at(1, 6 + 42 * min(1.0, self.calls / max(self.cap or 1, 1)))
         elif msg.startswith("OpenStreetMap"):
             self.map_started = self.map_started or time.time()
-            self._at(2, 50)
+            part = re.search(r"part (\d+) of (\d+)", msg)
+            # A wide search is asked in parts: the bar moves on with each one.
+            self._at(2, 50 + (36 * (int(part.group(1)) - 1) / int(part.group(2)) if part else 0))
         elif msg.startswith("Filtering"):
             self._at(3, 88)
         elif msg.startswith("Merging"):
@@ -289,13 +292,14 @@ def _save(job: Job, result: RunResult, params: SearchParams, warnings: list[str]
         log.exception("Counting the saved leads failed")
 
 
-def _record(day: str, result: RunResult, job: Job, warnings: list[str]) -> None:
+def _record(day: str, result: RunResult, job: Job, warnings: list[str],
+            extra: dict[str, Any] | None = None) -> None:
     """The day's record is written before the job says it is done, so the page's
     search history is up to date when it reloads it."""
     try:
         daily.finish(day, {"leads": len(result.leads), "new": job.get("new_leads"),
                            "found_near": result.location_label,
-                           "details": result.stats, "warnings": warnings})
+                           "details": result.stats, "warnings": warnings, **(extra or {})})
     except Exception:
         log.exception("Recording today's search failed; retrying with the count only")
         # Try once more with just the count: without it the day would look unfinished
@@ -343,21 +347,43 @@ def _worker(job: Job, params: SearchParams, day: str) -> None:
 
 def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str]) -> None:
     """A search where a source failed (a paid one refused its key, say) while others
-    found businesses: what was found is saved, but the day is given back, so the
-    search can be run again once the source works."""
+    found businesses: what was found is saved, and the day is given back, so the
+    search can be run again once the source works; but only daily.INCOMPLETE_RERUNS
+    more times: an incomplete re-run after that keeps the day."""
     names = _source_names(result.failed_sources)
     paid = [s for s in result.failed_sources if s in ("google", "yelp")]
-    reason = (f"Couldn't reach {names}, so its businesses are missing from this search; "
-              f"the {len(result.leads):,} businesses the other sources found were "
+    whole = [s for s in result.failed_sources if s not in result.partial_sources]
+    parts = [f"Couldn't reach {_source_names(whole)}, so its businesses are missing"] if whole else []
+    if result.partial_sources:
+        parts.append(f"{_source_names(result.partial_sources)} answered for only part of the "
+                     "area, so some of its businesses are missing")
+    reason = (" and ".join(parts)[:1].upper() + " and ".join(parts)[1:]
+              + f" from this search; the {len(result.leads):,} businesses found were "
               + ("saved." if job.get("saved") else "kept."))
     advice = (f" If it keeps happening, ask whoever looks after the site to check the "
               f"{_source_names(paid)} key." if paid else "")
-    warnings.append(f"{NOT_USED_UP} You can run it again to fill in what {names} would "
-                    f"have found.{advice}")
-    _give_back(day, reason, {"partial": True, "leads": len(result.leads),
-                             "new": job.get("new_leads"), "details": result.stats,
-                             "warnings": warnings})
+    try:
+        earlier = daily.incomplete_count(day)
+    except Exception:
+        log.exception("Counting today's incomplete searches failed")
+        earlier = 0
+    if earlier >= daily.INCOMPLETE_RERUNS:
+        # The re-run allowance is used up: this search keeps the day, like a complete one.
+        warnings.append(f"{reason} This was today's re-run, so today's search is now used up; "
+                        f"the next search can run tomorrow.{advice}")
+        _record(day, result, job, warnings, {"partial": True, "reason": reason})
+    else:
+        left = daily.INCOMPLETE_RERUNS - earlier
+        warnings.append(f"{NOT_USED_UP} You can run it again {_times(left)} today to fill in "
+                        f"what {names} would have found.{advice}")
+        _give_back(day, reason, {"partial": True, "leads": len(result.leads),
+                                 "new": job.get("new_leads"), "details": result.stats,
+                                 "warnings": warnings})
     alerts.report("search", f"Today's search was incomplete: {reason}{advice}")
+
+
+def _times(n: int) -> str:
+    return "once" if n == 1 else f"{n} times"
 
 
 def _source_names(sources: list[str]) -> str:
@@ -398,7 +424,8 @@ def _claim(params: SearchParams) -> str | tuple[Response, int]:
     if day is None:
         when = done["when"] if done else "earlier today"
         return jsonify({"error": f"Today's search was already run ({when}). Find Leads works "
-                                 "once a day; the next search can run tomorrow.",
+                                 "once a day; the next search can run tomorrow, from midnight "
+                                 "Utah time.",
                         "searched": done}), 409
     return day
 

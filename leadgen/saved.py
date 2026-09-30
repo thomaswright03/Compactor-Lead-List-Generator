@@ -11,6 +11,7 @@ its listing ids, so its mark comes back if a search finds it again.
 
 A business a later search reports closed for good stays in the list (with its
 mark and calls), flagged CLOSED_FLAG; it is not offered for checking any more.
+A closed business that was never saved is not added: nobody prospected it.
 
 A saved lead is always scored with the default keywords
 (config.DEFAULT_KEYWORDS), never with what someone typed into a later search,
@@ -20,6 +21,7 @@ page's tiers stay comparable over time.
 
 import copy
 import json
+import threading
 import time
 import uuid
 from collections.abc import Iterable, Sequence
@@ -126,9 +128,10 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
     keywords: what the search was scored with; a lead scored with anything but
     the default keywords is scored again with them before it is saved.
 
-    Leads the search found permanently closed update their row too (it then
-    stays in the list flagged CLOSED_FLAG, with its mark and calls). Returns
-    (new, updated) counts of open businesses. Raises store.Unavailable
+    Leads the search found permanently closed update their row if the business
+    is already saved (it then stays in the list flagged CLOSED_FLAG, with its
+    mark and calls); a closed business that isn't saved yet is not added (and
+    gets no uid). Returns (new, updated) counts of open businesses. Raises store.Unavailable
     without a database, or a database error; no lead gets a uid then.
     """
     now = time.time()
@@ -156,9 +159,12 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
                         if r.uid not in claimed and r.lead is not None and is_duplicate(lead, r.lead)]
                 row = min(near, key=lambda r: _miles_between(lead, r.lead), default=None)
             if row is None:
+                if lead.business_status == CLOSED:
+                    uids.append("")             # closed before anyone saw it: not added
+                    continue
                 row = _Row(uuid.uuid4().hex, None, [], set(), now, now)
                 rows.append(row)
-                new += lead.business_status != "CLOSED_PERMANENTLY"
+                new += 1
             older = [p for p in row.parts if _part_id(p) not in ids]
             row.parts = parts + older
             row.ids |= ids
@@ -169,7 +175,7 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
                 row.lead = copy.deepcopy(lead)
                 if rescore:
                     score_lead(row.lead, config.DEFAULT_KEYWORDS)
-            if lead.business_status == "CLOSED_PERMANENTLY":
+            if lead.business_status == CLOSED:
                 row.lead.business_status = lead.business_status
             row.lead.uid = row.uid
             row.lead.parts = []
@@ -182,12 +188,54 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
         _write(db, changed.values())
     for lead, uid in zip(leads, uids):
         lead.uid = uid
-    shown = sum(l.business_status != "CLOSED_PERMANENTLY" for l in leads)
+    shown = sum(l.business_status != CLOSED for l in leads)
     return new, shown - new
 
 
 def is_closed(lead: Lead) -> bool:
     return lead.business_status == CLOSED
+
+
+# The parsed saved list, per database: (fingerprint, leads ready to show). Every
+# change to a saved row stamps its last_seen (save_search), so the row count and
+# the sum and latest of those stamps say whether the list changed since it was
+# parsed, in this process or another. Parsing 10,000 rows takes about 0.4 s; this
+# check is one quick query.
+_parsed: dict[str, tuple[store.Row | None, list[Lead]]] = {}
+_parsed_lock = threading.Lock()
+
+
+def _ready(row: _Row) -> Lead | None:
+    """A saved row's lead as the pages show it (closed flag, uid, miles from Arco)."""
+    lead = row.lead
+    if lead is None:
+        return None
+    if is_closed(lead) and CLOSED_FLAG not in lead.flags:
+        lead.flags = [CLOSED_FLAG, *lead.flags]
+    lead.uid = row.uid
+    lead.distance_miles = round(haversine_miles(*config.DEFAULT_CENTER, lead.lat, lead.lon), 2)
+    return lead
+
+
+def _best_first(leads: list[Lead]) -> list[Lead]:
+    leads.sort(key=lambda l: (-l.score, l.distance_miles, l.name.lower()))
+    return leads
+
+
+def _whole_list(db: store.Db) -> list[Lead]:
+    """Every saved lead, parsed once and reused until a search changes the list. Each
+    call gets its own copies (marks and calls are set on them per request)."""
+    fingerprint = db.one("SELECT COUNT(*), MAX(last_seen), SUM(last_seen) FROM leads")
+    with _parsed_lock:
+        cached = _parsed.get(db.key)
+    if cached is None or cached[0] != fingerprint:
+        rows = [_Row(uid, _to_lead(data) if (data := json.loads(lead)) else None, [],
+                     set(), 0.0, 0.0)
+                for uid, lead in db.all("SELECT uid, lead FROM leads")]
+        cached = (fingerprint, _best_first([l for r in rows if (l := _ready(r))]))
+        with _parsed_lock:
+            _parsed[db.key] = cached
+    return [copy.copy(lead) for lead in cached[1]]
 
 
 def load(uids: Iterable[str] | None = None) -> list[Lead]:
@@ -204,27 +252,16 @@ def load(uids: Iterable[str] | None = None) -> list[Lead]:
         if config.SAVED_SOURCE_KEEP_SECONDS:
             rows = _read(db, None if wanted is None else list(wanted))
             _write(db, _drop_expired(rows, now))
+        elif wanted is None:
+            return _whole_list(db)
         else:
             # Nothing expires, so the source listings (most of each row) needn't be read.
             select = "SELECT uid, lead FROM leads"
-            found = (db.all(select) if wanted is None
-                     else store.rows_for(db, select, "uid", list(wanted)))
             rows = [_Row(uid, _to_lead(data) if (data := json.loads(lead)) else None, [],
                          set(), 0.0, 0.0)
-                    for uid, lead in found]
-    leads = []
-    for row in rows:
-        if wanted is not None and row.uid not in wanted:
-            continue
-        if row.lead:
-            if is_closed(row.lead) and CLOSED_FLAG not in row.lead.flags:
-                row.lead.flags = [CLOSED_FLAG, *row.lead.flags]
-            row.lead.uid = row.uid
-            row.lead.distance_miles = round(haversine_miles(
-                *config.DEFAULT_CENTER, row.lead.lat, row.lead.lon), 2)
-            leads.append(row.lead)
-    leads.sort(key=lambda l: (-l.score, l.distance_miles, l.name.lower()))
-    return leads
+                    for uid, lead in store.rows_for(db, select, "uid", list(wanted))]
+    return _best_first([l for r in rows
+                        if (wanted is None or r.uid in wanted) and (l := _ready(r))])
 
 
 def count() -> int:

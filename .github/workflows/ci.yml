@@ -2,7 +2,7 @@
 # test suite on SQLite and on Postgres (like the live site), including the browser
 # tests. Render deploys a commit on main only after these checks pass (render.yaml,
 # autoDeployTrigger: checksPass), and branch protection on main requires all three jobs
-# (README, "Deploying"). live.yml checks afterwards that the site runs the latest commit.
+# (docs/operator-runbook.md, "Deploying"). live.yml checks afterwards that the site runs the latest commit.
 name: CI
 
 on:
