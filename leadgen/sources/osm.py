@@ -19,6 +19,7 @@ from .. import config
 from ..geo import METERS_PER_MILE, haversine_miles
 from ..http import HttpError, cache_get, cache_put, request_json
 from ..models import Lead
+from ..scoring import generic_name
 from . import SourceError
 
 log = logging.getLogger(__name__)
@@ -182,6 +183,8 @@ def parse_element(el: dict[str, Any]) -> Lead | None:
             primary = _pretty(tags[k])
             break
     street = " ".join(x for x in [tags.get("addr:housenumber", ""), tags.get("addr:street", "")] if x)
+    if generic_name(name):
+        name = _descriptive(name, tags, street)
     etype = el.get("type", "node")
     footprint = None
     if etype in ("way", "relation") and ("building" in tags or "shop" in tags):
@@ -206,6 +209,19 @@ def parse_element(el: dict[str, Any]) -> Lead | None:
         business_status="CLOSED_PERMANENTLY" if tags.get("disused") == "yes" else "",
         map_url=f"https://www.openstreetmap.org/{etype}/{el.get('id')}",
     )
+
+
+def _descriptive(name: str, tags: dict[str, str], street: str) -> str:
+    """A generic map name ("Recycling") made into something a salesperson can look up:
+    with its operator or brand ("Recycling (Salt Lake County)"), else its street
+    ("Recycling at 1200 W 500 S"), else its city ("Recycling, Magna")."""
+    who = (tags.get("operator") or tags.get("brand") or "").strip()
+    if who and not generic_name(who):
+        return f"{name} ({who})"
+    if street:
+        return f"{name} at {street}"
+    city = tags.get("addr:city", "").strip()
+    return f"{name}, {city}" if city else name
 
 
 def _parts(lat: float, lon: float, radius_miles: float) -> list[Box]:

@@ -1,5 +1,5 @@
 {
- "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses Arco's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests. \"not_campus\": places named after a university or college that are not the campus (a garden, house, condo, department, press...); they must never score as a campus prospect. Businesses with \"not_prospect\": true (police, fire, impound, trailer yards, parcel lockers) must get no prospect category and score below the default minimum. \"not_production\": small shops and eateries whose name has a production word (\"Day Dairy Barn\"); a name alone must never make them a food & beverage plant. Map listings known only by a catch-all industrial tag on a small building (under 5,000 sq ft), and pumping stations, water wells, substations or a utility's or city's structures, are \"not_prospect\" too (with their footprint_sqft). \"name_traps\": listings whose name holds another business's name or a misleading word (a hotel named after the air base beside it, a thrift store called \"... Industries\"); each must get \"category\" and must never show a reason containing \"never_reason\".",
+ "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses Arco's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests. \"not_campus\": places named after a university or college that are not the campus (a garden, house, condo, department, press...); they must never score as a campus prospect. Businesses with \"not_prospect\": true (police, fire, impound, trailer yards, parcel lockers) must get no prospect category and score below the default minimum. \"not_production\": small shops and eateries whose name has a production word (\"Day Dairy Barn\"); a name alone must never make them a food & beverage plant. Map listings known only by a catch-all industrial tag on a small building (under 5,000 sq ft), and pumping stations, water wells, substations or a utility's or city's structures, are \"not_prospect\" too (with their footprint_sqft). \"name_traps\": listings whose name holds another business's name or a misleading word (a hotel named after the air base beside it, a thrift store called \"... Industries\"); each must get \"category\" and must never show a reason containing \"never_reason\". Self-storage places (\"Magna Safe Storage\", tagged or named so), data centres, career centres and a city's maintenance shops on a catch-all industrial tag are \"not_prospect\" too. More \"name_traps\": a retail chain whose name holds a warehouse word (\"Harbor Freight\") is retail, and a furniture shop mapped as a mall is never a venue. \"generic_names\": map listings whose only name is a generic word (\"Recycling\", \"Junkyard\"); each must score below the same place with a real name (\"named\"), and the free map data gives it a descriptive name (operator, street or city) where the map has one.",
  "businesses": [
   {
    "name": "Smith's Marketplace",
@@ -322,6 +322,77 @@
    "footprint_sqft": 4500,
    "has_equipment": false,
    "not_prospect": true
+  },
+  {
+   "name": "Library Storage",
+   "source": "osm",
+   "raw_categories": [
+    "building=warehouse"
+   ],
+   "footprint_sqft": 45000,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Magna Safe Storage",
+   "source": "osm",
+   "raw_categories": [
+    "building=warehouse"
+   ],
+   "footprint_sqft": 20000,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Storage Warehouse",
+   "source": "osm",
+   "raw_categories": [
+    "building=warehouse"
+   ],
+   "footprint_sqft": 20000,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Magna Safe Storage",
+   "source": "osm",
+   "raw_categories": [
+    "shop=storage_rental",
+    "building=industrial"
+   ],
+   "footprint_sqft": 20000,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Flexential Salt Lake City - Downtown",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "footprint_sqft": 45000,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Utah Career Center",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "footprint_sqft": 45000,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Woods Cross City Shops",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "footprint_sqft": 45000,
+   "has_equipment": false,
+   "not_prospect": true
   }
  ],
  "confirmed": [],
@@ -423,6 +494,70 @@
    ],
    "category": "specialty_retail",
    "never_reason": "Manufacturing"
+  },
+  {
+   "name": "Harbor Freight",
+   "source": "osm",
+   "raw_categories": [
+    "building=retail"
+   ],
+   "category": "specialty_retail",
+   "never_reason": "Warehouse"
+  },
+  {
+   "name": "Harbor Freight Tools",
+   "source": "osm",
+   "raw_categories": [
+    "building=warehouse",
+    "brand=Harbor Freight Tools"
+   ],
+   "category": "specialty_retail",
+   "never_reason": "Warehouse"
+  },
+  {
+   "name": "Liddiard Furniture",
+   "source": "osm",
+   "raw_categories": [
+    "shop=mall"
+   ],
+   "category": "retail",
+   "never_reason": "Mall"
+  },
+  {
+   "name": "Liddiard Furniture",
+   "source": "osm",
+   "raw_categories": [
+    "shop=furniture;mall"
+   ],
+   "category": "specialty_retail",
+   "never_reason": "Mall"
+  },
+  {
+   "name": "Lineage Cold Storage",
+   "source": "osm",
+   "raw_categories": [
+    "building=warehouse"
+   ],
+   "category": "distribution",
+   "never_reason": "no business name"
+  }
+ ],
+ "generic_names": [
+  {
+   "name": "Recycling",
+   "source": "osm",
+   "raw_categories": [
+    "amenity=recycling"
+   ],
+   "named": "Wasatch Recycling"
+  },
+  {
+   "name": "Junkyard",
+   "source": "osm",
+   "raw_categories": [
+    "industrial=scrap_yard"
+   ],
+   "named": "Rocky Mountain Recycling"
   }
  ]
 }

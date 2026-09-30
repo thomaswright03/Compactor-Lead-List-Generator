@@ -303,6 +303,7 @@ UTILITY_OSM_TAGS = [
     ("power", "substation"), ("power", "transformer"), ("power", "switch"),
     ("building", "transformer_tower"), ("building", "pumping_station"),
     ("pumping_station", None), ("substation", None), ("telecom", None),
+    ("building", "data_center"), ("building", "data_centre"),
 ]
 # A place known only by a catch-all industrial tag (building=industrial,
 # landuse=industrial) is a utility structure when its name or its operator tag says
@@ -335,6 +336,78 @@ SMALL_GENERIC_BUILDING_SQFT = 5_000
 NOT_MANUFACTURING_NAME_WORDS = ["store", "stores", "thrift", "outlet", "boutique",
                                 "showroom", "retail"]
 RETAIL_OSM_TAGS = [("landuse", "retail")]
+
+# Self-storage (units rented to the public, "Magna Safe Storage", "Storage Warehouse",
+# tagged shop=storage_rental) is not a warehouse prospect: tenants take their rubbish
+# home. A name counts when it has one of SELF_STORAGE_NAME_WORDS, or the word "storage"
+# without a word that makes it a logistics or cold store (COLD_STORAGE_WORDS,
+# LOGISTICS_NAME_WORDS: "Lineage Cold Storage", "Acme Storage & Distribution"). A
+# specific recycling tag (NAME_BLOCK_RESCUE_TAGS) still counts.
+SELF_STORAGE_OSM_TAGS = [("shop", "storage_rental"), ("amenity", "storage_rental"),
+                         ("building", "storage_rental")]
+SELF_STORAGE_GOOGLE_TYPES = {"storage", "self_storage"}
+SELF_STORAGE_NAME_WORDS = ["self storage", "selfstorage", "self-storage", "safe storage",
+                           "storage units", "storage unit", "mini storage", "ministorage",
+                           "rv storage", "boat storage", "storage rental", "storage rentals",
+                           "public storage", "extra space storage", "cubesmart",
+                           "u haul storage"]
+COLD_STORAGE_WORDS = ["cold", "frozen", "freezer", "refrigerated", "food", "foods", "grain",
+                      "bulk", "records", "document", "archive", "archives"]
+LOGISTICS_NAME_WORDS = ["distribution", "distributing", "logistics", "fulfillment",
+                        "warehousing", "supply chain", "3pl", "freight", "transport",
+                        "transportation", "trucking", "shipping"]
+
+# Places a catch-all industrial tag (building=industrial) doesn't make a plant: a data
+# centre, a job or career centre, a city's or county's maintenance shops and yards
+# ("Flexential Salt Lake City - Downtown", "Utah Career Center", "Woods Cross City
+# Shops"). No prospect category; a specific tag or a telling name still decides first.
+NOT_PLANT_NAME_WORDS = [
+    "data center", "data centre", "datacenter", "data centers", "colocation", "flexential",
+    "databank", "equinix", "digital realty", "cyrusone", "aligned data",
+    "career center", "career centre", "job center", "employment center", "workforce services",
+    "american job center", "city shops", "county shops", "public works", "city yard",
+    "city yards", "county yard", "streets division", "street department", "road shed",
+    "roads shed", "maintenance shops",
+]
+
+# Retail chains whose name holds a warehouse or industrial word ("Harbor Freight" sells
+# tools; the word "freight" says nothing): the name counts for the retail category
+# given here, never as a warehouse or plant.
+RETAIL_NAME_BRANDS = {
+    "harbor freight": "specialty_retail", "harbor freight tools": "specialty_retail",
+    "sportsman's warehouse": "specialty_retail", "sportsmans warehouse": "specialty_retail",
+    "the container store": "specialty_retail", "mattress warehouse": "specialty_retail",
+    "furniture warehouse": "specialty_retail", "shoe warehouse": "retail",
+    "dsw designer shoe warehouse": "retail", "men's wearhouse": "retail",
+}
+
+# A shop mapped as a mall (a furniture store tagged shop=mall) is the shop, not a
+# venue, unless its name says it is a shopping centre (MALL_NAME_WORDS).
+MALL_NAME_WORDS = ["mall", "shopping center", "shopping centre", "shopping plaza", "plaza",
+                   "town center", "towne center", "town centre", "marketplace", "commons",
+                   "crossing", "outlets", "outlet mall", "galleria", "square", "promenade",
+                   "fashion place", "gateway", "station park", "city creek", "center", "centre",
+                   "village", "shops at", "the shops"]
+SHOP_NAME_WORDS = ["furniture", "mattress", "mattresses", "appliance", "appliances", "store",
+                   "shop", "boutique", "showroom", "hardware", "tools", "carpet", "flooring",
+                   "rugs", "jewelers", "jewelry", "books", "home furnishings", "interiors",
+                   "decor", "gallery", "music", "pianos", "outdoor", "sports", "clothing"]
+
+# A place whose map name is only a generic word ("Recycling", "Junkyard") gives a
+# salesperson nothing to look up: the map data's name is made descriptive (its
+# operator, else "at" its street, else its city; osm.parse_element), and one still
+# known only by the word scores GENERIC_NAME_PENALTY less, so named places rank first.
+GENERIC_NAMES = [
+    "recycling", "recycling center", "recycling centre", "recycling drop off",
+    "recycling dropoff", "recycling drop-off", "recycling bins", "recycling containers",
+    "recycle", "recycle center", "junkyard", "junk yard", "scrap yard", "scrapyard",
+    "salvage yard", "landfill", "transfer station", "dump", "waste", "trash", "garbage",
+    "compactor", "dumpster", "dumpsters", "warehouse", "storage", "self storage",
+    "distribution center", "factory", "plant", "industrial", "industrial building",
+    "manufacturing", "shop", "store", "hotel", "apartments", "hospital", "grocery",
+    "supermarket", "mall",
+]
+GENERIC_NAME_PENALTY = 15
 
 NAME_BLOCK_RESCUE_TAGS = {("amenity", "recycling"), ("amenity", "waste_transfer_station"),
                           ("landuse", "landfill")}

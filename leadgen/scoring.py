@@ -147,6 +147,63 @@ def _shop_named(lead: Lead, name: str) -> bool:
             or any(_osm_tag_matches(lead, k, v) for k, v in config.RETAIL_OSM_TAGS))
 
 
+def self_storage(lead: Lead) -> bool:
+    """True for a self-storage place (units rented to the public), by its tag, Google
+    type or name (config.SELF_STORAGE_*), unless a specific tag says it is a recycling
+    site or transfer station. A cold store or a logistics firm's storage is not."""
+    if any(_osm_tag_matches(lead, k, v) for k, v in config.NAME_BLOCK_RESCUE_TAGS):
+        return False
+    if (any(_osm_tag_matches(lead, k, v) for k, v in config.SELF_STORAGE_OSM_TAGS)
+            or google_types(lead) & config.SELF_STORAGE_GOOGLE_TYPES):
+        return True
+    name = normalize(lead.name)
+    if any(_contains_term(name, w, whole=True) for w in config.SELF_STORAGE_NAME_WORDS):
+        return True
+    return (_contains_term(name, "storage", whole=True)
+            and not any(_contains_term(name, w, whole=True)
+                        for w in config.COLD_STORAGE_WORDS + config.LOGISTICS_NAME_WORDS))
+
+
+def _not_plant_named(name: str) -> bool:
+    """True when the name says a catch-all industrial building is a data centre, a career
+    centre or a city's shops (config.NOT_PLANT_NAME_WORDS)."""
+    return any(_contains_term(name, w, whole=True) for w in config.NOT_PLANT_NAME_WORDS)
+
+
+def _retail_brand(lead: Lead) -> config.Category | None:
+    """The retail category of a chain whose name holds a warehouse word ("Harbor
+    Freight"; config.RETAIL_NAME_BRANDS), from its name or its map brand tag."""
+    brand_tags = normalize(" ".join(c.split("=", 1)[1] for c in lead.raw_categories
+                                    if c.startswith("brand=")))
+    for text in (normalize(lead.name), brand_tags):
+        for brand, key in config.RETAIL_NAME_BRANDS.items():
+            if _contains_term(text, brand, whole=True):
+                return config.CATEGORY_BY_KEY[key]
+    return None
+
+
+def _shop_mapped_as_mall(lead: Lead, name: str) -> bool:
+    """True when a shop is mapped as a mall (a furniture store tagged shop=mall): the
+    only venue tag is shop=mall, its name says shop (or it has another shop tag) and
+    nothing in the name says shopping centre (config.MALL_NAME_WORDS)."""
+    venue = config.CATEGORY_BY_KEY["venue"]
+    tags = [(k, v) for k, v in venue.osm_tags if _osm_tag_matches(lead, k, v)]
+    if tags != [("shop", "mall")]:
+        return False
+    if any(_contains_term(name, w, whole=True) for w in config.MALL_NAME_WORDS):
+        return False
+    other_shop = any(c.startswith("shop=") and v != "mall"
+                     for c in lead.raw_categories for v in c.split("=", 1)[1].split(";"))
+    return other_shop or any(_contains_term(name, w, whole=True) for w in config.SHOP_NAME_WORDS)
+
+
+def generic_name(name: str) -> bool:
+    """True when a name is only a generic word ("Recycling", "Junkyard"), alone or made
+    descriptive only by its street or city ("Recycling at 1200 W 500 S")."""
+    base = re.split(r"\s+(?:at|near)\s+|,", name.strip(), maxsplit=1)[0]
+    return normalize(base) in {normalize(g) for g in config.GENERIC_NAMES}
+
+
 def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
     """Return (best category, list of matched categories) as (Category, how) pairs.
 
@@ -161,6 +218,7 @@ def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
     gtypes = google_types(lead)
     yelp = yelp_categories(lead)
     use_hint = not (gtypes - config.GENERIC_GOOGLE_TYPES) and not yelp
+    retail_brand = _retail_brand(lead)
     matched = []
     for cat in config.CATEGORIES:
         hit = None
@@ -181,6 +239,10 @@ def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
             hit = None          # "Day Dairy Barn" is a small shop, not a plant
         if hit == "name" and cat.key == "manufacturing" and _shop_named(lead, name):
             hit = None          # "Deseret Industries Thrift Store" is a shop, not a plant
+        if hit == "map tag" and cat.key == "venue" and _shop_mapped_as_mall(lead, name):
+            hit = None          # "Liddiard Furniture" mapped as a mall is a furniture shop
+        if hit == "name" and cat.key in ("distribution", "manufacturing") and retail_brand:
+            hit = None          # "Harbor Freight" sells tools: "freight" says nothing
         if hit:
             matched.append((cat, hit))
 
@@ -196,6 +258,9 @@ def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
     # A pumping station, water well or substation has no waste stream to compact.
     if utility_structure(lead):
         return None, matched
+    # Self-storage units: the tenants take their rubbish home.
+    if self_storage(lead):
+        return None, matched
 
     def best_of(options: list[Match]) -> Match:
         return max(options, key=lambda m: m[0].weight)
@@ -204,6 +269,14 @@ def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
     by_name = [m for m in matched if m[1] == "name"]
     # A catch-all industrial tag describes the building, not the business.
     specific = [m for m in tagged if not _only_generic_tags(lead, m[0])]
+    if retail_brand:
+        # A retail chain's name decides over a warehouse building it is mapped as (which
+        # then isn't offered as "also looks like" either).
+        matched = [m for m in matched if m[0].key not in ("distribution", "manufacturing")]
+        specific = [m for m in specific if m in matched]
+        if not specific:
+            brand = (retail_brand, "retail brand name")
+            return brand, matched + [brand]
     if specific:
         best = best_of(specific)
         # Google and Yelp label production breweries/bakeries like taprooms and cafes.
@@ -236,9 +309,11 @@ def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
 
     telling_name = by_name or any(_contains_term(name, kw, whole=True)
                                   for cat, _ in tagged for kw in cat.name_keywords)
-    if tagged and not telling_name and (_small_generic_building(lead) or _utility_named(lead)):
-        # Only a catch-all industrial tag on a shed-sized building, or on a city's or a
-        # utility's structure ("Pacificorp", 900 sq ft): not a plant.
+    if tagged and not telling_name and (_small_generic_building(lead) or _utility_named(lead)
+                                        or _not_plant_named(name)):
+        # Only a catch-all industrial tag on a shed-sized building, on a city's or a
+        # utility's structure ("Pacificorp", 900 sq ft), a data centre or a career
+        # centre: not a plant.
         return None, matched
     if tagged or by_name:
         # Only catch-all tags; a telling name ("... Waste Management District") may say more.
@@ -346,7 +421,8 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
 
     # A brand's helipad, pharmacy or parking lot is not the store.
     blocked = best is None and (_is_non_prospect(lead, set(lead.raw_categories))
-                                or non_prospect_name(lead) or utility_structure(lead))
+                                or non_prospect_name(lead) or utility_structure(lead)
+                                or self_storage(lead))
     brand = None if blocked else _brand_bonus(lead)
     if brand:
         score += 20
@@ -396,6 +472,12 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
         flags.append(f"OWN COMPANY: {config.OWN_COMPANY}")
     elif lead.lead_type.startswith("Industry"):
         flags.append("Possible competitor or partner (equipment / hauler)")
+
+    if generic_name(lead.name):
+        # "Recycling" with no operator: nothing to look up or call; named places come first.
+        score -= config.GENERIC_NAME_PENALTY
+        reasons.append(f"-{config.GENERIC_NAME_PENALTY} no business name on the map "
+                       f"(only \"{lead.name}\")")
 
     if lead.business_status in ("CLOSED_TEMPORARILY",):
         flags.append("Temporarily closed")

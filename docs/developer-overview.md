@@ -107,8 +107,12 @@ and the lint fails on a badly laid-out file.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the lint, the dead-code and
 strict type checks and every test, on SQLite and on Postgres, for each push and
-pull request; Render deploys only commits that pass, and branch protection on
-`main` should require the three jobs (see "Deploying" in the [operator runbook](operator-runbook.md#deploying)). Every public function in
+pull request. Render deploys a push to `main` only once `lint`, `test (sqlite)`
+and `test (postgres)` are all green (`autoDeployTrigger: checksPass` in
+`render.yaml`, "After CI Checks Pass" in Render), so a red commit reaches `main`
+but never the live site; branch protection on `main` (an owner setting, see
+"Deploying" in the [operator runbook](operator-runbook.md#deploying)) keeps it off
+`main` too. Every public function in
 `leadgen/` has parameter and return annotations (`strict = true` for mypy).
 
 ## Command line options
@@ -395,7 +399,14 @@ prospect category, and a place known only by a catch-all industrial tag gets non
 when its footprint is under `config.SMALL_GENERIC_BUILDING_SQFT` (5,000 sq ft) or
 its name or operator tag says it is a utility's, a city's or a transit agency's
 (`config.UTILITY_NAME_WORDS`, `config.UTILITY_OPERATOR_WORDS`), unless an
-industrial use tag or a telling name ("... Plastics") says it is a plant. Its
+industrial use tag or a telling name ("... Plastics") says it is a plant. It
+also holds what a later real search got wrong: self-storage ("Library Storage",
+"Magna Safe Storage", "Storage Warehouse": `config.SELF_STORAGE_*` tags, Google
+types and name words, or the word "storage" without a cold-store or logistics word)
+gets no prospect category, and neither does a catch-all industrial building whose
+name says it is a data centre, a career centre or a city's shops
+(`config.NOT_PLANT_NAME_WORDS`: "Flexential ...", "Utah Career Center", "Woods
+Cross City Shops"). Its
 **name_traps** list holds names that hold another business's name or a misleading
 word: "Tru by Hilton Clearfield Hill Air Force Base" gets no air-base brand bonus (a
 high-volume brand counts from the name only when the map's own brand tag doesn't
@@ -403,7 +414,16 @@ name another brand, a place-name brand in `config.PLACE_NAME_BRANDS` opens the
 name, and no location word from `config.BRAND_LOCATION_WORDS` ("near", "at",
 "by"...) comes just before it), and "Deseret Industries Thrift Store" is retail,
 not a plant (`config.NOT_MANUFACTURING_NAME_WORDS` and a landuse=retail tag cancel
-a manufacturing name word). Its **confirmed** list holds real businesses
+a manufacturing name word). "Harbor Freight" is mid-size retail, whatever
+building it is mapped as (`config.RETAIL_NAME_BRANDS`: a retail chain whose name
+holds a warehouse word never counts as a warehouse or plant), and "Liddiard
+Furniture" tagged shop=mall is a shop, not a venue (a shop=mall tag counts only when
+the name has no shop word from `config.SHOP_NAME_WORDS`, or has a mall word from
+`config.MALL_NAME_WORDS`). Its **generic_names** list holds map listings named only
+"Recycling" or "Junkyard": the map data adds the operator, street or city to such a
+name (`osm.parse_element`), and one still known only by the word (or the word plus
+its street) scores `config.GENERIC_NAME_PENALTY` less, so it ranks below a named
+place of the same kind. Its **confirmed** list holds real businesses
 Arco's staff marked Yes / No on the Leads page, with the tier each had:
 `python -m leadgen reference` (with `DATABASE_URL` set to the website's
 database) refreshes it from the site's marks, copying only the facts the

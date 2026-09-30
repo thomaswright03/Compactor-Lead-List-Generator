@@ -248,3 +248,22 @@ def test_real_business_names_are_kept(name):
     element = {"type": "node", "id": 6, "lat": 40.7, "lon": -111.9,
                "tags": {"name": name, "shop": "supermarket"}}
     assert osm.parse_element(element).name == name
+
+
+def test_a_generic_map_name_is_made_descriptive():
+    """"Recycling" alone gives a salesperson nothing to look up: the map's operator,
+    street or city is added to it."""
+    from leadgen.sources.osm import parse_element
+
+    def name(tags):
+        return parse_element({"type": "node", "id": 7, "lat": 40.7, "lon": -111.9,
+                              "tags": tags}).name
+    assert name({"name": "Recycling", "amenity": "recycling",
+                 "operator": "Salt Lake County"}) == "Recycling (Salt Lake County)"
+    assert name({"name": "Recycling", "amenity": "recycling", "addr:housenumber": "1200",
+                 "addr:street": "W 500 S"}) == "Recycling at 1200 W 500 S"
+    assert name({"name": "Junkyard", "industrial": "scrap_yard",
+                 "addr:city": "Magna"}) == "Junkyard, Magna"
+    assert name({"name": "Junkyard", "industrial": "scrap_yard"}) == "Junkyard"
+    assert name({"name": "Wasatch Recycling", "amenity": "recycling",
+                 "operator": "Wasatch"}) == "Wasatch Recycling"

@@ -443,3 +443,82 @@ def test_names_that_hold_another_business_or_a_misleading_word():
     assert not any("(walmart)" in r for r in other_brand.reasons)
     plant = score_lead(make("Deseret Industries Manufacturing", ["building=industrial"], "osm"))
     assert plant.category_key == "manufacturing"
+
+
+def test_self_storage_data_centres_career_centres_and_city_shops_are_not_prospects():
+    """The wrong categories a real 30-mile map search showed (the reference's new
+    "not_prospect" entries) stay fixed, while the real warehouses and plants beside
+    them keep their category."""
+    from leadgen import config
+
+    for name, cats in [("Library Storage", ["building=warehouse"]),
+                       ("Magna Safe Storage", ["building=warehouse"]),
+                       ("Storage Warehouse", ["building=warehouse"]),
+                       ("Acme Self Storage", ["building=industrial"]),
+                       ("Units", ["shop=storage_rental", "building=warehouse"]),
+                       ("Flexential Salt Lake City - Downtown", ["building=industrial"]),
+                       ("Utah Career Center", ["building=industrial"]),
+                       ("Woods Cross City Shops", ["building=industrial"])]:
+        lead = score_lead(make(name, cats, "osm", footprint_sqft=45_000), config.DEFAULT_KEYWORDS)
+        assert lead.category_key == "" and lead.score < config.DEFAULT_MIN_SCORE, (name, lead.reasons)
+    storage_type = score_lead(make("Store It All", ["storage", "point_of_interest"]))
+    assert storage_type.category_key == ""
+    # Cold stores, logistics firms' storage and real plants are unchanged.
+    for name, cats, key in [("Lineage Cold Storage", ["building=warehouse"], "distribution"),
+                            ("Acme Storage and Distribution", [], "distribution"),
+                            ("Acme Warehouse", ["building=warehouse"], "distribution"),
+                            ("Wasatch Freight Lines", ["building=warehouse"], "distribution"),
+                            ("Acme", ["building=industrial"], "manufacturing"),
+                            ("Wasatch Plastics", ["building=industrial"], "manufacturing")]:
+        lead = score_lead(make(name, cats, "osm", footprint_sqft=45_000), config.DEFAULT_KEYWORDS)
+        assert lead.category_key == key, (name, lead.reasons)
+        assert lead.score >= 38, (name, lead.score)
+    # A recycling site's own tag still counts, whatever its name says.
+    drop = score_lead(make("Storage Yard Recycling", ["amenity=recycling"], "osm"))
+    assert drop.category_key == "recycling"
+
+
+def test_a_retail_chain_named_freight_and_a_shop_mapped_as_a_mall():
+    """"Harbor Freight" is a tool shop, not a warehouse; a furniture shop tagged
+    shop=mall is not a venue; a real mall still is."""
+    for cats in ([], ["building=retail"], ["building=warehouse"], ["shop=tools"],
+                 ["building=warehouse", "brand=Harbor Freight Tools"],
+                 ["building=warehouse", "shop=hardware"]):
+        lead = score_lead(make("Harbor Freight", cats, "osm", footprint_sqft=16_000))
+        assert lead.category_key == "specialty_retail", (cats, lead.reasons)
+        assert not any("Warehouse" in r for r in lead.reasons)
+    tools = score_lead(make("Harbor Freight Tools", ["hardware_store", "store"]))
+    assert tools.category_key == "specialty_retail"
+    for cats in (["shop=mall"], ["shop=furniture;mall"], ["shop=mall", "shop=furniture"]):
+        lead = score_lead(make("Liddiard Furniture", cats, "osm", footprint_sqft=45_000))
+        assert lead.category_key in ("retail", "specialty_retail"), (cats, lead.reasons)
+    for name in ("Fashion Place Mall", "The Gateway", "Valley Fair"):
+        mall = score_lead(make(name, ["shop=mall"], "osm"))
+        assert mall.category_key == "venue", name
+    brand = score_lead(make("Sportsman's Warehouse", ["shop=sports"], "osm"))
+    assert brand.category_key == "specialty_retail" and any("sportsman" in r for r in brand.reasons)
+
+
+def test_generic_names_rank_below_named_places():
+    """A listing whose only name is "Recycling" or "Junkyard" (the reference's
+    "generic_names") scores below the same place with a real name."""
+    import json
+    from pathlib import Path
+
+    from leadgen import config
+
+    data = json.loads((Path(__file__).parent / "fixtures" / "scoring_reference.json").read_text())
+    assert {"Recycling", "Junkyard"} <= {item["name"] for item in data["generic_names"]}
+    for item in data["generic_names"]:
+        bare = score_lead(make(item["name"], item["raw_categories"], item["source"]),
+                          config.DEFAULT_KEYWORDS)
+        named = score_lead(make(item["named"], item["raw_categories"], item["source"]),
+                           config.DEFAULT_KEYWORDS)
+        assert bare.score < named.score and bare.tier not in ("A", "B"), bare.reasons
+        assert any("no business name" in r for r in bare.reasons)
+        located = score_lead(make(f"{item['name']} at 1200 W 500 S", item["raw_categories"],
+                                  item["source"]), config.DEFAULT_KEYWORDS)
+        assert located.score == bare.score
+        run = score_lead(make(f"{item['name']} (Salt Lake County)", item["raw_categories"],
+                              item["source"]), config.DEFAULT_KEYWORDS)
+        assert not any("no business name" in r for r in run.reasons)

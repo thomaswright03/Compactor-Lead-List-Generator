@@ -43,7 +43,11 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   parts, one name spread over a site up to half a mile across) are one lead.
   Police, fire, impound and trailer yards and parcel lockers are not prospects,
   nor are pumping stations, wells, substations and small (under 5,000 sq ft)
-  industrial buildings known only by a map tag. A brand counts only when the
+  industrial buildings known only by a map tag, nor self-storage, data centres,
+  career centres or a city's maintenance shops. "Harbor Freight" is a tool shop,
+  not a freight warehouse, and a furniture shop mapped as a mall is not a venue. A
+  map listing named only "Recycling" or "Junkyard" gets its operator, street or
+  city added to its name and ranks below named places. A brand counts only when the
   business is that brand (a hotel named after the air base next to it is not the base).
   A name word alone never makes a small shop a plant ("Day Dairy Barn" is not a
   dairy). When the buildings of one site marked Yes and No are joined
@@ -98,6 +102,10 @@ together with OpenStreetMap, and the results are merged.
 
 To put it online, follow "Put it online (Render)" in the
 [operator runbook](docs/operator-runbook.md#put-it-online-render).
+Once online, every push to `main` deploys on its own, but only after the GitHub
+checks (`lint`, `test (sqlite)`, `test (postgres)`) pass: a commit with a failing
+test never reaches the live site (`autoDeployTrigger: checksPass` in `render.yaml`;
+see "Deploying" in the runbook, which also has the steps for protecting `main`).
 
 ---
 

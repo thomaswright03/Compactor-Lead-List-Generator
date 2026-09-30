@@ -3,9 +3,10 @@ services:
     name: compactor-lead-finder
     runtime: python
     plan: free
-    # Deploy every push to main straight away (Render's Settings > Auto-Deploy > "On Commit",
-    # chosen by the owner 2026-09-30). "After CI Checks Pass" never fired for this service.
-    autoDeployTrigger: commit
+    # Deploy a push to main only once its GitHub checks (lint, test (sqlite), test (postgres))
+    # are green: Render's Settings > Auto-Deploy > "After CI Checks Pass" (the owner's choice,
+    # 2026-09-30; it needs Render's GitHub app to have access to the repository, which it now has).
+    autoDeployTrigger: checksPass
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn wsgi:app --workers 1 --threads 8 --timeout 0 --bind 0.0.0.0:$PORT
     envVars:

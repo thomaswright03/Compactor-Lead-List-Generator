@@ -52,34 +52,51 @@ switches are kept in the database (the additive `switches` table).
 
 ## Deploying
 
-**Automatic since 2026-09-30.** Render's GitHub app now has access to this
-repository, so Render hears about every push to `main` and deploys it on its own
-(Render **Settings** > **Deploy** > **Auto-Deploy**). Before that date Render could
-only clone the public repository when someone pressed Manual Deploy, and its deploy
-log said "It looks like we don't have access to your repo"; if that line comes back,
-give the Render app access again on GitHub (Settings > Applications > Render >
-Configure > Repository access).
+**Automatic, and only for green commits (since 2026-09-30).** Render's GitHub app
+has access to this repository, so Render hears about every push to `main`. Its
+Auto-Deploy is set to **After CI Checks Pass** (Render **Settings** > **Deploy** >
+**Auto-Deploy**, and `autoDeployTrigger: checksPass` in `render.yaml`): a push goes
+live only once the three GitHub checks `lint`, `test (sqlite)` and
+`test (postgres)` are green. A commit whose checks fail is never deployed; the
+site keeps running the last green commit until a fix is pushed. (Before
+2026-09-30 Render could only clone the public repository when someone pressed
+Manual Deploy, and its deploy log said "It looks like we don't have access to your
+repo"; if that line comes back, give the Render app access again on GitHub:
+Settings > Applications > Render > Configure > Repository access.)
 
-Pick **After CI Checks Pass** for Auto-Deploy (and `autoDeployTrigger: checksPass`
-in `render.yaml`) so a push goes live only once `lint`, `test (sqlite)` and
-`test (postgres)` are green; **On Commit** deploys every push straight away, red or
-not. After a push:
+If the dashboard ever shows **On Commit** instead, switch it back to **After CI
+Checks Pass**: On Commit deploys every push straight away, red or not.
+
+After a push:
 
 1. Wait for the CI checks on the commit (GitHub **Actions** tab, about 5 minutes),
-   then for Render's deploy (**Events**, about 5 minutes more).
+   then for Render's deploy (**Events**, about 5 minutes more). If a check is red,
+   nothing is deployed: fix it and push again.
 2. Check the version: open
    `https://compactor-lead-finder.onrender.com/healthz`; `version` must be the
    first seven characters of the commit (`git log -1 --format=%h`). If it isn't,
-   **Events** in Render shows whether the deploy failed (its log says why) or never
-   started; **Manual Deploy** > **Deploy latest commit** still works as a fallback.
+   **Events** in Render shows whether the deploy failed (its log says why), is
+   waiting for the checks, or never started; **Manual Deploy** > **Deploy latest
+   commit** still works as a fallback (it skips the check wait, so use it only for
+   a green commit).
 
-Protect `main` so that nothing reaches it without green checks (a one-time
-setting only the repository owner can make): GitHub → **Settings** →
-**Branches** → **Add branch protection rule** for `main` → **Require status
-checks to pass before merging**, and pick `lint`, `test (sqlite)` and
-`test (postgres)`. **Status (2026-09-30): not set** (GitHub shows `main` as not
+**Protect `main`** so that a red commit can't even land on it (a one-time setting
+only the repository owner can make; the code can't set it):
+
+1. On GitHub, open the repository → **Settings** → **Branches** (or **Rules** →
+   **Rulesets** on newer pages).
+2. **Add branch protection rule** (or **New branch ruleset**) for the branch name
+   pattern `main`.
+3. Tick **Require status checks to pass before merging**, and add the checks
+   `lint`, `test (sqlite)` and `test (postgres)` (each shows up in the search box
+   once it has run on a commit). Optionally tick **Require branches to be up to
+   date before merging**.
+4. Leave **Allow force pushes** and **Allow deletions** off, and save.
+
+With protection on, changes reach `main` through a pull request whose checks are
+green. **Status (2026-09-30): not set yet** (GitHub shows `main` as not
 protected). Whoever sets it should change this line to say so, with the date.
-Until then a red commit can land on `main`, so step 1 above matters.
+Until then a red commit can land on `main`, but Render won't deploy it.
 
 The Python packages are pinned to exact versions in `requirements.txt`, so a
 deploy never picks up a new Flask or psycopg by surprise (the Excel files are
