@@ -45,8 +45,10 @@ COLUMNS: list[tuple[str, Callable[[Lead], object], float]] = [
     ("Latitude", lambda l: round(l.lat, 6), 11),
     ("Longitude", lambda l: round(l.lon, 6), 11),
     ("Has Baler or Compactor?", lambda l: {"yes": "Yes", "no": "No"}.get(l.has_baler, ""), 13),
+    ("Marked By", lambda l: l.marked_by, 16),
     ("Call Result", lambda l: l.call_outcome, 14),
     ("Last Called", lambda l: date_time_text(l.last_call_at), 20),
+    ("Called By", lambda l: l.last_call_by, 16),
     # The latest call's notes; when it had none, the latest notes an earlier call has.
     ("Call Notes", lambda l: l.call_notes or (
         f"(From the call on {date_time_text(l.earlier_notes_at)}) {l.earlier_notes}"

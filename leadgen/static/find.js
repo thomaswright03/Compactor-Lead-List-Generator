@@ -74,6 +74,8 @@ function renderProblems(p) {
   d.append(list, el("p", "If these keep happening, tell whoever looks after the site.", "sub"));
   box.replaceChildren(d);
 }
+// Every count on the page reads the same way: 1,135.
+const num = (v) => typeof v === "number" ? v.toLocaleString() : v ?? "-";
 function renderHistory(searches) {
   const box = $("history");
   if (!searches.length) { box.replaceChildren(el("div", "No searches yet.", "muted")); return; }
@@ -86,11 +88,11 @@ function renderHistory(searches) {
     const tr = el("tr", undefined, s.failed ? "failed" : "");
     const leadsCell = el("td");
     // An incomplete search (a source failed) saved what the others found, and gave the day back.
-    if (s.partial) leadsCell.append(`${s.leads ?? "-"} `, el("span", "Incomplete", "tag"));
+    if (s.partial) leadsCell.append(`${num(s.leads)} `, el("span", "Incomplete", "tag"));
     else if (s.failed) leadsCell.append(el("span", "Failed", "tag"));
-    else leadsCell.textContent = s.leads ?? "-";
+    else leadsCell.textContent = num(s.leads);
     tr.append(el("td", s.when, "nowrap"), el("td", s.location), el("td", s.radius ? `${s.radius} mi` : ""),
-              leadsCell, el("td", s.failed && !s.partial ? "" : s.new ?? "-"));
+              leadsCell, el("td", s.failed && !s.partial ? "" : num(s.new)));
     const td = el("td");
     tr.append(td); tbody.append(tr);
     if (s.failed) {
@@ -107,7 +109,7 @@ function renderHistory(searches) {
       // [label, value] pairs in funnel order (older answers were an object).
       const pairs = Array.isArray(s.details) ? s.details : Object.entries(s.details || {});
       for (const [k, v] of pairs) {
-        const row = el("div"); row.append(el("dt", k), el("dd", v)); dl.append(row);
+        const row = el("div"); row.append(el("dt", k), el("dd", num(v))); dl.append(row);
       }
       cell.append(dl);
       for (const w of s.warnings || []) cell.append(el("div", w, "warn"));
@@ -193,13 +195,13 @@ function searchSummary(form) {
 }
 // The server's limits, checked here first so a mistake is caught before the confirmation.
 const MAX_KEYWORDS = 20, MAX_KEYWORD_LEN = 60;
-function number(f, name, label, lo, hi, whole) {
+function number(f, name, label, lo, hi, whole, unit) {
   const raw = (f.get(name) || "").trim();
   if (!raw) return null;
   const v = Number(raw);
   if (!Number.isFinite(v)) return `${label} must be a number`;
   if (whole && !Number.isInteger(v)) return `${label} must be a whole number`;
-  return v < lo || v > hi ? `${label} must be between ${lo} and ${hi}` : null;
+  return v < lo || v > hi ? `${label} must be between ${lo} and ${hi}${unit || ""}` : null;
 }
 function checkForm(form) {
   const f = new FormData(form);
@@ -208,9 +210,11 @@ function checkForm(form) {
   if (words.length > MAX_KEYWORDS) return ["keywords", `Use at most ${MAX_KEYWORDS} search words (you have ${words.length}).`];
   const long = words.find((k) => k.length > MAX_KEYWORD_LEN);
   if (long) return ["keywords", `Each search word can be up to ${MAX_KEYWORD_LEN} characters; “${long.slice(0, 20)}…” has ${long.length}. Separate words with commas.`];
-  for (const [name, label, lo, hi, whole] of [["radius", "Radius", 1, 100, false], ["min_score", "Minimum score", 0, 100, true],
-                                              ["max_requests", "The limit on paid lookups", 1, 5000, true]]) {
-    const bad = number(f, name, label, lo, hi, whole);
+  // The same words as the server's (web/finding.py parse_form): the field's own label.
+  for (const [name, label, lo, hi, whole, unit] of [["radius", "How far", 1, 100, false, " miles"],
+                                                    ["min_score", "The score to leave out weak leads below", 0, 100, true],
+                                                    ["max_requests", "Most paid lookups for this search", 1, 5000, true]]) {
+    const bad = number(f, name, label, lo, hi, whole, unit);
     if (bad) return [name, bad];
   }
   return null;

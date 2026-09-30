@@ -1,5 +1,5 @@
-/* The Lead Finder page's styles. Colours, spacing (--sp-1 to --sp-6), radii and the five text
-   sizes (--fs-sm to --fs-xl) come from templates/_theme.html; use those, not raw pixel values. */
+/* The Lead Finder page's styles. Colours, spacing (--sp-1 to --sp-6), radii and the six text
+   sizes (--fs-xs to --fs-xl) come from templates/_theme.html; use those, not raw pixel values. */
 * { box-sizing:border-box; }
 [hidden] { display:none !important; }
 body { margin:0; font:var(--fs-base)/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
@@ -14,7 +14,7 @@ textarea:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; 
 input, select, textarea { font:inherit; font-weight:400; padding:var(--sp-2); border:1px solid var(--line); border-radius:var(--r-sm); color:var(--ink); background:var(--input); }
 
 /* Layout: sidebar + pages */
-.app { display:grid; grid-template-columns:224px minmax(0,1fr); min-height:100vh; }
+.app { display:grid; grid-template-columns:232px minmax(0,1fr); min-height:100vh; }
 /* "Skip to main content": off screen until a keyboard user reaches it. */
 .skip { position:absolute; left:var(--sp-3); top:-100px; z-index:60; }
 .skip:focus { top:var(--sp-3); }
@@ -24,11 +24,15 @@ input, select, textarea { font:inherit; font-weight:400; padding:var(--sp-2); bo
 .brand span { font-size:var(--fs-sm); opacity:.85; }
 nav { display:flex; flex-direction:column; gap:var(--sp-1); }
 nav a { color:var(--side-ink); text-decoration:none; padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm); display:flex; gap:var(--sp-1) var(--sp-2);
-        justify-content:space-between; align-items:center; font-weight:600; flex-wrap:wrap; }
+        justify-content:space-between; align-items:center; font-weight:600; flex-wrap:nowrap; }
 nav a:hover { background:rgba(255,255,255,.08); }
 nav a.on { background:rgba(255,255,255,.16); color:#fff; }
-nav .count { font-size:var(--fs-sm); font-weight:600; background:rgba(255,255,255,.14); border-radius:var(--r-pill); padding:0 var(--sp-2); white-space:nowrap; }
+/* "Leads 1,135 to check" stays on one line: the count is a small badge that never wraps. */
+nav .count { font-size:var(--fs-xs); font-weight:600; background:rgba(255,255,255,.14); border-radius:var(--r-pill); padding:0 var(--sp-2); white-space:nowrap; }
 .side .quota { font-size:var(--fs-sm); line-height:1.4; opacity:.95; }
+.side .me { font-size:var(--fs-sm); display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-1) var(--sp-2); }
+.side .me strong { color:#fff; overflow-wrap:anywhere; }
+.side .me button.link { color:var(--side-ink); text-decoration:underline; }
 .side .quota.paused { color:#ffb4ab; }
 .side .who { font-size:var(--fs-sm); display:flex; align-items:center; justify-content:space-between; gap:var(--sp-2);
              border-top:1px solid rgba(255,255,255,.12); padding-top:var(--sp-3); }
@@ -40,7 +44,7 @@ nav .count { font-size:var(--fs-sm); font-weight:600; background:rgba(255,255,25
 .theme button:first-child { border-radius:var(--r-sm) 0 0 var(--r-sm); }
 .theme button:last-child { border-radius:0 var(--r-sm) var(--r-sm) 0; }
 .theme button[aria-pressed="true"] { background:rgba(255,255,255,.2); color:#fff; }
-.menu-btn, .phone-only, button.why-toggle, .c-miles .unit { display:none; }
+.menu-btn, .phone-only, .cards-only, button.why-toggle, .c-miles .unit { display:none; }
 .side-bottom { margin-top:auto; display:flex; flex-direction:column; gap:var(--sp-3); }
 main { padding:var(--sp-5) var(--sp-5) var(--sp-6); min-width:0; display:flex; flex-direction:column; }
 .wrap { width:100%; max-width:1500px; margin:0 auto; flex:1; display:flex; flex-direction:column; }
@@ -108,7 +112,7 @@ table.plain.calls { min-width:720px; }
 button.link { background:none; border:0; padding:0; color:var(--accent); font-weight:600; font-size:var(--fs-sm); }
 tr.more-row td { background:var(--hover); }
 tr.failed td { color:var(--muted); }
-.tag { display:inline-block; font-size:var(--fs-sm); font-weight:700; border-radius:var(--r-pill); padding:0 var(--sp-2); background:var(--pts-neg); color:var(--bad-ink); }
+.tag { display:inline-block; font-size:var(--fs-xs); font-weight:700; border-radius:var(--r-pill); padding:0 var(--sp-2); background:var(--pts-neg); color:var(--bad-ink); }
 dl.details { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:var(--sp-2) var(--sp-4); margin:var(--sp-2) 0; }
 dl.details div { display:flex; justify-content:space-between; gap:var(--sp-2); border-bottom:1px dashed var(--line); padding:var(--sp-1) 0; }
 dl.details dt { color:var(--muted); } dl.details dd { margin:0; font-weight:600; }
@@ -119,6 +123,7 @@ dl.details dt { color:var(--muted); } dl.details dd { margin:0; font-weight:600;
 .tabs button.on { background:var(--btn); color:var(--btn-ink); border-color:var(--btn); }
 .toolbar { display:flex; gap:var(--sp-3); flex-wrap:wrap; align-items:center; margin-bottom:var(--sp-3); }
 .toolbar input { flex:1; min-width:200px; }
+.toolbar .picks, .toolbar .downloads { display:flex; gap:var(--sp-3); flex-wrap:wrap; align-items:center; }
 .recent { background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3) var(--sp-4); margin-bottom:var(--sp-3); }
 .recent h2 { font-size:var(--fs-sm); margin:0 0 var(--sp-2); }
 .recent ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--sp-1); }
@@ -143,7 +148,7 @@ tr.competitor td { background:var(--comp); }
 .contact .site { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .reasons { display:flex; flex-direction:column; gap:var(--sp-1); }
 .reason { display:flex; gap:var(--sp-2); align-items:baseline; font-size:var(--fs-sm); line-height:1.35; }
-.pts { flex:0 0 40px; text-align:center; font-weight:700; font-size:var(--fs-sm); border-radius:var(--r-pill); padding:0;
+.pts { flex:0 0 40px; text-align:center; font-weight:700; font-size:var(--fs-xs); border-radius:var(--r-pill); padding:0;
        background:var(--pts); color:var(--good-ink); font-variant-numeric:tabular-nums; }
 .pts.neg { background:var(--pts-neg); color:var(--bad-ink); } .pts.zero { background:var(--pts-zero); color:var(--muted); }
 details.explain summary { cursor:pointer; color:var(--accent); font-size:var(--fs-sm); margin-top:var(--sp-1); }
@@ -154,9 +159,10 @@ details.explain p { margin:var(--sp-1) 0 0; color:var(--muted); font-size:var(--
 .mark button.no.on { background:var(--bad); border-color:var(--bad); color:#fff; }
 button.undo { background:none; border:0; padding:var(--sp-1) 0 0; color:var(--accent); font-size:var(--fs-sm); font-weight:600; text-decoration:underline; }
 .call-cell { display:flex; flex-direction:column; gap:var(--sp-2); align-items:flex-start; }
+.c-mark .by { margin-top:var(--sp-1); }
 .mark + .call-cell, .mark ~ .call-cell { margin-top:var(--sp-2); }
 .call-cell button:not(.undo) { padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); white-space:nowrap; }
-.badge { display:inline-block; font-size:var(--fs-sm); font-weight:700; border-radius:var(--r-pill); padding:0 var(--sp-2); background:var(--badge); color:var(--ink); }
+.badge { display:inline-block; font-size:var(--fs-xs); font-weight:700; border-radius:var(--r-pill); padding:0 var(--sp-2); background:var(--badge); color:var(--ink); }
 .notes { white-space:pre-wrap; font-size:var(--fs-sm); }
 .more { margin:var(--sp-3) auto 0; display:block; }
 .empty { padding:var(--sp-6); text-align:center; color:var(--muted); }
@@ -172,9 +178,30 @@ tr.just-marked td:not(:first-child) { opacity:.6; }
 dl.confirm-list { grid-template-columns:minmax(0,1fr); margin:0; }
 dl.confirm-list dd { text-align:right; overflow-wrap:anywhere; }
 @media (max-width: 1099px) {
-  /* Narrow screens: the table scrolls inside its box (sideways too); the header sticks to the box. */
-  .table-wrap { overflow:auto; max-height:calc(100vh - 110px); }
-  table.leads { min-width:880px; }
+  /* Tablets and small laptops (and phones, below): one card per lead, side by side where there
+     is room, so the whole lead and why it scored as it did are in view with no sideways
+     scrolling. The table's column headers go, so the list sorts with its own picker. */
+  .cards-only { display:inline-block; }
+  .table-wrap, .table-wrap.stale { overflow:visible; background:none; border:0; border-radius:0; }
+  table.leads { display:block; }
+  table.leads colgroup, table.leads thead { display:none; }
+  table.leads tbody { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:var(--sp-3); align-items:start; }
+  table.leads tr { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--sp-2) var(--sp-3);
+                   grid-template-areas:"name score" "mark mark" "contact miles" "why why";
+                   background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); }
+  table.leads td { display:block; border:0; padding:0; min-width:0; }
+  table.leads td.c-name { grid-area:name; }
+  table.leads td.score { grid-area:score; align-self:start; border-radius:var(--r-pill); padding:0 var(--sp-2); font-weight:700; }
+  table.leads td.score .tier-word { display:inline; }
+  table.leads td.c-mark { grid-area:mark; }
+  table.leads td.contact { grid-area:contact; }
+  table.leads td.c-miles { grid-area:miles; color:var(--muted); font-size:var(--fs-sm); }
+  table.leads td.c-why { grid-area:why; border-top:1px dashed var(--line); padding-top:var(--sp-2); }
+  table.leads td.c-miles:empty { display:none; }
+  .c-miles .unit { display:inline; }
+  tr.competitor { background:var(--comp) !important; }
+  tr.competitor td:not(.score), tr.just-marked td { background:none; }
+  tr.just-marked { background:var(--hover) !important; }
 }
 
 .toast { position:fixed; left:50%; bottom:var(--sp-5); transform:translateX(-50%); z-index:50; display:flex; align-items:center;
@@ -248,7 +275,6 @@ dialog::backdrop { background:var(--backdrop); }
   .side-bottom { margin-top:0; flex-basis:100%; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--sp-3); }
   .side .who { border-top:0; padding-top:0; }
   main { padding:var(--sp-4) var(--sp-4) var(--sp-6); }
-  .table-wrap { max-height:calc(100vh - 40px); }
 }
 @media (max-width: 700px) {
   /* Phones: one short bar at the top (name and Menu, then the pages); the rest is in the menu. */
@@ -268,29 +294,26 @@ dialog::backdrop { background:var(--backdrop); }
   .side.open .side-bottom { display:flex; }
   main { padding-top:var(--sp-3); }
 
-  /* The Leads list: one card per lead, with the name right above its Yes / No buttons,
-     and no sideways scrolling. The reasons for the score open with "Why this score". */
-  .phone-only { display:inline-block; }
-  .table-wrap, .table-wrap.stale { overflow:visible; max-height:none; background:none; border:0; border-radius:0; }
-  table.leads { display:block; min-width:0; }
-  table.leads colgroup, table.leads thead { display:none; }
-  table.leads tbody { display:flex; flex-direction:column; gap:var(--sp-3); }
-  table.leads tr { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--sp-2) var(--sp-3);
-                   grid-template-areas:"name score" "mark mark" "contact miles" "why why";
-                   background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); }
-  table.leads td { display:block; border:0; padding:0; min-width:0; }
-  table.leads td.c-name { grid-area:name; }
-  table.leads td.score { grid-area:score; align-self:start; border-radius:var(--r-pill); padding:0 var(--sp-2); font-weight:700; }
-  table.leads td.score .tier-word { display:inline; }
-  table.leads td.c-mark { grid-area:mark; }
-  table.leads td.contact { grid-area:contact; }
-  table.leads td.c-miles { grid-area:miles; color:var(--muted); font-size:var(--fs-sm); }
-  table.leads td.c-why { grid-area:why; border-top:1px dashed var(--line); padding-top:var(--sp-1); }
-  table.leads td.c-miles:empty { display:none; }
-  .c-miles .unit { display:inline; }
-  tr.competitor { background:var(--comp) !important; }
-  tr.competitor td:not(.score), tr.just-marked td { background:none; }
-  tr.just-marked { background:var(--hover) !important; }
+  /* The Leads page: the first lead in view on opening. The tabs become one list, the tier
+     and sort pickers share a row, Recent changes is one line, and the downloads and the
+     call hint move below the list. Each lead is a card with its name right above its
+     Yes / No buttons; the reasons for the score open with "Why this score". */
+  #page-leads .page-head p { display:none; }
+  #leads-body { display:flex; flex-direction:column; gap:var(--sp-2); }
+  #leads-body .toolbar { display:contents; }
+  #lead-tabs { display:none; }
+  #tab-pick { display:block; width:100%; }
+  .toolbar input { min-width:0; }
+  .toolbar .picks { flex-wrap:nowrap; gap:var(--sp-2); }
+  .toolbar .picks select { flex:1 1 0; min-width:0; }
+  #leads-body .hint-line, #leads-body .recent { margin:0; }
+  #downloads, #call-hint { order:1; }
+  #downloads { justify-content:center; margin-top:var(--sp-3); }
+  .recent { display:flex; align-items:center; gap:var(--sp-2); padding:var(--sp-1) var(--sp-3); }
+  .recent h2 { display:none; }
+  .recent ul { flex:1; min-width:0; }
+  table.leads tbody { grid-template-columns:minmax(0,1fr); }
+  table.leads td.c-why { padding-top:var(--sp-1); }
   button.why-toggle { display:inline-flex; }
   td.c-why:not(.open) .reasons, td.c-why:not(.open) details.explain { display:none; }
   td.c-why.open .reasons { margin-top:var(--sp-2); }

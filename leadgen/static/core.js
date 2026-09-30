@@ -79,6 +79,45 @@ function applyTheme(choice) {
 document.querySelectorAll("[data-theme-pick]").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.themePick)));
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (chartRows) drawChart(chartRows); });
 
+/* Who is using this browser: the name saved with each Yes / No and call made here, so the
+   team can see who to ask. Kept in this browser; asked once before the first mark or call. */
+const NAME_KEY = "my-name";
+let nameMemory = "", nameAsked = false, nameThen = null;
+function myName() {
+  try { return localStorage.getItem(NAME_KEY) || nameMemory; } catch (e) { return nameMemory; }
+}
+function setMyName(name) {
+  nameMemory = name.trim().replace(/\s+/g, " ").slice(0, 60);
+  try { if (nameMemory) localStorage.setItem(NAME_KEY, nameMemory); else localStorage.removeItem(NAME_KEY); }
+  catch (e) { /* kept for this visit only */ }
+  showMyName();
+}
+function showMyName() {
+  const name = myName();
+  $("me-name").textContent = name || "not set";
+  $("me-change").textContent = name ? "Change" : "Set";
+}
+function askName(then) {
+  nameThen = then || null;
+  $("name-input").value = myName();
+  $("name-dlg").showModal();
+  $("name-input").focus();
+}
+// Runs fn once the name is known; "Not now" goes ahead without one (and asks again next visit).
+function withName(fn) { if (myName() || nameAsked) fn(); else askName(fn); }
+function finishName() {
+  nameAsked = true;
+  const then = nameThen; nameThen = null;
+  $("name-dlg").close();
+  if (then) then();
+}
+$("name-form").addEventListener("submit", (e) => { e.preventDefault(); setMyName($("name-input").value); finishName(); });
+$("name-skip").addEventListener("click", finishName);
+$("name-dlg").addEventListener("cancel", () => { nameThen = null; });   // Escape: the click is dropped
+$("me-change").addEventListener("click", () => askName());
+showMyName();
+const byWho = (name) => name ? ` by ${name}` : "";
+
 // Phones fold the Yelp count, the colour theme and Log out into a Menu button, so the
 // navigation stays one short bar at the top.
 $("menu-btn").addEventListener("click", () => {

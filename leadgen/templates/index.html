@@ -21,6 +21,9 @@
       <a href="#stats" data-page="stats">Stats</a>
     </nav>
     <div class="side-bottom" id="side-bottom">
+      <div class="me" id="me">
+        <span>Your name: <strong id="me-name">not set</strong></span>
+        <button type="button" class="link" id="me-change">Set</button></div>
       {% if yelp %}<div id="yelp-quota" class="quota{{ ' paused' if yelp.paused }}">{{ yelp.text }}</div>{% endif %}
       <div class="theme" role="group" aria-label="Colour theme">
         <button type="button" data-theme-pick="light">Light</button>
@@ -82,6 +85,9 @@
             <label class="check"><input type="checkbox" name="only_keyword_matches"> Only businesses matching the search words</label>
           </div>
         </details>
+        {% if not (google_on or yelp_on) %}<p class="warn" id="phone-note">Google and Yelp aren't set up, so
+          searches use the free map data only: most businesses found will have no phone number, and
+          some no street address. Whoever looks after the site can add Google or Yelp.</p>{% endif %}
         <div class="go-row">
           <button id="go" type="submit"{% if switches.search_paused %} disabled{% endif %}>Find leads</button>
           <span id="day-note" role="status">Checking today's search...</span>
@@ -124,19 +130,25 @@
       <div id="leads-body">
         <div class="tabs" id="lead-tabs"></div>
         <div class="toolbar">
+          <!-- Phones pick the tab from this list (the tab buttons take too much room there). -->
+          <select id="tab-pick" class="phone-only" aria-label="Show"></select>
           <input id="filter" type="search" placeholder="Filter by name, city, category..." aria-label="Filter leads">
-          <select id="tier" aria-label="Tier">
-            <option value="">All tiers</option><option value="A">A - strong</option><option value="B">B - likely</option>
-            <option value="C">C - possible</option><option value="D">D - weak</option>
-          </select>
-          <select id="sort-pick" class="phone-only" aria-label="Sort">
-            <option value="score:desc">Best score first</option><option value="name:asc">Name A to Z</option>
-            <option value="city:asc">City A to Z</option><option value="miles:asc">Nearest first</option>
-          </select>
-          <a class="btn quiet" href="/download/saved.xlsx" data-download data-file="compactor-leads.xlsx"
-             data-busy-label="Preparing Excel…">Download Excel</a>
-          <a class="btn quiet" href="/download/saved.csv" data-download data-file="compactor-leads.csv"
-             data-busy-label="Preparing CSV…">Download CSV</a>
+          <div class="picks">
+            <select id="tier" aria-label="Tier">
+              <option value="">All tiers</option><option value="A">A - strong</option><option value="B">B - likely</option>
+              <option value="C">C - possible</option><option value="D">D - weak</option>
+            </select>
+            <select id="sort-pick" class="cards-only" aria-label="Sort">
+              <option value="score:desc">Best score first</option><option value="name:asc">Name A to Z</option>
+              <option value="city:asc">City A to Z</option><option value="miles:asc">Nearest first</option>
+            </select>
+          </div>
+          <div class="downloads" id="downloads">
+            <a class="btn quiet" href="/download/saved.xlsx" data-download data-file="compactor-leads.xlsx"
+               data-busy-label="Preparing Excel…">Download Excel</a>
+            <a class="btn quiet" href="/download/saved.csv" data-download data-file="compactor-leads.csv"
+               data-busy-label="Preparing CSV…">Download CSV</a>
+          </div>
         </div>
         <div id="leads-note"></div>
         <p class="hint-line" id="competitor-hint" hidden>Competitors and Arco's own listing are
@@ -230,6 +242,19 @@
     <div class="dlg-actions">
       <button type="button" class="quiet" id="confirm-back">Go back and edit</button>
       <button type="submit" id="confirm-go">Start search</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="name-dlg" aria-labelledby="name-title">
+  <form class="dlg" method="dialog" id="name-form">
+    <h2 id="name-title">Who is using this browser?</h2>
+    <label for="name-input">Your name
+      <input id="name-input" maxlength="60" autocomplete="name" placeholder="For example, Dana">
+      <span class="hint">It is saved with each Yes / No and call you make here, so colleagues know who to ask. This browser remembers it; change it any time from the menu.</span></label>
+    <div class="dlg-actions">
+      <button type="button" class="quiet" id="name-skip">Not now</button>
+      <button type="submit" id="name-save">Save</button>
     </div>
   </form>
 </dialog>

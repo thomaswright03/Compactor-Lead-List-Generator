@@ -201,11 +201,11 @@ def test_a_partial_map_result_is_saved_and_the_search_marked_incomplete(monkeypa
     assert [l["name"] for l in client.get("/leads").get_json()["leads"]] == ["Costco"]
 
 
-def test_progress_says_which_part_of_the_map_is_searched():
+def test_progress_says_how_many_parts_of_the_map_are_done():
     job = {}
     progress = web._Progress(job)
-    progress("OpenStreetMap: searching the free map data (part 4 of 9)")
-    assert job["message"] == "Searching the free map data (area 4 of 9)…"
+    progress("OpenStreetMap: searching the free map data (3 of 9 areas done)")
+    assert job["message"] == "Searching the free map data: 3 of 9 areas done…"
     assert job["step"] == 2 and job["pct"] == pytest.approx(62, abs=1)
 
 

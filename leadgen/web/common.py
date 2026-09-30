@@ -107,6 +107,7 @@ def lead_json(lead: Lead, undo: Undos | None = None) -> dict[str, Any]:
         "zip": lead.zip, "phone": format_phone(lead.phone), "website": lead.website,
         "distance": lead.distance_miles, "reasons": lead.reasons, "map_url": lead.map_url,
         "sources": lead.sources, "key": lead.uid, "has_baler": lead.has_baler,
+        "marked_by": lead.marked_by, "last_call_by": lead.last_call_by,
         "call_outcome": lead.call_outcome, "call_notes": lead.call_notes,
         "call_count": lead.call_count, "last_call": date_time_text(lead.last_call_at),
         "last_call_at": lead.last_call_at,

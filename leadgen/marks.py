@@ -46,9 +46,10 @@ def _current(db: store.Db, uid: str) -> str:
     return row[0] if row else ""
 
 
-def set_mark(uid: str, value: str) -> Undo | None:
-    """Save a mark ("yes" or "no"; a mark is only taken back by undo()). Returns the
-    undo for the click ({"id", "until"}), or None when nothing changed.
+def set_mark(uid: str, value: str, by: str = "") -> Undo | None:
+    """Save a mark ("yes" or "no"; a mark is only taken back by undo()) made by `by`
+    (a name, or "" when unknown). Returns the undo for the click ({"id", "until"}),
+    or None when nothing changed.
 
     Raises ValueError for a bad value or a business that isn't saved, and
     store.Unavailable or a database error when it can't be saved.
@@ -68,6 +69,7 @@ def set_mark(uid: str, value: str) -> Undo | None:
         change = uuid.uuid4().hex
         db.run("INSERT INTO mark_changes (id, uid, value, previous, at) VALUES (?, ?, ?, ?, ?)",
                (change, uid, value, previous, now))
+        store.record_maker(db, change, store.person(by))
     return {"id": change, "until": now + UNDO_SECONDS}
 
 
@@ -107,9 +109,31 @@ def pending_undos() -> dict[str, Undo]:
     return {uid: {"id": change, "until": at + UNDO_SECONDS} for change, uid, at in rows}
 
 
+def makers(uids: Iterable[str]) -> dict[str, str]:
+    """{uid: name}: who made each business's current mark (its latest click not undone),
+    for the marks whose maker is known."""
+    wanted = [u for u in dict.fromkeys(uids) if u]
+    if not wanted:
+        return {}
+    with store.connect() as db:
+        rows = store.rows_for(
+            db, "SELECT mark_changes.uid, made_by.name, mark_changes.undone_at FROM mark_changes "
+                "LEFT JOIN made_by ON made_by.id = mark_changes.id", "mark_changes.uid", wanted,
+            order="ORDER BY mark_changes.at")
+    latest: dict[str, str] = {}
+    for uid, name, undone_at in rows:
+        if undone_at is None:
+            latest[uid] = name or ""
+    keep = set(wanted)
+    return {uid: name for uid, name in latest.items() if name and uid in keep}
+
+
 def apply(leads: list[Lead]) -> list[Lead]:
-    """Set lead.has_baler from the saved marks (raises when they can't be read)."""
+    """Set lead.has_baler (and who marked it) from the saved marks (raises when they
+    can't be read)."""
     found = get_all(lead.uid for lead in leads)
+    by = makers(lead.uid for lead in leads if lead.uid in found)
     for lead in leads:
         lead.has_baler = found.get(lead.uid, "")
+        lead.marked_by = by.get(lead.uid, "") if lead.has_baler else ""
     return leads

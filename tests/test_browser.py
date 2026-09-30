@@ -18,6 +18,14 @@ sync_api = pytest.importorskip("playwright.sync_api")
 expect = sync_api.expect
 
 
+def _context(browser, name="Tester", **kw):
+    """A browser window whose "Your name" is already set (so a first Yes / No doesn't ask)."""
+    context = browser.new_context(**kw)
+    if name:
+        context.add_init_script(f"try {{ localStorage.setItem('my-name', {name!r}); }} catch (e) {{}}")
+    return context
+
+
 @pytest.fixture(scope="module")
 def browser():
     with sync_api.sync_playwright() as p:
@@ -53,7 +61,7 @@ def page(browser, site):
         score_lead(lead, config.DEFAULT_KEYWORDS)
         leads.append(lead)
     saved.save_search(leads, config.DEFAULT_KEYWORDS)
-    context = browser.new_context(viewport={"width": 1280, "height": 900}, accept_downloads=True)
+    context = _context(browser, viewport={"width": 1280, "height": 900}, accept_downloads=True)
     tab = context.new_page()
     errors = []
     tab.on("pageerror", lambda exc: errors.append(str(exc)))
@@ -275,7 +283,7 @@ def test_a_colleagues_mark_arrives_without_reloading_everything(page, monkeypatc
 
 
 def test_touch_targets_on_a_phone(browser, site, page):
-    context = browser.new_context(viewport={"width": 375, "height": 800}, has_touch=True,
+    context = _context(browser, viewport={"width": 375, "height": 800}, has_touch=True,
                                   is_mobile=True)
     phone = context.new_page()
     phone.goto(site + "#leads")
@@ -325,7 +333,7 @@ def test_stats_show_only_the_note_until_something_is_marked(page):
 @pytest.mark.parametrize("width", [320, 375, 390, 768, 1280])
 def test_theme_labels_fit_at_every_width(browser, site, page, width):
     touch = width < 1000                               # phones and tablets: 44 px targets
-    context = browser.new_context(viewport={"width": width, "height": 800}, has_touch=touch)
+    context = _context(browser, viewport={"width": width, "height": 800}, has_touch=touch)
     tab = context.new_page()
     tab.goto(site + "#leads")
     tab.wait_for_selector("table.leads")
@@ -388,7 +396,7 @@ def test_a_refused_search_says_so(page):
 
 
 def test_leads_are_cards_on_a_phone(browser, site, page):
-    context = browser.new_context(viewport={"width": 375, "height": 812}, has_touch=True, is_mobile=True)
+    context = _context(browser, viewport={"width": 375, "height": 812}, has_touch=True, is_mobile=True)
     phone = context.new_page()
     phone.goto(site + "#leads")
     phone.wait_for_selector("table.leads")
@@ -428,7 +436,7 @@ def test_calls_are_cards_and_every_page_is_in_the_bar_on_a_small_phone(browser, 
     uid = _uid("Smith")
     marks.set_mark(uid, "yes")
     calls.log_call(uid, "Follow Up", "Spoke to Dana; send a quote.")
-    context = browser.new_context(viewport={"width": 320, "height": 700}, has_touch=True, is_mobile=True)
+    context = _context(browser, viewport={"width": 320, "height": 700}, has_touch=True, is_mobile=True)
     phone = context.new_page()
     phone.goto(site + "#calls")
     phone.wait_for_selector("table.calls")
@@ -522,7 +530,7 @@ def test_missing_address_and_tier_meaning_are_written_out(browser, site, page):
     score = row.locator("td.score")
     tier = score.inner_text().split()[1]
     assert score.inner_text().split()[2] == words[tier] and words[tier] in score.get_attribute("title")
-    phone = browser.new_context(viewport={"width": 390, "height": 844}, has_touch=True)
+    phone = _context(browser, viewport={"width": 390, "height": 844}, has_touch=True)
     tab = phone.new_page()
     tab.goto(site + "#leads")
     card = tab.locator("table.leads tbody tr", has_text="Nowhere Foods")
@@ -530,3 +538,109 @@ def test_missing_address_and_tier_meaning_are_written_out(browser, site, page):
     expect(card.locator("td.score")).to_contain_text(f"{tier} {words[tier]}")
     assert tab.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
     phone.close()
+
+
+# ---- round 7: every width shows the whole lead; the first lead in view on a phone
+
+@pytest.mark.parametrize("width,height", [(768, 1024), (1024, 800), (1100, 800), (1280, 800),
+                                          (1440, 900)])
+def test_the_whole_lead_and_its_reasons_fit_tablets_and_laptops(browser, site, page, width, height):
+    context = _context(browser, viewport={"width": width, "height": height}, has_touch=width < 1000)
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("table.leads")
+    fits = tab.evaluate("""() => {
+        const wrap = document.getElementById('leads-wrap');
+        const reasons = [...document.querySelectorAll('table.leads .reasons')];
+        return { wide: wrap.scrollWidth > wrap.clientWidth,
+                 page: document.documentElement.scrollWidth > window.innerWidth,
+                 shown: reasons.length > 0 && reasons.every((r) => r.offsetParent !== null
+                        && r.getBoundingClientRect().right <= wrap.getBoundingClientRect().right + 1) }; }""")
+    context.close()
+    assert not fits["wide"] and not fits["page"] and fits["shown"]
+
+
+def test_the_first_lead_is_in_view_on_a_phone(browser, site, page):
+    from leadgen import marks
+    marks.set_mark(_uid("Smith"), "yes", "Dana")          # Recent changes has a line
+    context = _context(browser, viewport={"width": 375, "height": 812}, has_touch=True, is_mobile=True)
+    phone = context.new_page()
+    phone.goto(site + "#leads")
+    phone.wait_for_selector("table.leads")
+    phone.wait_for_selector("#recent:not([hidden])")
+    assert phone.evaluate("document.getElementById('leads-wrap').getBoundingClientRect().top") < 812
+    card = phone.locator("table.leads tbody tr").first
+    for part in (card.locator("td.c-name strong"), card.locator(".mark button.yes"),
+                 card.locator(".mark button.no")):
+        box = part.bounding_box()
+        assert box and box["y"] + box["height"] <= 812
+    # The tabs are one list there, and the downloads come after the list.
+    assert phone.locator("#lead-tabs").is_hidden()
+    phone.select_option("#tab-pick", "yes")
+    expect(_row(phone, "Smith")).to_have_count(1)
+    downloads = phone.locator("#downloads").bounding_box()
+    assert downloads["y"] > phone.locator("#leads-wrap").bounding_box()["y"]
+    assert "by Dana" in phone.inner_text("#recent")
+    context.close()
+
+
+def test_your_name_is_asked_once_and_shown_with_the_mark(browser, site, page):
+    context = _context(browser, name=None, viewport={"width": 1280, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("table.leads")
+    sent = _posts(tab, "/mark")
+    _row(tab, "Costco").locator(".mark button.yes").click()
+    expect(tab.locator("#name-dlg")).to_be_visible()
+    assert sent == []                                  # nothing saved before the name is known
+    tab.fill("#name-input", "Dana")
+    tab.click("#name-save")
+    tab.wait_for_selector("#recent:not([hidden])")
+    assert "Costco Wholesale: marked Yes by Dana" in tab.inner_text("#recent")
+    assert tab.inner_text("#me-name") == "Dana"
+    # Asked once: the next click goes straight through.
+    _row(tab, "Smith").locator(".mark button.no").click()
+    tab.wait_for_function("document.getElementById('recent').innerText.includes('Smith')")
+    assert not tab.locator("#name-dlg").is_visible()
+    tab.get_by_role("button", name="All (4)").click()
+    expect(_row(tab, "Costco")).to_contain_text("Marked by Dana")
+    context.close()
+
+
+def test_an_empty_list_points_to_find_leads(browser, site):
+    context = _context(browser, viewport={"width": 1280, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("#leads-wrap .empty")
+    assert tab.locator("#downloads").is_hidden()
+    tab.get_by_role("link", name="Go to Find leads").click()
+    expect(tab.locator("#page-find")).to_be_visible()
+    context.close()
+
+
+def test_no_match_names_the_filter_and_clears_it(page):
+    page.fill("#filter", "walmrt")
+    expect(page.locator("#leads-wrap .empty")).to_contain_text("No leads match “walmrt” in Not checked")
+    page.get_by_role("button", name="Clear filters").click()
+    expect(page.locator("table.leads tbody tr")).to_have_count(3)
+    assert page.input_value("#filter") == ""
+
+
+@pytest.mark.parametrize("width", [1280, 1440])
+def test_a_four_digit_lead_count_stays_on_one_line(browser, site, page, width):
+    context = _context(browser, viewport={"width": width, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("#n-leads:not([hidden])")
+    tab.evaluate("S.counts.unchecked = 1135; counts()")
+    link = tab.locator("nav a[data-page=leads]").bounding_box()
+    badge = tab.locator("#n-leads").bounding_box()
+    context.close()
+    assert tab is not None and link["height"] < 48 and badge["y"] < link["y"] + link["height"] / 2
+
+
+def test_reading_text_is_at_least_14px(page):
+    sizes = page.evaluate("""() => ['.reason', '.contact', 'td.c-name .sub', '.hint-line', 'footer.copy']
+        .map((s) => document.querySelector(s)).filter(Boolean)
+        .map((e) => parseFloat(getComputedStyle(e).fontSize))""")
+    assert len(sizes) >= 4 and min(sizes) >= 14

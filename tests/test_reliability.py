@@ -107,6 +107,7 @@ def test_a_failed_search_is_plain_logged_and_kept_in_the_history(monkeypatch, ca
         raise osm.SourceError("All OpenStreetMap (Overpass) servers failed: "
                               "HTTPSConnectionPool(host='overpass.kumi.systems') ProxyError(...)")
     monkeypatch.setattr(pipeline.osm, "search", unreachable)
+    monkeypatch.setattr(pipeline, "geocode", lambda location, key: (40.76, -111.89, "Salt Lake City"))
     client = web.create_app().test_client()
     with caplog.at_level(logging.WARNING):
         job = client.post("/search", data={"location": "84101"}).get_json()["job_id"]
@@ -122,7 +123,10 @@ def test_a_failed_search_is_plain_logged_and_kept_in_the_history(monkeypatch, ca
     assert not history["used_today"]                    # the day is given back
     failed = history["searches"][0]
     assert failed["failed"] and "map data service" in failed["reason"]
-    assert client.post("/search", data={"location": "84101"}).status_code == 200
+    again = client.post("/search", data={"location": "84101"})
+    assert again.status_code == 200
+    # Wait for it, so the search doesn't carry on after this test's stand-ins are gone.
+    assert _wait(client, again.get_json()["job_id"])["state"] == "error"
 
 
 def test_partial_failures_read_as_plain_notes():
@@ -358,7 +362,7 @@ def test_excel_of_10000_leads_is_quick_and_complete():
     site, where = ws.cell(row=201, column=12), ws.cell(row=201, column=22)
     assert site.hyperlink.target == "https://store199.example.com"
     assert where.value == "Open map" and where.hyperlink.target.endswith("/node/199")
-    assert ws.freeze_panes == "F2" and ws.auto_filter.ref == f"A1:AD{ws.max_row}"
+    assert ws.freeze_panes == "F2" and ws.auto_filter.ref == f"A1:AF{ws.max_row}"
     rule = ws.data_validations.dataValidation[0]
     letter = ws.cell(row=2, column=[n for n, _, _ in COLUMNS].index(OFFLINE_VERIFIED) + 1).column_letter
     assert str(rule.sqref) == f"{letter}2:{letter}201"

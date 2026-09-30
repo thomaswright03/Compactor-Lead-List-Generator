@@ -42,12 +42,14 @@ class Lead:
     distance_miles: float | None = None
     sources: list[str] = field(default_factory=list)
     has_baler: str = ""              # "yes" / "no" as marked on the results page (marks.py)
+    marked_by: str = ""              # who set that mark ("Your name" in their browser), if known
     uid: str = ""                    # the saved lead's id (saved.py)
     # The latest call (calls.py): when (epoch seconds), its result and notes, and how many.
     last_call_at: float | None = None
     call_outcome: str = ""
     call_notes: str = ""
     call_count: int = 0
+    last_call_by: str = ""           # who logged the latest call, if known
     # When the latest call has no notes: the most recent notes an earlier call has, and when.
     earlier_notes: str = ""
     earlier_notes_at: float | None = None

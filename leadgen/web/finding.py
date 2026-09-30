@@ -129,6 +129,9 @@ def plain_details(details: dict[str, object] | None) -> list[list[object]]:
     return out
 
 
+_AREAS = re.compile(r"(\d+) of (\d+) areas done")
+
+
 def plain_progress(msg: str) -> str:
     """The search's progress message in the page's words."""
     page = re.match(r"(Yelp|Google) page \d+: '(.*)' \((\d+)/(\d+)\)", msg)
@@ -139,10 +142,15 @@ def plain_progress(msg: str) -> str:
     if msg.startswith(("Yelp: ", "Google: ")):
         return f"Searching {msg.split(':')[0]}"
     if msg.startswith("OpenStreetMap"):
-        server = re.search(r"(server|part) (\d+) of (\d+)", msg)
-        what = {"server": "server", "part": "area"}[server.group(1)] if server else ""
+        areas = _AREAS.search(msg)
+        if areas:
+            again = (" (some areas are being asked again in smaller parts)"
+                     if "again" in msg else "")
+            return (f"Searching the free map data: {int(areas.group(1)):,} of "
+                    f"{int(areas.group(2)):,} areas done{again}…")
+        server = re.search(r"server (\d+) of (\d+)", msg)
         return ("Searching the free map data"
-                + (f" ({what} {server.group(2)} of {server.group(3)})" if server else "") + "…")
+                + (f" (server {server.group(1)} of {server.group(2)})" if server else "") + "…")
     if msg.startswith("Filtering"):
         return "Keeping the businesses within the radius"
     if msg.startswith("Merging"):
@@ -162,6 +170,7 @@ class _Progress:
         self.calls = 0
         self.cap: int | None = None
         self.map_started: float | None = None
+        self.areas_done = self.areas_total = 0
         self.step_started = time.time()
         job.update(step=0, pct=1.0, started=time.time())
 
@@ -171,6 +180,13 @@ class _Progress:
 
     def __call__(self, msg: str) -> None:
         job = self.job
+        areas = _AREAS.search(msg)
+        if areas:
+            # Parts finish on several threads, so a message can arrive after a newer
+            # one: the page's count only moves forward.
+            self.areas_done = max(self.areas_done, int(areas.group(1)))
+            self.areas_total = max(self.areas_total, int(areas.group(2)))
+            msg = _AREAS.sub(f"{self.areas_done} of {self.areas_total} areas done", msg)
         job["message"] = plain_progress(msg)
         if msg.startswith("Locating"):
             self._at(0, 3)
@@ -183,9 +199,8 @@ class _Progress:
             self._at(1, 6 + 42 * min(1.0, self.calls / max(self.cap or 1, 1)))
         elif msg.startswith("OpenStreetMap"):
             self.map_started = self.map_started or time.time()
-            part = re.search(r"part (\d+) of (\d+)", msg)
-            # A wide search is asked in parts: the bar moves on with each one.
-            self._at(2, 50 + (36 * (int(part.group(1)) - 1) / int(part.group(2)) if part else 0))
+            # A wide search is asked in parts: the bar moves on with each one done.
+            self._at(2, 50 + (36 * self.areas_done / self.areas_total if areas else 0))
         elif msg.startswith("Filtering"):
             self._at(3, 88)
         elif msg.startswith("Merging"):
@@ -217,7 +232,8 @@ def skipped_steps(params: SearchParams) -> list[int]:
 
 
 def _number(form: Mapping[str, str], name: str, default: Num | None, cast: type, lo: float, hi: float,
-            label: str) -> Any:
+            label: str, unit: str = "") -> Any:
+    """A number field; its errors use the field's on-screen label (and unit)."""
     raw = (form.get(name) or "").strip()
     if not raw:
         return default
@@ -230,7 +246,7 @@ def _number(form: Mapping[str, str], name: str, default: Num | None, cast: type,
             raise FormError(f"{label} must be a whole number", name)
         value = int(value)
     if not lo <= value <= hi:
-        raise FormError(f"{label} must be between {lo} and {hi}", name)
+        raise FormError(f"{label} must be between {lo:g} and {hi:g}{unit}", name)
     return value
 
 
@@ -262,34 +278,35 @@ def parse_form(form: Mapping[str, str]) -> SearchParams:
     return SearchParams(
         location=location,
         radius_miles=_number(form, "radius", config.DEFAULT_RADIUS_MILES, float, 1, 100,
-                             "Radius"),
+                             "How far", " miles"),
         keywords=keywords,
         source=source,
         min_score=_number(form, "min_score", config.DEFAULT_MIN_SCORE, int, 0, 100,
-                          "Minimum score"),
+                          "The score to leave out weak leads below"),
         grid=grid,
         max_requests=_number(form, "max_requests", None, int, 1, MAX_REQUESTS_LIMIT,
-                             "The limit on paid lookups"),
+                             "Most paid lookups for this search"),
         only_keyword_matches=form.get("only_keyword_matches") == "on",
     )
 
 
-def _save(job: Job, result: RunResult, params: SearchParams, warnings: list[str]) -> None:
+def _save(job: Job, result: RunResult, params: SearchParams) -> str | None:
+    """Save the search's leads; None when saved, else why not (in the page's words)."""
     try:
         job["progress"]("Saving leads")
         job["new_leads"], _ = saved.save_search(result.leads, params.keywords)
         job["saved"] = True
     except Exception as exc:
         log.exception("Saving the search's leads failed")
-        why = db_message(exc) if isinstance(exc, store.Unavailable) else (
-            "the database had a problem")
-        warnings.append(f"These leads were not saved: {why}")
-        return
+        if isinstance(exc, store.Unavailable) and "DATABASE_URL" in str(exc):
+            return db_message(exc)
+        return "the saved-leads database couldn't be reached."
     try:
         job["saved_count"] = saved.count()
     except Exception:
         # The leads are saved; only the page's "N saved leads in all" goes without its number.
         log.exception("Counting the saved leads failed")
+    return None
 
 
 def _record(day: str, result: RunResult, job: Job, warnings: list[str],
@@ -322,7 +339,13 @@ def _worker(job: Job, params: SearchParams, day: str) -> None:
         for problem in result.problems:
             log.warning("Search %s: a source failed: %s", day, problem)
         warnings = [plain_warning(w) for w in result.warnings]
-        _save(job, result, params, warnings)
+        unsaved = _save(job, result, params)
+        if unsaved is not None:
+            # Leads that aren't saved are lost with the page: the search gives the day
+            # back (like a failed one), so it can be run again once the database answers.
+            found = f"The search found {len(result.leads):,} businesses, but they couldn't be saved"
+            _fail(job, day, f"{found}: {unsaved} {NOT_USED_UP} {RETRY}", f"{found}: {unsaved}")
+            return
         if not params.include_closed:
             result.leads = [lead for lead in result.leads
                             if lead.business_status != "CLOSED_PERMANENTLY"]

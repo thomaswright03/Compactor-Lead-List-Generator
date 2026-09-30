@@ -151,5 +151,5 @@ def geocode(location: str, api_key: str | None = None) -> tuple[float, float, st
 
     if errors:
         log.info("Geocoding %r failed: %s", location, "; ".join(errors))
-    raise GeocodeError(f"Could not find the place '{location}'. Try a 5-digit ZIP code or a "
-                       "city name.")
+    raise GeocodeError(f"Could not find the place '{location}'. Check the spelling, or try a "
+                       "ZIP code, city or street address.")

@@ -205,16 +205,17 @@ async function setMark(lead, value) {
   // Keep the row where it is (with its new answer) instead of letting the next one slide under the pointer.
   if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);
   lead.saving = true; S.busy++;
-  updateLead({ key, has_baler: value }); moveCount(lead, before, value);
+  const beforeBy = lead.marked_by || "";
+  updateLead({ key, has_baler: value, marked_by: myName() }); moveCount(lead, before, value);
   renderAll();
   try {
-    const { undo } = await post("/mark", { key, value });
+    const { undo } = await post("/mark", { key, value, by: myName() });
     updateLead({ key, undo_mark: undo });
     addRecent(leadByKey(key) || lead);
     renderAll();
     toast(`${lead.name}: marked ${value === "yes" ? "Yes" : "No"}.`, () => undoMark(key));
   } catch (err) {
-    updateLead({ key, has_baler: before }); moveCount(lead, value, before);
+    updateLead({ key, has_baler: before, marked_by: beforeBy }); moveCount(lead, value, before);
     renderAll();
     toast(`${lead.name}: answer not saved. ${err.message}`, null, true);
   } finally { lead.saving = false; S.busy--; }
@@ -264,13 +265,14 @@ function markCell(lead, withCall) {
   }
   const box = el("div", undefined, "mark");
   for (const [value, label] of [["yes", "Yes"], ["no", "No"]]) {
-    const b = button(label, value + (lead.has_baler === value ? " on" : ""), () => setMark(lead, value));
+    const b = button(label, value + (lead.has_baler === value ? " on" : ""), () => withName(() => setMark(lead, value)));
     b.disabled = !lead.key;
     b.setAttribute("aria-pressed", lead.has_baler === value);
     b.setAttribute("aria-label", `${lead.name}: ${value === "yes" ? "has" : "doesn't have"} a baler or compactor`);
     box.append(b);
   }
   td.append(box);
+  if (lead.has_baler && lead.marked_by) td.append(el("div", `Marked by ${lead.marked_by}`, "sub by"));
   if (pinnedNow(lead.key) && !inTab(lead)) {
     const tab = LEAD_TABS.find(([v]) => v === (lead.has_baler || ""));
     td.append(el("div", `Saved. Moves to “${tab ? tab[1] : "All"}”.`, "sub moved"));
@@ -283,7 +285,7 @@ function callBox(lead) {
   const box = el("div", undefined, "call-cell");
   if (lead.call_outcome) {
     box.append(el("span", lead.call_outcome, "badge"));
-    box.append(el("span", lead.last_call, "sub"));
+    box.append(el("span", lead.last_call + byWho(lead.last_call_by), "sub"));
   }
   box.append(button("Just called", "", () => openCall(lead)));
   if (lead.call_count) box.append(button(`History (${lead.call_count})`, "quiet", () => openHistory(lead)));
@@ -347,9 +349,9 @@ function sortHeader(label, sort) {
 }
 function leadTable(rows, withCall) {
   const table = el("table", undefined, "leads");
-  // Fits a 1280px-wide window without scrolling sideways; the Why column takes the rest.
+  // Shown from 1100px wide (narrower windows show cards); the Why column takes the rest.
   const cols = [[withCall ? "Baler? / Call" : "Baler or compactor?", withCall ? "138px" : "118px"],
-                ["Score", "74px", "score"], ["Business", "22%", "name"], ["Contact", "22%", "city"],
+                ["Score", "74px", "score"], ["Business", "20%", "name"], ["Contact", "20%", "city"],
                 ["Miles", "72px", "miles"], ["Why this score", null]];
   const cg = el("colgroup");
   for (const [, w] of cols) { const c = el("col"); if (w) c.style.width = w; cg.append(c); }
@@ -362,6 +364,11 @@ function leadTable(rows, withCall) {
   return table;
 }
 
+function clearFilters() {
+  S.q = ""; S.tier = ""; $("filter").value = ""; $("tier").value = "";
+  S.limit = 300; unpinAll(); changeView();
+  $("filter").focus();
+}
 function pickTab(v) { S.leadView = v; S.limit = 300; unpinAll(); changeView(); }
 function renderLeads() {
   const problemBox = $("leads-problem");
@@ -373,7 +380,11 @@ function renderLeads() {
   problemBox.replaceChildren(); $("leads-body").hidden = !S.loaded;
   $("leads-note").replaceChildren(...(S.refreshError ? [el("div", S.refreshError, "warn")] : []));
   const c = S.counts || {};
-  tabs($("lead-tabs"), LEAD_TABS.map(([v, t]) => [v, t, c[v || "unchecked"] || 0]), S.leadView, pickTab);
+  const tabItems = LEAD_TABS.map(([v, t]) => [v, t, c[v || "unchecked"] || 0]);
+  tabs($("lead-tabs"), tabItems, S.leadView, pickTab);
+  $("tab-pick").replaceChildren(...tabItems.map(([v, t, n]) => { const o = el("option", `${t}: ${n.toLocaleString()}`); o.value = v; return o; }));
+  $("tab-pick").value = S.leadView;
+  $("downloads").hidden = !c.all;                  // nothing to download yet
   $("call-hint").hidden = ["competitors", "closed"].includes(S.leadView) || !c.all;
   $("competitor-hint").hidden = S.leadView !== "competitors";
   $("closed-hint").hidden = S.leadView !== "closed";
@@ -381,11 +392,22 @@ function renderLeads() {
   wrap.classList.toggle("stale", S.viewLoading);
   wrap.setAttribute("aria-busy", S.viewLoading);
   if (!S.leads.length) {
-    const empty = !c.all ? "No saved leads yet. Run a search on the Find leads page."
-      : S.q || S.tier ? "Nothing here with these filters."
-      : S.leadView === "" ? "Every business has been checked."
-      : S.leadView === "closed" ? "No saved business has been reported closed for good." : "Nothing here yet.";
-    wrap.replaceChildren(el("div", empty, "empty"));
+    if (!c.all) {
+      wrap.replaceChildren(emptyNote("No saved leads yet.",
+        "Run today's search on the Find leads page: the businesses it finds are saved here.", "#find", "Go to Find leads"));
+    } else if (S.q || S.tier) {
+      // Say what was filtered, and offer the way back to the whole list.
+      const tab = (LEAD_TABS.find(([v]) => v === S.leadView) || ["", "All"])[1];
+      const what = [S.q && `“${S.q}”`, S.tier && `tier ${S.tier} (${TIER_WORDS[S.tier]})`].filter(Boolean).join(" and ");
+      const box = el("div", undefined, "empty");
+      box.append(el("strong", `No leads match ${what} in ${tab}.`),
+                 el("p", "Check the spelling, pick another tab, or clear the filters to see the whole list."),
+                 button("Clear filters", "quiet", clearFilters));
+      wrap.replaceChildren(box);
+    } else {
+      wrap.replaceChildren(el("div", S.leadView === "" ? "Every business has been checked."
+        : S.leadView === "closed" ? "No saved business has been reported closed for good." : "Nothing here yet.", "empty"));
+    }
   } else {
     // Every prospect can be called (a call is how staff find out); competitors have no buttons.
     wrap.replaceChildren(leadTable(S.leads, true));
@@ -402,22 +424,23 @@ function renderRecent() {
   const items = [];
   for (const l of S.recent) {
     if (l.undo_mark && leftOf(l.undo_mark) > 0)
-      items.push([l.undo_mark.until, `${l.name}: marked ${l.has_baler === "yes" ? "Yes" : l.has_baler === "no" ? "No" : "Not checked"}`,
+      items.push([l.undo_mark.until, `${l.name}: marked ${l.has_baler === "yes" ? "Yes" : l.has_baler === "no" ? "No" : "Not checked"}${l.has_baler ? byWho(l.marked_by) : ""}`,
                   undoButton(l.undo_mark, "Undo", () => undoMark(l.key))]);
     if (l.undo_call && leftOf(l.undo_call) > 0)
-      items.push([l.undo_call.until, `${l.name}: call saved as ${l.call_outcome}`, undoButton(l.undo_call, "Undo", () => undoCall(l.key))]);
+      items.push([l.undo_call.until, `${l.name}: call saved as ${l.call_outcome}${byWho(l.last_call_by)}`, undoButton(l.undo_call, "Undo", () => undoCall(l.key))]);
   }
   items.sort((a, b) => b[0] - a[0]);
   $("recent").hidden = !items.length;
-  // The latest two, so the list stays in view; the rest behind "Show all".
-  const shown = S.recentOpen ? items : items.slice(0, RECENT_SHOWN);
+  // The latest two (one on a phone), so the list stays in view; the rest behind "Show all".
+  const few = recentShown();
+  const shown = S.recentOpen ? items : items.slice(0, few);
   $("recent-list").replaceChildren(...shown.map(([, text, b]) => { const li = el("li"); li.append(el("span", text), b); return li; }));
   const more = $("recent-more");
-  more.hidden = items.length <= RECENT_SHOWN;
+  more.hidden = items.length <= few;
   more.textContent = S.recentOpen ? "Show fewer" : `Show all ${items.length}`;
   more.setAttribute("aria-expanded", !!S.recentOpen);
 }
-const RECENT_SHOWN = 2;
+const recentShown = () => (window.matchMedia("(max-width: 700px)").matches ? 1 : 2);
 $("recent-more").addEventListener("click", () => { S.recentOpen = !S.recentOpen; renderRecent(); });
 $("leads-more").addEventListener("click", () => { S.limit += 300; S.viewLoading = true; renderLeads(); loadLeads(); });
 let filterTimer = null;
@@ -426,11 +449,12 @@ $("filter").addEventListener("input", () => {
   clearTimeout(filterTimer);
   filterTimer = setTimeout(changeView, 250);       // ask once typing pauses
 });
-// Phones sort with this list (the table's column headers are hidden there).
+// Cards (below 1100px wide) sort with this list: the table's column headers aren't shown there.
 $("sort-pick").addEventListener("change", () => {
   [S.sort, S.dir] = $("sort-pick").value.split(":");
   S.limit = 300; unpinAll(); changeView();
 });
+$("tab-pick").addEventListener("change", () => pickTab($("tab-pick").value));
 $("tier").addEventListener("change", () => { S.tier = $("tier").value; S.limit = 300; unpinAll(); changeView(); });
 
 /* The downloads: building a big Excel file takes a moment, so the button says so and a second

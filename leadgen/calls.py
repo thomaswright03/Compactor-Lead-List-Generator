@@ -18,8 +18,10 @@ OUTCOMES = ("Interested", "Follow Up", "Not Interested", "Not Qualified", "No Co
 MAX_NOTES = 5000
 
 
-def log_call(uid: str, outcome: str, notes: str, call_id: str | None = None) -> dict[str, Any]:
-    """Record a call; returns it. Raises ValueError for a bad outcome or unknown lead.
+def log_call(uid: str, outcome: str, notes: str, call_id: str | None = None,
+             by: str = "") -> dict[str, Any]:
+    """Record a call made by `by` (a name, or "" when unknown); returns it. Raises
+    ValueError for a bad outcome or unknown lead.
 
     call_id: the page's own id for this call, so a request sent twice (a retry on a
     flaky connection) records one call: the second gets the first one back.
@@ -29,8 +31,8 @@ def log_call(uid: str, outcome: str, notes: str, call_id: str | None = None) -> 
     if call_id is not None and not re.fullmatch(r"[0-9a-f]{32}", call_id):
         raise ValueError("Bad call id")
     notes = (notes or "").strip()[:MAX_NOTES]
-    call = {"id": call_id or uuid.uuid4().hex, "uid": uid, "at": time.time(), "outcome": outcome,
-            "notes": notes}
+    call: dict[str, Any] = {"id": call_id or uuid.uuid4().hex, "uid": uid, "at": time.time(),
+                            "outcome": outcome, "notes": notes, "by": store.person(by)}
     with store.connect() as db:
         if db.one("SELECT uid FROM leads WHERE uid = ?", (uid,)) is None:
             raise ValueError("Unknown lead")
@@ -42,10 +44,14 @@ def log_call(uid: str, outcome: str, notes: str, call_id: str | None = None) -> 
             if row is None or row[0] != uid:
                 raise ValueError("That call was already undone")
             call.update(at=row[1], outcome=row[2], notes=row[3])
+            name = db.one("SELECT name FROM made_by WHERE id = ?", (call["id"],))
+            call["by"] = name[0] if name else ""
         elif db.one("SELECT id FROM call_undos WHERE id = ?", (call["id"],)) is not None:
             # A late copy of a call that was saved and then undone: keep it undone.
             db.run("DELETE FROM calls WHERE id = ?", (call["id"],))
             raise ValueError("That call was already undone")
+        else:
+            store.record_maker(db, call["id"], call["by"])
     return call
 
 
@@ -74,10 +80,11 @@ def changed_since(ts: float) -> set[str]:
 def history(uid: str) -> list[dict[str, Any]]:
     """Every call to a lead, newest first."""
     with store.connect() as db:
-        rows = db.all("SELECT at, outcome, notes FROM calls WHERE uid = ? ORDER BY at DESC",
-                      (uid,))
-    return [{"at": at, "when": date_time_text(at), "outcome": outcome, "notes": notes}
-            for at, outcome, notes in rows]
+        rows = db.all("SELECT calls.at, calls.outcome, calls.notes, made_by.name FROM calls "
+                      "LEFT JOIN made_by ON made_by.id = calls.id WHERE calls.uid = ? "
+                      "ORDER BY calls.at DESC", (uid,))
+    return [{"at": at, "when": date_time_text(at), "outcome": outcome, "notes": notes,
+             "by": by or ""} for at, outcome, notes, by in rows]
 
 
 def pending_undos() -> dict[str, Undo]:
@@ -96,14 +103,18 @@ def apply(leads: list[Lead]) -> list[Lead]:
     an unreadable call log must never look like "never called".
     """
     with store.connect() as db:
-        rows = store.rows_for(db, "SELECT uid, at, outcome, notes FROM calls", "uid",
+        rows = store.rows_for(db, "SELECT calls.uid, calls.at, calls.outcome, calls.notes, "
+                                  "made_by.name FROM calls LEFT JOIN made_by "
+                                  "ON made_by.id = calls.id", "calls.uid",
                               dict.fromkeys(lead.uid for lead in leads if lead.uid),
-                              order="ORDER BY at")
+                              order="ORDER BY calls.at")
     latest: dict[str, tuple[float, str, str]] = {}
+    maker: dict[str, str] = {}
     noted: dict[str, tuple[float, str]] = {}              # the latest call with notes
     counts: dict[str, int] = {}
-    for uid, at, outcome, notes in rows:
+    for uid, at, outcome, notes, by in rows:
         latest[uid] = (at, outcome, notes)
+        maker[uid] = by or ""
         if notes:
             noted[uid] = (at, notes)
         counts[uid] = counts.get(uid, 0) + 1
@@ -111,6 +122,7 @@ def apply(leads: list[Lead]) -> list[Lead]:
         at, outcome, notes = latest.get(lead.uid, (None, "", ""))
         lead.last_call_at, lead.call_outcome, lead.call_notes = at, outcome, notes
         lead.call_count = counts.get(lead.uid, 0)
+        lead.last_call_by = maker.get(lead.uid, "")
         earlier_at, earlier = noted.get(lead.uid, (None, ""))
         if notes or not earlier:
             earlier_at, earlier = None, ""

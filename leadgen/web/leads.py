@@ -180,7 +180,7 @@ def log_call() -> ResponseReturnValue:
     call_id = str(data["id"]) if data.get("id") else None
     try:
         call = calls.log_call(uid, str(data.get("outcome") or ""), str(data.get("notes") or ""),
-                              call_id)
+                              call_id, str(data.get("by") or ""))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
@@ -223,7 +223,7 @@ def mark() -> ResponseReturnValue:
     if not uid or len(uid) > 64 or value not in marks.VALUES:
         return jsonify({"error": "Bad mark"}), 400
     try:
-        undo = marks.set_mark(uid, value)
+        undo = marks.set_mark(uid, value, str(data.get("by") or ""))
     except ValueError:
         return jsonify({"error": "That business isn't in the saved list. Reload the "
                                  "page."}), 404

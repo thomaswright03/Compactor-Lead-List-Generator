@@ -63,10 +63,15 @@ SCHEMA = [
         id TEXT PRIMARY KEY, at DOUBLE PRECISION NOT NULL, kind TEXT NOT NULL,
         text TEXT NOT NULL)""",
     "CREATE INDEX IF NOT EXISTS problems_by_time ON problems (at)",
+    # Who made each Yes / No click and each call: the name set in that browser, by the
+    # mark_changes or calls row's id. A table of its own, so no existing table changes;
+    # clicks and calls from before it (or with no name set) simply have no row here.
+    """CREATE TABLE IF NOT EXISTS made_by (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL)""",
 ]
 # Every table, for tests that empty them.
 TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "mark_changes",
-          "search_failures", "call_undos", "problems")
+          "search_failures", "call_undos", "problems", "made_by")
 # Up to this many ids are looked up by id (in chunks); more read the whole table.
 BY_ID_LIMIT = 1000
 _CHUNK = 500
@@ -78,6 +83,23 @@ _local = threading.local()      # the connection a web request shares (see scope
 
 # A row as the database returns it.
 Row = tuple[Any, ...]
+
+
+def person(name: object) -> str:
+    """A name as typed in "Your name" (who made a mark or call): one line, at most
+    MAX_NAME characters; "" for none."""
+    text = " ".join("".join(c for c in str(name or "") if c.isprintable()).split())
+    return text[:MAX_NAME]
+
+
+MAX_NAME = 60
+
+
+def record_maker(db: "Db", row_id: str, name: str) -> None:
+    """Note who made a mark change or call (nothing when no name was given)."""
+    if name:
+        db.run("INSERT INTO made_by (id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING",
+               (row_id, name))
 
 
 class Unavailable(RuntimeError):

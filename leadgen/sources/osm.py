@@ -136,12 +136,24 @@ def _fetched_by_tag(tags: dict[str, str]) -> bool:
             or any(k in tags for k in any_value))
 
 
+# Labels for one part of a complex ("Building B", "Bldg 3", "Tower 2", "C Building"):
+# not a business, and the complex itself is its own element when it is mapped.
+_PART_LABEL = re.compile(
+    r"^(?:(?:building|bldg\.?|block|wing|tower|unit|suite|ste\.?|phase|annex|hall)\s*[#-]?\s*"
+    r"[0-9a-z]{1,4}|[0-9a-z]{1,3}\s*[-]?\s*(?:building|bldg\.?|wing|tower))$", re.I)
+
+
+def is_part_label(name: str) -> bool:
+    """True for a name that only labels part of a complex, like "Building B"."""
+    return bool(_PART_LABEL.match(name.strip()))
+
+
 def parse_element(el: dict[str, Any]) -> Lead | None:
     tags = el.get("tags", {})
     name = tags.get("name", "").strip()
-    # Skip unnamed features and per-building labels like "B" or "12" inside a
-    # complex (but keep brands like "3M").
-    if len(name) < 2 or not any(ch.isalpha() for ch in name):
+    # Skip unnamed features and per-building labels like "B", "12" or "Building B"
+    # inside a complex (but keep brands like "3M").
+    if len(name) < 2 or not any(ch.isalpha() for ch in name) or is_part_label(name):
         return None
     # Places that no longer operate.
     if "(historical)" in name.lower() or _only_former_use(tags) or any(
@@ -320,15 +332,21 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
     errors: list[str] = []
     missing = 0.0                                # share of the area no server answered for
     done, total = 0, len(todo)
+    settled = 0                                  # parts finished (answered or split up)
+    first_total = total
+
+    def areas() -> None:
+        # Counts only go forward: parts finish out of order, and a part that failed
+        # counts as finished once it is replaced by its four smaller quarters.
+        if progress and total > 1:
+            again = ", some areas asked again in smaller parts" if total > first_total else ""
+            progress(f"OpenStreetMap: searching the free map data "
+                     f"({settled} of {total} areas done{again})")
 
     def said(part: int) -> Callable[[int, int], None]:
         def note(server: int, servers: int) -> None:
-            if not progress:
-                return
-            if total == 1:
+            if progress and total == 1:
                 progress(f"OpenStreetMap: searching the free map data (server {server} of {servers})")
-            else:
-                progress(f"OpenStreetMap: searching the free map data (part {part} of {total})")
         return note
 
     def one(n: int, box: Box | None) -> tuple[Any, list[str]]:
@@ -341,6 +359,7 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
     with ThreadPoolExecutor(max_workers=config.OVERPASS_PARALLEL) as pool:
         running: dict[Any, tuple[Box | None, float, int]] = {}
         started = 0
+        areas()
         while todo or running:
             while todo and len(running) < config.OVERPASS_PARALLEL:
                 if deadline - time.monotonic() < MIN_SECONDS_LEFT:
@@ -357,6 +376,7 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
             finished, _ = wait(running, return_when=FIRST_COMPLETED)
             for future in finished:
                 box, share, depth = running.pop(future)
+                settled += 1
                 try:
                     data, _ = future.result()
                 except Exception as exc:  # noqa: BLE001 - SourceError, or a thread that broke
@@ -368,8 +388,10 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
                         total += 4
                     else:
                         missing += share
+                    areas()
                     continue
                 done += 1
+                areas()
                 for lead in map(parse_element, data.get("elements", [])):
                     if lead:
                         found.setdefault(lead.source_id, lead)

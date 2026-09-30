@@ -169,8 +169,8 @@ def test_an_unknown_place_reads_plainly(monkeypatch):
     monkeypatch.setattr(geo, "request_json", lambda *a, **k: [])
     with pytest.raises(geo.GeocodeError) as err:
         geo.geocode("Nowhereville zz", "")
-    assert str(err.value) == ("Could not find the place 'Nowhereville zz'. Try a 5-digit ZIP "
-                              "code or a city name.")
+    assert str(err.value) == ("Could not find the place 'Nowhereville zz'. Check the spelling, "
+                              "or try a ZIP code, city or street address.")
 
 
 def test_osm_progress_names_no_server(monkeypatch):

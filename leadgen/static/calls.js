@@ -53,6 +53,7 @@ function renderCalls() {
     phone.append(l.phone ? phoneLink(l.phone) : el("span", "No phone listed", "sub")); tr.append(phone);
     const when = el("td", undefined, "c-when");
     when.append(el("span", l.call_outcome, "badge"), el("div", l.last_call));
+    if (l.last_call_by) when.append(el("div", `by ${l.last_call_by}`, "sub"));
     when.append(el("div", `${l.call_count} call${l.call_count > 1 ? "s" : ""}`, "sub"));
     tr.append(when);
     tr.append(notesCell(l));
@@ -105,7 +106,8 @@ function pickOutcome(o) {
   $("call-save").disabled = !o;
 }
 function saveDraft() { if (callLead) writeDraft(callLead.key, { notes: $("call-notes").value, outcome: callOutcome, id: callId }); }
-function openCall(lead) {
+function openCall(lead) { withName(() => openCallBox(lead)); }
+function openCallBox(lead) {
   callLead = lead;
   $("call-title").textContent = `Just called: ${lead.name}`;
   $("call-error").textContent = "";
@@ -132,7 +134,7 @@ $("call-form").addEventListener("submit", async (e) => {
   const target = callLead, key = callLead.key;
   $("call-save").disabled = true; S.busy++;
   try {
-    const { call } = await post("/calls", { key, outcome: callOutcome, notes: $("call-notes").value, id: callId });
+    const { call } = await post("/calls", { key, outcome: callOutcome, notes: $("call-notes").value, id: callId, by: myName() });
     writeDraft(key, { notes: "", outcome: "" });
     // Update the lead as it is now (the list may have been reloaded while saving).
     const lead = leadByKey(key) || target;
@@ -140,7 +142,7 @@ $("call-form").addEventListener("submit", async (e) => {
     const earlier = call.notes ? { earlier_notes: "", earlier_notes_when: "" }
       : lead.call_notes ? { earlier_notes: lead.call_notes, earlier_notes_when: lead.last_call } : {};
     updateLead({ key, ...earlier, call_outcome: call.outcome, call_notes: call.notes, last_call: call.when,
-                 last_call_at: call.at, call_count: (lead.call_count || 0) + 1, undo_call: call.undo });
+                 last_call_at: call.at, last_call_by: call.by, call_count: (lead.call_count || 0) + 1, undo_call: call.undo });
     addRecent(leadByKey(key) || lead);
     if (S.counts && first) S.counts.called++;
     if (callLead && callLead.key === key) { callLead = null; $("call-dlg").close(); }
@@ -165,7 +167,7 @@ async function openHistory(lead) {
     list.replaceChildren();
     for (const c of calls) {
       const item = el("div", undefined, "item");
-      const top = el("div"); top.append(el("span", c.outcome, "badge")); top.append(el("span", `  ${c.when}`, "sub"));
+      const top = el("div"); top.append(el("span", c.outcome, "badge")); top.append(el("span", `  ${c.when}${byWho(c.by)}`, "sub"));
       item.append(top, el("div", c.notes || "(no notes)", "notes"));
       list.append(item);
     }
