@@ -162,7 +162,7 @@ function readLeadView(params) {
 function route() {
   const { page: asked, params } = parseHash();
   const page = ["find", "leads", "calls", "stats"].includes(asked) ? asked : (S.counts && S.counts.all ? "leads" : "find");
-  hideToast();                                     // a note about one page never covers the next
+  if (typeof hideToast === "function") hideToast();   // a note about one page never covers the next (leads.js may not be loaded yet)
   if (page === "leads" && params.toString() && readLeadView(params)) { S.pinned.clear(); S.limit = 300; changeView(); }
   if (page === "calls") {
     const tab = params.get("tab");
