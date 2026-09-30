@@ -120,9 +120,10 @@ def test_calls_come_back_24_hours_after_they_were_made(monkeypatch):
     assert budget.left() == 50 and budget.reset_text() is None
     for _ in range(3):
         assert budget.take()
-    assert budget.left() == 47 and budget.reset_text() == "12:21 PM"
-    clock["now"] = dt.datetime(2026, 9, 30, 6, 0, tzinfo=dt.UTC)     # past midnight UTC
+    assert budget.left() == 47 and budget.reset_text() == "tomorrow at 12:21 PM"
+    clock["now"] = dt.datetime(2026, 9, 30, 6, 0, tzinfo=dt.UTC)     # just past midnight in Utah
     assert budget.left() == 47                     # still counted: not 24 hours yet
+    assert budget.reset_text() == "today at 12:21 PM"     # the same time, now on Utah's same day
     for _ in range(47):
         assert budget.take()
     assert not budget.take()
@@ -146,7 +147,7 @@ def test_page_shows_when_calls_come_back(monkeypatch):
     for _ in range(3):
         usage.yelp_budget().take()
     page = web.create_app(password="").test_client().get("/").data.decode()
-    assert "Yelp: 47 of 50 calls left in the last 24 hours; all back by 12:21 PM</div>" in page
+    assert "Yelp: 47 of 50 calls left in the last 24 hours; all back by tomorrow at 12:21 PM</div>" in page
 
 
 def test_small_request_cap_advice_stays_within_the_daily_limit(monkeypatch):

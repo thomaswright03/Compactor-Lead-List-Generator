@@ -153,4 +153,3 @@ def create_app(password: str | None = None, username: str | None = None) -> Flas
         app.register_blueprint(blueprint)
     _register_pages(app)
     return app
-

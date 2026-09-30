@@ -18,8 +18,24 @@ from .xlsx import Book, Cell, clean
 OFFLINE_VERIFIED = "My notes: equipment seen (this file only)"
 OFFLINE_CHOICES = ("Saw a compactor", "Saw a baler", "Saw neither", "Not sure")
 
+# The sources in the downloads' words.
+SOURCE_NAMES = {"google": "Google", "yelp": "Yelp", "osm": "OpenStreetMap map data"}
+# How a category was matched ("+35 Grocery (by map tag): ..."), in the downloads' words.
+_HOW = {"Google category": "from the Google listing", "Yelp category": "from the Yelp listing",
+        "map tag": "from the map listing", "name": "from its name",
+        "search query": "from the search that found it"}
+
+
+def plain_reason(reason: str) -> str:
+    """A score reason in plain words: "(by map tag)" -> "(from the map listing)"."""
+    return re.sub(r"\(by ([^)]+)\)", lambda m: f"({_HOW.get(m.group(1), m.group(1))})", reason, count=1)
+
+
+Column = tuple[str, Callable[[Lead], object], float]
+
+
 # Each column: its heading, the value for a lead, and its width in Excel.
-COLUMNS: list[tuple[str, Callable[[Lead], object], float]] = [
+COLUMNS: list[Column] = [
     ("Score", lambda l: l.score, 8),
     ("Tier", lambda l: TIER_LABELS.get(l.tier, l.tier), 13),
     ("Lead Type", lambda l: l.lead_type, 20),
@@ -33,14 +49,14 @@ COLUMNS: list[tuple[str, Callable[[Lead], object], float]] = [
     ("Phone", lambda l: format_phone(l.phone), 16),
     ("Website", lambda l: l.website, 32),
     ("Distance (mi)", lambda l: l.distance_miles, 12),
-    ("Why This Score", lambda l: "Points: " + " | ".join(l.reasons) if l.reasons else "", 60),
+    ("Why This Score", lambda l: "Points: " + " | ".join(map(plain_reason, l.reasons)) if l.reasons else "", 60),
     ("Matched Keywords", lambda l: ", ".join(l.matched_keywords), 18),
     ("Google Reviews", lambda l: l.rating_count, 10),
     ("Yelp Reviews", lambda l: l.yelp_reviews, 10),
     ("Approx. Footprint (sq ft)", lambda l: l.footprint_sqft, 14),
     ("Source Category", lambda l: l.primary_category, 22),
     ("Found By", lambda l: ", ".join(l.search_terms), 24),
-    ("Sources", lambda l: ", ".join(l.sources or [l.source]), 12),
+    ("Sources", lambda l: ", ".join(SOURCE_NAMES.get(s, s) for s in (l.sources or [l.source])), 18),
     ("Map Link", lambda l: l.map_url, 30),
     ("Latitude", lambda l: round(l.lat, 6), 11),
     ("Longitude", lambda l: round(l.lon, 6), 11),
@@ -58,6 +74,20 @@ COLUMNS: list[tuple[str, Callable[[Lead], object], float]] = [
     (OFFLINE_VERIFIED, lambda l: "", 18),
     ("My notes (this file only)", lambda l: "", 30),
 ]
+
+# Columns left out of a download when every row is empty there (a free map search has
+# no reviews, search phrases or calls, say): the others are always there.
+OPTIONAL = {"Website", "Matched Keywords", "Google Reviews", "Yelp Reviews",
+            "Approx. Footprint (sq ft)", "Source Category", "Found By", "Marked By",
+            "Call Result", "Last Called", "Called By", "Call Notes"}
+
+
+def columns_for(leads: list[Lead]) -> list[Column]:
+    """COLUMNS, without the optional ones that are empty in every row."""
+    def used(fn: Callable[[Lead], object]) -> bool:
+        return any(fn(l) not in (None, "", 0) for l in leads)
+    return [c for c in COLUMNS if c[0] not in OPTIONAL or used(c[1])]
+
 
 TIER_FILLS = {"A": "C6EFCE", "B": "E2EFDA", "C": "FFF2CC", "D": "F2F2F2"}
 COMPETITOR_FILL = "F8CBAD"
@@ -89,15 +119,16 @@ def _xl(value: object) -> object:
     return clean(value) if isinstance(value, str) else value
 
 
-def rows(leads: list[Lead]) -> list[list[object]]:
-    return [[fn(l) for _, fn, _ in COLUMNS] for l in leads]
+def rows(leads: list[Lead], columns: list[Column] | None = None) -> list[list[object]]:
+    return [[fn(l) for _, fn, _ in (columns or COLUMNS)] for l in leads]
 
 
 def to_csv_bytes(leads: list[Lead]) -> bytes:
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow([c for c, _, _ in COLUMNS])
-    for r in rows(leads):
+    columns = columns_for(leads)
+    w.writerow([c for c, _, _ in columns])
+    for r in rows(leads, columns):
         w.writerow(["" if v is None else _safe(v) for v in r])
     return buf.getvalue().encode("utf-8-sig")   # BOM so Excel opens it cleanly
 
@@ -108,22 +139,23 @@ def to_xlsx_bytes(leads: list[Lead], run_info: dict[str, Any] | None = None) -> 
     Written by xlsx.py, in time that grows in step with the number of leads.
     """
     book = Book()
-    ws = book.add_sheet("Leads", [width for _, _, width in COLUMNS], freeze="F2")
-    ws.append([Cell(name, fill="1F4E78", font="header", wrap=True) for name, _, _ in COLUMNS])
-    site_at, map_at = _col("Website") - 1, _col("Map Link") - 1
+    columns = columns_for(leads)
+    ws = book.add_sheet("Leads", [width for _, _, width in columns], freeze="F2")
+    ws.append([Cell(name, fill="1F4E78", font="header", wrap=True) for name, _, _ in columns])
+    site_at, map_at = _col("Website", columns) - 1, _col("Map Link", columns) - 1
     for lead in leads:
-        row = [_xl(fn(lead)) for _, fn, _ in COLUMNS]
+        row = [_xl(fn(lead)) for _, fn, _ in columns]
         fill = COMPETITOR_FILL if lead.lead_type == "Competitor" else TIER_FILLS.get(lead.tier)
         if fill:
             for i in range(4):
                 row[i] = Cell(row[i], fill=fill)
-        if re.match(r"https?://", lead.website or "", re.I):
+        if site_at >= 0 and re.match(r"https?://", lead.website or "", re.I):
             row[site_at] = Cell(row[site_at], font="link", link=lead.website)
         if re.match(r"https?://", lead.map_url or "", re.I):
             row[map_at] = Cell("Open map", font="link", link=lead.map_url)
         ws.append(row)
     ws.filter = True
-    ws.dropdown = (_col(OFFLINE_VERIFIED), OFFLINE_CHOICES)
+    ws.dropdown = (_col(OFFLINE_VERIFIED, columns), OFFLINE_CHOICES)
 
     info = book.add_sheet("Run Info", [26, 90])
     info.append(["Generated", date_time_text(time.time()) + " (Utah time)"])
@@ -132,6 +164,9 @@ def to_xlsx_bytes(leads: list[Lead], run_info: dict[str, Any] | None = None) -> 
     info.append([])
     info.append(["Tiers", tier_text()])
     info.append(["Row colors", "Green = stronger lead, orange = competitor"])
+    left_out = [name for name, _, _ in COLUMNS if name not in {c for c, _, _ in columns}]
+    if left_out:
+        info.append(["Columns left out", "Empty for every lead in this file: " + ", ".join(left_out)])
     info.append(["This file only", "The last two columns are for your own notes on this "
                  "copy. Nothing typed there is saved in the website: record Yes / No and "
                  "calls on the Leads page."])
@@ -169,5 +204,6 @@ def tier_text() -> str:
     return ", ".join(parts + [f"{lowest[1]} below {above}"])
 
 
-def _col(name: str) -> int:
-    return next(i for i, (c, _, _) in enumerate(COLUMNS, start=1) if c == name)
+def _col(name: str, columns: list[Column]) -> int:
+    """The column's number (from 1) in columns; 0 when it was left out."""
+    return next((i for i, (c, _, _) in enumerate(columns, start=1) if c == name), 0)

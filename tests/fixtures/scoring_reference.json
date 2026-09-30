@@ -1,5 +1,5 @@
 {
- "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses Arco's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests.",
+ "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses Arco's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests. \"not_campus\": places named after a university or college that are not the campus (a garden, house, condo, department, press...); they must never score as a campus prospect.",
  "businesses": [
   {
    "name": "Smith's Marketplace",
@@ -222,5 +222,55 @@
    "yelp_reviews": 60
   }
  ],
- "confirmed": []
+ "confirmed": [],
+ "not_campus": [
+  {
+   "name": "University Neighborhood Community Garden",
+   "raw_categories": [
+    "landuse=allotments"
+   ]
+  },
+  {
+   "name": "Westminster College President's House",
+   "raw_categories": [
+    "building=house"
+   ]
+  },
+  {
+   "name": "University Heights Condominiums",
+   "raw_categories": [
+    "building=residential"
+   ]
+  },
+  {
+   "name": "Department of Linguistics, University of Utah",
+   "raw_categories": [
+    "office=educational_institution"
+   ]
+  },
+  {
+   "name": "Price College of Engineering",
+   "raw_categories": [
+    "building=university"
+   ]
+  },
+  {
+   "name": "University of Utah Press",
+   "raw_categories": [
+    "office=publisher"
+   ]
+  },
+  {
+   "name": "University of Utah Marriott Library",
+   "raw_categories": [
+    "building=university"
+   ]
+  },
+  {
+   "name": "University South Campus Station",
+   "raw_categories": [
+    "public_transport=station"
+   ]
+  }
+ ]
 }

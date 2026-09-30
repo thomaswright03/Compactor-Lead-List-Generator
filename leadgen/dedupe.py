@@ -115,7 +115,7 @@ def snapshot(lead: Lead) -> list[dict[str, Any]]:
     return lead.parts or [{k: v for k, v in asdict(lead).items() if k != "parts"}]
 
 
-def _merge(group: list[Lead]) -> Lead:
+def merge(group: list[Lead]) -> Lead:
     parts = [p for lead in group for p in snapshot(lead)]
     # Open listings first, then Google, then Yelp records (phone/website coverage),
     # then the richest.
@@ -298,7 +298,7 @@ def dedupe(leads: list[Lead]) -> list[Lead]:
 
     out = []
     for root, group in groups.items():
-        lead = _merge(group)
+        lead = merge(group)
         if root in closed:
             lead.business_status = "CLOSED_PERMANENTLY"
         out.append(lead)

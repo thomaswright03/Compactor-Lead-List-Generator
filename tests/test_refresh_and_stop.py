@@ -155,7 +155,7 @@ def test_progress_and_details_are_in_plain_words():
     osm_note.append(job["message"])
     progress("Yelp page 1: 'grocery' (3/19)")
     osm_note.append(job["message"])
-    assert osm_note == ["Searching the free map data (server 2 of 4)…",
+    assert osm_note == ["Searching the free map data, trying another source…",
                         "Searching Yelp for grocery (3 of 19)"]
     # An older record (no funnel numbers): labelled and put in funnel order all the same.
     details = web.plain_details({"seconds": 8.2, "osm raw results": 40, "after dedupe": 30,

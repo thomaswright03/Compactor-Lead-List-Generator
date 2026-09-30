@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--radius", "-r", type=float, default=config.DEFAULT_RADIUS_MILES,
                    help="Search radius in miles (default 30)")
     r.add_argument("--keywords", "-k", nargs="*", default=None,
-                   help="Extra keywords to search for and boost, e.g. compactor baler "
+                   help="Extra keywords to search for (scores always use the defaults), e.g. compactor baler "
                         f"(default: {' '.join(config.DEFAULT_KEYWORDS)})")
     r.add_argument("--source", choices=SOURCES, default="auto",
                    help="auto = OpenStreetMap plus Google and/or Yelp when their key is set; "

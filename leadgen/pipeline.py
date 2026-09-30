@@ -11,7 +11,7 @@ from . import config
 from .dedupe import SAME_PHONE_MILES, dedupe
 from .geo import geocode, haversine_miles
 from .models import Lead
-from .scoring import score_lead
+from .scoring import keyword_hits, score_lead
 from .sources import SourceError, google_places, osm, yelp
 
 # auto: every paid source that has a key, plus the free map data.
@@ -174,8 +174,15 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
     # Google or Yelp reports closed cannot slip through on its own.
     if not params.include_closed:
         merged = [l for l in merged if l.business_status != "CLOSED_PERMANENTLY"]
+    # Scores always use the standard words (config.DEFAULT_KEYWORDS), like the saved
+    # list, so the minimum score is applied to the score that is saved and shown. The
+    # words typed for this search choose what is searched for and, with
+    # only_keyword_matches, which businesses are kept.
     for lead in merged:
-        score_lead(lead, keywords)
+        score_lead(lead, config.DEFAULT_KEYWORDS)
+    typed = {id(lead): keyword_hits(lead, keywords) for lead in merged}
+    for lead in merged:
+        lead.matched_keywords = typed[id(lead)]
 
     # Each business within the radius ends up in exactly one of these, so the search's
     # numbers add up: closed, left out for a low score, left out for not matching the
@@ -187,7 +194,7 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
             if lead.score < params.min_score:
                 low_score += lead.business_status != "CLOSED_PERMANENTLY"
                 continue
-            if params.only_keyword_matches and not lead.matched_keywords:
+            if params.only_keyword_matches and not typed[id(lead)]:
                 no_match += lead.business_status != "CLOSED_PERMANENTLY"
                 continue
         kept.append(lead)

@@ -29,7 +29,7 @@ from dataclasses import asdict, fields
 from typing import Any
 
 from . import config, store
-from .dedupe import _merge, is_duplicate, snapshot
+from .dedupe import is_duplicate, merge, snapshot
 from .geo import haversine_miles
 from .models import Lead
 from .scoring import score_lead
@@ -63,7 +63,7 @@ def _expired(part: Part, now: float) -> bool:
 
 
 def _rebuild(parts: list[Part]) -> Lead:
-    lead = _merge([_to_lead(copy.deepcopy(p["lead"])) for p in parts])
+    lead = merge([_to_lead(copy.deepcopy(p["lead"])) for p in parts])
     score_lead(lead, config.DEFAULT_KEYWORDS)
     return lead
 

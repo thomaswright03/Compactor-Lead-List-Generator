@@ -374,10 +374,12 @@ def test_find_leads_says_why_a_search_cannot_start(page):
     # The server's own refusal (the browser check skipped) shows too, and stays.
     page.evaluate("document.querySelector('input[name=keywords]').value = Array(22).fill('w').join(',')")
     page.evaluate("startSearch()")
-    expect(page.locator("#go-error")).to_contain_text("Use at most 20 search words")
-    expect(page.locator("#err-keywords")).to_be_visible()
+    expect(page.locator("#err-keywords")).to_contain_text("Use at most 20 search words")
     page.wait_for_timeout(300)                         # the search history has reloaded by now
-    expect(page.locator("#go-error")).to_contain_text("Use at most 20 search words")
+    expect(page.locator("#err-keywords")).to_contain_text("Use at most 20 search words")
+    # Shown once, beside its field: the red line under the button is for other problems.
+    expect(page.locator("#go-error")).to_be_hidden()
+    expect(page.get_by_text("Use at most 20 search words")).to_have_count(1)
     assert "red" not in page.evaluate("getComputedStyle(document.getElementById('day-note')).color")
 
 
@@ -446,7 +448,8 @@ def test_calls_are_cards_and_every_page_is_in_the_bar_on_a_small_phone(browser, 
         const wrap = document.getElementById('calls-wrap');
         return { wide: wrap.scrollWidth > wrap.clientWidth,
                  page: document.documentElement.scrollWidth > window.innerWidth,
-                 parts: [...document.querySelectorAll('#calls-wrap td.notes, #calls-wrap .call-cell button')].map(inside),
+                 parts: [...document.querySelectorAll('#calls-wrap td.notes, #calls-wrap .call-cell button')]
+                        .map(inside),
                  nav: [...document.querySelectorAll('nav a')].map(inside) }; }""")
     assert not fits["wide"] and not fits["page"]
     assert len(fits["parts"]) >= 3 and all(fits["parts"])    # notes, Just called, History, Undo

@@ -5,7 +5,6 @@ this file, so tuning false positives/negatives never means touching the
 pipeline code.
 """
 
-import os
 from dataclasses import dataclass, field
 
 # Arco Compactor's shop: the default point the radius and "Miles" are measured
@@ -238,6 +237,23 @@ CATEGORIES = [
 
 CATEGORY_BY_KEY = {c.key: c for c in CATEGORIES}
 
+# A place named after a university or college is not the campus when its name says it
+# is a garden, house, condo, department, press, library, office... ("University Heights
+# Condominiums", "Department of Linguistics, University of Utah", "University of Utah
+# Press"): the campus itself is the lead, not each of its units and neighbours. Whole
+# words; "college of" / "school of" count only after the start ("Price College of
+# Engineering" is a unit, "College of Eastern Utah" is a college).
+NOT_CAMPUS_WORDS = [
+    "garden", "gardens", "house", "home", "homes", "residence", "residences", "heights",
+    "condominium", "condominiums", "condo", "condos", "apartments", "townhomes", "village",
+    "department", "dept", "press", "institute", "center for", "centre for", "office",
+    "offices", "bookstore", "library", "museum", "parking", "credit union", "alumni",
+    "foundation", "club", "chapel", "church", "ward", "stake", "lab", "laboratory",
+    "laboratories", "clinic", "preschool", "child care", "daycare", "observatory", "park",
+    "station", "president's house", "presidents house",
+]
+NOT_CAMPUS_INNER = ["college of", "school of"]
+
 # Catch-all tags: they make a place "industrial" or "residential" without saying much more.
 GENERIC_OSM_TAGS = {("industrial", None), ("building", "industrial"), ("landuse", "industrial"),
                     ("landuse", "residential")}
@@ -432,16 +448,20 @@ HTTP_USER_AGENT = "compactor-lead-list-generator/1.0 (+https://github.com/thomas
 CACHE_TTL_SECONDS = 7 * 24 * 3600
 
 
-# Off switches for whoever runs the site, read on every request (set them in
-# Render > Environment; see docs/operator-runbook.md). Any of 1 / true / yes / on counts as set.
+# Off switches for whoever runs the site, read on every request: flipped on the Find
+# leads page (Site switches, stored in the database, no restart) or, as a backup, set
+# in Render > Environment (see docs/operator-runbook.md), where any of 1 / true / yes /
+# on counts as set.
 SEARCH_PAUSED_ENV = "LEADGEN_SEARCH_PAUSED"   # Find leads refuses to start
 GOOGLE_OFF_ENV = "LEADGEN_GOOGLE_OFF"         # searches skip Google (no Google charges)
 YELP_OFF_ENV = "LEADGEN_YELP_OFF"             # searches skip Yelp
 
 
 def switched_on(name: str) -> bool:
-    """True when the environment variable `name` is set to 1 / true / yes / on."""
-    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+    """True when the switch `name` is on: its environment variable is set to 1 / true /
+    yes / on, or someone switched it on inside the site (switches.py)."""
+    from . import switches  # it reads the database, which needs this module
+    return switches.is_on(name)
 
 
 def stop_reason(source: str | None = None) -> str | None:

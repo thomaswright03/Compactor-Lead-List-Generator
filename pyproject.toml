@@ -1,8 +1,10 @@
 # Lint settings (ruff). Run: python -m ruff check .   CI runs it on every push.
 # The code keeps its own layout (aligned continuation lines), so ruff's formatter
-# is not used; pycodestyle's rules below keep the layout tidy instead.
+# is not used; pycodestyle's layout rules below check it instead (indentation,
+# whitespace, blank lines, and lines of at most 120 characters), so CI fails on a
+# badly laid-out file.
 [tool.ruff]
-line-length = 110
+line-length = 120
 target-version = "py311"
 extend-exclude = [".cache", "output"]
 
@@ -19,8 +21,17 @@ select = [
     "RUF",         # ruff's own checks
     "DTZ",         # no naive datetimes (the site's clock is Utah time)
 ]
+# pycodestyle's layout rules are "preview" rules in ruff: each is named here.
+preview = true
+explicit-preview-rules = true
+extend-select = [
+    "E101", "E111", "E112", "E113", "E114", "E115", "E116", "E117",
+    "E201", "E202", "E203", "E204", "E211", "E221", "E222", "E223", "E224", "E225",
+    "E226", "E227", "E228", "E231", "E241", "E242", "E251", "E252", "E261", "E262",
+    "E265", "E266", "E271", "E272", "E273", "E274", "E275",
+    "E301", "E302", "E303", "E304", "E305", "E306",
+]
 ignore = [
-    "E501",        # long lines are wrapped by hand, at up to ~110 characters
     "E741",        # `l` is the house name for a lead
     "SIM108",      # an if/else block is sometimes clearer than a ternary
     "RUF001",      # the pages use typographic characters on purpose

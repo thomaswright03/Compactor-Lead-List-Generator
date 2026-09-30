@@ -46,6 +46,19 @@ def date_time_text(ts: float | None) -> str:
     return f"{when:%b} {when.day}, {when.year}, {_clock(when)}"
 
 
+def day_clock_text(ts: float, today: dt.datetime | float) -> str:
+    """'today at 4:43 PM', 'tomorrow at 9:05 AM' or 'Oct 2 at 9:05 AM' (Utah time),
+    for a time seen from today."""
+    when, day = utah(ts), utah(today).date()
+    if when.date() == day:
+        name = "today"
+    elif when.date() == day + dt.timedelta(days=1):
+        name = "tomorrow"
+    else:
+        name = f"{when:%b} {when.day}"
+    return f"{name} at {_clock(when)}"
+
+
 def clock_text(ts: float) -> str:
     """'12:19 PM' (Utah time) for a timestamp, written like date_time_text's time."""
     return _clock(utah(ts))

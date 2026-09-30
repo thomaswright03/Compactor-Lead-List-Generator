@@ -110,8 +110,15 @@ Every lead has a score from 0 to 100 and a tier:
 
 Points come from the kind of business (grocery, warehouse and big-box stores
 score highest), a well-known high-volume brand, how busy the place is (review
-counts), how big the building is, and your search words. **Why this score**
-lists every reason on each lead.
+counts), how big the building is, and the standard words compactor, baler,
+waste and recycling in its name or listing. **Why this score** lists every
+reason on each lead.
+
+Words you type under **Extra search words** add businesses to look for; they
+don't change scores, so a business scores the same whichever search found it.
+To keep only businesses that match your words, tick **Only businesses matching
+the search words** under More options. **Leave out weak leads below score**
+uses the same score you then see in the list.
 
 ## When something goes wrong
 

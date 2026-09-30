@@ -93,6 +93,14 @@ def is_non_prospect_tag(tag: str) -> bool:
                              for nk, nv in config.NON_PROSPECT_OSM_TAGS)
 
 
+def _not_campus(name: str) -> bool:
+    """True for a name that is a campus's unit or neighbour, not the campus (config.NOT_CAMPUS_WORDS)."""
+    if any(_contains_term(name, w, whole=True) for w in config.NOT_CAMPUS_WORDS):
+        return True
+    return any(m.start() > 0 for w in config.NOT_CAMPUS_INNER
+               for m in _term_pattern(normalize(w), True).finditer(name))
+
+
 def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
     """Return (best category, list of matched categories) as (Category, how) pairs.
 
@@ -120,6 +128,8 @@ def classify(lead: Lead) -> tuple[Match | None, list[Match]]:
             hit = "name"
         elif use_hint and any(config.QUERY_CATEGORY.get(t) == cat.key for t in lead.search_terms):
             hit = "search query"
+        if hit and cat.key == "education" and _not_campus(name):
+            hit = None          # "University Heights Condominiums", "University of Utah Press"
         if hit:
             matched.append((cat, hit))
 
@@ -223,6 +233,14 @@ def _is_self(lead: Lead) -> bool:
     return any(compact(a) in hay for a in config.SELF_ALIASES)
 
 
+def keyword_hits(lead: Lead, keywords: Iterable[str]) -> list[str]:
+    """The words (of keywords) found in the lead's name, category, website or tags."""
+    hay = normalize(" ".join([lead.name, lead.primary_category, lead.website]
+                             + [c.removeprefix("yelp:").replace("_", " ").replace("=", " ")
+                                for c in lead.raw_categories]))
+    return [k for k in keywords if k.strip() and _contains_term(hay, k)]
+
+
 def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
     reasons, flags = [], []
     best, matched = classify(lead)
@@ -269,10 +287,7 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
             score += bonus
             reasons.append(f"+{bonus} large footprint (~{lead.footprint_sqft:,} sq ft)")
 
-    hay = normalize(" ".join([lead.name, lead.primary_category, lead.website]
-                             + [c.removeprefix("yelp:").replace("_", " ").replace("=", " ")
-                                for c in lead.raw_categories]))
-    kw_hits = [k for k in keywords if k.strip() and _contains_term(hay, k)]
+    kw_hits = keyword_hits(lead, keywords)
     if kw_hits:
         bonus = min(10 * len(kw_hits), 20)
         score += bonus

@@ -284,8 +284,10 @@ function markCell(lead, withCall) {
 function callBox(lead) {
   const box = el("div", undefined, "call-cell");
   if (lead.call_outcome) {
-    box.append(el("span", lead.call_outcome, "badge"));
-    box.append(el("span", lead.last_call + byWho(lead.last_call_by), "sub"));
+    // The latest call on one line (outcome, date, who), the buttons side by side below it.
+    const last = el("div", undefined, "call-last");
+    last.append(el("span", lead.call_outcome, "badge"), " ", el("span", lead.last_call + byWho(lead.last_call_by), "sub"));
+    box.append(last);
   }
   box.append(button("Just called", "", () => openCall(lead)));
   if (lead.call_count) box.append(button(`History (${lead.call_count})`, "quiet", () => openHistory(lead)));
@@ -350,7 +352,7 @@ function sortHeader(label, sort) {
 function leadTable(rows, withCall) {
   const table = el("table", undefined, "leads");
   // Shown from 1100px wide (narrower windows show cards); the Why column takes the rest.
-  const cols = [[withCall ? "Baler? / Call" : "Baler or compactor?", withCall ? "138px" : "118px"],
+  const cols = [[withCall ? "Baler? / Call" : "Baler or compactor?", withCall ? "250px" : "118px"],
                 ["Score", "74px", "score"], ["Business", "20%", "name"], ["Contact", "20%", "city"],
                 ["Miles", "72px", "miles"], ["Why this score", null]];
   const cg = el("colgroup");

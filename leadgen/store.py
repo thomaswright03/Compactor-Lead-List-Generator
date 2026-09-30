@@ -1,8 +1,9 @@
 """The one permanent database for what the site keeps between searches.
 
 Saved leads, the Yes / No baler marks, the call log, the record of each day's
-search, the site's recent problems, the count of today's Yelp calls and recent Yelp results all live here. With DATABASE_URL set (a Postgres URL, e.g.
-a free Neon database) that is Postgres; otherwise, for the command line and
+search, the site's recent problems, the count of today's Yelp calls and recent
+Yelp results all live here. With DATABASE_URL set (a Postgres URL, e.g. a free
+Neon database) that is Postgres; otherwise, for the command line and
 local use, a SQLite file in the cache folder. Render's own disk is wiped on
 every redeploy, so on Render there is no fallback: without DATABASE_URL
 nothing is saved and Yelp is paused (its daily limit could not be kept).
@@ -68,10 +69,14 @@ SCHEMA = [
     # clicks and calls from before it (or with no name set) simply have no row here.
     """CREATE TABLE IF NOT EXISTS made_by (
         id TEXT PRIMARY KEY, name TEXT NOT NULL)""",
+    # The emergency switches flipped inside the site (switches.py): 1 = on.
+    """CREATE TABLE IF NOT EXISTS switches (
+        name TEXT PRIMARY KEY, value INTEGER NOT NULL, by_name TEXT,
+        at DOUBLE PRECISION)""",
 ]
 # Every table, for tests that empty them.
 TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "mark_changes",
-          "search_failures", "call_undos", "problems", "made_by")
+          "search_failures", "call_undos", "problems", "made_by", "switches")
 # Up to this many ids are looked up by id (in chunks); more read the whole table.
 BY_ID_LIMIT = 1000
 _CHUNK = 500

@@ -58,6 +58,9 @@ footer.copy { margin-top:auto; padding-top:var(--sp-6); text-align:center; color
 .muted { color:var(--muted); }
 .error { color:var(--bad-ink); font-weight:600; }
 .warn { background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn-ink); padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm); margin:var(--sp-2) 0; }
+.warn .more-notes { margin-top:var(--sp-1); }
+.warn .more-notes summary { cursor:pointer; font-weight:600; min-height:24px; }
+.warn .more-notes p { margin:var(--sp-1) 0 0; }
 .problem { background:var(--card); border:1px solid var(--warn-line); border-left:5px solid var(--bad); border-radius:var(--r-md);
            padding:var(--sp-4) var(--sp-5); display:flex; gap:var(--sp-4); align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:var(--sp-4); }
 .problem strong { display:block; font-size:var(--fs-md); margin-bottom:var(--sp-1); }
@@ -107,6 +110,11 @@ table.plain th { font-size:var(--fs-sm); color:var(--muted); }
 table.plain.calls { min-width:720px; }
 .problems { margin-top:var(--sp-3); font-size:var(--fs-sm); }
 .problems summary { cursor:pointer; color:var(--bad-ink); font-weight:600; }
+details.switches summary { cursor:pointer; font-weight:700; font-size:var(--fs-md); }
+details.switches > p { margin:var(--sp-2) 0; font-size:var(--fs-sm); }
+.switch-row { display:flex; justify-content:space-between; align-items:center; gap:var(--sp-3); padding:var(--sp-2) 0; border-top:1px solid var(--line); }
+.switch-row .sub { display:block; }
+.switch-row button { flex:none; }
 .problems ul { margin:var(--sp-2) 0; padding-left:var(--sp-5); }
 .scroll-x { overflow-x:auto; }
 button.link { background:none; border:0; padding:0; color:var(--accent); font-weight:600; font-size:var(--fs-sm); }
@@ -161,6 +169,11 @@ button.undo { background:none; border:0; padding:var(--sp-1) 0 0; color:var(--ac
 .call-cell { display:flex; flex-direction:column; gap:var(--sp-2); align-items:flex-start; }
 .c-mark .by { margin-top:var(--sp-1); }
 .mark + .call-cell, .mark ~ .call-cell { margin-top:var(--sp-2); }
+/* In the wide table a called lead stays short: the buttons sit side by side. */
+@media (min-width: 1100px) {
+  table.leads .call-cell { flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--sp-1) var(--sp-2); }
+  table.leads .call-cell .call-last { flex-basis:100%; }
+}
 .call-cell button:not(.undo) { padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); white-space:nowrap; }
 .badge { display:inline-block; font-size:var(--fs-xs); font-weight:700; border-radius:var(--r-pill); padding:0 var(--sp-2); background:var(--badge); color:var(--ink); }
 .notes { white-space:pre-wrap; font-size:var(--fs-sm); }

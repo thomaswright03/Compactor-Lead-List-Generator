@@ -337,7 +337,7 @@ def test_excel_of_10000_leads_is_quick_and_complete():
     """The Excel file is built in time that grows in step with the list: 10,000 saved
     leads in a few seconds (it took minutes once), with every column, the tier and
     competitor colours, the web links, the notes dropdown and Run Info."""
-    from leadgen.export import COLUMNS, COMPETITOR_FILL, OFFLINE_VERIFIED, TIER_FILLS
+    from leadgen.export import COMPETITOR_FILL, OFFLINE_VERIFIED, TIER_FILLS, columns_for
     leads = []
     for i in range(10_000):
         lead = _lead(f"Store {i}", f"s{i}", website=f"https://store{i}.example.com",
@@ -355,16 +355,19 @@ def test_excel_of_10000_leads_is_quick_and_complete():
     # The rest is checked on a shorter list (reading 10,000 rows back takes a while).
     book = load_workbook(io.BytesIO(to_xlsx_bytes(leads[:200], {"List": "All saved leads"})))
     ws = book["Leads"]
-    assert ws.max_row == 201 and ws.max_column == len(COLUMNS)
-    assert [c.value for c in ws[1]] == [name for name, _, _ in COLUMNS]
+    names = [name for name, _, _ in columns_for(leads[:200])]
+    assert ws.max_row == 201 and ws.max_column == len(names)
+    assert [c.value for c in ws[1]] == names
     assert ws["A2"].fill.fgColor.rgb == "FF" + TIER_FILLS[leads[0].tier]
     assert ws["D3"].fill.fgColor.rgb == "FF" + COMPETITOR_FILL          # a competitor row
-    site, where = ws.cell(row=201, column=12), ws.cell(row=201, column=22)
+    site = ws.cell(row=201, column=names.index("Website") + 1)
+    where = ws.cell(row=201, column=names.index("Map Link") + 1)
     assert site.hyperlink.target == "https://store199.example.com"
     assert where.value == "Open map" and where.hyperlink.target.endswith("/node/199")
-    assert ws.freeze_panes == "F2" and ws.auto_filter.ref == f"A1:AF{ws.max_row}"
+    last = ws.cell(row=1, column=len(names)).column_letter
+    assert ws.freeze_panes == "F2" and ws.auto_filter.ref == f"A1:{last}{ws.max_row}"
     rule = ws.data_validations.dataValidation[0]
-    letter = ws.cell(row=2, column=[n for n, _, _ in COLUMNS].index(OFFLINE_VERIFIED) + 1).column_letter
+    letter = ws.cell(row=2, column=names.index(OFFLINE_VERIFIED) + 1).column_letter
     assert str(rule.sqref) == f"{letter}2:{letter}201"
     info = {row[0]: row[1] for row in book["Run Info"].iter_rows(values_only=True) if row[0]}
     assert info["List"] == "All saved leads" and info["Tiers"].startswith("A >= 60")

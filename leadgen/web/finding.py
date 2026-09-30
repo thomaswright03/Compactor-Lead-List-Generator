@@ -14,8 +14,9 @@ from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
 
 from .. import alerts, config, daily, saved, store
+from .. import switches as site_switches
 from ..geo import GeocodeError
-from ..localtime import clock_text
+from ..localtime import clock_text, date_time_text
 from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, run
 from .common import (
     NOT_USED_UP,
@@ -148,9 +149,10 @@ def plain_progress(msg: str) -> str:
                      if "again" in msg else "")
             return (f"Searching the free map data: {int(areas.group(1)):,} of "
                     f"{int(areas.group(2)):,} areas done{again}…")
-        server = re.search(r"server (\d+) of (\d+)", msg)
+        # Which mirror is answering means nothing to a salesperson; only say one is being tried.
+        server = re.search(r"server (\d+) of \d+", msg)
         return ("Searching the free map data"
-                + (f" (server {server.group(1)} of {server.group(2)})" if server else "") + "…")
+                + (", trying another source" if server and server.group(1) != "1" else "") + "…")
     if msg.startswith("Filtering"):
         return "Keeping the businesses within the radius"
     if msg.startswith("Merging"):
@@ -385,6 +387,9 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str]) -> N
               + ("saved." if job.get("saved") else "kept."))
     advice = (f" If it keeps happening, ask whoever looks after the site to check the "
               f"{_source_names(paid)} key." if paid else "")
+    how = ("answered for only part of the area" if not whole
+           else "couldn't be reached" if not result.partial_sources else "didn't fully answer")
+    missing = f"Some businesses are missing: {names} {how}."
     try:
         earlier = daily.incomplete_count(day)
     except Exception:
@@ -394,9 +399,11 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str]) -> N
         # The re-run allowance is used up: this search keeps the day, like a complete one.
         warnings.append(f"{reason} This was today's re-run, so today's search is now used up; "
                         f"the next search can run tomorrow.{advice}")
+        job["note"] = f"{missing} Today's search is now used up; the next one can run tomorrow."
         _record(day, result, job, warnings, {"partial": True, "reason": reason})
     else:
         left = daily.INCOMPLETE_RERUNS - earlier
+        job["note"] = f"{missing} Run the search again today to fill them in."
         warnings.append(f"{NOT_USED_UP} You can run it again {_times(left)} today to fill in "
                         f"what {names} would have found.{advice}")
         _give_back(day, reason, {"partial": True, "leads": len(result.leads),
@@ -517,7 +524,34 @@ def searches() -> ResponseReturnValue:
         # When an unfinished search stops holding the day, in Utah time like every time.
         current["free_at"] = clock_text(current["at"] + daily.STALE_SECONDS)
     return jsonify({**body, "yelp": yelp_quota(), "running": state().running_job(),
-                    "paused": SEARCH_PAUSED if switches()["search_paused"] else None})
+                    "paused": SEARCH_PAUSED if switches()["search_paused"] else None,
+                    "switches": _switch_list()})
+
+
+def _switch_list() -> dict[str, Any]:
+    """The emergency switches for the page, each with when it was flipped in Utah time."""
+    out = site_switches.state()
+    for item in out.values():
+        item["when"] = date_time_text(item.pop("at")) if item["site"] else ""
+    return out
+
+
+@bp.post("/switches")
+def flip_switch() -> ResponseReturnValue:
+    """Flip an emergency switch inside the site: it takes effect on the next request (a
+    running search stops at its next check), with no restart."""
+    if not same_origin():
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    name = site_switches.KEYS.get(str(data.get("key") or ""))
+    if name is None or not isinstance(data.get("on"), bool):
+        return jsonify({"error": "Unknown switch."}), 400
+    try:
+        site_switches.set_switch(name, data["on"], str(data.get("by") or ""))
+    except Exception as exc:
+        log.error("Saving a switch failed", exc_info=True)
+        return jsonify({"error": db_message(exc)}), 503
+    return jsonify({"switches": _switch_list()})
 
 
 @bp.get("/status/<job_id>")
@@ -534,5 +568,6 @@ def status(job_id: str) -> ResponseReturnValue:
         res = job["result"]
         body.update(found=len(res.leads), new_leads=job.get("new_leads"),
                     saved_count=job.get("saved_count"), warnings=list(res.warnings),
+                    note=job.get("note"),
                     location=res.location_label, yelp=yelp_quota(), saved=bool(job.get("saved")))
     return jsonify(body)

@@ -16,7 +16,18 @@ in Render → the service → **Environment** → **Save Changes**. Details just
 ## Emergency switches: stop searches or paid calls
 
 If searches misbehave (unexpected Google charges, bad data going into the saved
-list), whoever looks after the site can stop them without a code change:
+list), whoever looks after the site can stop them without a code change.
+
+**On the site (first choice, works at once):** open **Find leads**, then **Site
+switches** at the bottom. **Pause searching** → **Turn on** stops all searching;
+**Switch Google off** / **Switch Yelp off** (shown when that source is set up) stop
+just that paid source. It takes effect on the next request, with no restart: Find
+leads says "Searching is paused by the administrator" and refuses to start, and a
+search already running stops at its next check (below). Each switch shows who
+turned it on (the name under **Your name**) and when. **Turn off** undoes it. The
+switches are kept in the database (the additive `switches` table).
+
+**In Render (the backup, if the site itself won't load):**
 
 1. In Render, open the **compactor-lead-finder** service and click **Environment**.
 2. Add `LEADGEN_SEARCH_PAUSED` with the value `1` to stop all searching, or
@@ -28,7 +39,9 @@ list), whoever looks after the site can stop them without a code change:
    is already running checks the switches between sources and before every
    paid Google or Yelp call: it stops there, keeps (and saves) what it found,
    and says it was stopped by the administrator.
-4. To switch it back on, delete the variable (or set it to `0`) and save.
+4. To switch it back on, delete the variable (or set it to `0`) and save. While
+   the variable is set, the site's switch shows "On, set in the server's
+   settings" and can't be turned off there.
 
 ## Deploying
 
@@ -172,7 +185,7 @@ not expire (Render's free Postgres is deleted after 30 days):
 The tables are created on first use, and new ones are added the same way on
 the next start (never by changing or dropping an existing table): for example
 `made_by`, which holds the name set under "Your name" for each Yes / No click
-and call. Without `DATABASE_URL` on Render, searches
+and call, and `switches`, which holds the emergency switches flipped on the site. Without `DATABASE_URL` on Render, searches
 still run, but nothing is saved and Yelp is paused (its daily limit could not be
 kept). Off Render, a SQLite file in `.cache/` is used instead.
 

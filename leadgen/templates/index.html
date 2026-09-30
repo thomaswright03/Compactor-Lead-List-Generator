@@ -55,7 +55,7 @@
             <span class="hint">Businesses farther away are left out.</span></label>
           <label>Extra search words
             <input name="keywords" value="{{ defaults.keywords }}">
-            <span class="hint">Separate with commas: up to 20 words, each up to 60 characters. Businesses matching them score higher.</span></label>
+            <span class="hint">Separate with commas: up to 20 words, each up to 60 characters. They add businesses to look for; scores always use the standard words (compactor, baler, waste, recycling), so they stay comparable.</span></label>
         </div>
         <details class="advanced">
           <summary>More options</summary>
@@ -120,6 +120,14 @@
         <div id="history"><div class="muted">Loading...</div></div>
         <div id="problems" class="problems" hidden></div>
       </div>
+
+      <details class="card switches" id="switches-card">
+        <summary>Site switches</summary>
+        <p class="muted">For whoever looks after the site: stop searches (or the paid sources) straight
+          away, for example if something goes wrong. It works at once, with no restart; saved leads,
+          marks and calls keep working.</p>
+        <div id="switch-list"></div>
+      </details>
     </section>
 
     <!-- Leads -->

@@ -46,7 +46,7 @@ function drawChart(rows) {
   chartRows = rows;
   const css = getComputedStyle(document.documentElement), c = (n) => css.getPropertyValue(n).trim();
   const box = $("chart"); box.replaceChildren();
-  const W = Math.max(300, Math.round(box.clientWidth || 560)), H = 260, L = 44, R = 12, T = 22, B = 46, NS = "http://www.w3.org/2000/svg";
+  const W = Math.max(300, Math.round(box.clientWidth || 560)), H = 260, L = 48, R = 12, T = 24, B = 52, NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("role", "img");
@@ -61,14 +61,14 @@ function drawChart(rows) {
   const y = (p) => T + (H - T - B) * (1 - p / 100);
   for (const p of [0, 25, 50, 75, 100]) {
     node("line", { x1: L, x2: W - R, y1: y(p), y2: y(p), stroke: p === 0 ? c("--chart-base") : c("--chart-grid"), "stroke-width": 1 });
-    node("text", { x: L - 8, y: y(p) + 4, "text-anchor": "end", "font-size": 11, fill: c("--chart-text") }, `${p}%`);
+    node("text", { x: L - 8, y: y(p) + 4, "text-anchor": "end", "font-size": 14, fill: c("--chart-text") }, `${p}%`);
   }
   const band = (W - L - R) / rows.length, bw = 24;
   const tip = el("div", undefined, "tip"); tip.hidden = true; box.append(tip);
   rows.forEach((r, i) => {
     const cx = L + band * i + band / 2;
-    node("text", { x: cx, y: H - B + 18, "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: c("--ink") }, `Tier ${r.tier}`);
-    node("text", { x: cx, y: H - B + 34, "text-anchor": "middle", "font-size": 11, fill: c("--chart-text") },
+    node("text", { x: cx, y: H - B + 20, "text-anchor": "middle", "font-size": 14, "font-weight": 700, fill: c("--ink") }, `Tier ${r.tier}`);
+    node("text", { x: cx, y: H - B + 40, "text-anchor": "middle", "font-size": 14, fill: c("--chart-text") },
          r.checked ? `${r.yes} of ${r.checked}` : band < 90 ? "none" : "none checked");
     if (r.pct === null) return;
     const top = y(r.pct), h = Math.max(y(0) - top, r.pct > 0 ? 2 : 0), rad = Math.min(4, h / 2);
@@ -76,7 +76,7 @@ function drawChart(rows) {
     const x0 = cx - bw / 2, x1 = cx + bw / 2, yb = y(0);
     const path = node("path", { d: `M${x0},${yb} V${top + rad} Q${x0},${top} ${x0 + rad},${top} H${x1 - rad} Q${x1},${top} ${x1},${top + rad} V${yb} Z`,
                                 fill: c("--chart-bar") });
-    node("text", { x: cx, y: top - 7, "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: c("--ink") }, `${r.pct}%`);
+    node("text", { x: cx, y: top - 7, "text-anchor": "middle", "font-size": 14, "font-weight": 700, fill: c("--ink") }, `${r.pct}%`);
     // The hit target is the whole column band, bigger than the mark.
     const hit = node("rect", { x: cx - band / 2 + 4, y: T, width: band - 8, height: H - T - B, fill: "transparent", class: "col", tabindex: 0 });
     const show = () => {

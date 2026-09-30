@@ -11,7 +11,8 @@ function clearErrors() {
   $("form").querySelectorAll(".field-error").forEach((e) => e.remove());
   $("form").querySelectorAll("[aria-invalid]").forEach((e) => { e.removeAttribute("aria-invalid"); e.removeAttribute("aria-describedby"); });
 }
-// Show why the search can't start: beside the field it is about (when there is one) and beside the button.
+// Show why the search can't start: once, beside the field it is about, or (for a problem
+// that belongs to no field) in the red line beside the button.
 function showError(message, field) {
   clearErrors();
   S.error = message;
@@ -23,7 +24,8 @@ function showError(message, field) {
     input.setAttribute("aria-invalid", "true"); input.setAttribute("aria-describedby", err.id);
     input.focus();
   }
-  $("go-error").textContent = input ? `Can't start the search: ${message}` : message;
+  if (input) return;
+  $("go-error").textContent = message;
   $("go-error").hidden = false;
 }
 $("form").addEventListener("input", () => { if (S.error) clearErrors(); });
@@ -61,6 +63,32 @@ async function loadSearches() {
   } else setGo(true, "One search a day. Today's is available.");
   renderHistory(body.searches);
   renderProblems(body.problems);
+  if (body.switches) renderSwitches(body.switches);
+}
+// The emergency switches (web/finding.py flip_switch): each takes effect on the next request.
+const SWITCH_SHOWN = { search_paused: () => true, google_off: () => CONFIG.google_on, yelp_off: () => CONFIG.yelp_on };
+function renderSwitches(list) {
+  const box = $("switch-list"); box.replaceChildren();
+  for (const [key, s] of Object.entries(list)) {
+    if (!SWITCH_SHOWN[key]()) continue;
+    const row = el("div", undefined, "switch-row");
+    const text = el("div");
+    text.append(el("strong", s.label));
+    text.append(el("span", s.env ? "On, set in the server's settings (turn it off there)."
+      : s.on ? `On${s.when ? ` since ${s.when}` : ""}${s.by ? `, by ${s.by}` : ""}.` : "Off.", "sub"));
+    row.append(text);
+    if (!s.env) {
+      const b = button(s.on ? "Turn off" : "Turn on", s.on ? "" : "quiet", async () => {
+        b.disabled = true;
+        try { await post("/switches", { key, on: !s.on, by: myName() }); }
+        catch (err) { box.append(el("div", err.message, "error")); }
+        loadSearches();
+      });
+      b.setAttribute("aria-label", `${s.on ? "Turn off" : "Turn on"}: ${s.label}`);
+      row.append(b);
+    }
+    box.append(row);
+  }
 }
 // The site's problems in the last 7 days (failed searches, errors), so they are never only in the logs.
 function renderProblems(p) {
@@ -147,6 +175,19 @@ function showProgress(job) {
   $("progress-msg").textContent = job.message;
   $("slow-note").hidden = !job.slow;
 }
+// One short note (an incomplete search's summary, or the first warning); the details behind "More".
+function showNotes(note, warnings) {
+  const box = $("done-warnings"); box.replaceChildren();
+  const rest = note ? warnings : warnings.slice(1), main = note || warnings[0];
+  if (!main) return;
+  const div = el("div", "", "warn"); div.append(el("span", main));
+  if (rest.length) {
+    const more = el("details", "", "more-notes"); more.append(el("summary", "More"));
+    for (const w of rest) more.append(el("p", w));
+    div.append(more);
+  }
+  box.append(div);
+}
 async function follow(jobId, misses = 0) {
   S.job = jobId;
   setGo(false, ""); $("done-card").hidden = true; $("search-failed").hidden = true;
@@ -172,8 +213,7 @@ async function follow(jobId, misses = 0) {
                                         : `${job.found.toLocaleString()} leads found`;
   $("done-sub").textContent = !job.saved ? `near ${job.location} (not saved)`
     : job.saved_count == null ? `near ${job.location}` : `${job.saved_count.toLocaleString()} saved leads in all, near ${job.location}`;
-  const warn = $("done-warnings"); warn.replaceChildren();
-  for (const w of job.warnings) warn.append(el("div", w, "warn"));
+  showNotes(job.note, job.warnings);
   if (job.yelp && $("yelp-quota")) $("yelp-quota").textContent = job.yelp.text;
   await loadLeads();
   loadSearches();
@@ -185,7 +225,7 @@ function searchSummary(form) {
   const f = new FormData(form), rows = [];
   rows.push(["Search around", f.get("location").trim()]);
   rows.push(["How far", `${f.get("radius") || "30"} miles`]);
-  rows.push(["Search words", (f.get("keywords") || "").split(",").map((k) => k.trim()).filter(Boolean).join(", ") || "None"]);
+  rows.push(["Also look for", (f.get("keywords") || "").split(",").map((k) => k.trim()).filter(Boolean).join(", ") || "None"]);
   rows.push(["Where to look", SOURCE_TEXT[f.get("source")] || "Everywhere available"]);
   rows.push(["Leave out scores below", f.get("min_score")]);
   if (f.get("grid") && f.get("grid") !== "1") rows.push(["Coverage for Google and Yelp", `${f.get("grid")} searches`]);

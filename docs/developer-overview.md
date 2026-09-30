@@ -47,7 +47,7 @@ pip install -r requirements-dev.txt
 python -m playwright install chromium          # for the browser tests
 python -m pytest                               # SQLite
 LEADGEN_TEST_DATABASE_URL=postgresql://... python -m pytest   # a throwaway Postgres
-python -m ruff check .                         # lint (settings in pyproject.toml)
+python -m ruff check .                         # lint and layout (settings in pyproject.toml)
 python -m vulture                              # dead code (settings in pyproject.toml)
 python -m mypy                                 # strict type check (settings in pyproject.toml)
 ```
@@ -94,6 +94,11 @@ checked, double-click Start search (nothing gets selected), and check "No street
 address" and the tier words at desktop and 390 px.
 `tests/test_cli.py` runs the command line with the sources mocked.
 
+The layout is checked rather than reformatted: ruff's formatter would undo the
+aligned continuation lines, so `pyproject.toml` turns on pycodestyle's layout
+rules (indentation, whitespace, blank lines, lines of at most 120 characters)
+and the lint fails on a badly laid-out file.
+
 GitHub Actions (`.github/workflows/ci.yml`) runs the lint, the dead-code and
 strict type checks and every test, on SQLite and on Postgres, for each push and
 pull request; Render deploys only commits that pass, and branch protection on
@@ -121,7 +126,7 @@ explanation, and `--source auto` leaves Yelp out and says so.
 | --- | --- | --- |
 | `--location` | Arco Compactor (876 Fortune Rd, Salt Lake City) | ZIP, city, address, or `lat,lon`. The radius and the Miles column are measured from here |
 | `--radius` | 30 | Miles from the center; results outside are removed |
-| `--keywords` | compactor baler waste recycling | Extra search terms; matches add points |
+| `--keywords` | compactor baler waste recycling | Extra search terms (they add businesses to look for; scores always use the defaults) |
 | `--source` | auto | `auto` = OpenStreetMap plus Google and/or Yelp when their key is set. Also `google`, `yelp`, `osm`, and `both` (Google + OpenStreetMap) |
 | `--min-score` | 20 | Drop leads below this score (competitors are always kept) |
 | `--grid` | 1 | Google and Yelp. 1, 7 or 19 search cells. Google caps each search at 60 results and Yelp at 240, so more cells find more businesses (and cost more). Yelp searches at most 25 miles around a point, so past 25 miles it needs 7 cells; at the default 1 it searches the 25 miles around the center instead when 7 would take more calls than are left |
@@ -332,12 +337,17 @@ addresses and server errors show a branded page with a link back.
 
 ## The scoring reference file
 
-Saved leads are always scored with the default keywords (compactor, baler,
-waste, recycling), whatever a search typed, so a business's score and tier
+Leads are always scored with the default keywords (compactor, baler,
+waste, recycling), whatever a search typed (typed words only choose what is
+searched for and, with "only keyword matches", what is kept; the minimum score
+is applied to this same score), so a business's score and tier
 depend only on facts about it and the Stats page's tiers stay comparable over
 time. `tests/fixtures/scoring_reference.json` lists reference businesses and
 whether they run a baler or compactor; a test fails if a scoring change stops
-ranking them where they should. Its **confirmed** list holds real businesses
+ranking them where they should. Its **not_campus** list holds places named after a
+university or college that are not the campus (a community garden, a president's
+house, condominiums, a department, a press, a library): `config.NOT_CAMPUS_WORDS`
+keeps them from scoring as a campus prospect, so one campus is one lead. Its **confirmed** list holds real businesses
 Arco's staff marked Yes / No on the Leads page, with the tier each had:
 `python -m leadgen reference` (with `DATABASE_URL` set to the website's
 database) refreshes it from the site's marks, copying only the facts the

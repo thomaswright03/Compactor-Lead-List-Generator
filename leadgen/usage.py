@@ -15,7 +15,7 @@ from collections.abc import Callable
 from typing import Any
 
 from . import config, store
-from .localtime import clock_text
+from .localtime import day_clock_text
 
 log = logging.getLogger(__name__)
 
@@ -89,7 +89,8 @@ class DailyBudget:
 
     def reset_text(self) -> str | None:
         at = self.resets_at()
-        return clock_text(-(-at // 60) * 60) if at else None     # rounded up to the minute
+        # Rounded up to the minute; "today at 4:43 PM" or "tomorrow at 4:43 PM".
+        return day_clock_text(-(-at // 60) * 60, _now()) if at else None
 
     def take(self) -> bool:
         """Reserve one call. False when the calls are used up or cannot be counted."""

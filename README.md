@@ -16,21 +16,26 @@ and Arco Compactor's own listing is flagged too.
 | Looking after the live site | [Operator runbook](docs/operator-runbook.md): **emergency switches** (pause searching), deploying, rollback, alerts, settings, the database |
 | Changing the code | [Developer overview](docs/developer-overview.md): a diagram of search → sources → merge/score → saved list → pages, tests and checks, the command line, and every page's behaviour in detail |
 
-**Emergency stop:** in Render, the service → **Environment**, add
-`LEADGEN_SEARCH_PAUSED` = `1` and **Save Changes** (`LEADGEN_GOOGLE_OFF` /
-`LEADGEN_YELP_OFF` stop just one paid source). See the
+**Emergency stop:** on the site, **Find leads** → **Site switches** → **Pause
+searching** → **Turn on** (or switch just Google or Yelp off). It works on the next
+request, with no restart. The backup, if the site itself won't load: in Render, the
+service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Changes**
+(`LEADGEN_GOOGLE_OFF` / `LEADGEN_YELP_OFF` stop just one paid source). See the
 [runbook](docs/operator-runbook.md#emergency-switches-stop-searches-or-paid-calls).
 
 ## What it does
 
 - **Find leads** once a day (Utah calendar day) around Arco's shop or any ZIP or
   city, from Google Places, Yelp (at most 50 calls in any 24 hours, with the reset
-  time shown) and the free OpenStreetMap data (asked in parts, so busy public
-  servers still answer).
+  time shown, "today at ..." or "tomorrow at ...") and the free OpenStreetMap data
+  (asked in parts, so busy public servers still answer). Extra search words add
+  businesses to look for; scores always use the standard words, so the minimum
+  score, the list and Stats all use the same number.
 - One **saved list**, one row per business, kept for good with its source details.
 - **Yes / No** "has a baler or compactor" marks (permanent; a click can be undone
   for 5 minutes), **Just called** notes with six results and a Calls tab for each,
-  a **Stats** page, and Excel / CSV downloads. Each mark and call records who made
+  a **Stats** page, and Excel / CSV downloads (in plain words; columns empty for
+  every lead in the file are left out and named on the Run Info sheet). Each mark and call records who made
   it (the name set under **Your name** in that browser).
 - Works on phones, tablets and laptops: below 1,100 px wide each lead is a card,
   so the reasons for its score are always in view without scrolling sideways.
