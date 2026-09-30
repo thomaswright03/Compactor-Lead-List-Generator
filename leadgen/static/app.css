@@ -393,3 +393,22 @@ dialog::backdrop { background:var(--backdrop); }
   table.plain.hist tr.more-row td { background:none; }
   .scroll-x:has(table.plain.hist) { overflow:visible; }
 }
+
+/* The tutorial (tour.js): a dimmed page with one part cut out and a box explaining it. */
+.side .tour-btn { background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.3); align-self:flex-start; }
+.side .tour-btn:hover { background:rgba(255,255,255,.2); }
+.tour-shade { position:fixed; inset:0; z-index:70; background:transparent; }
+.tour-shade.dim { background:rgba(0,0,0,.55); }
+.tour-spot { position:fixed; z-index:71; border-radius:var(--r-sm); box-shadow:0 0 0 9999px rgba(0,0,0,.55), 0 0 0 3px var(--accent-2);
+             pointer-events:none; transition:all .2s ease; }
+.tour-box { position:fixed; z-index:72; width:min(380px, calc(100vw - 24px)); background:var(--card); color:var(--ink);
+            border:1px solid var(--line); border-radius:var(--r-md, 10px); padding:var(--sp-4); box-shadow:0 8px 30px rgba(0,0,0,.35);
+            transition:opacity .15s ease; }
+.tour-box.moving { opacity:0; }
+.tour-box h2 { margin:0 0 var(--sp-2); font-size:var(--fs-md); }
+.tour-box p { margin:0 0 var(--sp-4); line-height:1.5; }
+.tour-count { font-size:var(--fs-sm); color:var(--muted); margin-bottom:var(--sp-1); }
+.tour-actions { display:flex; justify-content:space-between; align-items:center; gap:var(--sp-3); flex-wrap:wrap; }
+.tour-nav { display:flex; gap:var(--sp-2); }
+.tour-actions button { min-height:44px; }
+@media (prefers-reduced-motion: reduce) { .tour-spot, .tour-box { transition:none; } }

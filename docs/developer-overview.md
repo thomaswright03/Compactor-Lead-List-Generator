@@ -61,7 +61,7 @@ downloads) and `common.py`. `export.py` lays out the CSV and Excel files and
 `xlsx.py` writes the Excel format; `reference.py` copies the site's marks into
 the scoring tests. The page's markup is `leadgen/templates/index.html`;
 its script and styles are in `leadgen/static/` (`core.js` first, then one file
-per page, then `start.js`). Spacing, radii and text sizes come from one scale of
+per page, then `start.js`, then `tour.js`: the Tutorial button's step-by-step tour, whose steps are the `TOUR` list at its top). Spacing, radii and text sizes come from one scale of
 CSS variables in `templates/_theme.html` (`--sp-1` … `--sp-6`, `--fs-xs` …
 `--fs-xl`); use those rather than raw pixel values. Reading text is at least
 14 px (`--fs-sm`); only badges and counts use `--fs-xs` (12 px).

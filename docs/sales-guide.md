@@ -2,6 +2,9 @@
 
 How to use the Lead Finder, one task at a time. Each part fits on one screen.
 
+New to the site? Press **Tutorial** in the sidebar (under **Menu** on a phone) for a
+step-by-step tour of every page. It only looks around and never changes anything.
+
 ## A day's work
 
 1. **Find leads**: run the day's search (once a day).

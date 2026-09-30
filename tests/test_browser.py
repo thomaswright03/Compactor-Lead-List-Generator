@@ -916,3 +916,42 @@ def test_address_lines_stay_close_on_a_tablet(browser, site, page):
     context.close()
     assert tap >= 44
     assert line < 30, line
+
+
+@pytest.mark.parametrize("width,height", [(1280, 900), (390, 844)])
+def test_the_tutorial_walks_every_page_and_stays_on_screen(browser, site, page, width, height):
+    context = _context(browser, viewport={"width": width, "height": height})
+    tab = context.new_page()
+    errors = []
+    tab.on("pageerror", lambda exc: errors.append(str(exc)))
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("table.leads")
+    if width < 700:
+        tab.click("#menu-btn")                     # on phones the button is in Menu
+    tab.click("#tour-btn")
+    box = tab.locator(".tour-box")
+    expect(box).to_be_visible()
+    expect(tab.locator("#tour-count")).to_have_text(re.compile(r"Step 1 of \d+"))
+    total = int(re.search(r"of (\d+)", tab.inner_text("#tour-count")).group(1))
+    pages = set()
+    for i in range(total):
+        expect(tab.locator("#tour-count")).to_have_text(f"Step {i + 1} of {total}")
+        tab.wait_for_timeout(250)
+        b = box.bounding_box()
+        assert b["x"] >= 0 and b["y"] >= 0
+        assert b["x"] + b["width"] <= width and b["y"] + b["height"] <= height, tab.inner_text("#tour-title")
+        pages.add(tab.evaluate("location.hash.slice(1).split('?')[0]"))
+        tab.keyboard.press("Enter")                # Next has the focus
+    expect(box).to_be_hidden()
+    assert pages == {"find", "leads", "calls", "stats"}
+    # Nothing was marked, called or searched along the way.
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("table.leads")
+    assert "Marked by" not in tab.inner_text("table.leads")
+    tab.click("#menu-btn") if width < 700 else None
+    tab.click("#tour-btn")
+    expect(box).to_be_visible()
+    tab.keyboard.press("Escape")
+    expect(box).to_be_hidden()
+    context.close()
+    assert not errors
