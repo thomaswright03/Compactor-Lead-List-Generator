@@ -147,6 +147,16 @@ The repo includes `render.yaml`, so Render can set everything up:
 3. When asked, set **APP_USERNAME** and **APP_PASSWORD** (the login page asks for them; both are case-sensitive) and, optionally, **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
 4. Open the `onrender.com` link Render shows.
 
+## The size of a clone
+
+A clone of the repository is about 6 MB bigger than the code: an unrelated
+Python package file (a `pglast` wheel) was committed by mistake early on and
+removed in commit 77589dd, but it stays in the git history. Removing it from the
+history would rewrite every commit and need a force-push, which would break
+everyone's clones and the deploy link, so it is left there; it has no effect on
+the running site. `*.whl` files are now ignored so it can't happen again. Purge
+it only if the owner agrees to rewrite the history.
+
 ## The database (saved leads, marks, calls, the Yelp count)
 
 Render's disk is wiped on every redeploy, so the site keeps its data in a
@@ -159,7 +169,10 @@ not expire (Render's free Postgres is deleted after 30 days):
 3. In Render, open the service, **Environment**, add `DATABASE_URL` with that
    string, and save (the service restarts).
 
-The tables are created on first use. Without `DATABASE_URL` on Render, searches
+The tables are created on first use, and new ones are added the same way on
+the next start (never by changing or dropping an existing table): for example
+`made_by`, which holds the name set under "Your name" for each Yes / No click
+and call. Without `DATABASE_URL` on Render, searches
 still run, but nothing is saved and Yelp is paused (its daily limit could not be
 kept). Off Render, a SQLite file in `.cache/` is used instead.
 

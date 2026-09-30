@@ -12,9 +12,9 @@ and Arco Compactor's own listing is flagged too.
 
 | You are | Read |
 | --- | --- |
-| On the sales team | [Sales guide](docs/sales-guide.md): a day's work, every page, scores and tiers, the downloads |
+| On the sales team | [Sales guide](docs/sales-guide.md): short how-tos for the day's search, marking, logging calls, Stats, downloads and what the scores mean |
 | Looking after the live site | [Operator runbook](docs/operator-runbook.md): **emergency switches** (pause searching), deploying, rollback, alerts, settings, the database |
-| Changing the code | [Developer overview](docs/developer-overview.md): a diagram of search → sources → merge/score → saved list → pages, tests and checks, the command line |
+| Changing the code | [Developer overview](docs/developer-overview.md): a diagram of search → sources → merge/score → saved list → pages, tests and checks, the command line, and every page's behaviour in detail |
 
 **Emergency stop:** in Render, the service → **Environment**, add
 `LEADGEN_SEARCH_PAUSED` = `1` and **Save Changes** (`LEADGEN_GOOGLE_OFF` /
@@ -30,7 +30,10 @@ and Arco Compactor's own listing is flagged too.
 - One **saved list**, one row per business, kept for good with its source details.
 - **Yes / No** "has a baler or compactor" marks (permanent; a click can be undone
   for 5 minutes), **Just called** notes with six results and a Calls tab for each,
-  a **Stats** page, and Excel / CSV downloads.
+  a **Stats** page, and Excel / CSV downloads. Each mark and call records who made
+  it (the name set under **Your name** in that browser).
+- Works on phones, tablets and laptops: below 1,100 px wide each lead is a card,
+  so the reasons for its score are always in view without scrolling sideways.
 - A login from `APP_USERNAME` / `APP_PASSWORD` in the environment.
 
 ## Quick start
