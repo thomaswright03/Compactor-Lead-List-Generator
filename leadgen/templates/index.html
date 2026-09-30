@@ -127,6 +127,19 @@
       <details class="admin" id="admin-card">
         <summary>For the site administrator</summary>
         <div class="admin-body">
+          <form class="admin-lock" id="admin-lock" novalidate{% if admin == "open" %} hidden{% endif %}>
+            <p id="admin-lock-text">{% if admin == "unset" %}This section is locked. To use it, whoever looks
+              after the site adds an administrator password (ADMIN_PASSWORD) in the server's settings.{% else %}This
+              section is locked. Enter the administrator password to open it.{% endif %}</p>
+            <div class="admin-lock-row"{% if admin == "unset" %} hidden{% endif %}>
+              <label>Administrator password
+                <input type="password" id="admin-pass" autocomplete="current-password" maxlength="200"></label>
+              <button type="submit" id="admin-unlock">Unlock</button>
+            </div>
+            <div class="error" id="admin-error" role="alert" hidden></div>
+          </form>
+          <div id="admin-content"{% if admin != "open" %} hidden{% endif %}>
+          <p class="admin-relock"{% if not admin_lockable %} hidden{% endif %}><button type="button" class="quiet" id="admin-relock">Lock this section</button></p>
           <h2>Recent problems</h2>
           <div id="problems" class="problems"><p class="muted">Nothing went wrong in the last 7 days.</p></div>
           <h2>Site switches</h2>
@@ -138,6 +151,7 @@
             it copies the businesses marked Yes or No (names and categories only, no phone numbers or
             notes) into the tests, so a change to the scores can't push known Yes businesses down.</p>
           <p><a class="btn quiet" href="/download/scoring-reference.json" download>Download the scoring check file</a></p>
+          </div>
         </div>
       </details>
     </section>
@@ -303,7 +317,7 @@
   </div>
 </dialog>
 
-<script id="page-config" type="application/json">{{ {"outcomes": outcomes, "paused": switches.search_paused, "google_on": google_on, "yelp_on": yelp_on, "flagged": flagged}|tojson }}</script>
+<script id="page-config" type="application/json">{{ {"outcomes": outcomes, "paused": switches.search_paused, "google_on": google_on, "yelp_on": yelp_on, "flagged": flagged, "admin": admin}|tojson }}</script>
 <script src="/static/core.js?v={{ asset_version }}" defer></script>
 <script src="/static/leads.js?v={{ asset_version }}" defer></script>
 <script src="/static/calls.js?v={{ asset_version }}" defer></script>

@@ -74,6 +74,7 @@ async function loadSearches() {
   } else setGo(true, "One search a day. Today's is available.");
   renderHistory(body.searches);
   renderProblems(body.problems);
+  if (body.admin && body.admin !== "open") showAdmin(false);   // locked again elsewhere
   if (body.switches) { S.switches = body.switches; renderSwitches(body.switches); }
 }
 // The emergency switches (web/finding.py flip_switch): each takes effect on the next request.
@@ -336,3 +337,30 @@ async function startSearch() {
     loadSearches();
   }
 }
+
+// The administrator's section is locked with its own password (web/auth.py admin_unlock).
+// Unlocking lasts as long as the login; the problems and switches then load.
+function showAdmin(open) {
+  $("admin-lock").hidden = open;
+  $("admin-content").hidden = !open;
+}
+$("admin-lock").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("admin-error"), go = $("admin-unlock");
+  err.hidden = true;
+  if (!$("admin-pass").value) { err.textContent = "Enter the administrator password."; err.hidden = false; return; }
+  go.disabled = true;
+  try {
+    await post("/admin/unlock", { password: $("admin-pass").value });
+    $("admin-pass").value = "";
+    showAdmin(true);
+    loadSearches();
+  } catch (x) { err.textContent = x.message; err.hidden = false; $("admin-pass").select(); }
+  finally { go.disabled = false; }
+});
+$("admin-relock").addEventListener("click", async () => {
+  try { await post("/admin/lock", {}); } catch (x) { /* the page locks either way */ }
+  showAdmin(false);
+  renderProblems(null);
+  $("admin-pass").focus();
+});

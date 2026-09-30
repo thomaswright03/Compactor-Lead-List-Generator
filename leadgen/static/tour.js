@@ -20,8 +20,8 @@ const TOUR = [
   { page: "find", target: "#history", title: "Search history",
     text: "Every search is listed here: when it ran, where it looked, and how many businesses it found and added." },
   { page: "find", target: "#admin-card", title: "For the site administrator",
-    text: "Kept closed for the sales team. It lists recent problems, has switches to pause searching right away, " +
-          "and a scoring check file to send in once a month." },
+    text: "Kept closed for the sales team and locked with its own administrator password. It lists recent problems, " +
+          "has switches to pause searching right away, and a scoring check file to send in once a month." },
   { page: "leads", target: "#lead-tabs, #tab-pick", title: "Leads: one tab per answer",
     text: "Not checked holds the businesses nobody has answered yet. Once marked, a business moves to " +
           "Has baler or compactor or No baler or compactor. Competitors (like Pro Baler and Action Compaction) " +

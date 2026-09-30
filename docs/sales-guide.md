@@ -152,7 +152,7 @@ uses the same score you then see in the list.
 ## The administrator's section
 
 At the bottom of **Find leads**, **For the site administrator** is closed until
-opened. It lists the site's problems of the last 7 days and the **site
+opened, and locked with its own administrator password. It lists the site's problems of the last 7 days and the **site
 switches** (pause searching, switch Google or Yelp off). Each switch asks first
 and says what it will do; **Cancel** leaves it as it was. The sales team doesn't
 need it.

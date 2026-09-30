@@ -30,6 +30,7 @@ from .common import (
     State,
     lead_json,
     load_saved,
+    state,
     switches,
     wants_page,
     yelp_quota,
@@ -125,16 +126,19 @@ def _register_pages(app: Flask) -> None:
             "keywords": ", ".join(config.DEFAULT_KEYWORDS), "min_score": config.DEFAULT_MIN_SCORE,
         }, yelp=yelp_quota(), outcomes=list(calls.OUTCOMES), google_on=bool(google),
             yelp_on=bool(yelp_key), switches=switches(), paused_text=SEARCH_PAUSED,
-            undo_seconds=marks.UNDO_SECONDS,
+            undo_seconds=marks.UNDO_SECONDS, admin=auth.admin_state(),
+            admin_lockable=bool(state().admin_password),
             flagged=[*config.COMPETITORS, config.OWN_COMPANY])
 
 
-def create_app(password: str | None = None, username: str | None = None) -> Flask:
+def create_app(password: str | None = None, username: str | None = None,
+               admin_password: str | None = None) -> Flask:
     """password (or the APP_PASSWORD env var) puts the whole site behind a login page.
 
     username (or APP_USERNAME) is the name to log in with; without one any name
     works. Always set a password when the page is reachable from the internet:
-    every search can spend the Google or Yelp API key.
+    every search can spend the Google or Yelp API key. admin_password (or
+    ADMIN_PASSWORD) locks the administrator's section (auth.admin_open).
     """
     setup_logging()
     alerts.install()
@@ -149,7 +153,8 @@ def create_app(password: str | None = None, username: str | None = None) -> Flas
                       SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),
                       PERMANENT_SESSION_LIFETIME=dt.timedelta(days=LOGIN_DAYS),
                       SEND_FILE_MAX_AGE_DEFAULT=7 * 24 * 3600)   # asset URLs carry a version
-    app.extensions["leadgen"] = State(password, username)
+    admin_password = admin_password if admin_password is not None else os.environ.get("ADMIN_PASSWORD", "")
+    app.extensions["leadgen"] = State(password, username, admin_password)
     for blueprint in (auth.bp, finding.bp, leads.bp):
         app.register_blueprint(blueprint)
     _register_pages(app)

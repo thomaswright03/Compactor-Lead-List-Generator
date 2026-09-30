@@ -19,8 +19,11 @@ If searches misbehave (unexpected Google charges, bad data going into the saved
 list), whoever looks after the site can stop them without a code change.
 
 **On the site (first choice, works at once):** open **Find leads**, then **For the
-site administrator** at the bottom (closed until opened; it also lists the problems
-of the last 7 days). **Pause searching** → **Turn on**, then confirm with **Pause
+site administrator** at the bottom (closed until opened, and locked: enter the
+administrator password, `ADMIN_PASSWORD`, and press **Unlock**; it stays unlocked on
+that device until you log out or press **Lock this section**; it also lists the problems
+of the last 7 days). If the password isn't at hand, the `LEADGEN_SEARCH_PAUSED`
+setting below does the same. **Pause searching** → **Turn on**, then confirm with **Pause
 searching** in the box that asks first ("Pause all searching for everyone?"), stops all searching;
 **Switch Google off** / **Switch Yelp off** (shown when that source is set up) stop
 just that paid source. It takes effect on the next request, with no restart: Find
@@ -169,6 +172,7 @@ them in `.env` (see `.env.example`) or the shell.
 | --- | --- | --- | --- |
 | `APP_USERNAME` | On a public site | none (any name works) | The name to log in with (case-sensitive) |
 | `APP_PASSWORD` | On a public site | none (no login; only `localhost`/IP access) | The password for the login page |
+| `ADMIN_PASSWORD` | On a public site | none (the administrator's section stays locked; open on a local copy with no login) | Unlocks **For the site administrator** on Find leads (problems, site switches, scoring check). Changing it locks the section again for everyone |
 | `DATABASE_URL` | On Render | SQLite file in the cache folder | The permanent Postgres database (saved leads, marks, calls, searches, the Yelp count) |
 | `GOOGLE_PLACES_API_KEY` | No | none | Google Places key (paid; best phones and websites) |
 | `YELP_API_KEY` | No | none | Yelp key (at most 50 calls in any 24 hours) |

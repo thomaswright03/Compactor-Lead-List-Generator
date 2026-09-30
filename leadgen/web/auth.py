@@ -114,3 +114,61 @@ def logout() -> ResponseReturnValue:
         abort(403)
     session.clear()
     return redirect("/login")
+
+
+# The administrator's section (problems, site switches, the scoring check file) has its
+# own password, ADMIN_PASSWORD, on top of the login. Unlocking lasts as long as the login.
+def admin_token() -> str:
+    """Changes when the admin password changes, which locks the section again everywhere."""
+    key = current_app.secret_key
+    key = key if isinstance(key, bytes) else str(key).encode()
+    return hmac.new(key, f"admin\n{state().admin_password}".encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def admin_state() -> str:
+    """"open", "locked", or "unset": a site with a login but no ADMIN_PASSWORD keeps the
+    section locked for everyone. Without any login (a local copy) it is open."""
+    s = state()
+    if not s.admin_password:
+        return "unset" if s.password else "open"
+    return "open" if hmac.compare_digest(str(session.get("admin", "")), admin_token()) else "locked"
+
+
+def admin_open() -> bool:
+    return admin_state() == "open"
+
+
+def admin_refusal() -> ResponseReturnValue:
+    return jsonify({"error": "Unlock the administrator's section with its password first."}), 403
+
+
+@bp.post("/admin/unlock")
+def admin_unlock() -> ResponseReturnValue:
+    s = state()
+    if not same_origin():
+        abort(403)
+    if not s.admin_password:
+        return jsonify({"error": "No administrator password is set up. Add ADMIN_PASSWORD "
+                                 "in the server's settings." if s.password else ""}), 400
+    now, who = time.time(), _client_address()
+    recent = [t for t in s.admin_failures.get(who, []) if now - t < LOGIN_WINDOW]
+    if len(recent) >= LOGIN_TRIES:
+        return jsonify({"error": "Too many wrong tries. Wait 15 minutes and try again."}), 429
+    supplied = str((request.get_json(silent=True) or {}).get("password") or "")
+    if hmac.compare_digest(supplied.encode(), s.admin_password.encode()):
+        s.admin_failures.pop(who, None)
+        session["admin"] = admin_token()
+        return jsonify({"admin": "open"})
+    s.admin_failures[who] = [*recent, now]
+    if len(s.admin_failures) > 5000:
+        s.admin_failures.clear()
+    time.sleep(0.5)
+    return jsonify({"error": "Wrong password."}), 403    # not 401: that means logged out
+
+
+@bp.post("/admin/lock")
+def admin_lock() -> ResponseReturnValue:
+    if not same_origin():
+        abort(403)
+    session.pop("admin", None)
+    return jsonify({"admin": admin_state()})

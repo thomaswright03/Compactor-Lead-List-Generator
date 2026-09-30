@@ -59,7 +59,8 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   that can be phoned; under Not checked, among equal scores, those come first.
 - Works on phones, tablets and laptops: below 1,100 px wide each lead is a card,
   so the reasons for its score are always in view without scrolling sideways.
-- A login from `APP_USERNAME` / `APP_PASSWORD` in the environment.
+- A login from `APP_USERNAME` / `APP_PASSWORD` in the environment, and a separate
+  `ADMIN_PASSWORD` that unlocks the administrator's section.
 
 ## Quick start
 

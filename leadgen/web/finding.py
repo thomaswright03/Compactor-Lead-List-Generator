@@ -18,6 +18,7 @@ from .. import switches as site_switches
 from ..geo import GeocodeError
 from ..localtime import clock_text, date_time_text
 from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, run
+from .auth import admin_open, admin_refusal, admin_state
 from .common import (
     NOT_USED_UP,
     SEARCH_PAUSED,
@@ -530,11 +531,12 @@ def searches() -> ResponseReturnValue:
     for record in [body.get("current"), *body["searches"]]:
         if record and record.get("details"):
             record["details"] = plain_details(record["details"])
-    try:
-        problems: dict[str, Any] | None = alerts.recent()
-    except Exception:
-        log.warning("Loading the recent problems failed", exc_info=True)
-        problems = None                  # the history is still worth showing without them
+    problems: dict[str, Any] | None = None           # only for an unlocked administrator
+    if admin_open():
+        try:
+            problems = alerts.recent()
+        except Exception:
+            log.warning("Loading the recent problems failed", exc_info=True)   # the history is still worth showing
     body["problems"] = problems
     current = body.get("current")
     if current:
@@ -542,7 +544,7 @@ def searches() -> ResponseReturnValue:
         current["free_at"] = clock_text(current["at"] + daily.STALE_SECONDS)
     return jsonify({**body, "yelp": yelp_quota(), "running": state().running_job(),
                     "paused": SEARCH_PAUSED if switches()["search_paused"] else None,
-                    "switches": _switch_list()})
+                    "switches": _switch_list(), "admin": admin_state()})
 
 
 def _switch_list() -> dict[str, Any]:
@@ -559,6 +561,8 @@ def flip_switch() -> ResponseReturnValue:
     running search stops at its next check), with no restart."""
     if not same_origin():
         abort(403)
+    if not admin_open():
+        return admin_refusal()
     data = request.get_json(silent=True) or {}
     name = site_switches.KEYS.get(str(data.get("key") or ""))
     if name is None or not isinstance(data.get("on"), bool):

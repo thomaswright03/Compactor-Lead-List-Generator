@@ -14,6 +14,7 @@ from ..export import saved_list_info, to_csv_bytes, to_xlsx_bytes
 from ..localtime import date_time_text
 from ..models import Lead
 from ..pipeline import EXEMPT_TYPES
+from .auth import admin_open
 from .common import (
     MARKS_DOWN,
     LoadError,
@@ -293,6 +294,8 @@ def scoring_reference() -> ResponseReturnValue:
     """The scoring check file (tests/fixtures/scoring_reference.json) with every business
     marked Yes / No on the site in it (only the facts the scoring reads: no phone
     numbers, addresses or call notes), for the developer to commit (reference.py)."""
+    if not admin_open():
+        abort(403, "Unlock the administrator's section on the Find leads page first.")
     try:
         data, _, _ = reference.build()
     except Exception as exc:

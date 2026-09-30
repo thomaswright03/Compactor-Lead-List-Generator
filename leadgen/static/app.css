@@ -412,3 +412,9 @@ dialog::backdrop { background:var(--backdrop); }
 .tour-nav { display:flex; gap:var(--sp-2); }
 .tour-actions button { min-height:44px; }
 @media (prefers-reduced-motion: reduce) { .tour-spot, .tour-box { transition:none; } }
+/* The administrator's section is locked until its password is entered. */
+.admin-lock { display:flex; flex-direction:column; gap:var(--sp-3); }
+.admin-lock p { margin:0; }
+.admin-lock-row { display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--sp-3); }
+.admin-lock-row label { display:flex; flex-direction:column; gap:var(--sp-1); font-weight:600; }
+.admin-relock { margin:0 0 var(--sp-3); }

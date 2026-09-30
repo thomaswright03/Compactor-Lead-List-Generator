@@ -33,9 +33,11 @@ Undos = dict[str, dict[str, Undo]]
 class State:
     """One app's login settings and running searches (kept in app.extensions)."""
 
-    def __init__(self, password: str, username: str) -> None:
+    def __init__(self, password: str, username: str, admin_password: str = "") -> None:
         self.password, self.username = password, username
+        self.admin_password = admin_password         # locks the administrator's section
         self.failures: dict[str, list[float]] = {}   # address -> times of recent wrong passwords
+        self.admin_failures: dict[str, list[float]] = {}
         self.jobs: dict[str, dict[str, Any]] = {}     # job id -> search job, oldest first
         self.lock = threading.Lock()
 

@@ -955,3 +955,38 @@ def test_the_tutorial_walks_every_page_and_stays_on_screen(browser, site, page, 
     expect(box).to_be_hidden()
     context.close()
     assert not errors
+
+
+def test_the_administrators_section_unlocks_with_its_password(browser):
+    from werkzeug.serving import make_server
+    server = make_server("127.0.0.1", 0, web.create_app(password="pw", username="Matt", admin_password="adm1n"),
+                         threaded=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        context = _context(browser, viewport={"width": 1280, "height": 900})
+        tab = context.new_page()
+        url = f"http://127.0.0.1:{server.server_port}/"
+        tab.goto(url + "login")
+        tab.fill("input[name=username]", "Matt")
+        tab.fill("input[name=password]", "pw")
+        tab.locator("form button[type=submit]").click()
+        tab.goto(url + "#find")
+        tab.locator("#admin-card summary").click()
+        expect(tab.locator("#admin-content")).to_be_hidden()
+        tab.fill("#admin-pass", "wrong")
+        tab.click("#admin-unlock")
+        expect(tab.locator("#admin-error")).to_have_text("Wrong password.")
+        assert tab.url.startswith(url) and "/login" not in tab.url        # still on the page
+        tab.fill("#admin-pass", "adm1n")
+        tab.keyboard.press("Enter")
+        expect(tab.locator("#admin-content")).to_be_visible()
+        expect(tab.locator("#switch-list button").first).to_be_visible()
+        tab.reload()
+        tab.locator("#admin-card summary").click()
+        expect(tab.locator("#admin-content")).to_be_visible()             # stays unlocked
+        tab.click("#admin-relock")
+        expect(tab.locator("#admin-lock")).to_be_visible()
+        expect(tab.locator("#admin-content")).to_be_hidden()
+        context.close()
+    finally:
+        server.shutdown()
