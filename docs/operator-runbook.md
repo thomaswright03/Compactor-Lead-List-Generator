@@ -259,8 +259,13 @@ A login lasts 30 days on a device; changing the username or password logs everyo
 out. After 10 wrong passwords from one address, logins from it pause for 15 minutes.
 Without a password the page only answers on `localhost` or an IP address; to use
 another hostname, list it in `LEADGEN_ALLOWED_HOSTS`.
-The free plan sleeps after 15 idle minutes, so the first visit takes about a minute
+The free plan sleeps after 15 idle minutes, so the first visit takes 20 to 60 seconds
 to wake up, and its disk is wiped on each restart (which is why data lives in the database).
+The GitHub Actions job `.github/workflows/keep-awake.yml` opens `/healthz` every 10
+minutes from 6 AM to 9 PM Utah time so the site stays awake while the team works
+(GitHub may run it a few minutes late, and turns scheduled jobs off after 60 days
+with no commits: re-enable it under Actions if so). Render's paid Starter plan never
+sleeps and doesn't need it.
 To run the production server yourself: `gunicorn wsgi:app --workers 1 --threads 8 --timeout 0`.
 
 ## Yelp notes
