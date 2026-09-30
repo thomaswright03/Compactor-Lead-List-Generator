@@ -61,7 +61,7 @@ python -m leadgen run
 # Web page at http://127.0.0.1:5000
 python -m leadgen web
 
-# Merge saved leads that are buildings of one site (every search also does this)
+# Merge saved leads that are buildings of one site (only when you choose to run it)
 python -m leadgen merge-sites
 ```
 

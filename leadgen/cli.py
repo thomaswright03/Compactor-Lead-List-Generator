@@ -72,7 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("merge-sites", help="Merge saved leads that are parts of one site (the "
                    "numbered buildings of one complex) into one lead, keeping every mark and "
-                   "call; every search also does this after saving")
+                   "call; searches never do this on their own")
 
     w = sub.add_parser("web", help="Start the web page")
     w.add_argument("--host", default="127.0.0.1")

@@ -196,13 +196,14 @@ kept). Off Render, a SQLite file in `.cache/` is used instead.
 **Saved leads.** Every search merges into one saved list: a business found again
 (the same listing, or the duplicate rules in the [developer overview](developer-overview.md)) updates its row instead of
 adding one. The buildings of one site (an apartment complex's numbered buildings,
-a campus's parts, one name spread over up to half a mile) are one lead: after
-every save, saved rows that are parts of one site are merged into the one saved
-first, keeping every source listing, moving the calls and Yes / No clicks to it
-and keeping the latest mark (the earlier ones stay in its history). Nothing is
-deleted: the merged rows stay in the table, hidden, and are recorded in
-`merged_leads`. `python -m leadgen merge-sites` (with `DATABASE_URL` set) does the
-same merge on demand. The page shows the saved list when it opens, and the downloads
+a campus's parts, one name spread over up to half a mile) are one lead, and a
+later search's building joins the saved site. Rows saved as separate leads before
+this rule are left alone by searches, because joining them moves calls and
+Yes / No clicks. To join them, run `python -m leadgen merge-sites` (with
+`DATABASE_URL` set) once the owner agrees: each group becomes the row saved first,
+keeping every source listing, moving the calls and Yes / No clicks to it and keeping
+the latest mark (the earlier ones stay in its history). Nothing is deleted: the
+merged rows stay in the table, hidden, and are recorded in `merged_leads`. The page shows the saved list when it opens, and the downloads
 contain all of it. Everything is kept, including Yelp's details, although
 Yelp's terms allow keeping its data for 24 hours (and Google's for 30 days);
 `SAVED_SOURCE_KEEP_SECONDS` in `leadgen/config.py` drops a source's details

@@ -195,13 +195,13 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
             for i in row.ids:
                 by_id[i] = row
             buckets.setdefault(_bucket(row.lead), []).append(row)
-        moved, merged = _join_sites(db, rows, now)
-        changed.update((r.uid, r) for r in merged)
+        # Rows saved before sites were merged are joined only on request
+        # (`python -m leadgen merge-sites`): that moves marks and calls between
+        # saved rows, which the owner decides on, not an automatic save.
         _write(db, changed.values())
-    uids = [moved.get(uid, uid) for uid in uids]
     for lead, uid in zip(leads, uids):
         lead.uid = uid
-    new = len(fresh - set(moved))
+    new = len(fresh)
     shown = sum(l.business_status != CLOSED for l in leads)
     return new, max(0, shown - new)
 
@@ -276,9 +276,9 @@ def _join_sites(db: store.Db, rows: list[_Row], now: float) -> tuple[dict[str, s
 
 
 def merge_sites() -> int:
-    """Merge the saved leads that are parts of one site (see _join_sites), as every
-    search does after saving; returns how many rows were merged into another. For the
-    command line (`python -m leadgen merge-sites`)."""
+    """Merge the saved leads that are parts of one site (see _join_sites); returns
+    how many rows were merged into another. Only run on request, from the command
+    line (`python -m leadgen merge-sites`)."""
     with store.connect() as db:
         moved, _ = _join_sites(db, _read(db), time.time())
     return len(moved)
