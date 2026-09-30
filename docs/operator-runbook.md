@@ -95,14 +95,27 @@ marked No to a higher tier) fails the tests. The command
 computer. If the Stats page shows tier A's Yes share not above tier C's, ask for the
 weights to be looked at.
 
+Write each run down here (the Stats page's tier table gives the shares), so it is
+clear whether the ranking works for Arco's market. The first run needs about 50
+businesses marked Yes or No on the live site.
+
+| Date | Marked Yes / No | Tier A Yes share | Tier C Yes share | Weights changed? |
+|---|---|---|---|---|
+| 2026-09-30 | Not run: the developer has no access to the live site's marks; the owner's first download is still needed | - | - | No |
+
 ## The one-search-a-day rule
 
-Find leads runs once per Utah calendar day. The one exception: a search that
+Find leads runs once per Utah calendar day, as the owner asked. A search that
 came back incomplete (a source failed, or map areas never answered even after the
-automatic retries) gives the day back once, so it can be run again the same day
-(`INCOMPLETE_RERUNS = 1` in `leadgen/daily.py`). The developer added this exception;
-**it is awaiting the owner's confirmation** (status 2026-09-30). To remove it, set
-`INCOMPLETE_RERUNS = 0`; once the owner agrees, change this line to say so, with the date.
+automatic retries) saves what it found, says which source was missing, and uses up
+the day like a complete one. Only a search that failed outright (an unknown place,
+nothing found, the leads couldn't be saved) gives the day back.
+
+Decision record (2026-09-30): the same-day re-run after an incomplete search, which
+an earlier version allowed once, was never approved by the owner, so it was removed
+(`INCOMPLETE_RERUNS = 0` in `leadgen/daily.py`). If the owner ever wants it back,
+set it to 1 (the code and tests for it remain) and record the owner's decision
+here with the date.
 
 ## Logs, and rolling back a bad deploy
 

@@ -1,4 +1,4 @@
-"""Closed businesses stay in the list, an incomplete search gives the day back, and
+"""Closed businesses stay in the list, an incomplete search saves what it found, and
 problems on the live site are recorded and sent to whoever looks after it."""
 
 import csv
@@ -95,7 +95,9 @@ def _google_refused(monkeypatch):
     monkeypatch.setattr(pipeline.osm, "search", lambda *a, **k: ([_lead()], []))
 
 
-def test_a_search_whose_paid_source_failed_saves_what_it_found_and_gives_the_day_back(monkeypatch):
+def test_a_search_whose_paid_source_failed_saves_what_it_found_and_uses_up_the_day(monkeypatch):
+    """One search per Utah day, as the owner asked: an incomplete search saves what the
+    other sources found, says which source was missing, and uses up the day."""
     _google_refused(monkeypatch)
     monkeypatch.setattr(alerts, "ON", True)
     client = web.create_app().test_client()
@@ -103,22 +105,21 @@ def test_a_search_whose_paid_source_failed_saves_what_it_found_and_gives_the_day
     body = _wait(client, job)
     assert body["state"] == "done" and body["saved"] and body["found"] == 1
     text = " ".join(body["warnings"])
-    assert "Couldn't reach Google" in text and "Today's search was not used up" in text
+    assert "Couldn't reach Google" in text and "Today's search is used up all the same" in text
+    assert "Today's search was not used up" not in text
     assert "check the Google key" in text
+    assert "the next one can run tomorrow" in body["note"]
     history = client.get("/searches").get_json()
-    assert not history["used_today"] and history["current"] is None
-    record = history["searches"][0]
-    assert record["failed"] and record["partial"] and record["leads"] == 1 and record["new"] == 1
+    assert history["used_today"] and history["reruns_left"] is None
+    record = history["current"]
+    assert record["partial"] and record["leads"] == 1
     assert "Couldn't reach Google" in record["reason"] and "were saved" in record["reason"]
     assert [l["name"] for l in client.get("/leads").get_json()["leads"]] == ["Costco"]
     assert history["problems"]["count"] == 1
     assert "incomplete" in history["problems"]["latest"][0]["text"]
-    # The search can be run again today, and a complete one then uses the day up.
-    monkeypatch.setattr(pipeline.google_places, "search", lambda *a, **k: ([], 1, []))
-    job = client.post("/search", data={"location": "84101"}).get_json()["job_id"]
-    assert _wait(client, job)["state"] == "done"
-    assert client.get("/searches").get_json()["used_today"]
-    assert client.post("/search", data={"location": "84101"}).status_code == 409
+    refused = client.post("/search", data={"location": "84101"})
+    assert refused.status_code == 409
+    assert "the next search can run tomorrow, from midnight Utah time" in refused.get_json()["error"]
 
 
 def test_the_pipeline_names_the_sources_that_failed(monkeypatch):

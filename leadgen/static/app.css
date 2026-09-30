@@ -63,6 +63,18 @@ footer.copy { margin-top:auto; padding-top:var(--sp-6); text-align:center; color
 .card h2 + .muted { margin-top:calc(-1 * var(--sp-2)); }
 .muted { color:var(--muted); }
 .error { color:var(--bad-ink); font-weight:600; }
+/* Find leads after today's search: a notice on top, the settings greyed out. */
+.form-closed { background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn-ink); border-radius:var(--r-sm);
+               padding:var(--sp-3); margin-bottom:var(--sp-4); }
+.form-closed strong { display:block; }
+#form.closed .form-grid, #form.closed details.advanced { opacity:.6; }
+#form.closed input:disabled, #form.closed select:disabled { cursor:not-allowed; }
+/* The call box's Save needs one of the six results: a quiet hint, then a clear ring when missed. */
+.need-note { font-weight:400; color:var(--muted); margin-left:var(--sp-2); }
+.outcomes.need button { border-color:var(--bad); box-shadow:0 0 0 1px var(--bad); }
+/* The Calls page's filter box. */
+.calls-tools { display:flex; margin-bottom:var(--sp-3); }
+.calls-tools input { flex:1; max-width:420px; min-width:0; }
 .warn { background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn-ink); padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm); margin:var(--sp-2) 0; }
 .warn .more-notes { margin-top:var(--sp-1); }
 .warn .more-notes summary { cursor:pointer; font-weight:600; min-height:24px; }
@@ -287,8 +299,10 @@ dialog::backdrop { background:var(--backdrop); }
   .theme button { min-height:44px; }
   .side .who button { min-height:44px; padding:0 var(--sp-4); }
   table.leads th button.sort { min-height:44px; align-items:center; }
-  table.leads td a, table.plain td a { display:inline-flex; align-items:center; min-height:44px; }
-  .contact .site { display:flex; align-items:center; min-height:44px; }
+  /* Links in text keep a 44px tap area, but the negative margins stop it spreading the
+     lines apart (an address, its map link, the phone and website read as one block). */
+  table.leads td a, table.plain td a { display:inline-flex; align-items:center; min-height:44px; margin-block:-11px; }
+  .contact .site { display:flex; align-items:center; min-height:44px; margin-block:-11px; }
   table.leads td a.map { min-width:44px; justify-content:center; }
   details.explain summary, details.advanced summary { display:flex; align-items:center; }
   label.check { min-height:44px; }

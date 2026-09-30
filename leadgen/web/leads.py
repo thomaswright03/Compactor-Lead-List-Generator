@@ -9,7 +9,7 @@ from typing import Any
 from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from .. import calls, config, marks, reference, saved, stats, store
+from .. import calls, config, daily, marks, reference, saved, stats, store
 from ..export import saved_list_info, to_csv_bytes, to_xlsx_bytes
 from ..localtime import date_time_text
 from ..models import Lead
@@ -328,9 +328,11 @@ def download(job_id: str, fmt: str) -> ResponseReturnValue:
             log.error("Loading marks for a download failed", exc_info=True)
             unavailable(MARKS_DOWN)
         info = job["result"].run_info(job["params"])
+    # Named with the Utah date, so the copies people keep can be told apart.
+    disposition = f"attachment; filename=compactor-leads-{daily.today()}.{fmt}"
     if fmt == "csv":
         return Response(to_csv_bytes(leads), mimetype="text/csv",
-                        headers={"Content-Disposition": "attachment; filename=compactor-leads.csv"})
+                        headers={"Content-Disposition": disposition})
     data = to_xlsx_bytes(leads, info)
     return Response(data, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    headers={"Content-Disposition": "attachment; filename=compactor-leads.xlsx"})
+                    headers={"Content-Disposition": disposition})

@@ -276,6 +276,13 @@ def parse_form(form: Mapping[str, str]) -> SearchParams:
     source = form.get("source", "auto")
     if source not in SOURCES:
         raise FormError("Pick where to search from the list", "source")
+    # The page always sends How far and the minimum score: a blank one is a mistake to
+    # point out, never a silent default (a script that leaves them out gets the defaults).
+    for name, message in (("radius", "How far must be between 1 and 100 miles"),
+                          ("min_score", "The score to leave out weak leads below must be "
+                                        "between 0 and 100")):
+        if name in form and not (form.get(name) or "").strip():
+            raise FormError(message, name)
     grid = _number(form, "grid", 1, int, 1, 19, "Coverage")
     if grid not in GRIDS:
         raise FormError("Pick a coverage from the list", "grid")
@@ -378,7 +385,8 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str]) -> N
     """A search where a source failed (a paid one refused its key, say) while others
     found businesses: what was found is saved, and the day is given back, so the
     search can be run again once the source works; but only daily.INCOMPLETE_RERUNS
-    more times: an incomplete re-run after that keeps the day."""
+    more times (0: none, the owner's rule): an incomplete search after that keeps
+    the day, like a complete one."""
     names = _source_names(result.failed_sources)
     paid = [s for s in result.failed_sources if s in ("google", "yelp")]
     whole = [s for s in result.failed_sources if s not in result.partial_sources]
@@ -404,8 +412,10 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str]) -> N
         earlier = 0
     if earlier >= daily.INCOMPLETE_RERUNS:
         # The re-run allowance is used up: this search keeps the day, like a complete one.
-        warnings.append(f"{reason} This was today's re-run, so today's search is now used up; "
-                        f"the next search can run tomorrow.{advice}")
+        used = ("This was today's re-run, so today's search is now used up"
+                if earlier else "Today's search is used up all the same (one search a day)")
+        warnings.append(f"{reason} {used}; the next search can run tomorrow, from midnight "
+                        f"Utah time.{advice}")
         job["note"] = f"{missing} Today's search is now used up; the next one can run tomorrow."
         _record(day, result, job, warnings, {"partial": True, "reason": reason})
     else:

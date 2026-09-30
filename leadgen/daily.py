@@ -3,12 +3,11 @@
 Each day's search is recorded (when it was started, what was searched and what
 it found) in the database; the record is claimed atomically when the button is
 clicked, so two clicks can never both run. A search that fails before finding
-anything (e.g. an unknown location) gives the day back, and so does one where a
-source failed (e.g. Google refused its key) even though others found businesses:
-what was found is saved, and the day's search can be run again, but only
-INCOMPLETE_RERUNS more times that day: when the last re-run is incomplete too,
-it keeps the day (so a broken key can't turn the day into unlimited searches,
-each spending Yelp calls and map-server time).
+anything (e.g. an unknown location) gives the day back. One where a source failed
+(e.g. Google refused its key) while others found businesses is incomplete: what
+was found is saved and it uses up the day like a complete search, as the owner
+asked (one search per Utah calendar day). INCOMPLETE_RERUNS can allow that many
+same-day re-runs after an incomplete search, but it is 0 unless the owner asks.
 """
 
 import datetime as dt
@@ -33,8 +32,10 @@ def today() -> str:
 # stops holding the day after this long, so the day's search can be run again.
 STALE_SECONDS = 30 * 60
 
-# After an incomplete search the day's search can be run this many more times.
-INCOMPLETE_RERUNS = 1
+# After an incomplete search the day's search can be run this many more times. The owner
+# asked for one search per Utah day, full stop, so this is 0 (an incomplete search
+# uses up the day); raise it only if the owner asks for re-runs.
+INCOMPLETE_RERUNS = 0
 
 # A day's search as the page shows it: day, at, when, and what was searched and found.
 Record = dict[str, Any]

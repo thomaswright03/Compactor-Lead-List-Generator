@@ -25,16 +25,28 @@ function renderCalls() {
   }
   $("calls-problem").replaceChildren(); $("calls-body").hidden = !S.calledLoaded;
   if (!S.calledLoaded) return;
-  const called = S.called, outcomes = (S.counts && S.counts.outcomes) || {};
+  // The filter box narrows the list (and the tab counts) to businesses whose name, address or city match.
+  const matching = S.callQ ? S.called.filter((l) => callMatches(l, S.callQ)) : S.called;
+  const called = matching, outcomes = S.callQ ? countOutcomes(matching) : (S.counts && S.counts.outcomes) || {};
+  $("call-filter-row").hidden = !S.called.length;
+  if ($("call-filter").value !== S.callQ) $("call-filter").value = S.callQ;
   // Every called business first (one row each, latest call first), so a call just saved is always in view.
   tabs($("call-tabs"), [["", "All called businesses", called.length], ...OUTCOMES.map((o) => [o, o, outcomes[o] || 0])], S.callView,
        (v) => { S.callView = v; renderCalls(); writeHash("calls"); });
   const rows = S.callView ? called.filter((l) => l.call_outcome === S.callView) : [...called];
   const wrap = $("calls-wrap");
-  if (!called.length) {
+  if (!S.called.length) {
     wrap.replaceChildren(emptyNote("No calls logged yet.",
       "Log a call with Just called on any business on the Leads page. It doesn't change the business's Yes / No answer.",
       "#leads", "Go to Leads"));
+    return;
+  }
+  if (!rows.length && S.callQ) {
+    const box = el("div", undefined, "empty");
+    box.append(el("strong", `No calls match “${S.callQ}”${S.callView ? ` under ${S.callView}` : ""}.`),
+               el("p", "Check the spelling, pick another tab, or clear the filter to see every called business."),
+               button("Clear filter", "quiet", clearCallFilter));
+    wrap.replaceChildren(box);
     return;
   }
   if (!rows.length) { wrap.replaceChildren(el("div", `No calls with the result “${S.callView}” yet.`, "empty")); return; }
@@ -67,6 +79,23 @@ function renderCalls() {
   table.append(thead, tbody);
   wrap.replaceChildren(table);
 }
+
+// A called business matches the Calls filter when every word typed is in its name, address or city.
+function callMatches(l, q) {
+  const hay = [l.name, l.address, l.city, l.zip].filter(Boolean).join(" ").toLowerCase();
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+}
+function countOutcomes(leads) {
+  const n = {};
+  for (const l of leads) if (l.call_outcome) n[l.call_outcome] = (n[l.call_outcome] || 0) + 1;
+  return n;
+}
+function clearCallFilter() {
+  S.callQ = ""; $("call-filter").value = ""; renderCalls(); writeHash("calls"); $("call-filter").focus();
+}
+$("call-filter").addEventListener("input", () => {
+  S.callQ = $("call-filter").value.trim(); renderCalls(); writeHash("calls");
+});
 
 // The latest call's notes; when it had none, the latest notes from an earlier call, with their date.
 function notesCell(l) {
@@ -103,14 +132,17 @@ function newId() {
 function pickOutcome(o) {
   callOutcome = o;
   $("outcomes").querySelectorAll("button").forEach((x) => { const on = x.textContent === o; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on); });
-  $("call-save").disabled = !o;
+  $("outcomes").classList.remove("need");
+  $("call-need").hidden = Boolean(o);
+  if (o && $("call-error").dataset.need) { $("call-error").textContent = ""; delete $("call-error").dataset.need; }
 }
 function saveDraft() { if (callLead) writeDraft(callLead.key, { notes: $("call-notes").value, outcome: callOutcome, id: callId }); }
 function openCall(lead) { withName(() => openCallBox(lead)); }
 function openCallBox(lead) {
   callLead = lead;
   $("call-title").textContent = `Just called: ${lead.name}`;
-  $("call-error").textContent = "";
+  $("call-error").textContent = ""; delete $("call-error").dataset.need;
+  $("call-save").disabled = false;
   const box = $("outcomes"); box.replaceChildren();
   for (const o of OUTCOMES) {
     const b = button(o, "", () => { pickOutcome(o); saveDraft(); });
@@ -130,7 +162,15 @@ $("call-cancel").addEventListener("click", () => { saveDraft(); $("call-dlg").cl
 $("call-dlg").addEventListener("close", saveDraft);
 $("call-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (!callLead || !callOutcome) return;
+  if (!callLead) return;
+  if (!callOutcome) {
+    // Save needs one of the six results: say so, and point at them.
+    $("call-error").textContent = "Pick how the call went (one of the buttons under “How did it go?”), then Save.";
+    $("call-error").dataset.need = "1";
+    $("outcomes").classList.add("need");
+    $("outcomes").querySelector("button").focus();
+    return;
+  }
   const target = callLead, key = callLead.key;
   $("call-save").disabled = true; S.busy++;
   try {

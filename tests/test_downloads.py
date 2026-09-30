@@ -34,3 +34,19 @@ def test_downloads_after_a_free_search_use_plain_words():
     info = {r[0]: r[1] for r in load_workbook(io.BytesIO(to_xlsx_bytes(leads)))["Run Info"]
             .iter_rows(values_only=True) if r[0]}
     assert "Found By" in info["Columns left out"]
+
+
+def test_download_file_names_carry_the_utah_date(monkeypatch):
+    """Each download is named with the Utah date, so kept copies can be told apart."""
+    from leadgen import daily, saved, web
+
+    lead = _map_lead("Harmons", ["shop=supermarket"])
+    score_lead(lead, config.DEFAULT_KEYWORDS)
+    saved.save_search([lead])
+    monkeypatch.setattr(daily, "today", lambda: "2026-09-30")
+    client = web.create_app().test_client()
+    for fmt in ("xlsx", "csv"):
+        res = client.get(f"/download/saved.{fmt}")
+        assert res.status_code == 200
+        assert res.headers["Content-Disposition"] == \
+            f"attachment; filename=compactor-leads-2026-09-30.{fmt}"

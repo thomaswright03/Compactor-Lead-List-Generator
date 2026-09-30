@@ -5,6 +5,15 @@ function setGo(enabled, note) {
   $("go").disabled = !enabled;
   if (note !== undefined) $("day-note").textContent = note;
 }
+// Once today's search is used, the form reads as closed: a notice at its top and its fields
+// greyed out, so nobody edits settings for a search that can't run until tomorrow.
+function lockForm(note) {
+  const locked = Boolean(note);
+  $("form-closed").hidden = !locked;
+  if (locked) $("form-closed-text").textContent = note;
+  $("form").classList.toggle("closed", locked);
+  $("form").querySelectorAll("input, select").forEach((x) => { x.disabled = locked; });
+}
 function clearErrors() {
   S.error = "";
   $("go-error").textContent = ""; $("go-error").hidden = true;
@@ -48,6 +57,8 @@ async function loadSearches() {
   const today = body.current;
   if (body.running && !S.job) follow(body.running);
   // A refusal or failure stays in its own red line (showError, the failure box); this only says how the day stands.
+  lockForm(!S.job && body.used_today && !body.running && today.leads !== undefined
+    ? "The next one can run tomorrow, from midnight Utah time." : "");
   if (S.job) setGo(false, "");
   else if (body.paused) setGo(false, "Searching is paused by the administrator.");
   else if (body.used_today && today.leads === undefined && !body.running) {
@@ -263,7 +274,7 @@ const SOURCE_TEXT = { auto: "Everywhere available", osm: "Free map data only", y
 function searchSummary(form) {
   const f = new FormData(form), rows = [];
   rows.push(["Search around", f.get("location").trim()]);
-  rows.push(["How far", `${f.get("radius") || "30"} miles`]);
+  rows.push(["How far", `${f.get("radius")} miles`]);
   rows.push(["Also look for", (f.get("keywords") || "").split(",").map((k) => k.trim()).filter(Boolean).join(", ") || "Nothing extra"]);
   const source = f.get("source") || "auto";
   rows.push(["Where to look", source === "auto" ? autoSources() : SOURCE_TEXT[source] || autoSources()]);
@@ -275,9 +286,10 @@ function searchSummary(form) {
 }
 // The server's limits, checked here first so a mistake is caught before the confirmation.
 const MAX_KEYWORDS = 20, MAX_KEYWORD_LEN = 60;
-function number(f, name, label, lo, hi, whole, unit) {
+function number(f, name, label, lo, hi, whole, unit, required) {
   const raw = (f.get(name) || "").trim();
-  if (!raw) return null;
+  // A blank How far or minimum score is pointed out, never quietly replaced by the default.
+  if (!raw) return required ? `${label} must be between ${lo} and ${hi}${unit || ""}` : null;
   const v = Number(raw);
   if (!Number.isFinite(v)) return `${label} must be a number`;
   if (whole && !Number.isInteger(v)) return `${label} must be a whole number`;
@@ -291,10 +303,10 @@ function checkForm(form) {
   const long = words.find((k) => k.length > MAX_KEYWORD_LEN);
   if (long) return ["keywords", `Each search word can be up to ${MAX_KEYWORD_LEN} characters; “${long.slice(0, 20)}…” has ${long.length}. Separate words with commas.`];
   // The same words as the server's (web/finding.py parse_form): the field's own label.
-  for (const [name, label, lo, hi, whole, unit] of [["radius", "How far", 1, 100, false, " miles"],
-                                                    ["min_score", "The score to leave out weak leads below", 0, 100, true],
-                                                    ["max_requests", "Most paid lookups for this search", 1, 5000, true]]) {
-    const bad = number(f, name, label, lo, hi, whole, unit);
+  for (const [name, label, lo, hi, whole, unit, required] of [["radius", "How far", 1, 100, false, " miles", true],
+                                                              ["min_score", "The score to leave out weak leads below", 0, 100, true, "", true],
+                                                              ["max_requests", "Most paid lookups for this search", 1, 5000, true]]) {
+    const bad = number(f, name, label, lo, hi, whole, unit, required);
     if (bad) return [name, bad];
   }
   return null;

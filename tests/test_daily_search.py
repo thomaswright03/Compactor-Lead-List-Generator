@@ -1,5 +1,5 @@
 """The day's one search: a search whose leads can't be saved gives the day back, an
-incomplete search may be run again a set number of times, and shows one short note."""
+incomplete search uses up the day (unless re-runs are allowed), and shows one short note."""
 
 import time
 
@@ -35,7 +35,10 @@ def _map_lead(name, tags, sid=None, **kw):
 
 # ---- an incomplete search may be run again a set number of times
 
-def test_incomplete_searches_can_be_rerun_once(monkeypatch):
+def test_incomplete_searches_can_be_rerun_once_when_allowed(monkeypatch):
+    """INCOMPLETE_RERUNS is 0 (the owner's one-search-a-day rule); raised to 1, an
+    incomplete search may be run once more that day."""
+    monkeypatch.setattr(daily, "INCOMPLETE_RERUNS", 1)
     monkeypatch.setenv("GOOGLE_PLACES_API_KEY", "AIzaFAKEKEYFORTESTS000000000000000000")
     monkeypatch.setattr(pipeline, "geocode", lambda location, key: (40.72, -111.9, "Salt Lake City"))
 
@@ -102,5 +105,6 @@ def test_an_incomplete_search_gives_one_short_note(monkeypatch):
     job = client.post("/search", data={"location": "84101"}).get_json()["job_id"]
     body = _wait(client, job)
     assert body["note"] == ("Some businesses are missing: the map data service answered for "
-                            "only part of the area. Run the search again today to fill them in.")
+                            "only part of the area. Today's search is now used up; the next "
+                            "one can run tomorrow.")
     assert len(body["warnings"]) >= 2                     # the details, shown behind "More"

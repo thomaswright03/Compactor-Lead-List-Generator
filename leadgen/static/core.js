@@ -16,7 +16,7 @@ const SHIFT_GUARD_MS = 700;
 // the first `limit` of them), every tab's count, and the leads that can still be undone.
 const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "",
             loaded: false, loadError: "", refreshError: "", viewLoading: false, seq: 0,
-            leadView: "", callView: "", q: "", tier: "", phone: false, sort: "score", dir: "desc", limit: 300,
+            leadView: "", callView: "", callQ: "", q: "", tier: "", phone: false, sort: "score", dir: "desc", limit: 300,
             job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0 };
 
 function el(tag, text, cls) {
@@ -167,6 +167,7 @@ function route() {
   if (page === "calls") {
     const tab = params.get("tab");
     S.callView = tab && OUTCOMES.includes(tab) ? tab : "";
+    S.callQ = params.get("q") || "";
     loadCalled();
   }
   for (const p of ["find", "leads", "calls", "stats"]) $(`page-${p}`).hidden = p !== page;
@@ -187,7 +188,10 @@ function writeHash(page) {
     if (S.tier) params.set("tier", S.tier);
     if (S.phone) params.set("phone", "1");
     if (S.sort !== "score" || S.dir !== "desc") { params.set("sort", S.sort); params.set("dir", S.dir); }
-  } else if (page === "calls" && S.callView) params.set("tab", S.callView);
+  } else if (page === "calls") {
+    if (S.callView) params.set("tab", S.callView);
+    if (S.callQ) params.set("q", S.callQ);
+  }
   const hash = `#${page}${params.toString() ? "?" + params : ""}`;
   if (location.hash !== hash) history.replaceState(null, "", hash);
 }

@@ -24,7 +24,8 @@ How to use the Lead Finder, one task at a time. Each part fits on one screen.
 ## Run the day's search
 
 1. Open **Find leads**.
-2. Check **Search around** (a ZIP code, city or street address) and **How far**.
+2. Check **Search around** (a ZIP code, city or street address) and **How far**
+   (1 to 100 miles; it can't be left blank).
    **Extra search words** starts empty: the standard words (compactor, baler,
    waste, recycling) are always searched, and anything you type is searched as
    well. Extra settings are under **More options**.
@@ -32,6 +33,7 @@ How to use the Lead Finder, one task at a time. Each part fits on one screen.
 4. The progress bar shows each step. A search takes a few minutes; you can use
    the other pages meanwhile.
 5. When it finishes, press **View leads**. New businesses join the saved list.
+   The form then greys out with "Today's search is used up" until midnight Utah time.
 
 Good to know:
 
@@ -40,13 +42,12 @@ Good to know:
 - When the free map servers are busy, the search asks again by itself for the
   areas they missed (the progress bar says so), so you don't need to do anything.
   It can then take up to about 10 minutes.
-- If a search fails, or a source was still missing, the page says so and the day
-  is not used up: you can run it again once that day (an exception to the
-  one-a-day rule added by the developer; the owner has still to confirm it). An
-  incomplete map-data search says how much of the area answered ("about 8 of 9
-  areas searched"); the re-run keeps what answered and asks only for the missing
-  areas, so it is much quicker. Run it again with the same **Search around** and
-  **How far**.
+- If a search fails outright (say the place wasn't found), the page says so and
+  the day is not used up: fix it and run it again. If a source was missing (the
+  page says which, e.g. "the map data service answered for only part of the area,
+  about 8 of 9 areas searched"), what the others found is saved and the day is
+  used up all the same: the next search can run tomorrow, and it fills in what
+  was missing (it asks again only for the missing map areas, so it is quicker).
 - If the page says Google and Yelp aren't set up, most businesses found will
   have no phone number.
 
@@ -91,7 +92,8 @@ Good to know:
 2. Write what was said in **Conversation Summary**.
 3. Pick how it went: Interested, Follow Up, Not Interested, Not Qualified,
    No Contact or Bad Lead.
-4. Press **Save**. A wrong call can be undone for 5 minutes.
+4. Press **Save** (if no result is picked, the box says to pick one first). A
+   wrong call can be undone for 5 minutes.
 
 Your typed notes are kept as a draft until you save, even if you close the box.
 Logging a call never changes the Yes / No answer.
@@ -100,6 +102,8 @@ Logging a call never changes the Yes / No answer.
 
 - Open **Calls**. **All called businesses** lists every business called, latest
   call first. The other tabs group them by how the latest call went.
+- Type part of a business's name, address or city in the filter box to find its
+  calls; it works with the tabs and stays after a reload.
 - **History** shows every call to a business: when, who made it, how it went and
   the notes, and below them every Yes / No the business was given.
 
@@ -113,7 +117,8 @@ Logging a call never changes the Yes / No answer.
 ## Download the list
 
 - On **Leads**, press **Download Excel** or **Download CSV** for every saved
-  lead, with its mark, who marked it, and the latest call.
+  lead, with its mark, who marked it, and the latest call. The file name has
+  the date (Utah time), e.g. `compactor-leads-2026-09-30.xlsx`.
 - The last two columns in Excel are for your own notes on that copy only.
   Nothing typed there goes back into the site: record marks and calls on the
   Leads page.

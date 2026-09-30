@@ -322,7 +322,7 @@ function leadRow(l, withCall) {
   const name = el("td", undefined, "c-name");
   name.append(el("strong", l.name));
   if (l.category) name.append(el("div", l.category, "sub"));
-  if (l.lead_type !== "Prospect") name.append(el("div", l.lead_type, "sub"));
+  if (l.lead_type !== "Prospect" && !saysTheSame(l.lead_type, l.category)) name.append(el("div", l.lead_type, "sub"));
   for (const f of l.flags) name.append(el("div", f, "flag"));
   tr.append(name);
   const contact = el("td", undefined, "contact");
@@ -341,10 +341,19 @@ function leadRow(l, withCall) {
   }
   tr.append(contact);
   const miles = el("td", undefined, "c-miles nowrap");
-  if (l.distance != null) { miles.append(String(l.distance)); miles.append(el("span", " mi", "unit")); }
+  // One decimal for every distance ("4.6", "2.2"), so the column reads evenly.
+  if (l.distance != null) { miles.append(Number(l.distance).toFixed(1)); miles.append(el("span", " mi", "unit")); }
   tr.append(miles);
   tr.append(whyCell(l.reasons));
   return tr;
+}
+
+// True when a second label only repeats the first in other words or order
+// ("Waste / recycling facility" under "Recycling / waste facility").
+function saysTheSame(extra, shown) {
+  const words = (t) => new Set((t || "").toLowerCase().match(/[a-z]+/g) || []);
+  const have = words(shown);
+  return [...words(extra)].every((w) => have.has(w));
 }
 
 function sortHeader(label, sort) {
@@ -496,7 +505,9 @@ async function download(a) {
       throw new Error((page.querySelector(".box p") || {}).textContent || "Try again in a minute.");
     }
     const url = URL.createObjectURL(await res.blob());
-    const save = el("a"); save.href = url; save.download = a.dataset.file;
+    // The server names the file with the Utah date ("compactor-leads-2026-09-30.xlsx").
+    const named = /filename="?([^";]+)"?/.exec(res.headers.get("Content-Disposition") || "");
+    const save = el("a"); save.href = url; save.download = named ? named[1] : a.dataset.file;
     document.body.append(save); save.click(); save.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch (err) {

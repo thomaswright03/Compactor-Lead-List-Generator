@@ -6,6 +6,7 @@ Chromium binary to use instead of Playwright's own.
 """
 
 import os
+import re
 import threading
 
 import pytest
@@ -169,7 +170,7 @@ def test_the_excel_button_shows_it_is_busy_and_starts_one_download(page):
     assert len(asked) == 1 and link.get_attribute("aria-disabled") == "true"
     with page.expect_download() as info:
         release[0].continue_()
-    assert info.value.suggested_filename == "compactor-leads.xlsx"
+    assert re.fullmatch(r"compactor-leads-\d{4}-\d{2}-\d{2}\.xlsx", info.value.suggested_filename)
     expect(link).to_have_text("Download Excel")
 
 
@@ -830,3 +831,88 @@ def test_the_confirmation_names_the_sources_and_stats_explain_a_missing_average(
     page.wait_for_selector("#recent:not([hidden])")
     page.click("nav a[data-page=stats]")
     expect(page.locator("#s-avg")).to_have_text("No businesses marked Yes yet.")
+
+
+def test_save_without_a_result_says_what_to_pick(page):
+    _row(page, "Smith").get_by_role("button", name="Just called").click()
+    page.fill("#call-notes", "Spoke to Dana.")
+    expect(page.locator("#call-need")).to_have_text("Pick one to save the call.")
+    assert page.locator("#call-save").is_enabled()
+    page.click("#call-save")
+    expect(page.locator("#call-error")).to_contain_text("Pick how the call went")
+    assert page.locator("#call-dlg").is_visible()
+    assert "need" in page.get_attribute("#outcomes", "class")
+    page.locator("#outcomes").get_by_role("button", name="Follow Up").click()
+    expect(page.locator("#call-error")).to_have_text("")
+    expect(page.locator("#call-need")).to_be_hidden()
+    page.click("#call-save")
+    page.wait_for_selector("#call-dlg:not([open])", state="attached")
+
+
+def test_the_calls_page_can_be_filtered_and_keeps_the_filter(page):
+    for name in ("Smith", "Costco"):
+        _row(page, name).get_by_role("button", name="Just called").click()
+        page.locator("#outcomes").get_by_role("button", name="Follow Up").click()
+        page.click("#call-save")
+        page.wait_for_selector("#call-dlg:not([open])", state="attached")
+    page.click("nav a[data-page=calls]")
+    expect(page.locator("#calls-wrap tbody tr")).to_have_count(2)
+    page.fill("#call-filter", "costco")
+    expect(page.locator("#calls-wrap tbody tr")).to_have_count(1)
+    assert "Costco Wholesale" in page.inner_text("#calls-wrap")
+    assert page.locator("#call-tabs button.on").inner_text() == "All called businesses (1)"
+    assert "q=costco" in page.url
+    page.reload()
+    expect(page.locator("#calls-wrap tbody tr")).to_have_count(1)
+    assert page.input_value("#call-filter") == "costco"
+    page.get_by_role("button", name="Follow Up (1)").click()
+    assert "tab=Follow+Up" in page.url and "q=costco" in page.url
+    page.fill("#call-filter", "walmrt")
+    expect(page.locator("#calls-wrap")).to_contain_text("No calls match “walmrt”")
+    page.get_by_role("button", name="Clear filter").click()
+    expect(page.locator("#calls-wrap tbody tr")).to_have_count(2)
+
+
+def test_a_blank_radius_is_pointed_out(page):
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    page.fill("input[name=radius]", "")
+    page.click("#go")
+    assert not page.locator("#confirm-dlg").is_visible()
+    expect(page.locator("#err-radius")).to_have_text("How far must be between 1 and 100 miles")
+
+
+def test_the_form_reads_closed_once_the_day_is_used(page):
+    from leadgen import daily
+    day, _ = daily.claim({"location": "84101"})
+    daily.finish(day, {"leads": 3})
+    page.click("nav a[data-page=find]")
+    expect(page.locator("#form-closed")).to_be_visible()
+    expect(page.locator("#form-closed")).to_contain_text("from midnight Utah time")
+    assert page.locator("input[name=location]").is_disabled()
+    assert page.locator("input[name=radius]").is_disabled()
+    assert page.locator("#go").is_disabled()
+
+
+def test_miles_have_one_decimal_and_a_category_is_not_repeated(page):
+    miles = page.locator("table.leads td.c-miles").all_inner_texts()
+    assert miles and all(re.fullmatch(r"\d+\.\d( mi)?", m.strip()) for m in miles), miles
+    # A recycling centre's type repeats its category in other words: shown once.
+    assert page.evaluate("saysTheSame('Waste / recycling facility', 'Recycling / waste facility')")
+    assert not page.evaluate(
+        "saysTheSame('Industry (equipment / hauler)', 'Compactor / baler equipment or service')")
+
+
+def test_address_lines_stay_close_on_a_tablet(browser, site, page):
+    context = _context(browser, viewport={"width": 768, "height": 1000}, has_touch=True,
+                       is_mobile=True)
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("table.leads td.contact")
+    # The phone number's line is one line of text high, while its link keeps a 44px tap area.
+    line, tap = tab.evaluate("""() => {
+        const a = document.querySelector('table.leads td.contact a[href^="tel:"]');
+        return [a.parentElement.getBoundingClientRect().height, a.getBoundingClientRect().height]; }""")
+    context.close()
+    assert tap >= 44
+    assert line < 30, line

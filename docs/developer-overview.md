@@ -82,7 +82,7 @@ view, the colour switch fitting from 320 px up, 44 px touch targets on a
 phone, the Calls cards and every page link in view at 320 px, a closed business
 keeping its mark, the skip link and the short Recent changes); it is skipped when Playwright's Chromium is missing.
 `tests/test_closed_and_alerts.py` covers closed businesses in every view, the
-downloads and Stats, an incomplete search giving the day back, and problem
+downloads and Stats, an incomplete search saving what it found and using up the day, and problem
 reports (the webhook is mocked).
 Tests are named for the feature they protect: `tests/test_map_data.py` covers the
 map data asked in parts (every query bigger than one part fails, a failed part is
@@ -92,7 +92,7 @@ with the other parts' businesses saved, the catch-up rounds' time limit);
 `tests/test_saved_list.py` closed businesses never being added, refreshes after a
 big search staying one page at most and the parsed saved list being reused;
 `tests/test_calls.py` calls on unmarked businesses and who made each mark and call;
-`tests/test_daily_search.py` the one re-run after an incomplete search;
+`tests/test_daily_search.py` the optional re-run after an incomplete search;
 `tests/test_find_page.py`, `tests/test_search_words.py`, `tests/test_campus.py`,
 `tests/test_downloads.py`, `tests/test_switches.py` and `tests/test_offline.py`
 what their names say. The browser tests also log a call on Not
@@ -196,7 +196,11 @@ the sidebar to the page's list (Leads, Calls) or heading.
   When a search finishes, the page gets only the counts it shows ("N new leads,
   M saved leads in all"), not the saved list, so finishing stays quick however
   long the list grows. **Find Leads works once per calendar day** (Utah time), for the whole site:
-  after today's search it is off until midnight. Pressing **Find leads** first
+  after today's search it is off until midnight, and the form says so at its top
+  ("Today's search is used up") with its fields greyed out. A blank **How far** or
+  minimum score is refused beside the field ("How far must be between 1 and 100
+  miles"), in the browser and by the server, never quietly replaced by the
+  default. Pressing **Find leads** first
   shows a summary (location, miles, search words, sources) and says this uses
   today's only search: **Start search** runs it, **Go back and edit** (or Escape)
   leaves the day unused. A search that fails outright
@@ -207,18 +211,15 @@ the sidebar to the page's list (Leads, Calls) or heading.
   restarted), after 30 minutes (the page says when, in Utah time). A search
   where one source failed while the others worked (say Google refused its key,
   or the map data service was down) is **incomplete**: the businesses the other
-  sources found are saved, but the day is given back, so the search can be run
-  again once that source works. The page says which source is missing and that
-  today's search was not used up (for Google or Yelp: "ask whoever looks after
-  the site to check the key"), and the history shows the search's lead count
-  marked **Incomplete**, with the reason. An incomplete search can be re-run
-  **once** that day (`INCOMPLETE_RERUNS` in `leadgen/daily.py`; an exception to the
-  owner's once-a-day rule that the developer added, awaiting the owner's
-  confirmation: set it to 0 to remove it); the note beside
-  the button says "1 re-run left today". If the re-run is incomplete too, what
-  it found is saved and it uses up the day like a complete search, so a key that
-  stays broken can't turn the day into unlimited searches (each spending Yelp
-  calls); a third search that day is refused with "the next search can run
+  sources found are saved and the day is used up, as the owner asked (one search
+  per Utah day). The page says which source is missing and that today's search is
+  used up all the same (for Google or Yelp: "ask whoever looks after the site to
+  check the key"), and the history shows the search's lead count marked
+  **Incomplete**, with the reason. `INCOMPLETE_RERUNS` in `leadgen/daily.py` is 0;
+  set to 1 it would give the day back once after an incomplete search (the note
+  beside the button then says "1 re-run left today", and an incomplete re-run keeps
+  the day), but the owner has not asked for that (decision recorded 2026-09-30 in
+  the runbook). A further search that day is refused with "the next search can run
   tomorrow, from midnight Utah time". A source switched off by the
   administrator is not a failure (the day is used as usual). At the bottom of the
   page, **For the site administrator** (a quiet section, closed until opened)
@@ -283,7 +284,11 @@ the sidebar to the page's list (Leads, Calls) or heading.
   tier, Has phone and sort are kept in the address, so a reload or a shared link shows the
   same view. **Download Excel** / **Download CSV** say "Preparing Excel…" while
   the file is built (10,000 leads take about a second) and ignore a second click
-  meanwhile. Phone numbers are tap-to-call links; a business without one says
+  meanwhile; the files are named with the Utah date (`compactor-leads-2026-09-30.xlsx`).
+  Miles show one decimal for every lead ("4.6", "2.2"; the downloads keep two). A
+  lead's type ("Waste / recycling facility") shows under its category only when it
+  says something the category doesn't. On touch screens links in a lead's contact
+  lines keep a 44 px tap area with negative margins, so the lines stay one text line apart. Phone numbers are tap-to-call links; a business without one says
   "No phone listed", and one without a street address says "No street address"
   (next to its map link). Each score shows its tier and what the tier means
   ("55" over "B likely": A strong, B likely, C possible, D weak; hovering says
@@ -330,7 +335,12 @@ the sidebar to the page's list (Leads, Calls) or heading.
   called businesses**: one row per business, latest call first, so a call just
   saved is in view (every call is under **History**); then there is a tab per
   result, where a business sits under its latest call's result (`#calls?tab=Follow Up`
-  in the address opens that tab). The Conversation summary column shows the
+  in the address opens that tab). A filter box above the tabs narrows the list
+  (and the tab counts) to businesses whose name, address or city hold every word
+  typed; it is kept in the address (`#calls?q=costco`), and with no match the page
+  says "No calls match ..." with **Clear filter**. The call box's **Save** is always
+  pressable: without a result picked, a hint beside "How did it go?" and a red line
+  say to pick one, and the result buttons are ringed. The Conversation summary column shows the
   latest call's notes; when the latest call had none it says so and shows the
   most recent notes from an earlier call, with that call's date (the downloads'
   Call Notes column does the same). With no calls yet it says how to log one.
@@ -376,7 +386,24 @@ category and score below the default minimum: `config.NON_PROSPECT_NAME_WORDS`
 (police, sheriff, fire department, impound, trailer yard, fleet maintenance, parcel
 lockers, Luxer...) outrank every tag and name word, unless a specific recycling or
 transfer-station tag says otherwise, and police / fire-station / parcel-locker tags
-are non-prospect tags. Its **confirmed** list holds real businesses
+are non-prospect tags. The **not_prospect** list also holds small utility and
+infrastructure structures from a real 30-mile search ("6th East Well", a
+pumping station; "Pacificorp", "Utah Power & Light Co", "UTA Station", "D04",
+all tagged only building=industrial and under 5,000 sq ft): a pumping station,
+water well, substation or similar tag (`config.UTILITY_OSM_TAGS`) gives no
+prospect category, and a place known only by a catch-all industrial tag gets none
+when its footprint is under `config.SMALL_GENERIC_BUILDING_SQFT` (5,000 sq ft) or
+its name or operator tag says it is a utility's, a city's or a transit agency's
+(`config.UTILITY_NAME_WORDS`, `config.UTILITY_OPERATOR_WORDS`), unless an
+industrial use tag or a telling name ("... Plastics") says it is a plant. Its
+**name_traps** list holds names that hold another business's name or a misleading
+word: "Tru by Hilton Clearfield Hill Air Force Base" gets no air-base brand bonus (a
+high-volume brand counts from the name only when the map's own brand tag doesn't
+name another brand, a place-name brand in `config.PLACE_NAME_BRANDS` opens the
+name, and no location word from `config.BRAND_LOCATION_WORDS` ("near", "at",
+"by"...) comes just before it), and "Deseret Industries Thrift Store" is retail,
+not a plant (`config.NOT_MANUFACTURING_NAME_WORDS` and a landuse=retail tag cancel
+a manufacturing name word). Its **confirmed** list holds real businesses
 Arco's staff marked Yes / No on the Leads page, with the tier each had:
 `python -m leadgen reference` (with `DATABASE_URL` set to the website's
 database) refreshes it from the site's marks, copying only the facts the

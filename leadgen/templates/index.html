@@ -46,6 +46,8 @@
         <div><strong>Searching is paused</strong><span class="muted">{{ paused_text }}</span></div>
       </div>
       <form id="form" class="card" novalidate>
+        <div class="form-closed" id="form-closed" role="status" hidden><strong>Today's search is used up</strong>
+          <span id="form-closed-text"></span> Your saved leads are on the <a href="#leads">Leads</a> page.</div>
         <div class="form-grid">
           <label>Search around
             <input name="location" value="{{ defaults.location }}" autocomplete="off" maxlength="200" required>
@@ -190,6 +192,9 @@
         <p>Every business that has been called, whatever its Yes / No answer: one row per business, latest call first, or grouped by how the latest call went. Every call is under History.</p></div>
       <div id="calls-problem"></div>
       <div id="calls-body">
+        <div class="calls-tools" id="call-filter-row" hidden>
+          <input id="call-filter" type="search" placeholder="Filter by name, address or city..." aria-label="Filter calls">
+        </div>
         <div class="tabs" id="call-tabs"></div>
         <div class="table-wrap scroll-x" id="calls-wrap"></div>
       </div>
@@ -239,14 +244,14 @@
     <label for="call-notes">Conversation Summary
       <textarea id="call-notes" maxlength="5000" placeholder="Who you spoke to, what they said, next steps..."></textarea></label>
     <div>
-      <div class="sub ask">How did it go?</div>
-      <div class="outcomes" id="outcomes"></div>
+      <div class="sub ask">How did it go? <span class="need-note" id="call-need">Pick one to save the call.</span></div>
+      <div class="outcomes" id="outcomes" role="group" aria-label="How did it go?"></div>
     </div>
     <div class="sub" id="call-draft-note"></div>
     <div class="error" id="call-error" role="alert"></div>
     <div class="dlg-actions">
       <button type="button" class="quiet" id="call-cancel">Cancel</button>
-      <button type="submit" id="call-save" disabled>Save</button>
+      <button type="submit" id="call-save">Save</button>
     </div>
   </form>
 </dialog>
