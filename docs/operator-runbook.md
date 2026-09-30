@@ -52,27 +52,26 @@ switches are kept in the database (the additive `switches` table).
 
 ## Deploying
 
-**How it is done today: by hand.** A push to `main` does not reliably go live on
-its own (on 2026-09-30 the live site was four commits behind `main`), so after a
-push:
+**Automatic since 2026-09-30.** Render's GitHub app now has access to this
+repository, so Render hears about every push to `main` and deploys it on its own
+(Render **Settings** > **Deploy** > **Auto-Deploy**). Before that date Render could
+only clone the public repository when someone pressed Manual Deploy, and its deploy
+log said "It looks like we don't have access to your repo"; if that line comes back,
+give the Render app access again on GitHub (Settings > Applications > Render >
+Configure > Repository access).
 
-1. On GitHub, open the commit (or the **Actions** tab) and wait until all three
-   CI checks, `lint`, `test (sqlite)` and `test (postgres)`, are green (about 5
-   minutes). Never deploy a commit whose checks are red or still running.
-2. In Render, open the **compactor-lead-finder** service and click **Manual
-   Deploy** > **Deploy latest commit**. Wait for "Live" (about 5 minutes).
-3. Check the version: open
+Pick **After CI Checks Pass** for Auto-Deploy (and `autoDeployTrigger: checksPass`
+in `render.yaml`) so a push goes live only once `lint`, `test (sqlite)` and
+`test (postgres)` are green; **On Commit** deploys every push straight away, red or
+not. After a push:
+
+1. Wait for the CI checks on the commit (GitHub **Actions** tab, about 5 minutes),
+   then for Render's deploy (**Events**, about 5 minutes more).
+2. Check the version: open
    `https://compactor-lead-finder.onrender.com/healthz`; `version` must be the
-   first seven characters of the commit you deployed (`git log -1 --format=%h`).
-   If it isn't, **Events** in Render shows whether the deploy failed (its log says
-   why) or never started.
-
-`render.yaml` asks for automatic deploys after CI passes (`autoDeployTrigger:
-checksPass`), but Render applies that only to a service managed as a Blueprint;
-to switch it on for this service, set Render **Settings** > **Build & Deploy** >
-**Auto-Deploy** = **After CI Checks Pass**. Until someone has seen a push go live
-on its own, keep deploying by hand as above. There is no automatic "is the live
-site up to date" check or email: step 3 is that check.
+   first seven characters of the commit (`git log -1 --format=%h`). If it isn't,
+   **Events** in Render shows whether the deploy failed (its log says why) or never
+   started; **Manual Deploy** > **Deploy latest commit** still works as a fallback.
 
 Protect `main` so that nothing reaches it without green checks (a one-time
 setting only the repository owner can make): GitHub → **Settings** →
