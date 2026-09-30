@@ -23,13 +23,15 @@ site administrator** at the bottom (closed until opened, and locked: enter the
 administrator password, `ADMIN_PASSWORD`, and press **Unlock**; it stays unlocked on
 that device until you log out or press **Lock this section**; it also lists the problems
 of the last 7 days). If the password isn't at hand, the `LEADGEN_SEARCH_PAUSED`
-setting below does the same. **Pause searching** → **Turn on**, then confirm with **Pause
+setting below does the same. Each row says how things stand ("Searching: Working
+normally", "Yelp: In use"). **Pause searching**, then confirm with **Pause
 searching** in the box that asks first ("Pause all searching for everyone?"), stops all searching;
-**Switch Google off** / **Switch Yelp off** (shown when that source is set up) stop
+**Stop using Google** / **Stop using Yelp** (shown when that source is set up) stop
 just that paid source. It takes effect on the next request, with no restart: Find
 leads says "Searching is paused by the administrator" and refuses to start, and a
 search already running stops at its next check (below). Each switch shows who
-turned it on (the name under **Your name**) and when. **Turn off** undoes it. The
+turned it on (the name under **Your name**) and when. **Resume searching** / **Use
+Google again** / **Use Yelp again** undoes it. The
 switches are kept in the database (the additive `switches` table).
 
 **In Render (the backup, if the site itself won't load):**

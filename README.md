@@ -17,8 +17,9 @@ and Arco Compactor's own listing is flagged too.
 | Changing the code | [Developer overview](docs/developer-overview.md): a diagram of search → sources → merge/score → saved list → pages, tests and checks, the command line, and every page's behaviour in detail |
 
 **Emergency stop:** on the site, **Find leads** → **For the site administrator**
-(at the bottom, closed until opened) → **Pause searching** → **Turn on** → confirm
-**Pause searching** (or switch just Google or Yelp off). It works on the next
+(at the bottom, closed until opened, then unlocked with the administrator password) →
+**Pause searching** → confirm **Pause searching** (or **Stop using Google** / **Stop
+using Yelp**). It works on the next
 request, with no restart. The backup, if the site itself won't load: in Render, the
 service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Changes**
 (`LEADGEN_GOOGLE_OFF` / `LEADGEN_YELP_OFF` stop just one paid source). See the

@@ -100,24 +100,33 @@ function askSwitch(key, on, then) {
 $("switch-form").addEventListener("submit", (e) => { e.preventDefault(); $("switch-dlg").close(); const then = switchThen; switchThen = null; if (then) then(); });
 $("switch-cancel").addEventListener("click", () => { switchThen = null; $("switch-dlg").close(); });
 $("switch-dlg").addEventListener("cancel", () => { switchThen = null; });
+// Each switch reads as what it controls and how that stands now ("Yelp: In use"), never
+// as "Switch Yelp off: Off"; its button says what pressing it does.
+// [thing, state when the switch is off, state when on, button to switch on, button to switch off]
+const SWITCH_TEXT = {
+  search_paused: ["Searching", "Working normally", "Paused", "Pause searching", "Resume searching"],
+  google_off: ["Google", "In use", "Stopped", "Stop using Google", "Use Google again"],
+  yelp_off: ["Yelp", "In use", "Stopped", "Stop using Yelp", "Use Yelp again"],
+};
 function renderSwitches(list) {
   const box = $("switch-list"); box.replaceChildren();
   for (const [key, s] of Object.entries(list)) {
-    if (!SWITCH_SHOWN[key]()) continue;
+    if (!SWITCH_SHOWN[key]() || !SWITCH_TEXT[key]) continue;
+    const [thing, offText, onText, turnOn, turnOff] = SWITCH_TEXT[key];
     const row = el("div", undefined, "switch-row");
     const text = el("div");
-    text.append(el("strong", s.label));
-    text.append(el("span", s.env ? "On, set in the server's settings (turn it off there)."
-      : s.on ? `On${s.when ? ` since ${s.when}` : ""}${s.by ? `, by ${s.by}` : ""}.` : "Off.", "sub"));
+    text.append(el("strong", `${thing}: ${s.on ? onText : offText}`));
+    if (s.env) text.append(el("span", "Set in the server's settings (change it there).", "sub"));
+    else if (s.on && (s.when || s.by)) text.append(el("span", `Since ${s.when || "?"}${s.by ? `, by ${s.by}` : ""}.`, "sub"));
     row.append(text);
     if (!s.env) {
-      const b = button(s.on ? "Turn off" : "Turn on", "quiet", () => askSwitch(key, !s.on, async () => {
+      const b = button(s.on ? turnOff : turnOn, s.on ? "" : "quiet", () => askSwitch(key, !s.on, async () => {
         b.disabled = true;
         try { await post("/switches", { key, on: !s.on, by: myName() }); }
         catch (err) { box.append(el("div", err.message, "error")); }
         loadSearches();
       }));
-      b.setAttribute("aria-label", `${s.on ? "Turn off" : "Turn on"}: ${s.label}`);
+
       row.append(b);
     }
     box.append(row);
