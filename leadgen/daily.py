@@ -69,6 +69,13 @@ def finish(day: str, info: dict[str, Any]) -> None:
         db.run("UPDATE searches SET info = ? WHERE day = ?", (json.dumps(merged), day))
 
 
+def info(day: str) -> dict[str, Any] | None:
+    """What the day's record holds (what was searched and found), or None."""
+    with store.connect() as db:
+        row = db.one("SELECT info FROM searches WHERE day = ?", (day,))
+    return json.loads(row[0]) if row else None
+
+
 def release(day: str, reason: str | None = None, extra: dict[str, Any] | None = None) -> None:
     """Give the day back after a search that failed (outright, or a source of it).
     With a reason (plain words for the page) the attempt stays in the history,
@@ -97,9 +104,20 @@ def _record(row: store.Row | None) -> Record | None:
     return _as_record(row) if row else None
 
 
+# A day whose map areas are still being filled in past this long after the fill-in's
+# end was cut short (the server restarted): it reads as interrupted.
+FILL_GRACE_SECONDS = 10 * 60
+
+
 def _as_record(row: store.Row) -> Record:
     day, at, info = row
-    return {"day": day, "at": at, "when": date_time_text(at), **json.loads(info)}
+    record = {"day": day, "at": at, "when": date_time_text(at), **json.loads(info)}
+    fill = record.get("fill")
+    if isinstance(fill, dict) and fill.get("until"):
+        fill["until_text"] = localtime.clock_text(fill["until"])
+        if fill.get("state") == "filling" and time.time() > fill["until"] + FILL_GRACE_SECONDS:
+            fill["state"] = "interrupted"
+    return record
 
 
 def history(limit: int = 60) -> dict[str, Any]:

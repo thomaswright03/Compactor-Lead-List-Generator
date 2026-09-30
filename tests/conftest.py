@@ -59,6 +59,9 @@ def no_real_keys(monkeypatch, tmp_path):
     monkeypatch.setattr("leadgen.http.CACHE_DIR", tmp_path / "cache")
     # The map data's catch-up rounds don't wait for busy servers to cool down.
     monkeypatch.setattr("leadgen.config.OVERPASS_RETRY_PAUSE_SECONDS", 0)
+    # The map areas a search missed are filled in in the background only in the tests
+    # about that (test_fill_in.py switches it on).
+    monkeypatch.setattr("leadgen.fillin.ON", False)
     # Problem reports (alerts.py) only in the tests about them, and never to a real webhook.
     monkeypatch.delenv("LEADGEN_ALERT_WEBHOOK", raising=False)
     monkeypatch.setattr("leadgen.alerts.ON", False)

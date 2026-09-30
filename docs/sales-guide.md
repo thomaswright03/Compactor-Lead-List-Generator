@@ -44,7 +44,11 @@ Good to know:
   run from midnight.
 - When the free map servers are busy, the search asks again by itself for the
   areas they missed (the progress bar says so), so you don't need to do anything.
-  It can then take up to about 10 minutes.
+  It can then take up to about 7 minutes. Areas still missing after that are asked
+  again in the background for up to an hour: Find leads says "Still filling in 4
+  areas..." above the search history, the businesses they find appear on the Leads
+  page as they arrive, and the note then says "Complete" (or how many areas never
+  answered). It is still the day's one search.
 - If a search fails outright (say the place wasn't found), the page says so and
   the day is not used up: fix it and run it again. If a source was missing (the
   page says which, e.g. "the map data service answered for only part of the area,

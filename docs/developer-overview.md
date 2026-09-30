@@ -32,7 +32,7 @@ never touch the saved row. Problems go to `alerts.py`.
 ## The search, step by step
 
 1. **Geocode** the location (built-in table for SLC-area cities, then ZIP lookup, Google, or OpenStreetMap Nominatim).
-2. **Search**: Google Places text search for your keywords, the competitor names, then ~27 business-type phrases, across 1/7/19 grid cells; Yelp's 13 category searches (most-reviewed first), then word searches for your keywords and the competitor names; and OpenStreetMap Overpass queries for matching tags and name words, one per area of up to 20 miles (several mirror servers are tried; a failed area is asked again in quarters; four minutes in all).
+2. **Search**: Google Places text search for your keywords, the competitor names, then ~27 business-type phrases, across 1/7/19 grid cells; Yelp's 13 category searches (most-reviewed first), then word searches for your keywords and the competitor names; and OpenStreetMap Overpass queries for matching tags and name words, one per area of up to 20 miles (several mirror servers are tried; a failed area is asked again in quarters; four minutes for the first round, then one catch-up round, and areas still missing are filled in in the background for up to an hour: `leadgen/fillin.py`).
 3. **Filter** to the exact radius (Haversine distance).
 4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's (then Yelp's) contact details and OpenStreetMap's building size. Different phone numbers or names that only share generic words ("Inn & Suites Airport") are kept apart. Then the parts of one named site become one lead (`merge_sites`): listings with the same *site name* (the cleaned name without building numbers or letters and words like "campus", "center", "building": "Shoreline Ridge 825" → "shoreline ridge"), each within 0.2 mi of the next and the whole site at most 0.5 mi across (`SITE_MILES`), with no phone numbers that differ. Names that are only numbers and generic words ("343 Apartments", "Building 2") never merge this way. The lead is named after the site ("Shoreline Ridge"), keeps every listing (the building names go into its other names) and the largest footprint. The saved list uses the same rule (`saved.py`): a later search's building joins the saved site. Rows already saved as separate leads are merged only on request with `python -m leadgen merge-sites` (calls and Yes / No clicks move to the row saved first, the latest mark wins, the merged rows stay hidden and are recorded in `merged_leads`); searches never do this on their own. Places Google or Yelp report permanently closed are then left out of the search's results and are never added to the saved list; a business already saved that is among them is flagged "Closed for good" there (it keeps its mark and calls).
 5. **Score**, sort by score then distance, and **export**.
@@ -89,6 +89,9 @@ map data asked in parts (every query bigger than one part fails, a failed part i
 asked again in quarters, areas busy servers missed are asked again automatically and
 the search ends complete, a part that never answers leaves the search incomplete
 with the other parts' businesses saved, the catch-up rounds' time limit);
+`tests/test_fill_in.py` the background filling in of missing map areas (their
+businesses saved without a second search, the record ending complete, areas that
+never answer, pausing, a restart);
 `tests/test_saved_list.py` closed businesses never being added, refreshes after a
 big search staying one page at most and the parsed saved list being reused;
 `tests/test_calls.py` calls on unmarked businesses and who made each mark and call;
@@ -243,13 +246,25 @@ the sidebar to the page's list (Leads, Calls) or heading.
   away on a re-run, so a re-run with the same location and radius only asks for the
   areas still missing. The first round gets four minutes (`OVERPASS_DEADLINE_SECONDS`),
   an area 90 seconds. Areas still missing after it (the servers were busy or
-  throttling) are asked again automatically in up to two more rounds
-  (`OVERPASS_RETRY_ROUNDS`), each after a 20-second pause (`OVERPASS_RETRY_PAUSE_SECONDS`)
+  throttling) are asked again automatically in one more round
+  (`OVERPASS_RETRY_ROUNDS`), after a 20-second pause (`OVERPASS_RETRY_PAUSE_SECONDS`)
   with 150 seconds of its own (`OVERPASS_RETRY_SECONDS`), so the map-data step
-  never takes more than about 10 minutes; the progress text says "asking again for
+  never takes more than about 7 minutes; the progress text says "asking again for
   the areas the busy map servers missed", and the search's Details show how many
-  areas were asked again. Only an area that still never answers makes the search
-  incomplete; a map server that
+  areas were asked again. Areas still missing then are **filled in in the
+  background** (`leadgen/fillin.py`), within the same search: the search reports
+  what it found and uses up the day as usual, and a background thread asks the
+  missing parts again every 5 minutes (`FILL_IN_PAUSE_SECONDS`) for up to an hour
+  (`FILL_IN_SECONDS`), never asking Yelp or Google. What they find is merged,
+  scored and filtered like the search's own (`pipeline.finish_leads`) and saved
+  into the list as it arrives; the day's record gets a `fill` entry (state
+  filling / complete / gave_up / stopped, areas left, businesses found and new),
+  which Find leads shows above the search history ("Still filling in 4 areas...",
+  polled every 30 seconds) and the history row tags "Filling in". Complete, the
+  search is no longer marked incomplete; areas that never answered are reported
+  as a problem (and the webhook). Pausing searching stops it, and a fill-in cut
+  short by a restart reads as interrupted (`daily.FILL_GRACE_SECONDS`). Only an
+  area that never answers even then leaves the search incomplete; a map server that
   hasn't answered an area after 25 seconds (`OVERPASS_STAGGER_SECONDS`) is not
   waited out: the next one is asked as well and the first good answer wins. The progress bar says when a step
   is taking longer than usual. Steps that don't apply (Google and Yelp when

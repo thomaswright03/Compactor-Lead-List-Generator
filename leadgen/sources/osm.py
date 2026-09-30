@@ -48,15 +48,24 @@ Box = tuple[float, float, float, float]
 MILES_PER_DEGREE_LAT = 69.05
 
 
+# One part of the area still to ask: (its box, or None for the whole circle; its
+# share of the area; how many times it has been split into quarters).
+Part = tuple[Box | None, float, int]
+
+
 class PartialResult(SourceError):
     """The map data came back for only part of the area: `leads` and `warnings` hold
-    what the parts that answered found (the search keeps them, marked incomplete)."""
+    what the parts that answered found (the search keeps them, marked incomplete);
+    `missing` the parts no server answered for, which fill_in can ask again later,
+    and `areas` how many areas the search was cut into."""
 
     def __init__(self, message: str, leads: list[Lead], warnings: list[str],
-                 coverage: str = "") -> None:
+                 coverage: str = "", missing: list[Part] | None = None, areas: int = 1) -> None:
         super().__init__(message)
         self.leads, self.warnings = leads, warnings
         self.coverage = coverage          # "about 7 of 9 areas": how much of the radius answered
+        self.missing = list(missing or [])
+        self.areas = areas
 
 
 def _tag_filters() -> tuple[dict[str, set[str]], set[str]]:
@@ -333,11 +342,6 @@ def _fetch(query: str, deadline: float, first: int = 0,
     raise SourceError(" | ".join(errors) or "no server answered")
 
 
-# One part of the area still to ask: (its box, or None for the whole circle; its
-# share of the area; how many times it has been split into quarters).
-Part = tuple[Box | None, float, int]
-
-
 class _Parts:
     """The state of one map-data search across its rounds: what was found, which
     parts are still missing, and the progress counts the page shows."""
@@ -515,5 +519,24 @@ def _result(run: _Parts) -> tuple[list[Lead], list[str]]:
                     else f"about {100 - share}% of the area")
         raise PartialResult(
             f"OpenStreetMap answered for only part of the area (about {share}% missing): "
-            + " | ".join(run.errors[-5:]), leads, run.warnings, coverage)
+            + " | ".join(run.errors[-5:]), leads, run.warnings, coverage,
+            missing=run.missing, areas=n_boxes)
     return leads, run.warnings
+
+
+def areas_left(parts: Sequence[Part], areas: int) -> int:
+    """How many of a search's `areas` the missing parts make up (at least 1 while any
+    part is missing), for the page's "still filling in N areas"."""
+    share = sum(part[1] for part in parts)
+    return max(1, round(share * areas)) if share > 0.001 else 0
+
+
+def fill_in(lat: float, lon: float, radius_miles: float, keywords: Sequence[str],
+            parts: Sequence[Part], seconds: float) -> tuple[list[Lead], list[Part]]:
+    """Ask again, within `seconds`, for the parts of a search the map servers missed
+    (PartialResult.missing): returns (the businesses found in the parts that answered
+    now, the parts still missing). A part not yet split is asked in quarters if it
+    fails, like in the search itself; nothing is raised when none answers."""
+    run = _Parts(lat, lon, radius_miles, keywords, None)
+    run.run_round(list(parts), seconds)
+    return list(run.found.values()), run.missing

@@ -146,6 +146,8 @@ button.link { background:none; border:0; padding:0; color:var(--accent); font-we
 tr.more-row td { background:var(--hover); }
 tr.failed td { color:var(--muted); }
 .tag { display:inline-block; font-size:var(--fs-xs); font-weight:700; border-radius:var(--r-pill); padding:0 var(--sp-2); background:var(--pts-neg); color:var(--bad-ink); }
+.tag.info { background:var(--warn-bg); color:var(--warn-ink); }
+.fill-note.done { background:var(--pts); border-color:var(--line); color:var(--good-ink); }
 dl.details { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:var(--sp-2) var(--sp-4); margin:var(--sp-2) 0; }
 dl.details div { display:flex; justify-content:space-between; gap:var(--sp-2); border-bottom:1px dashed var(--line); padding:var(--sp-1) 0; }
 dl.details dt { color:var(--muted); } dl.details dd { margin:0; font-weight:600; }

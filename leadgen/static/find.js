@@ -74,6 +74,7 @@ async function loadSearches() {
     setGo(true, `Today's search was incomplete, so it can be run again: ${n} re-run${n === 1 ? "" : "s"} left today.`);
   } else setGo(true, "One search a day. Today's is available.");
   renderHistory(body.searches);
+  showFill(today && today.fill);
   renderProblems(body.problems, body.problems_unread);
   if (body.admin && body.admin !== "open") showAdmin(false);   // locked again elsewhere
   if (body.switches) { S.switches = body.switches; renderSwitches(body.switches); }
@@ -161,6 +162,30 @@ function renderProblems(p, unread) {
   box.replaceChildren(el("p", `${p.count.toLocaleString()} in the last 7 days (the latest first):`), list,
                       el("p", "If these keep happening, tell whoever looks after the site.", "sub"));
 }
+// Map areas today's search missed are filled in in the background (fillin.py): how that stands,
+// in words, and the page looks again every half minute while it goes on.
+const areasText = (n) => (n === 1 ? "1 area" : `${n} areas`);
+function fillText(f) {
+  const more = f.found ? ` ${num(f.found)} more businesses so far (${num(f.new)} new).` : "";
+  if (f.state === "filling") {
+    return `Still filling in ${areasText(f.left)} of the free map data that didn't answer, in the background until about ${f.until_text}.${more} They join your saved leads as they arrive.`;
+  }
+  const added = f.found ? ` ${num(f.found)} more businesses were added (${num(f.new)} new).` : "";
+  if (f.state === "complete") return `Complete: the map areas that didn't answer at first were filled in later.${added}`;
+  if (f.state === "stopped") return `Filling in the missing map areas stopped because searching was paused${f.left ? `; ${areasText(f.left)} never answered` : ""}.${added}`;
+  return `${f.left ? `${areasText(f.left)[0].toUpperCase()}${areasText(f.left).slice(1)} of the free map data never answered today; their businesses are missing until the next search.` : "The missing map areas answered later."}${added}`;
+}
+function showFill(f) {
+  const box = $("fill-note");
+  clearTimeout(S.fillTimer);
+  box.hidden = !f;
+  if (!f) return;
+  box.textContent = fillText(f);
+  box.classList.toggle("done", f.state === "complete");
+  if (S.fillFound !== undefined && f.found !== S.fillFound) loadLeads();   // new businesses arrived
+  S.fillFound = f.found;
+  if (f.state === "filling") S.fillTimer = setTimeout(loadSearches, 30000);
+}
 // Every count on the page reads the same way: 1,135.
 const num = (v) => typeof v === "number" ? v.toLocaleString() : v ?? "-";
 // Each search is its own <tbody> (its row, then its reason or details), so on a phone
@@ -185,7 +210,8 @@ function renderHistory(searches) {
     const tr = el("tr", undefined, s.failed ? "failed" : "");
     const leadsCell = cell(undefined, "h-leads", "Leads");
     // An incomplete search (a source failed) saved what the others found, and gave the day back.
-    if (s.partial) leadsCell.append(`${num(s.leads)} `, el("span", "Incomplete", "tag"));
+    if (s.fill && s.fill.state === "filling") leadsCell.append(`${num(s.leads)} `, el("span", "Filling in", "tag info"));
+    else if (s.partial) leadsCell.append(`${num(s.leads)} `, el("span", "Incomplete", "tag"));
     else if (s.failed) leadsCell.append(el("span", "Failed", "tag"));
     else leadsCell.append(num(s.leads));
     tr.append(cell(s.when, "nowrap h-when"), cell(s.location, "h-where"),

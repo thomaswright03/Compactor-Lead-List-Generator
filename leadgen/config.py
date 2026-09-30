@@ -586,10 +586,17 @@ OVERPASS_SPLITS = 1
 # Parts still missing after OVERPASS_DEADLINE_SECONDS (busy or throttling servers) are
 # asked again automatically, in up to this many more rounds, each after a pause (so a
 # throttling server cools down) and with its own time. The whole map-data step is so
-# bounded by 240 + 2 x (20 + 150) seconds, under 10 minutes; most searches need none.
-OVERPASS_RETRY_ROUNDS = 2
+# bounded by 240 + 1 x (20 + 150) seconds, about 7 minutes; most searches need none.
+# Parts still missing after that are filled in in the background (FILL_IN_*).
+OVERPASS_RETRY_ROUNDS = 1
 OVERPASS_RETRY_PAUSE_SECONDS = 20
 OVERPASS_RETRY_SECONDS = 150
+# Map areas a day's search still missed are asked again in the background, within the
+# same search (not a second one: the day stays used), for up to FILL_IN_SECONDS after it
+# ends: a round every FILL_IN_PAUSE_SECONDS, each with OVERPASS_RETRY_SECONDS. The
+# businesses they find join the saved list as they arrive (fillin.py).
+FILL_IN_SECONDS = 60 * 60
+FILL_IN_PAUSE_SECONDS = 5 * 60
 # A mirror that hasn't answered after this long is not waited out: the next one is
 # asked as well, and the first good answer wins (a normal 30-mile query takes 10 to
 # 40 seconds, and the slow mirror can still answer until the deadline).

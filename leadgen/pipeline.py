@@ -92,6 +92,10 @@ class RunResult:
     failed_sources: list[str] = field(default_factory=list)
     # Of those, the ones that answered for part of the area (the map data, asked in parts).
     partial_sources: list[str] = field(default_factory=list)
+    # The map-data parts no server answered for (osm.PartialResult.missing), and how many
+    # areas the map search was cut into: the site asks them again in the background (fillin.py).
+    osm_missing: list[osm.Part] = field(default_factory=list)
+    osm_areas: int = 0
 
     def run_info(self, params: SearchParams) -> dict[str, Any]:
         info = {k: v for k, v in asdict(params).items() if k not in ("api_key", "yelp_api_key", "skip_yelp")}
@@ -115,10 +119,29 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
 
     warnings = _key_warnings(params, api_key, yelp_key, misplaced, use[1])
     stats: dict[str, object] = {}
+    missing: dict[str, Any] = {}
     raw, errors, failed, partly = _query_sources(params, use, (api_key, yelp_key),
-                                                 keywords, lat, lon, progress, warnings, stats)
+                                                 keywords, lat, lon, progress, warnings, stats,
+                                                 missing)
 
     say(f"Filtering {len(raw)} raw results to {params.radius_miles:g} miles")
+    kept = finish_leads(raw, (lat, lon), params, keywords, stats, say)
+    stats["seconds"] = round(time.time() - started, 1)
+    return RunResult(kept, (lat, lon), label, warnings, stats, problems=errors,
+                     failed_sources=failed, partial_sources=partly,
+                     osm_missing=missing.get("parts", []), osm_areas=missing.get("areas", 0))
+
+
+def finish_leads(raw: list[Lead], centre: tuple[float, float], params: SearchParams,
+                 keywords: list[str], stats: dict[str, object] | None = None,
+                 say: Progress | None = None) -> list[Lead]:
+    """The sources' listings as the search's leads, best first: within the radius,
+    duplicates merged, scored, and the ones left out (closed, low score, not matching,
+    over the limit) counted in stats. Also used for the businesses the map areas a
+    search missed find later (fillin.py)."""
+    lat, lon = centre
+    say = say or (lambda msg: None)
+    stats = stats if stats is not None else {}
     # Keep a margin while merging, so a listing just outside the radius can still
     # merge with (and e.g. mark closed) its copy just inside; the exact radius
     # is applied afterwards.
@@ -150,10 +173,8 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
         "competitors flagged": sum(l.lead_type == "Competitor" for l in open_kept),
         "leads kept": len(open_kept),
         **{f"tier {t}": sum(l.tier == t for l in open_kept) for t in "ABCD"},
-        "seconds": round(time.time() - started, 1),
     })
-    return RunResult(kept, (lat, lon), label, warnings, stats, problems=errors,
-                     failed_sources=failed, partial_sources=partly)
+    return kept
 
 
 def _sources_to_use(params: SearchParams, api_key: str, yelp_key: str,
@@ -278,12 +299,14 @@ class _Found:
 
 def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tuple[str, str],
                    keywords: list[str], lat: float, lon: float, progress: Progress | None,
-                   warnings: list[str], stats: dict[str, object]
+                   warnings: list[str], stats: dict[str, object],
+                   missing: dict[str, Any] | None = None
                    ) -> tuple[list[Lead], list[str], list[str], list[str]]:
     """Ask each source in turn; returns (raw leads, technical errors, the sources that
     failed, those of them that failed for only part of the area). Adds plain notes to
-    warnings and counts to stats. A source the administrator switched off since the
-    search started is skipped; raises PipelineError when nothing at all was found."""
+    warnings, counts to stats and (in missing: "parts", "areas") the map-data parts no
+    server answered for. A source the administrator switched off since the search
+    started is skipped; raises PipelineError when nothing at all was found."""
     use_google, use_yelp, use_osm = use
     api_key, yelp_key = keys
     got = _Found(warnings, stats)
@@ -316,6 +339,8 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
             got.add("osm", exc.leads, exc.warnings)
             if exc.coverage:
                 stats["osm areas searched"] = exc.coverage
+            if missing is not None:
+                missing.update(parts=exc.missing, areas=exc.areas)
             got.fail("osm", exc, partly=True)
         except SourceError as exc:
             got.fail("osm", exc)

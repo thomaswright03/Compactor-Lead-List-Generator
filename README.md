@@ -31,10 +31,12 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   city, from Google Places, Yelp (at most 50 calls in any 24 hours, with the reset
   time shown, "today at ..." or "tomorrow at ...") and the free OpenStreetMap data
   (asked in parts, so busy public servers still answer; areas a busy server missed
-  are asked again automatically, twice at most, so an ordinary search finishes
-  complete; only an area that never answers leaves it incomplete, saying how many
-  areas answered; an incomplete search saves what it found and still uses up the
-  day, as the owner asked).
+  are asked again automatically once during the search, which so takes about 7
+  minutes at most, and then **in the background for up to an hour**, within the
+  same search: their businesses join the saved list as they arrive, and Find leads
+  and the search history say "Still filling in N areas", then "Complete" or "N
+  areas never answered". A search with missing areas saves what it found and still
+  uses up the day, as the owner asked; the filling in is not a second search).
   The standard words (compactor, baler, waste, recycling) are always searched;
   **Extra search words** (empty to start) are searched as well. Scores always use
   the standard words, so the minimum score, the list and Stats all use the same number.

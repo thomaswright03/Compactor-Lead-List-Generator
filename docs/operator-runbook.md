@@ -129,7 +129,12 @@ businesses marked Yes or No on the live site.
 Find leads runs once per Utah calendar day, as the owner asked. A search that
 came back incomplete (a source failed, or map areas never answered even after the
 automatic retries) saves what it found, says which source was missing, and uses up
-the day like a complete one. Only a search that failed outright (an unknown place,
+the day like a complete one. Map areas the free map servers missed are then asked
+again in the background for up to an hour, within that same search (not a second
+one): Find leads shows "Still filling in N areas", then "Complete" or "N areas
+never answered" (that last one is also reported under Recent problems and to the
+webhook). Pausing searching stops the filling in too; a restart or deploy during
+it cuts it short (the history then says so). Only a search that failed outright (an unknown place,
 nothing found, the leads couldn't be saved) gives the day back.
 
 Decision record (2026-09-30): the same-day re-run after an incomplete search, which

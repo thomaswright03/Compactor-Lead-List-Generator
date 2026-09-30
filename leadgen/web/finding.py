@@ -13,7 +13,7 @@ from typing import Any
 from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from .. import alerts, config, daily, saved, store
+from .. import alerts, config, daily, fillin, saved, store
 from .. import switches as site_switches
 from ..geo import GeocodeError
 from ..localtime import clock_text, date_time_text
@@ -55,6 +55,7 @@ DETAIL_LABELS = {
     "osm raw results": "Businesses from the free map data",
     "osm areas searched": "Free map data: areas that answered",
     "osm areas asked again": "Free map data: areas asked again automatically",
+    "osm areas filled in later": "Free map data: filled in later, in the background",
     "results in radius": "Listings within the radius",
     "duplicates merged": "Duplicate listings merged",
     "after dedupe": "Businesses after merging duplicates",
@@ -365,7 +366,7 @@ def _worker(job: Job, params: SearchParams, day: str) -> None:
                             if lead.business_status != "CLOSED_PERMANENTLY"]
         result.warnings = warnings
         if result.failed_sources:
-            _incomplete(day, result, job, warnings)
+            _incomplete(day, result, job, warnings, params)
         else:
             _record(day, result, job, warnings)
         job.update(state="done", result=result, message="Done", pct=100, step=len(STEPS))
@@ -382,12 +383,14 @@ def _worker(job: Job, params: SearchParams, day: str) -> None:
                         "Something went wrong during the search.")
 
 
-def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str]) -> None:
+def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str],
+                params: SearchParams) -> None:
     """A search where a source failed (a paid one refused its key, say) while others
     found businesses: what was found is saved, and the day is given back, so the
     search can be run again once the source works; but only daily.INCOMPLETE_RERUNS
     more times (0: none, the owner's rule): an incomplete search after that keeps
-    the day, like a complete one."""
+    the day, like a complete one. Map areas the free map servers missed are then
+    filled in in the background (fillin.py), within this same search."""
     names = _source_names(result.failed_sources)
     paid = [s for s in result.failed_sources if s in ("google", "yelp")]
     whole = [s for s in result.failed_sources if s not in result.partial_sources]
@@ -411,6 +414,7 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str]) -> N
     except Exception:
         log.exception("Counting today's incomplete searches failed")
         earlier = 0
+    filling = fillin.ON and fillin.wanted(result) and earlier >= daily.INCOMPLETE_RERUNS
     if earlier >= daily.INCOMPLETE_RERUNS:
         # The re-run allowance is used up: this search keeps the day, like a complete one.
         used = ("This was today's re-run, so today's search is now used up"
@@ -418,7 +422,19 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str]) -> N
         warnings.append(f"{reason} {used}; the next search can run tomorrow, from midnight "
                         f"Utah time.{advice}")
         job["note"] = f"{missing} Today's search is now used up; the next one can run tomorrow."
+        if filling:
+            warnings.append(fillin.NOTE)
+            job["note"] = f"{missing} {fillin.NOTE}"
         _record(day, result, job, warnings, {"partial": True, "reason": reason})
+        if filling and not fillin.start(day, params, result):
+            job["note"] = f"{missing} Today's search is now used up; the next one can run tomorrow."
+            warnings.remove(fillin.NOTE)
+            _record(day, result, job, warnings)
+            filling = False
+        if filling and not whole:
+            # Only map areas are missing, and they are being filled in: fillin.py reports
+            # a problem if some never answer.
+            return
     else:
         left = daily.INCOMPLETE_RERUNS - earlier
         job["note"] = f"{missing} Run the search again today to fill them in."
