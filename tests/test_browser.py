@@ -1335,3 +1335,55 @@ def test_saving_a_call_from_the_keyboard_keeps_the_focus_on_that_business(page):
     expect(page.locator("#toast")).to_contain_text("Hampton Inn: saved as No Contact.")
     assert _in_list(page)
     assert page.evaluate("document.activeElement.closest('tr').dataset.key") == key
+
+
+def test_a_search_cut_off_by_a_restart_says_what_was_saved_and_frees_the_day(browser, monkeypatch):
+    """The server restarts mid-search (a deploy): the page notices, what the search had
+    found is saved, the history says so, and Find leads is available again at once."""
+    from werkzeug.serving import make_server
+
+    from leadgen import interrupted
+    from leadgen.sources import report_found
+
+    found = [Lead(name=name, lat=40.66 + i * 0.01, lon=-111.89, source="osm", source_id=f"way/{i}",
+                  raw_categories=[tag])
+             for i, (name, tag) in enumerate([("Costco", "shop=wholesale"),
+                                              ("Smith's Marketplace", "shop=supermarket")])]
+    reported, gate = threading.Event(), threading.Event()
+
+    def run(params, progress):
+        report_found(list(found))
+        reported.set()
+        gate.wait(30)
+        raise RuntimeError("the old server's search ends with the test")
+    monkeypatch.setattr(web.finding, "run", run)
+    app = web.create_app()
+    server = make_server("127.0.0.1", 0, app, threaded=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    context = _context(browser, viewport={"width": 1280, "height": 900})
+    tab = context.new_page()
+    errors = []
+    tab.on("pageerror", lambda exc: errors.append(str(exc)))
+    try:
+        tab.goto(f"http://127.0.0.1:{server.server_port}/#find")
+        tab.wait_for_selector("text=Today's is available")
+        tab.fill("input[name=location]", "Murray")
+        tab.click("#go")
+        tab.click("#confirm-go")
+        tab.wait_for_selector("#progress-card:not([hidden])")
+        assert reported.wait(10)
+        # The restart: the old process says its search ended; the new one has no jobs.
+        interrupted._shutting_down()
+        interrupted._live.clear()
+        app.extensions["leadgen"].jobs.clear()
+        expect(tab.locator("#history .h-leads")).to_contain_text("2 Interrupted", timeout=15000)
+        expect(tab.locator("#history")).to_contain_text(
+            "the 2 businesses it had found were saved. It didn't use up the day's search.")
+        expect(tab.locator("#day-note")).to_contain_text("cut off by a server restart")
+        expect(tab.locator("#go")).to_be_enabled()
+        assert sorted(l.name for l in saved.load()) == ["Costco", "Smith's Marketplace"]
+    finally:
+        gate.set()
+        context.close()
+        server.shutdown()
+    assert not errors

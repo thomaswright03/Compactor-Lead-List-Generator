@@ -85,11 +85,23 @@ SCHEMA = [
     """CREATE TABLE IF NOT EXISTS removed_leads (
         uid TEXT PRIMARY KEY, at DOUBLE PRECISION NOT NULL, miles DOUBLE PRECISION NOT NULL,
         row TEXT NOT NULL)""",
+    # A search while it runs (interrupted.py): when it last said it was alive, and what
+    # finishing it needs (where, how far, the search words), so a server restart in the
+    # middle of it keeps what it found. Its rows go once the search ends.
+    """CREATE TABLE IF NOT EXISTS search_runs (
+        id TEXT PRIMARY KEY, day TEXT NOT NULL, started DOUBLE PRECISION NOT NULL,
+        alive DOUBLE PRECISION NOT NULL, info TEXT NOT NULL)""",
+    # The listings a running search's sources have returned so far, a batch every few
+    # seconds (interrupted.py).
+    """CREATE TABLE IF NOT EXISTS search_found (
+        id TEXT PRIMARY KEY, run TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
+        leads TEXT NOT NULL)""",
+    "CREATE INDEX IF NOT EXISTS search_found_by_run ON search_found (run)",
 ]
 # Every table, for tests that empty them.
 TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "mark_changes",
           "search_failures", "call_undos", "problems", "made_by", "switches", "merged_leads",
-          "removed_leads")
+          "removed_leads", "search_runs", "search_found")
 # Up to this many ids are looked up by id (in chunks); more read the whole table.
 BY_ID_LIMIT = 1000
 _CHUNK = 500

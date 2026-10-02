@@ -57,17 +57,26 @@ async function loadSearches() {
   $("paused-box").hidden = !body.paused;
   const today = body.current;
   if (body.running && !S.job) follow(body.running);
+  // Today's search was cut off by a server restart (an update) and is still being finished
+  // on the server (what it found is saved, the day given back): ask again in a moment.
+  clearTimeout(S.cutOffTimer);
+  if (body.cut_off && !S.job) S.cutOffTimer = setTimeout(loadSearches, 8000);
+  const cutToday = !today && body.searches.find((s) => s.day === body.today && s.interrupted);
   // A refusal or failure stays in its own red line (showError, the failure box); this only says how the day stands.
   lockForm(!S.job && body.used_today && !body.running && today.leads !== undefined
     ? "The next one can run tomorrow, from midnight Utah time." : "");
   if (S.job) setGo(false, "");
   else if (body.paused) setGo(false, "Searching is paused by the administrator.");
-  else if (body.used_today && today.leads === undefined && !body.running) {
+  else if (body.cut_off) {
+    setGo(false, "Today's search was cut off by a server restart (the site was updated). What it had found is being saved; this page updates by itself in a moment.");
+  } else if (body.used_today && today.leads === undefined && !body.running) {
     setGo(false, `Today's search was interrupted before it finished. It can be run again after ${today.free_at}.`);
   } else if (body.used_today) {
     setGo(false, `Today's search ran at ${today.when.split(", ").pop()}. The next one can run tomorrow.`);
   } else if (today) {
     setGo(true, "Today's search didn't finish, so it can be run again.");
+  } else if (cutToday) {
+    setGo(true, "Today's search was cut off by a server restart; what it had found was saved (see the search history). You can search again now.");
   } else if (body.reruns_left) {
     // After an incomplete search (a source failed) it may run again, a set number of times.
     const n = body.reruns_left;
@@ -210,8 +219,9 @@ function renderHistory(searches, body) {
     return td;
   };
   for (const s of searches) {
-    // A search the administrator stopped before it found anything reads as stopped, not failed.
-    const failed = s.failed && !s.stopped;
+    // A search the administrator stopped before it found anything reads as stopped, not failed;
+    // one a server restart cut off kept what it found.
+    const failed = s.failed && !s.stopped && !s.interrupted;
     const tbody = el("tbody", undefined, failed ? "failed" : "");
     const tr = el("tr", undefined, failed ? "failed" : "");
     const leadsCell = cell(undefined, "h-leads", "Leads");
@@ -221,6 +231,7 @@ function renderHistory(searches, body) {
     if (running) leadsCell.append(el("span", "Running…", "tag info"));
     else if (unfinished) leadsCell.append(el("span", "Interrupted", "tag"));
     else if (s.failed && s.stopped) leadsCell.append(el("span", "Stopped by the administrator", "tag"));
+    else if (s.interrupted) leadsCell.append(s.leads ? `${num(s.leads)} ` : "", el("span", "Interrupted", "tag"));
     // An incomplete search (a source failed) saved what the others found, and gave the day back.
     else if (s.stopped) leadsCell.append(`${num(s.leads)} `, el("span", "Stopped", "tag"));
     else if (s.fill && s.fill.state === "filling") leadsCell.append(`${num(s.leads)} `, el("span", "Filling in", "tag info"));
@@ -229,16 +240,24 @@ function renderHistory(searches, body) {
     else leadsCell.append(num(s.leads));
     tr.append(cell(s.when, "nowrap h-when"), whereCell(s),
               cell(s.radius ? `${s.radius} mi` : "", "h-radius", "Radius"),
-              leadsCell, cell((s.failed && !s.partial) || unfinished ? "" : num(s.new), "h-new", "New"));
+              leadsCell, cell((s.failed && !s.partial && !s.interrupted) || unfinished ? "" : num(s.new), "h-new", "New"));
     const td = cell(undefined, "h-act");
     tr.append(td); tbody.append(tr); table.append(tbody);
     if (s.failed) {
-      const extra = el("tr", undefined, "failed");
+      const extra = el("tr", undefined, s.interrupted ? "" : "failed");
       const why = el("td"); why.colSpan = 6; why.className = "sub h-why";
       why.textContent = s.stopped ? `Stopped by the administrator (${s.stopped}) before it found anything. It didn't use up the day's search.`
         : `${s.reason || "The search didn't finish."} It didn't use up the day's search.`;
       extra.append(why); tbody.append(extra);
-      continue;
+      if (!s.interrupted) continue;
+    }
+    if (unfinished && !running) {
+      const extra = el("tr");
+      const why = el("td"); why.colSpan = 6; why.className = "sub h-why";
+      why.textContent = body && body.cut_off
+        ? "Cut off by a server restart (the site was updated); what it had found is being saved…"
+        : "The server stopped during this search, before it finished; what it had found couldn't be kept.";
+      extra.append(why); tbody.append(extra);
     }
     if (s.fill && s.fill.state !== "filling") {
       // How filling in the map areas it missed ended (complete, stopped, gave up).
@@ -334,7 +353,9 @@ async function follow(jobId, misses = 0) {
   catch (err) {
     if (err.status !== 404 && misses < 5) { setTimeout(() => follow(jobId, misses + 1), 3000); return; }
     S.job = null; $("progress-card").hidden = true;
-    setGo(false, "Lost track of the search (the server may have restarted). Reload the page."); return;
+    // The server restarted mid-search: it keeps what the search found and gives the day back.
+    setGo(false, "The server restarted during the search (the site was updated). Checking what it had found…");
+    setTimeout(loadSearches, 2000); return;
   }
   showProgress(job);
   if (job.state === "running") { setTimeout(() => follow(jobId), 1500); return; }

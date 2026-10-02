@@ -20,7 +20,7 @@ from ..geo import METERS_PER_MILE, haversine_miles
 from ..http import HttpError, cache_get, cache_put, request_json
 from ..models import Lead
 from ..scoring import generic_name
-from . import SourceError
+from . import SourceError, report_found
 
 log = logging.getLogger(__name__)
 
@@ -463,9 +463,12 @@ class _Parts:
 
     def answered(self, data: Any) -> None:
         self.done += 1
+        new = []
         for lead in map(parse_element, data.get("elements", [])):
-            if lead:
-                self.found.setdefault(lead.source_id, lead)
+            if lead and lead.source_id not in self.found:
+                self.found[lead.source_id] = lead
+                new.append(lead)
+        report_found(new)
         if data.get("remark"):
             log.warning("OpenStreetMap note: %s", data["remark"])
             note = "The map data service returned only part of its results (it was busy)."

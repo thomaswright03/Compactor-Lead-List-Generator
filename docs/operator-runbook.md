@@ -148,7 +148,17 @@ webhook). Pausing searching stops the filling in too, and so does the next day's
 starting (the history then says "stopped because the next day's search started"): a
 filling in that runs past midnight stays on Find leads until it ends. A restart or deploy during
 it cuts it short (the history then says so). Only a search that failed outright (an unknown place,
-nothing found, the leads couldn't be saved) gives the day back.
+nothing found, the leads couldn't be saved) or was cut off by a restart gives the day back.
+
+**A deploy or restart during a search.** Deploys restart the service, and a search
+running then stops with it. What it had found up to then (written to the database
+every 10 seconds while it runs: the `search_runs` and `search_found` tables, removed
+again when a search ends) is saved as soon as someone opens Find leads or starts a
+search: at once when the old server shut down normally, or 45 seconds after it was
+killed. The day's search is given back straight away, and the history row (marked
+**Interrupted**) says how many businesses were saved. Nothing is searched again by
+itself; the person can run the day's search again. To avoid it altogether, push
+changes outside working hours or when nobody is searching.
 
 Decision record (2026-09-30): the same-day re-run after an incomplete search, which
 an earlier version allowed once, was never approved by the owner, so it was removed

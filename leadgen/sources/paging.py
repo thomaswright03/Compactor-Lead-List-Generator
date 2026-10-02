@@ -15,7 +15,7 @@ from typing import Any, Protocol
 
 from ..http import HttpError, cache_get, cache_put
 from ..models import Lead
-from . import SourceError
+from . import SourceError, report_found
 
 
 class Cache(Protocol):
@@ -63,6 +63,7 @@ def run_searches(source: str, queries: Sequence[str], cells: Sequence[Cell],
 
     leads, chains, cached_q = _plan(queries, cells, key_of, lambda k: get(k, cache_ttl), keep,
                                     cache_partial, max_pages)
+    report_found(leads)
     warnings: list[str] = []
     fresh = sum(1 for c in chains if c["pages"] == 0)
     if fresh > max_requests and not cap_reason:
@@ -181,7 +182,9 @@ class _Rounds:
         chain["pages"] += 1
         chain["token"] = token
         chain["token_at"] = time.time()
-        self.leads += self.keep(items, chain["q"])
+        kept = self.keep(items, chain["q"])
+        self.leads += kept
+        report_found(kept)
 
 
 def _capped_note(source: str, queries: Sequence[str], chains: list[Chain], cached_q: set[str],

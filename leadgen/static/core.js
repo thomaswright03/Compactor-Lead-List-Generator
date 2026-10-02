@@ -19,7 +19,7 @@ const SHIFT_GUARD_MS = 700;
 const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "", sending: new Map(),
             loaded: false, loadError: "", refreshError: "", viewLoading: false, seq: 0,
             leadView: "", callView: "", callQ: "", q: "", tier: "", phone: false, sort: "score", dir: "desc", limit: PAGE,
-            job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0 };
+            job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0, cutOffTimer: 0 };
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);

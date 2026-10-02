@@ -42,6 +42,9 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   first when the next day's search starts, so two map searches never run at once.
   The progress bar's map step moves with the areas that answered, not with the clock,
   and the search history shows today's search as "Running…" from the moment it starts.
+  A search cut off by a server restart (a deploy) keeps what it had found: it is
+  saved, the day's search is given back at once, and the history says so
+  ("Interrupted by a server restart: the 128 businesses it had found were saved").
   When the place lookups themselves are down, the page says to try again in a minute
   (nothing spent), not to check the spelling.
   Before anything is spent, the confirmation names the place the search will

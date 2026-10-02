@@ -234,8 +234,23 @@ the sidebar to the page's list (Leads, Calls) or heading.
   (e.g. an unknown location, or the map data service is down) gives the day
   back, says so in one or two plain sentences (with one piece of advice: "You
   can try again now; if it fails again, try later today"), and stays in the history marked
-  **Failed** with the reason; so does one that never finished (the server
-  restarted), after 30 minutes (the page says when, in Utah time). A search
+  **Failed** with the reason. A search a server restart cuts off (a deploy lands
+  mid-search) keeps what it had found: while a search runs, what its sources return
+  (each Google or Yelp results page, each map area, reported through
+  `sources.report_found` on the search's thread) is written to the `search_found`
+  table every 10 seconds, and its `search_runs` row says it is alive
+  (`leadgen/interrupted.py`; the process marks its runs as ended when it exits). The
+  next page that loads the search history or starts a search finishes a run whose
+  server is gone (marked ended, or no heartbeat for 45 seconds): its listings are
+  merged, scored and saved like a search's own, and the day is given back at once,
+  with a history row marked **Interrupted** that says how many businesses were saved
+  ("Interrupted by a server restart (the site was updated or restarted): the 128
+  businesses it had found were saved. It didn't use up the day's search."). Until
+  then Find leads says the search was cut off and checks again every few seconds.
+  It is never re-run by itself (that would spend paid lookups without anyone asking).
+  A search's working rows are removed when it ends. One with no such rows (from
+  before this, or when they could not be written) stops holding the day after 30
+  minutes, as before (the page says when, in Utah time). A search
   where one source failed while the others worked (say Google refused its key,
   or the map data service was down) is **incomplete**: the businesses the other
   sources found are saved and the day is used up, as the owner asked (one search

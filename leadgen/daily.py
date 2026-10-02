@@ -7,7 +7,9 @@ anything (e.g. an unknown location) gives the day back. One where a source faile
 (e.g. Google refused its key) while others found businesses is incomplete: what
 was found is saved and it uses up the day like a complete search, as the owner
 asked (one search per Utah calendar day). INCOMPLETE_RERUNS can allow that many
-same-day re-runs after an incomplete search, but it is 0 unless the owner asks.
+same-day re-runs after an incomplete search, but it is 0 unless the owner asks. A
+search cut off by a server restart saves what it had found and gives the day back
+(interrupted.py).
 """
 
 import datetime as dt
@@ -28,8 +30,10 @@ def today() -> str:
     return _local_now().strftime("%Y-%m-%d")
 
 
-# A search takes minutes. One that never finished (the server restarted mid-search)
-# stops holding the day after this long, so the day's search can be run again.
+# A search takes minutes. One cut off by a server restart is finished, and gives the
+# day back, as soon as a page notices (interrupted.py). One that never finished and
+# left no record of its run for that (it could not be written) stops holding the
+# day after this long, so the day's search can be run again.
 STALE_SECONDS = 30 * 60
 
 # After an incomplete search the day's search can be run this many more times. The owner

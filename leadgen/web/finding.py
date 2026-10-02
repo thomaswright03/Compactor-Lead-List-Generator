@@ -13,11 +13,12 @@ from typing import Any
 from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from .. import alerts, config, daily, fillin, saved, store
+from .. import alerts, config, daily, fillin, interrupted, saved, store
 from .. import switches as site_switches
 from ..geo import GeocodeError, LookupDown, haversine_miles, miles_from_arco
 from ..localtime import clock_text, date_time_text
 from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, SearchStopped, locate, run
+from ..sources import collecting
 from .auth import admin_open, admin_refusal, admin_state
 from .common import (
     NOT_USED_UP,
@@ -379,13 +380,25 @@ RETRY = "You can try again now; if it fails again, try later today."
 
 
 def _worker(job: Job, params: SearchParams, day: str) -> None:
+    # What the sources return is written to the database as the search goes, so a
+    # server restart mid-search keeps it and gives the day back (interrupted.py).
+    checkpoint = interrupted.Run(day, params)
+    checkpoint.start()
+    try:
+        _search(job, params, day, checkpoint)
+    finally:
+        checkpoint.end()
+
+
+def _search(job: Job, params: SearchParams, day: str, checkpoint: interrupted.Run) -> None:
     try:
         # An earlier day's fill-in still asking the map servers ends first (fillin.py):
         # two map searches at once make the busy public servers refuse more of both.
         fillin.end_others(day)
         # Closed places come back too, so a saved one that has since closed is updated
         # (it stays in the saved list, flagged closed for good); they are not shown here.
-        result = run(replace(params, include_closed=True), job["progress"])
+        with collecting(checkpoint.add):
+            result = run(replace(params, include_closed=True), job["progress"])
         for problem in result.problems:
             log.warning("Search %s: a source failed: %s", day, problem)
         warnings = [plain_warning(w) for w in result.warnings]
@@ -635,6 +648,7 @@ def search() -> ResponseReturnValue:
                                  "you want to search there.",
                         "field": "location", "place": found, "confirm_far": True}), 409
     params = replace(params, center=(found["lat"], found["lon"]), place=found["label"])
+    _recover()                  # a search a restart cut off today gives the day back first
     claimed = _claim(params, found)
     if not isinstance(claimed, str):
         return claimed
@@ -662,9 +676,21 @@ def search() -> ResponseReturnValue:
     return jsonify({"job_id": job_id})
 
 
+def _recover() -> bool:
+    """Finish the searches a server restart cut off (interrupted.recover); True while
+    one is still to be finished (its server is stopping, or has just stopped)."""
+    try:
+        interrupted.recover()
+        return interrupted.pending()
+    except Exception:
+        log.warning("Finishing a search a server restart cut off failed", exc_info=True)
+        return False
+
+
 @bp.get("/searches")
 def searches() -> ResponseReturnValue:
     """Each day's search (when, what, what it found), and whether today's is used."""
+    cut_off = _recover()
     try:
         body = daily.history()
     except Exception as exc:
@@ -688,7 +714,10 @@ def searches() -> ResponseReturnValue:
     if current:
         # When an unfinished search stops holding the day, in Utah time like every time.
         current["free_at"] = clock_text(current["at"] + daily.STALE_SECONDS)
-    return jsonify({**body, "yelp": yelp_quota(), "running": state().running_job(),
+    running = state().running_job()
+    # A search cut off by a restart, still being finished: the page says so and asks again.
+    body["cut_off"] = cut_off and running is None
+    return jsonify({**body, "yelp": yelp_quota(), "running": running,
                     "paused": SEARCH_PAUSED if switches()["search_paused"] else None,
                     "switches": _switch_list(), "admin": admin_state()})
 
