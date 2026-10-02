@@ -14,9 +14,10 @@
   --chart-bar:#5aa2ea; --chart-grid:#2c384b; --chart-base:#4a586e; --chart-text:#c3ccd8;
   --shadow:rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
 {%- endset -%}
-{#- The browser's own bar takes the sidebar's colour, light and dark. -#}
-<meta name="theme-color" content="#15304d" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
+{#- The browser's own bar takes the sidebar's colour, light and dark: by the OS's setting,
+    or by the Light / Dark choice once one is made (setThemeColor, below). -#}
+<meta name="theme-color" content="#15304d" data-system="#15304d" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1220" data-system="#0b1220" media="(prefers-color-scheme: dark)">
 <style>
   :root {
     /* One scale for every page: spacing and radii, and six text sizes. Reading text is at
@@ -40,9 +41,19 @@
   :root[data-theme="dark"] { {{ dark }} }
 </style>
 <script>
+  // The browser bar's colour for a choice: the chosen theme's whatever the OS says, or
+  // the OS's own ("system").
+  window.setThemeColor = function (choice) {
+    var colour = { light: "#15304d", dark: "#0b1220" }[choice];
+    var metas = document.querySelectorAll('meta[name="theme-color"]');
+    for (var i = 0; i < metas.length; i++) {
+      metas[i].setAttribute("content", colour || metas[i].getAttribute("data-system"));
+    }
+  };
   (function () {
     var t = null;
     try { t = localStorage.getItem("theme"); } catch (e) { /* storage off: follow the OS */ }
     if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+    window.setThemeColor(t);
   })();
 </script>

@@ -18,6 +18,7 @@ async function loadCalled() {
   }
   renderCalls(); counts();
 }
+function pickCallTab(view) { S.callView = view; renderCalls(); writeHash("calls"); }
 function renderCalls() {
   if (S.calledError && !S.calledLoaded) {
     problem($("calls-problem"), "Can't show your calls right now", S.calledError, loadCalled);
@@ -31,8 +32,11 @@ function renderCalls() {
   $("call-filter-row").hidden = !S.called.length;
   if ($("call-filter").value !== S.callQ) $("call-filter").value = S.callQ;
   // Every called business first (one row each, latest call first), so a call just saved is always in view.
-  tabs($("call-tabs"), [["", "All called businesses", called.length], ...OUTCOMES.map((o) => [o, o, outcomes[o] || 0])], S.callView,
-       (v) => { S.callView = v; renderCalls(); writeHash("calls"); });
+  const tabItems = [["", "All called businesses", called.length], ...OUTCOMES.map((o) => [o, o, outcomes[o] || 0])];
+  tabs($("call-tabs"), tabItems, S.callView, pickCallTab);
+  // Phones: the same choice as one list, with the counts.
+  $("call-pick").replaceChildren(...tabItems.map(([v, t, n]) => { const o = el("option", `${t}: ${n.toLocaleString()}`); o.value = v; return o; }));
+  $("call-pick").value = S.callView;
   const rows = S.callView ? called.filter((l) => l.call_outcome === S.callView) : [...called];
   const wrap = $("calls-wrap");
   if (!S.called.length) {
@@ -96,6 +100,7 @@ function clearCallFilter() {
 $("call-filter").addEventListener("input", () => {
   S.callQ = $("call-filter").value.trim(); renderCalls(); writeHash("calls");
 });
+$("call-pick").addEventListener("change", () => pickCallTab($("call-pick").value));
 
 // The latest call's notes; when it had none, the latest notes from an earlier call, with their date.
 function notesCell(l) {

@@ -39,20 +39,20 @@ const TOUR = [
     text: "After a call, press Just called. Write a short Conversation Summary and pick how it went: " +
           "Interested, Follow Up, Not Interested, Not Qualified, No Contact or Bad Lead. " +
           "History shows every earlier call. A call never changes the Yes / No answer." },
-  { page: "calls", target: "#call-tabs", title: "Calls",
+  { page: "calls", target: "#call-tabs, #call-pick", title: "Calls",
     text: "Every business that has been called, latest call first. Each outcome has its own tab, " +
           "so Follow Up shows exactly who to call back. The filter finds a business by name, address or city." },
   { page: "stats", target: "#stats-body", title: "Stats",
     text: "How many businesses have a baler or compactor, their average score, and how often each tier " +
           "turned out right. It fills in as the team marks businesses Yes or No." },
   { page: "stats", target: "#me", title: "Your name",
-    text: "Marks and calls are saved with the name set in this browser. Change it here (under Menu on a phone) if someone else uses this computer." },
+    text: "Marks and calls are saved with the name set in this browser. Change it here (under Menu on a phone or tablet) if someone else uses this computer." },
   { page: "stats", target: "#yelp-quota", needs: "#yelp-quota", title: "Yelp lookups",
     text: "Yelp adds phone numbers. The site uses at most 50 Yelp lookups in any 24 hours and shows when they reset." },
   { page: "stats", target: ".theme", title: "Light or dark",
     text: "Pick a light or dark look, or follow your computer's setting." },
   { page: "find", target: "#tour-btn", title: "That's it",
-    text: "Open this tour again anytime with the Tutorial button (under Menu on a phone). Start on Find leads, then work through Leads." },
+    text: "Open this tour again anytime with the Tutorial button (under Menu on a phone or tablet). Start on Find leads, then work through Leads." },
 ];
 
 const tour = { steps: [], i: -1, box: null, spot: null, shade: null, keys: null, last: null, timer: 0 };

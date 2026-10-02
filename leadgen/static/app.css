@@ -15,6 +15,12 @@ textarea:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; 
    a pasted web address or email breaks inside its card or cell instead of widening the page. */
 .card, .history, dialog, .warn, .recent, .toast, table.plain td, .notes { overflow-wrap:anywhere; }
 .tag, .badge { white-space:nowrap; }                /* short labels ("Incomplete") never break */
+/* The search history's headings, numbers and Details link are whole words at every width
+   (anywhere would let the table squeeze them to "Radiu / s"); the place searched wraps
+   between words, and inside a long one only when it can't fit. */
+table.plain.hist th, table.plain.hist td.h-when, table.plain.hist td.h-radius,
+table.plain.hist td.h-leads, table.plain.hist td.h-new, table.plain.hist td.h-act { overflow-wrap:normal; }
+table.plain.hist td.h-where { overflow-wrap:break-word; }
 input, select, textarea { font:inherit; font-weight:400; padding:var(--sp-2); border:1px solid var(--line); border-radius:var(--r-sm); color:var(--ink); background:var(--input); }
 
 /* Layout: sidebar + pages */
@@ -317,10 +323,19 @@ dialog::backdrop { background:var(--backdrop); }
   label.check { min-height:44px; }
   label.check input { width:24px; height:24px; }
   .app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto 1fr; align-content:start; }
-  .side { position:static; height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--sp-3); padding:var(--sp-3) var(--sp-4); }
-  nav { flex-direction:row; flex-wrap:wrap; }
+  /* Tablets: a bar at the top with the name, the pages and Menu in one row (two when the
+     pages' counts are long); the tutorial, your name, the Yelp count, the colours and
+     logging out are under Menu, as on phones, so the bar never takes three rows. */
+  .side { position:static; height:auto; display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center;
+          gap:var(--sp-2) var(--sp-3); padding:var(--sp-3) var(--sp-4); }
+  nav { flex-direction:row; flex-wrap:wrap; grid-column:2; grid-row:1; }
   nav a { padding:var(--sp-2) var(--sp-3); }
-  .side-bottom { margin-top:0; flex-basis:100%; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--sp-3); }
+  nav .count .cw { display:none; }               /* "Leads 24": the words are in the link's title */
+  .menu-btn { display:inline-flex; align-items:center; justify-content:center; background:none; border:1px solid rgba(255,255,255,.3);
+              color:var(--side-ink); padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); min-height:44px; min-width:44px;
+              grid-column:3; grid-row:1; }
+  .side-bottom { margin-top:0; grid-column:1 / -1; display:none; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--sp-3); }
+  .side.open .side-bottom { display:flex; }
   .side .who { border-top:0; padding-top:0; }
   main { padding:var(--sp-4) var(--sp-4) var(--sp-6); }
 }
@@ -330,17 +345,14 @@ dialog::backdrop { background:var(--backdrop); }
           padding:var(--sp-2) var(--sp-4); }
   .brand { display:flex; gap:var(--sp-2); align-items:baseline; min-width:0; white-space:nowrap; overflow:hidden; }
   .brand strong { display:inline; }
-  .menu-btn { display:inline-flex; align-items:center; justify-content:center; background:none; border:1px solid rgba(255,255,255,.3);
-              color:var(--side-ink); padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); min-height:44px; min-width:44px; }
+  .menu-btn { grid-column:auto; grid-row:auto; }
   /* Every page's link stays in view: they wrap to a second line on the narrowest phones. */
-  nav { grid-column:1 / -1; flex-wrap:wrap; gap:var(--sp-1); }
+  nav { grid-column:1 / -1; grid-row:auto; flex-wrap:wrap; gap:var(--sp-1); }
   /* Each page's link is a full 44px tap target on a phone (touch screen or not). */
   nav a { padding:var(--sp-1) var(--sp-2); flex:none; font-size:var(--fs-sm); flex-wrap:nowrap; min-height:44px; min-width:44px; justify-content:center; }
   nav .count { padding:0 var(--sp-1); }
-  nav .count .cw { display:none; }
   .tabs button { font-size:var(--fs-sm); padding:var(--sp-1) var(--sp-3); }
-  .side-bottom { grid-column:1 / -1; display:none; padding:var(--sp-2) 0; }
-  .side.open .side-bottom { display:flex; }
+  .side-bottom { padding:var(--sp-2) 0; }
   main { padding-top:var(--sp-3); }
 
   /* The Leads page: the first lead in view on opening. The tabs become one list, the tier
@@ -350,8 +362,9 @@ dialog::backdrop { background:var(--backdrop); }
   #page-leads .page-head p { display:none; }
   #leads-body { display:flex; flex-direction:column; gap:var(--sp-2); }
   #leads-body .toolbar { display:contents; }
-  #lead-tabs { display:none; }
-  #tab-pick { display:block; width:100%; }
+  #lead-tabs, #call-tabs { display:none; }
+  #tab-pick, #call-pick { display:block; width:100%; }
+  #call-pick { margin-bottom:var(--sp-3); }
   .toolbar input { min-width:0; }
   .toolbar .picks { flex-wrap:nowrap; gap:var(--sp-2); }
   .toolbar .picks select { flex:1 1 0; min-width:0; }

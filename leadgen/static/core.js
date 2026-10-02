@@ -76,6 +76,7 @@ function applyTheme(choice) {
   else document.documentElement.removeAttribute("data-theme");
   try { if (choice === "system") localStorage.removeItem("theme"); else localStorage.setItem("theme", choice); } catch (e) { /* not kept */ }
   document.querySelectorAll("[data-theme-pick]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.themePick === choice));
+  window.setThemeColor(choice);              // the browser's bar matches (templates/_theme.html)
   if (chartRows && !$("page-stats").hidden) drawChart(chartRows);
 }
 document.querySelectorAll("[data-theme-pick]").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.themePick)));

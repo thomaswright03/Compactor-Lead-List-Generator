@@ -182,10 +182,14 @@ every page carries the Wright AI Solutions copyright. The browser tab names the
 page ("Leads · Arco Compactor Lead Finder") and shows the Lead Finder icon.
 On phones and tablets every button and link is at least 44 px each way (on a
 narrow window the "Only businesses matching the search words" tick box too). On a
-phone the navigation is one short bar at the top (the page counts show just the
-number; on the narrowest phones the links wrap to a second line, so Stats is
-never cut off), with the Yelp count, the colour switch and Log out under **Menu**; the
-browser's own bar takes the sidebar's colour, light or dark. Times are written
+phone or tablet (up to 820 px wide) the navigation is one short bar at the top (the
+page counts show just the number; on the narrowest phones the links wrap to a second
+line, so Stats is never cut off, and the bar never takes more than two rows), with the
+tutorial, your name, the Yelp count, the colour switch and Log out under **Menu**; the
+browser's own bar takes the sidebar's colour of the theme shown, light or dark,
+including after a Light / Dark choice (`setThemeColor` in `templates/_theme.html`).
+The search history's headings, numbers and **Details** never break inside a word
+(only the place searched wraps). Times are written
 one way everywhere, in Utah time: "Sep 29, 2026, 4:43 PM", or "4:43 PM".
 The first Tab stop on every page is **Skip to main content**, which jumps past
 the sidebar to the page's list (Leads, Calls) or heading.
@@ -368,7 +372,8 @@ the sidebar to the page's list (Leads, Calls) or heading.
   then the address with a map link, the tap-to-call phone and the miles, then
   the reasons for the score. Nothing scrolls sideways; a **Sort** list replaces
   the column headings. Below 700 px (phones) the reasons sit behind **Why this
-  score**, the tabs become one **Show** list, the page's intro line is hidden,
+  score**, the tabs become one **Show** list (the Calls page's result tabs too,
+  with their counts), the page's intro line is hidden,
   Recent changes shows one line, and the downloads and the call hint move below
   the list, so the first lead is in view on opening. With nothing saved yet the
   page offers **Go to Find leads** and hides the downloads; a filter that

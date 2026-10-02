@@ -1387,3 +1387,96 @@ def test_a_search_cut_off_by_a_restart_says_what_was_saved_and_frees_the_day(bro
         context.close()
         server.shutdown()
     assert not errors
+
+
+def _history_with_searches():
+    from leadgen import daily
+    day, _ = daily.claim({"location": "876 Fortune Rd, Salt Lake City, UT 84104", "radius": 30,
+                          "place": "Arco Compactor, 876 Fortune Rd, Salt Lake City, UT 84104"})
+    daily.finish(day, {"leads": 1038, "new": 1038, "details": {"leads kept": 1038}})
+
+
+@pytest.mark.parametrize("width", [375, 1280, 1440, 1920, 2560])
+def test_search_history_headings_and_details_are_whole_words(browser, site, page, width):
+    _history_with_searches()
+    context = _context(browser, viewport={"width": width, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#find")
+    tab.wait_for_selector("#history table.hist")
+    one_line = tab.evaluate("""() => {
+        const lines = (e) => { const s = getComputedStyle(e); const r = document.createRange();
+            r.selectNodeContents(e); const tops = new Set([...r.getClientRects()].map((x) => Math.round(x.top)));
+            return tops.size; };
+        const heads = [...document.querySelectorAll('#history thead th')].filter((t) => t.textContent && t.offsetWidth);
+        const details = [...document.querySelectorAll('#history td.h-act button')];
+        return { heads: heads.map((t) => [t.textContent, lines(t)]), details: details.map((b) => lines(b)),
+                 page: document.documentElement.scrollWidth > window.innerWidth }; }""")
+    assert all(n == 1 for _, n in one_line["heads"]), one_line
+    assert one_line["details"] and all(n == 1 for n in one_line["details"]), one_line
+    assert not one_line["page"]
+    context.close()
+
+
+@pytest.mark.parametrize("width", [375, 390])
+def test_calls_results_are_one_list_on_a_phone(browser, site, page, width):
+    from leadgen import calls
+    leads = saved.load()
+    calls.log_call(leads[0].uid, "Follow Up", "Call back Monday", by="Dana")
+    calls.log_call(leads[1].uid, "Interested", "Wants a quote", by="Dana")
+    context = _context(browser, viewport={"width": width, "height": 800})
+    tab = context.new_page()
+    tab.goto(site + "#calls")
+    tab.wait_for_selector("table.plain.calls")
+    expect(tab.locator("#call-tabs")).to_be_hidden()
+    pick = tab.locator("#call-pick")
+    expect(pick).to_be_visible()
+    assert pick.locator("option").all_inner_texts()[:3] == [
+        "All called businesses: 2", "Interested: 1", "Follow Up: 1"]
+    box = pick.bounding_box()
+    assert box["height"] < 60                       # one row
+    pick.select_option("Follow Up")
+    expect(tab.locator("#calls-wrap")).not_to_contain_text("Wants a quote")
+    expect(tab.locator("#calls-wrap")).to_contain_text("Call back Monday")
+    assert "Follow" in tab.evaluate("location.hash")
+    assert tab.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    context.close()
+
+
+@pytest.mark.parametrize("width", [721, 768, 820])
+def test_the_bar_takes_at_most_two_rows_on_a_tablet(browser, site, page, width):
+    context = _context(browser, viewport={"width": width, "height": 1000})
+    tab = context.new_page()
+    tab.goto(site + "#calls")
+    tab.wait_for_selector("nav a[data-page=calls]")
+    rows = tab.evaluate("""() => {
+        const parts = [document.querySelector('.brand'), document.querySelector('#menu-btn'),
+                       ...document.querySelectorAll('nav a')].filter((e) => e.offsetWidth);
+        const tops = [...new Set(parts.map((e) => Math.round(e.getBoundingClientRect().top / 20)))];
+        return tops.length; }""")
+    assert rows <= 2
+    expect(tab.locator("#side-bottom")).to_be_hidden()
+    # Your name, the colours and the tutorial are under Menu.
+    tab.click("#menu-btn")
+    expect(tab.locator("#side-bottom")).to_be_visible()
+    expect(tab.locator("#tour-btn")).to_be_visible()
+    assert tab.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    context.close()
+
+
+def test_the_browser_bar_colour_follows_the_chosen_theme(browser, site, page):
+    context = _context(browser, viewport={"width": 390, "height": 800}, color_scheme="light")
+    tab = context.new_page()
+    tab.goto(site + "#find")
+    tab.wait_for_selector("#menu-btn")
+    bar = "document.querySelector('meta[name=theme-color][media=\"(prefers-color-scheme: light)\"]').content"
+    assert tab.evaluate(bar) == "#15304d"
+    tab.click("#menu-btn")
+    tab.click("[data-theme-pick=dark]")
+    assert tab.evaluate(bar) == "#0b1220"
+    tab.reload()
+    tab.wait_for_selector("#menu-btn")
+    assert tab.evaluate(bar) == "#0b1220"           # kept after a reload
+    tab.click("#menu-btn")
+    tab.click("[data-theme-pick=system]")
+    assert tab.evaluate(bar) == "#15304d"
+    context.close()

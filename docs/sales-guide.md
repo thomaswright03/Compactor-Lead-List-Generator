@@ -2,7 +2,7 @@
 
 How to use the Lead Finder, one task at a time. Each part fits on one screen.
 
-New to the site? Press **Tutorial** in the sidebar (under **Menu** on a phone) for a
+New to the site? Press **Tutorial** in the sidebar (under **Menu** on a phone or tablet) for a
 step-by-step tour of every page. It only looks around and never changes anything.
 
 ## A day's work
@@ -17,12 +17,12 @@ step-by-step tour of every page. It only looks around and never changes anything
 
 - Log in with the username and password you were given. The login lasts 30 days
   on that device; **Log out** is at the bottom of the sidebar (under **Menu** on
-  a phone).
+  a phone or tablet).
 - The first time you press Yes, No or Just called, the site asks **Your name**.
   A mark or call can't be saved without it: it is saved with each mark and call
   you make, so colleagues know who to ask. **Cancel** drops the click.
   The browser remembers it; change it any time with **Change** next to your name
-  in the sidebar (under **Menu** on a phone).
+  in the sidebar (under **Menu** on a phone or tablet).
 
 ## Run the day's search
 
@@ -135,7 +135,8 @@ Logging a call never changes the Yes / No answer.
 ## Follow up on calls
 
 - Open **Calls**. **All called businesses** lists every business called, latest
-  call first. The other tabs group them by how the latest call went.
+  call first. The other tabs group them by how the latest call went (on a phone,
+  pick them from the list at the top, which shows each one's count).
 - Type part of a business's name, address or city in the filter box to find its
   calls; it works with the tabs and stays after a reload.
 - **History** shows every call to a business: when, who made it, how it went and
