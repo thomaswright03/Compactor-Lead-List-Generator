@@ -72,6 +72,21 @@ class GeocodeError(ValueError):
     pass
 
 
+class LookupDown(GeocodeError):
+    """No place lookup answered (each one failed or timed out): the place may well
+    exist, it just couldn't be looked up now."""
+
+
+# The longest part of what was typed an error message repeats.
+ECHO_CHARS = 50
+
+
+def shown(text: str) -> str:
+    """What was typed, as an error message repeats it: at most ECHO_CHARS characters."""
+    text = " ".join(text.split())
+    return text if len(text) <= ECHO_CHARS else text[:ECHO_CHARS].rstrip() + "…"
+
+
 def _place_key(text: str) -> str:
     """'876 Fortune Rd,  Salt Lake City, UT' -> '876 fortune rd salt lake city ut'."""
     return " ".join(re.sub(r"[,.]", " ", text.lower()).split())
@@ -163,7 +178,8 @@ def geocode(location: str, api_key: str | None = None) -> tuple[float, float, st
     if m:
         lat, lon = float(m.group(1)), float(m.group(2))
         if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-            raise GeocodeError(f"Coordinates out of range: {location}")
+            raise GeocodeError(f"The coordinates {shown(location)} are out of range: latitude "
+                               "must be between -90 and 90, longitude between -180 and 180.")
         return lat, lon, location
 
     known = _KNOWN.get(_place_key(location))
@@ -171,14 +187,19 @@ def geocode(location: str, api_key: str | None = None) -> tuple[float, float, st
         return known
 
     errors = []
+    answered = False          # a lookup answered (even "no such place"), so it isn't an outage
     zm = _ZIP.match(location)
     if zm:
         try:
             data = request_json("GET", f"https://api.zippopotam.us/us/{zm.group(1)}", retries=2)
+            answered = True
             place = data["places"][0]
             label = f"{place['place name']}, {place['state abbreviation']} {zm.group(1)}"
             return float(place["latitude"]), float(place["longitude"]), label
-        except (HttpError, KeyError, IndexError, ValueError) as exc:
+        except HttpError as exc:
+            answered = answered or exc.status == 404      # an unknown ZIP code
+            errors.append(str(exc))
+        except (KeyError, IndexError, ValueError) as exc:
             errors.append(str(exc))
 
     elsewhere = names_another_state(location)
@@ -197,6 +218,7 @@ def geocode(location: str, api_key: str | None = None) -> tuple[float, float, st
                                 cacheable=lambda v: isinstance(v, dict)
                                 and v.get("status") in ("OK", "ZERO_RESULTS"))
             status = data.get("status", "")
+            answered = answered or status in ("OK", "ZERO_RESULTS")
             if status == "OK" and data.get("results"):
                 r = data["results"][0]
                 loc = r["geometry"]["location"]
@@ -213,12 +235,18 @@ def geocode(location: str, api_key: str | None = None) -> tuple[float, float, st
         except (HttpError, KeyError, ValueError) as exc:
             errors.append(str(exc))
             continue
+        answered = True
         if found:
             return found
     if errors:
         log.info("Geocoding %r failed: %s", location, "; ".join(errors))
-    raise GeocodeError(f"Could not find the place '{location}'. Check the spelling, or try a "
-                       "ZIP code, city or street address.")
+    if not answered:
+        # Every lookup failed (the services are down or unreachable): not a typo.
+        raise LookupDown(f"Couldn't look up '{shown(location)}' right now: the place-lookup "
+                         "services aren't answering. Nothing was spent, and today's search is "
+                         "still available. Try again in a minute.")
+    raise GeocodeError(f"Could not find the place '{shown(location)}'. Check the spelling, or try "
+                       "a ZIP code, city or street address.")
 
 
 def _nominatim(location: str, in_utah: bool) -> tuple[float, float, str] | None:

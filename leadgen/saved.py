@@ -387,8 +387,8 @@ def changed_since(ts: float) -> set[str]:
 
 
 def date_range() -> tuple[float | None, float | None]:
-    """(first, latest): when the first and the latest search that saved leads ran
-    (epoch seconds), or (None, None) for an empty list."""
+    """(first, latest): when leads were first and last saved (epoch seconds; a search
+    saves its leads at its end), or (None, None) for an empty list."""
     with store.connect() as db:
         row = db.one("SELECT MIN(first_seen), MAX(last_seen) FROM leads")
     return (row[0], row[1]) if row else (None, None)

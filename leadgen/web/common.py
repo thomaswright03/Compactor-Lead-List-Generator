@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from flask import current_app, request
 from werkzeug.exceptions import ServiceUnavailable
 
-from .. import calls, config, marks, saved, store, usage
+from .. import calls, config, marks, places, saved, store, usage
 from ..export import format_phone
 from ..localtime import date_time_text
 from ..models import Lead, Undo
@@ -99,6 +99,9 @@ def changed_uids(since: float) -> set[str]:
 
 def lead_json(lead: Lead, undo: Undos | None = None) -> dict[str, Any]:
     undo = undo or {}
+    # A listing without a city: the town (and ZIP) its map position is near, shown as
+    # "near West Jordan, UT 84088" (places.py), so same-named rows can be told apart.
+    near = places.for_lead(lead) if not lead.city.strip() else None
     return {
         "score": lead.score, "tier": lead.tier, "tier_label": TIER_LABELS.get(lead.tier, ""),
         "lead_type": lead.lead_type, "flags": lead.flags, "name": lead.name,
@@ -106,7 +109,8 @@ def lead_json(lead: Lead, undo: Undos | None = None) -> dict[str, Any]:
         "prospect": lead.lead_type not in EXEMPT_TYPES,
         "closed": saved.is_closed(lead),
         "category": lead.category, "address": lead.address, "city": lead.city,
-        "zip": lead.zip, "phone": format_phone(lead.phone), "website": lead.website,
+        "zip": lead.zip, "near": near.text() if near else "",
+        "phone": format_phone(lead.phone), "website": lead.website,
         "distance": lead.distance_miles, "reasons": lead.reasons, "map_url": lead.map_url,
         "sources": lead.sources, "key": lead.uid, "has_baler": lead.has_baler,
         "marked_by": lead.marked_by, "mark_clicks": lead.mark_clicks,

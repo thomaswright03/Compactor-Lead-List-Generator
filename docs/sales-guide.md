@@ -40,8 +40,10 @@ step-by-step tour of every page. It only looks around and never changes anything
    (more than 30 miles from the shop) asks once more, naming the place and its
    distance: **Search there anyway** uses the day's search there; **Go back and edit**
    spends nothing.
-4. The progress bar shows each step. A search takes a few minutes; you can use
-   the other pages meanwhile.
+4. The progress bar shows each step; during the free map data its percentage moves
+   with the areas that answered ("3 of 17 areas done"). A search takes a few
+   minutes; you can use the other pages meanwhile. The search history shows it as
+   "Running…" until it finishes.
 5. When it finishes, press **View leads**. New businesses join the saved list.
    The form then greys out with "Today's search is used up" until midnight Utah time.
 
@@ -55,7 +57,12 @@ Good to know:
   again in the background for up to an hour: Find leads says "Still filling in 4
   areas..." above the search history, the businesses they find appear on the Leads
   page as they arrive, and the note then says "Complete" (or how many areas never
-  answered). It is still the day's one search.
+  answered). It is still the day's one search. If it is still going at midnight,
+  the note stays (naming the search it belongs to) until it ends, and it stops by
+  itself when the next day's search starts.
+- If the page says the place couldn't be looked up right now, the lookup services
+  are down: nothing was spent and the day's search is still there. Try again in a
+  minute; what you typed is fine.
 - If a search fails outright (say the place wasn't found), the page says so and
   the day is not used up: fix it and run it again. If a source was missing (the
   page says which, e.g. "the map data service answered for only part of the area,
@@ -101,11 +108,22 @@ Good to know:
   When none has been found yet, the tab says so.
 - A business a later search found **closed for good** keeps its mark and calls
   and moves to the **Closed** tab.
+- A business with no street address shows the town its map position is near, in
+  italics ("near West Jordan, UT 84088"), next to its **map** link: it is worked
+  out from the map, not an address, but it tells same-named stores apart. Type the
+  town in the filter box to find them.
+- If you click just as the list moves up (a row you marked leaves), the click is
+  not saved and a note says "Nothing was saved ... click Yes again". Check the row
+  and click again.
+- With the keyboard: Tab to a Yes or No and press Enter; the focus stays on that
+  business, so Tab goes on through the list.
 
 ## Log a call
 
 1. Press **Just called** on the business (you don't need to mark it first).
-2. Write what was said in **Conversation Summary**.
+2. Write what was said in **Conversation Summary** (up to 5,000 characters: near
+   the limit the box counts down, and if a long paste didn't fit it says how much
+   was left out).
 3. Pick how it went: Interested, Follow Up, Not Interested, Not Qualified,
    No Contact or Bad Lead.
 4. Press **Save** (if no result is picked, the box says to pick one first). A

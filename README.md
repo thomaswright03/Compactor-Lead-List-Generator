@@ -37,7 +37,13 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   same search: their businesses join the saved list as they arrive, and Find leads
   and the search history say "Still filling in N areas", then "Complete" or "N
   areas never answered". A search with missing areas saves what it found and still
-  uses up the day, as the owner asked; the filling in is not a second search).
+  uses up the day, as the owner asked; the filling in is not a second search). A
+  filling in that runs past midnight stays on Find leads until it ends, and is ended
+  first when the next day's search starts, so two map searches never run at once.
+  The progress bar's map step moves with the areas that answered, not with the clock,
+  and the search history shows today's search as "Running…" from the moment it starts.
+  When the place lookups themselves are down, the page says to try again in a minute
+  (nothing spent), not to check the spelling.
   Before anything is spent, the confirmation names the place the search will
   actually run around and how far it is from Arco's shop; a town name on its own
   ("Murray", "Sandy") means the Utah one. A place outside Arco's area (more than 30
@@ -70,6 +76,15 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   it (the name set under **Your name** in that browser, asked before the first
   mark or call and not skippable). **Has phone** on Leads shows only businesses
   that can be phoned; under Not checked, among equal scores, those come first.
+- A business the listing gives no street address or town for shows the town and ZIP
+  its map position is near ("No street address · near West Jordan, UT 84088 · map"),
+  worked out offline from a small table of Census towns and ZIP areas
+  (`leadgen/data/places.json`, see `leadgen/places.py`), so same-named stores (a
+  dozen Smith's) can be told apart; the downloads write it as City "near West
+  Jordan", ZIP "near 84088". It is shown, never saved: the saved rows are unchanged.
+- Keyboard use: after a Yes / No, an undo, a call saved or **Show more**, the focus
+  stays on that business (or moves to the next one's Yes when it left the view). A
+  click that lands just as the list moves up is not saved, and the page says so.
 - The Leads page gets one page of rows at a time (100); **Show more** fetches the
   next page, and the tab counts are always exact, however long the list grows.
 - Works on phones, tablets and laptops: below 1,100 px wide each lead is a card,

@@ -15,9 +15,9 @@ from flask.typing import ResponseReturnValue
 
 from .. import alerts, config, daily, fillin, saved, store
 from .. import switches as site_switches
-from ..geo import GeocodeError, haversine_miles, miles_from_arco
+from ..geo import GeocodeError, LookupDown, haversine_miles, miles_from_arco
 from ..localtime import clock_text, date_time_text
-from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, locate, run
+from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, SearchStopped, locate, run
 from .auth import admin_open, admin_refusal, admin_state
 from .common import (
     NOT_USED_UP,
@@ -96,6 +96,10 @@ def plain_warning(text: str) -> str:
     """A search note in words for sales staff: no URLs, error names or cap settings.
     The original goes to the log."""
     who = next((name for word, name in _SOURCE_WORDS if word.lower() in text.lower()), "")
+    if config.SWITCHES_UNREAD in text and text.startswith("Stopped early"):
+        log.info("Search note: %s", text)
+        return (f"{who or 'A paid source'} was stopped partway: {config.SWITCHES_UNREAD}. The "
+                "businesses already found were kept.")
     if "the administrator" in text and text.startswith("Stopped early"):
         log.info("Search note: %s", text)
         return (f"{who or 'A source'} was stopped partway by the administrator; the businesses "
@@ -166,11 +170,22 @@ def plain_progress(msg: str) -> str:
     return msg
 
 
+# The map data's share of the bar: from MAP_START to MAP_START + MAP_SHARE percent.
+MAP_START, MAP_SHARE = 50.0, 36.0
+# While an area is awaited the bar creeps on through most of that area's share, about
+# this fast (seconds), but never reaches the next area's mark before the area answers.
+CREEP_SECONDS = 60.0
+CREEP_PART = 0.9
+
+
 class _Progress:
     """Turns the search's progress messages into a step and a percentage for the page.
 
-    The Yelp / Google part advances with each call; the map data comes back in one
-    slow request, so its share of the bar fills gradually while it runs.
+    The Yelp / Google part advances with each call; the map data's share moves with
+    the areas that answered out of the areas to ask (parts asked again in smaller
+    pieces add to that count), plus a small creep within the area being waited for,
+    so the number never runs ahead of the "N of M areas" line by more than one area.
+    The percentage shown never goes back.
     """
 
     def __init__(self, job: Job) -> None:
@@ -179,6 +194,8 @@ class _Progress:
         self.cap: int | None = None
         self.map_started: float | None = None
         self.areas_done = self.areas_total = 0
+        self.area_at: float | None = None        # when the latest area answered
+        self.shown = 0.0
         self.step_started = time.time()
         job.update(step=0, pct=1.0, started=time.time())
 
@@ -192,6 +209,8 @@ class _Progress:
         if areas:
             # Parts finish on several threads, so a message can arrive after a newer
             # one: the page's count only moves forward.
+            if int(areas.group(1)) > self.areas_done:
+                self.area_at = time.time()
             self.areas_done = max(self.areas_done, int(areas.group(1)))
             self.areas_total = max(self.areas_total, int(areas.group(2)))
             msg = _AREAS.sub(f"{self.areas_done} of {self.areas_total} areas done", msg)
@@ -208,7 +227,7 @@ class _Progress:
         elif msg.startswith("OpenStreetMap"):
             self.map_started = self.map_started or time.time()
             # A wide search is asked in parts: the bar moves on with each one done.
-            self._at(2, 50 + (36 * self.areas_done / self.areas_total if areas else 0))
+            self._at(2, MAP_START + (MAP_SHARE * self.areas_done / self.areas_total if areas else 0))
         elif msg.startswith("Filtering"):
             self._at(3, 88)
         elif msg.startswith("Merging"):
@@ -223,11 +242,17 @@ class _Progress:
         self.job["pct"] = max(self.job["pct"], pct)
 
     def pct(self) -> float:
+        pct = float(self.job["pct"])
         if self.job["step"] == 2 and self.map_started:
-            # Creeps toward 86% over the few minutes the map servers take.
-            return max(float(self.job["pct"]),
-                       50 + 36 * (1 - math.exp(-(time.time() - self.map_started) / 150)))
-        return float(self.job["pct"])
+            # One area's share (the whole share for a search asked in one piece).
+            total = max(self.areas_total, 1)
+            share = MAP_SHARE / total
+            done = MAP_START + share * min(self.areas_done, total)
+            waited = time.time() - (self.area_at or self.map_started)
+            creep = share * CREEP_PART * (1 - math.exp(-waited / CREEP_SECONDS))
+            pct = max(pct, min(MAP_START + MAP_SHARE, done + creep))
+        self.shown = max(self.shown, pct)
+        return self.shown
 
 
 def skipped_steps(params: SearchParams) -> list[int]:
@@ -248,13 +273,13 @@ def _number(form: Mapping[str, str], name: str, default: Num | None, cast: type,
     try:
         value = float(raw)
     except ValueError:
-        raise FormError(f"{label} must be a number", name) from None
+        raise FormError(f"{label} must be a number.", name) from None
     if cast is int:
         if not math.isfinite(value) or not value.is_integer():
-            raise FormError(f"{label} must be a whole number", name)
+            raise FormError(f"{label} must be a whole number.", name)
         value = int(value)
     if not lo <= value <= hi:
-        raise FormError(f"{label} must be between {lo:g} and {hi:g}{unit}", name)
+        raise FormError(f"{label} must be between {lo:g} and {hi:g}{unit}.", name)
     return value
 
 
@@ -284,17 +309,17 @@ def parse_form(form: Mapping[str, str]) -> SearchParams:
                         "keywords")
     source = form.get("source", "auto")
     if source not in SOURCES:
-        raise FormError("Pick where to search from the list", "source")
+        raise FormError("Pick where to search from the list.", "source")
     # The page always sends How far and the minimum score: a blank one is a mistake to
     # point out, never a silent default (a script that leaves them out gets the defaults).
-    for name, message in (("radius", "How far must be between 1 and 100 miles"),
+    for name, message in (("radius", "How far must be between 1 and 100 miles."),
                           ("min_score", "The score to leave out weak leads below must be "
-                                        "between 0 and 100")):
+                                        "between 0 and 100.")):
         if name in form and not (form.get(name) or "").strip():
             raise FormError(message, name)
     grid = _number(form, "grid", 1, int, 1, 19, "Coverage")
     if grid not in GRIDS:
-        raise FormError("Pick a coverage from the list", "grid")
+        raise FormError("Pick a coverage from the list.", "grid")
     return SearchParams(
         location=location,
         radius_miles=_number(form, "radius", config.DEFAULT_RADIUS_MILES, float, 1, 100,
@@ -355,6 +380,9 @@ RETRY = "You can try again now; if it fails again, try later today."
 
 def _worker(job: Job, params: SearchParams, day: str) -> None:
     try:
+        # An earlier day's fill-in still asking the map servers ends first (fillin.py):
+        # two map searches at once make the busy public servers refuse more of both.
+        fillin.end_others(day)
         # Closed places come back too, so a saved one that has since closed is updated
         # (it stays in the saved list, flagged closed for good); they are not shown here.
         result = run(replace(params, include_closed=True), job["progress"])
@@ -379,9 +407,17 @@ def _worker(job: Job, params: SearchParams, day: str) -> None:
         else:
             _record(day, result, job, warnings)
         job.update(state="done", result=result, message="Done", pct=100, step=len(STEPS))
+    except LookupDown as exc:
+        log.warning("Search %s: the place couldn't be looked up: %s", day, exc)
+        _fail(job, day, str(exc), "The place couldn't be looked up (the lookup services weren't answering).")
     except GeocodeError as exc:
         log.info("Search %s: location not found: %s", day, exc)
         _fail(job, day, f"{exc} {NOT_USED_UP}", str(exc), alert=False)
+    except SearchStopped as exc:
+        # The administrator's deliberate stop: recorded as stopped, not as a failure (no alert).
+        log.info("Search %s was stopped by the administrator: %s", day, exc.reason)
+        _give_back(day, str(exc), {"stopped": exc.reason})
+        job.update(state="error", stopped=exc.reason, message=f"{exc} {NOT_USED_UP}")
     except PipelineError as exc:
         log.warning("Search %s failed: %s %s", day, exc, exc.detail)
         _fail(job, day, f"{exc} {NOT_USED_UP} {RETRY}", str(exc))
@@ -527,6 +563,10 @@ def _place(params: SearchParams) -> dict[str, Any] | tuple[Response, int]:
     can't be found (nothing is spent then)."""
     try:
         return where(params)
+    except LookupDown as exc:
+        # The lookup services are down: not a mistake in what was typed (no field).
+        log.warning("Looking up the place to search failed: %s", exc)
+        return jsonify({"error": str(exc), "lookup_down": True}), 503
     except GeocodeError as exc:
         return jsonify({"error": str(exc), "field": "location"}), 400
     except Exception:
@@ -691,6 +731,8 @@ def status(job_id: str) -> ResponseReturnValue:
             "elapsed": round(time.time() - job.get("started", time.time())),
             "skipped": job.get("skipped", []),
             "slow": job["state"] == "running" and progress.slow()}
+    if job["state"] == "error" and job.get("stopped"):
+        body["stopped"] = job["stopped"]           # stopped by the administrator, not a failure
     if job["state"] == "done":
         # Only what the page shows: the counts, not the leads (the Leads page loads those).
         res = job["result"]

@@ -9,7 +9,8 @@ import time
 
 import pytest
 
-from leadgen import cleanup, cli, config, daily, geo, marks, pipeline, saved, stats, web
+from leadgen import alerts, cleanup, cli, config, daily, geo, marks, pipeline, saved, stats, web
+from leadgen.http import HttpError
 from leadgen.models import Lead
 from leadgen.pipeline import RunResult, SearchParams
 from leadgen.scoring import score_lead
@@ -207,13 +208,89 @@ def test_a_search_paused_during_the_map_data_says_so_and_keeps_what_it_found(mon
 
 
 def test_a_search_paused_before_the_map_found_anything_gives_the_day_back(monkeypatch):
+    monkeypatch.setattr(alerts, "ON", True)
     monkeypatch.setattr(pipeline.osm, "search", lambda *a, **k: (_ for _ in ()).throw(
         osm.Stopped("the administrator paused searching", [], [])))
     client = web.create_app().test_client()
     job = client.post("/search", data={"location": "Murray", "source": "osm"}).get_json()["job_id"]
     body = _wait(client, job)
     assert body["state"] == "error" and "stopped by the administrator" in body["message"]
+    assert body["stopped"] == "the administrator paused searching"
+    history = client.get("/searches").get_json()
+    assert not history["used_today"]
+    # A deliberate stop is recorded as stopped, not as a failed search, and raises no alarm.
+    record = history["searches"][0]
+    assert record["stopped"] == "the administrator paused searching"
+    assert alerts.recent()["count"] == 0
+
+
+# ---- a place lookup that is down is not a spelling mistake
+
+def _lookups_down(*a, **k):
+    raise HttpError("https://nominatim.openstreetmap.org/search: ConnectionError(timed out)")
+
+
+def test_a_lookup_outage_says_try_again_not_check_the_spelling(monkeypatch):
+    monkeypatch.setattr(geo, "request_json", _lookups_down)
+    client = web.create_app().test_client()
+    res = client.get("/place?location=84111")             # a real ZIP code (not known offline)
+    body = res.get_json()
+    assert res.status_code == 503 and "field" not in body and body["lookup_down"]
+    assert "Couldn't look up '84111' right now" in body["error"]
+    assert "Nothing was spent, and today's search is still available" in body["error"]
+    assert "spelling" not in body["error"]
+    # Starting the search says the same, and the day isn't claimed.
+    res = client.post("/search", data={"location": "Draperville"})
+    assert res.status_code == 503 and "right now" in res.get_json()["error"]
     assert not client.get("/searches").get_json()["used_today"]
+
+
+def test_a_place_that_doesnt_exist_still_reads_as_not_found(monkeypatch):
+    def lookups(method, url, **kw):
+        if "zippopotam" in url:
+            raise HttpError(f"{url} returned HTTP 404: {{}}", 404)       # no such ZIP code
+        return []                                                       # nothing found
+    monkeypatch.setattr(geo, "request_json", lookups)
+    res = web.create_app().test_client().get("/place?location=00000")
+    assert res.status_code == 400 and res.get_json()["field"] == "location"
+    assert "Check the spelling" in res.get_json()["error"]
+
+
+def test_error_messages_are_short_full_sentences(monkeypatch):
+    monkeypatch.setattr(geo, "request_json", lambda *a, **k: [])
+    with pytest.raises(geo.GeocodeError) as err:
+        geo.geocode("Nowhere " * 75, "")                # 600 characters typed
+    assert len(str(err.value)) < 150 and "…'" in str(err.value)
+    client = web.create_app().test_client()
+    for form in ({"location": "84101", "radius": "500"}, {"location": "84101", "radius": "abc"},
+                 {"location": "84101", "radius": "30", "min_score": "5.5"},
+                 {"location": "84101", "source": "nowhere"}, {"location": "84101", "grid": "4"}):
+        message = client.post("/search", data=form).get_json()["error"]
+        assert message.endswith("."), message
+
+
+# ---- the progress bar follows the map areas that answered
+
+def test_the_map_steps_percent_follows_the_areas_done(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(web.finding.time, "time", lambda: clock[0])
+    progress = web.finding._Progress({})
+    progress("OpenStreetMap: searching the free map data (0 of 17 areas done)")
+    progress("OpenStreetMap: searching the free map data (3 of 17 areas done)")
+    clock[0] += 180                                   # three minutes, no area answers
+    one_more = 50 + 36 * 4 / 17
+    assert 50 + 36 * 3 / 17 <= progress.pct() <= one_more
+    clock[0] += 3600
+    assert progress.pct() < one_more                  # never past the next area's mark
+    progress("OpenStreetMap: searching the free map data (9 of 17 areas done)")
+    assert 50 + 36 * 9 / 17 <= progress.pct() <= 50 + 36 * 10 / 17
+    # Parts asked again in smaller pieces add to the areas to ask: the bar never goes back.
+    before = progress.pct()
+    progress("OpenStreetMap: searching the free map data (9 of 25 areas done, some areas asked again "
+             "in smaller parts)")
+    assert progress.pct() == before
+    progress("OpenStreetMap: searching the free map data (25 of 25 areas done)")
+    assert progress.pct() == 86
 
 
 # ---- leads from a search around the wrong place: taken out only on request

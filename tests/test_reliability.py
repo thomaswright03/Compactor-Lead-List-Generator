@@ -390,7 +390,23 @@ def test_saved_list_run_info_says_what_the_file_holds():
     assert info["Marked Yes (has a baler or compactor)"] == 1 and info["Marked No"] == 0
     assert info["Not checked yet"] == 1 and info["Competitors and Arco's own listing"] == 1
     assert sum(v for k, v in info.items() if k.startswith("Tier ") and isinstance(v, int)) == 3
-    assert info["First search"].endswith("(Utah time)") and info["Latest search"]
+    # No search on record (saved straight away): the times are when the leads were saved.
+    assert info["First saved"].endswith("(Utah time)") and info["Latest saved"]
+    assert "First search" not in info
+
+
+def test_run_info_search_times_match_the_search_history(monkeypatch):
+    day, _ = daily.claim({"location": "84104"})
+    daily.finish(day, {"leads": 1})
+    started = daily.history()["searches"][0]
+    # The leads are saved minutes after the search started (a search takes a while).
+    real = time.time
+    with monkeypatch.context() as later:
+        later.setattr(saved.time, "time", lambda: real() + 420)
+        saved.save_search([_lead("Costco", "c")], config.DEFAULT_KEYWORDS)
+    book = load_workbook(io.BytesIO(web.create_app().test_client().get("/download/saved.xlsx").data))
+    info = {row[0]: row[1] for row in book["Run Info"].iter_rows(values_only=True) if row[0]}
+    assert info["First search"] == f"{started['when']} (Utah time)" == info["Latest search"]
 
 
 def test_one_place_for_utah_time():

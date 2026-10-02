@@ -660,16 +660,32 @@ def switched_on(name: str) -> bool:
     return switches.is_on(name)
 
 
+# Why a running search makes no more paid lookups when the switches can't be read.
+SWITCHES_UNREAD = ("the site's emergency switches couldn't be checked (the saved data wasn't "
+                   "answering), so no more paid lookups were made")
+
+
 def stop_reason(source: str | None = None) -> str | None:
     """Why a running search must stop now (plain words), or None.
 
     Checked between sources and before every paid call, so switching searching
-    off (or Google / Yelp off) also stops a search that is already running.
+    off (or Google / Yelp off) also stops a search that is already running. When the
+    site's switches can't be read (the database stopped answering), a switch last
+    seen on still counts as on, and no paid (Google / Yelp) lookup goes ahead while
+    it isn't known to be off (SWITCHES_UNREAD); the free map data carries on.
     """
-    if switched_on(SEARCH_PAUSED_ENV):
-        return "the administrator paused searching"
-    if source == "google" and switched_on(GOOGLE_OFF_ENV):
-        return "the administrator switched Google off"
-    if source == "yelp" and switched_on(YELP_OFF_ENV):
-        return "the administrator switched Yelp off"
+    from . import switches  # it reads the database, which needs this module
+    unknown = False
+    for name, applies, reason in (
+            (SEARCH_PAUSED_ENV, True, "the administrator paused searching"),
+            (GOOGLE_OFF_ENV, source == "google", "the administrator switched Google off"),
+            (YELP_OFF_ENV, source == "yelp", "the administrator switched Yelp off")):
+        if not applies:
+            continue
+        on = switches.checked(name)
+        if on:
+            return reason
+        unknown = unknown or on is None
+    if unknown and source in ("google", "yelp"):
+        return SWITCHES_UNREAD
     return None

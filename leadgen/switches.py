@@ -20,6 +20,9 @@ log = logging.getLogger(__name__)
 NAMES = {config.SEARCH_PAUSED_ENV: "Pause searching",
          config.GOOGLE_OFF_ENV: "Switch Google off",
          config.YELP_OFF_ENV: "Switch Yelp off"}
+# The state each site switch had when it was last read (by name): while the database
+# doesn't answer, a running search goes by it (checked).
+_known: dict[str, bool] = {}
 # The short keys the page and its requests use.
 KEYS = {"search_paused": config.SEARCH_PAUSED_ENV, "google_off": config.GOOGLE_OFF_ENV,
         "yelp_off": config.YELP_OFF_ENV}
@@ -47,7 +50,20 @@ def _read(name: str) -> tuple[bool, str, float | None, bool]:
     except Exception:
         log.warning("Reading the site's switches failed; only the environment's count", exc_info=True)
         return False, "", None, False
+    _known[name] = bool(row[0]) if row else False
     return (bool(row[0]), row[1] or "", row[2], True) if row else (False, "", None, True)
+
+
+def checked(name: str) -> bool | None:
+    """The switch as a running search must take it: on or off, in the environment or
+    the site; when the site's switch can't be read now, on if it was on when last read,
+    else None (not known: a paid lookup must not go ahead on a guess)."""
+    if env_on(name):
+        return True
+    on, _, _, read = _read(name)
+    if read:
+        return on
+    return True if _known.get(name) else None
 
 
 def is_on(name: str) -> bool:

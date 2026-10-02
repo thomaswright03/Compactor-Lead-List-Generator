@@ -7,7 +7,7 @@ a { color:var(--accent); }
 button, .btn { font:inherit; font-weight:600; border-radius:var(--r-sm); cursor:pointer; border:1px solid transparent;
                padding:var(--sp-2) var(--sp-4); background:var(--btn); color:var(--btn-ink); text-decoration:none; display:inline-block; }
 button.quiet, .btn.quiet { background:var(--card); color:var(--ink); border-color:var(--line); }
-button:disabled { opacity:.5; cursor:not-allowed; }
+button:disabled, button[aria-disabled="true"] { opacity:.5; cursor:not-allowed; }
 .btn.busy { opacity:.7; cursor:progress; }
 button:focus-visible, .btn:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
 textarea:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
@@ -183,6 +183,8 @@ tr.competitor td { background:var(--comp); }
 .not-asked { font-weight:600; }
 .contact > div { margin-bottom:var(--sp-1); }
 .contact .site { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.contact .near { font-style:italic; }
+#call-notes-count.limit { color:var(--warn-ink); font-weight:600; }
 .reasons { display:flex; flex-direction:column; gap:var(--sp-1); }
 .reason { display:flex; gap:var(--sp-2); align-items:baseline; font-size:var(--fs-sm); line-height:1.35; }
 .pts { flex:0 0 40px; text-align:center; font-weight:700; font-size:var(--fs-xs); border-radius:var(--r-pill); padding:0;
@@ -328,11 +330,12 @@ dialog::backdrop { background:var(--backdrop); }
           padding:var(--sp-2) var(--sp-4); }
   .brand { display:flex; gap:var(--sp-2); align-items:baseline; min-width:0; white-space:nowrap; overflow:hidden; }
   .brand strong { display:inline; }
-  .menu-btn { display:inline-flex; align-items:center; background:none; border:1px solid rgba(255,255,255,.3); color:var(--side-ink);
-              padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); }
+  .menu-btn { display:inline-flex; align-items:center; justify-content:center; background:none; border:1px solid rgba(255,255,255,.3);
+              color:var(--side-ink); padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); min-height:44px; min-width:44px; }
   /* Every page's link stays in view: they wrap to a second line on the narrowest phones. */
   nav { grid-column:1 / -1; flex-wrap:wrap; gap:var(--sp-1); }
-  nav a { padding:var(--sp-1) var(--sp-2); flex:none; font-size:var(--fs-sm); flex-wrap:nowrap; }
+  /* Each page's link is a full 44px tap target on a phone (touch screen or not). */
+  nav a { padding:var(--sp-1) var(--sp-2); flex:none; font-size:var(--fs-sm); flex-wrap:nowrap; min-height:44px; min-width:44px; justify-content:center; }
   nav .count { padding:0 var(--sp-1); }
   nav .count .cw { display:none; }
   .tabs button { font-size:var(--fs-sm); padding:var(--sp-1) var(--sp-3); }

@@ -494,7 +494,12 @@ the Leads page). A second sheet, **Run Info**, records when it was made (Utah
 time) and what the file holds: for a search, its settings and counts; for the
 saved list (**Download Excel** on the Leads page), how many leads, how many are
 marked Yes / No / not checked, competitors and own listing, the count per
-tier, how many were called, and the dates of the first and latest search. The
+tier, how many were called, and when the first and latest search started (the
+search history's "When"; "First saved" / "Latest saved" for leads saved with no
+search on record). A lead with no city or ZIP gets the town / ZIP area its map
+position is near (`leadgen/places.py`, offline, from `leadgen/data/places.json`:
+the Census 2023 Gazetteer's places and ZIP areas within 200 miles of Salt Lake
+City), written "near West Jordan" / "near 84088" and explained on Run Info. The
 Excel file is written by `leadgen/xlsx.py` in time that grows in step with the
 list (10,000 leads in about a second).
 

@@ -107,7 +107,7 @@
       </div>
 
       <div class="problem" id="search-failed" hidden>
-        <div><strong>The search didn't finish</strong><span id="search-failed-msg"></span></div>
+        <div><strong id="search-failed-title">The search didn't finish</strong><span id="search-failed-msg"></span></div>
       </div>
 
       <div class="card" id="done-card" hidden>
@@ -261,7 +261,8 @@
   <form class="dlg" method="dialog" id="call-form">
     <h2 id="call-title">Just called</h2>
     <label for="call-notes">Conversation Summary
-      <textarea id="call-notes" maxlength="5000" placeholder="Who you spoke to, what they said, next steps..."></textarea></label>
+      <textarea id="call-notes" maxlength="5000" aria-describedby="call-notes-count" placeholder="Who you spoke to, what they said, next steps..."></textarea></label>
+    <div class="sub" id="call-notes-count" aria-live="polite" hidden></div>
     <div>
       <div class="sub ask">How did it go? <span class="need-note" id="call-need">Pick one to save the call.</span></div>
       <div class="outcomes" id="outcomes" role="group" aria-label="How did it go?"></div>

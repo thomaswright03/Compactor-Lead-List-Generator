@@ -885,7 +885,7 @@ def test_a_blank_radius_is_pointed_out(page):
     page.fill("input[name=radius]", "")
     page.click("#go")
     assert not page.locator("#confirm-dlg").is_visible()
-    expect(page.locator("#err-radius")).to_have_text("How far must be between 1 and 100 miles")
+    expect(page.locator("#err-radius")).to_have_text("How far must be between 1 and 100 miles.")
 
 
 def test_the_form_reads_closed_once_the_day_is_used(page):
@@ -1138,7 +1138,9 @@ def test_a_place_outside_arcos_area_is_named_and_needs_a_second_yes(page, monkey
     expect(where).to_contain_text("Searched around Portland, Oregon · 633 miles from Arco")
 
 
-def test_the_place_found_is_named_before_a_search_in_the_area(page):
+def test_the_place_found_is_named_before_a_search_in_the_area(page, monkeypatch):
+    from leadgen import geo
+    monkeypatch.setattr(geo, "request_json", lambda *a, **k: [])     # the lookups find nothing
     page.click("nav a[data-page=find]")
     page.wait_for_selector("text=Today's is available")
     page.fill("input[name=location]", "Murray")
@@ -1208,3 +1210,128 @@ def test_the_tier_d_note_is_true_whatever_minimum_score_was_used(page):
     page.click("nav a[data-page=stats]")
     expect(page.locator("#tier-d-note")).to_contain_text("1 saved lead is in tier D (scores below 20)")
     assert "usually empty" not in page.inner_text("#tier-d-note")
+
+
+# ---- review round 15: keyboard focus, clicks as the list moves, phone navigation, call notes,
+# the town of a lead without an address, the running search in the history
+
+def _in_list(page):
+    return page.evaluate("document.getElementById('leads-wrap').contains(document.activeElement)"
+                         " && document.activeElement.id !== 'leads-wrap'")
+
+
+def test_marking_with_the_keyboard_keeps_the_focus_in_the_list(page):
+    first = page.locator("table.leads tbody tr").first
+    name = first.locator("td.c-name strong").inner_text()
+    first.locator(".mark button.yes").focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#toast")).to_contain_text(f"{name}: marked Yes.")
+    assert _in_list(page)
+    assert page.evaluate("document.activeElement.closest('tr').dataset.key") == \
+        first.get_attribute("data-key")
+    page.keyboard.press("Tab")
+    assert _in_list(page)
+    # Undo from the keyboard: the focus stays on that business (its Yes button again).
+    page.locator("table.leads tbody tr").first.locator("button.undo").focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#toast")).to_contain_text("undone")
+    page.wait_for_function("!document.querySelector('table.leads tbody tr button.undo')")
+    assert _in_list(page)
+
+
+def test_a_click_just_as_the_list_moves_is_never_silently_dropped(page):
+    row = _row(page, "Hampton")
+    page.evaluate("S.shiftedAt = Date.now()")             # the rows have just moved up
+    row.locator(".mark button.yes").click()
+    expect(page.locator("#toast")).to_contain_text("Nothing was saved for Hampton Inn")
+    expect(page.locator("#toast")).to_contain_text("click Yes again")
+    assert not row.locator(".mark button.yes.on").count()
+    page.wait_for_timeout(800)
+    row.locator(".mark button.yes").click()
+    expect(page.locator("#toast")).to_contain_text("Hampton Inn: marked Yes.")
+
+
+@pytest.mark.parametrize("width", [375, 390])
+def test_phone_navigation_is_easy_to_tap(browser, site, page, width):
+    context = _context(browser, viewport={"width": width, "height": 800})     # no touch screen needed
+    phone = context.new_page()
+    phone.goto(site + "#leads")
+    phone.wait_for_selector("table.leads")
+    sizes = phone.evaluate("""() => [...document.querySelectorAll('nav a'), document.getElementById('menu-btn')]
+        .map((e) => [e.textContent.trim().slice(0, 20), e.getBoundingClientRect()])
+        .map(([t, r]) => [t, Math.round(r.width), Math.round(r.height), Math.round(r.right)])""")
+    context.close()
+    assert len(sizes) == 5
+    assert all(w >= 44 and h >= 44 and right <= width for _, w, h, right in sizes), sizes
+
+
+def test_call_notes_say_when_the_limit_is_reached(page):
+    _row(page, "Smith").get_by_role("button", name="Just called").click()
+    count = page.locator("#call-notes-count")
+    page.fill("#call-notes", "x" * 4000)
+    expect(count).to_be_hidden()
+    page.fill("#call-notes", "x" * 4800)
+    expect(count).to_have_text("200 characters left (5,000 at most).")
+    page.fill("#call-notes", "")
+    # A long email pasted in: only 5,000 characters fit, and the box says so before Save.
+    page.evaluate("""() => {
+        const box = document.getElementById('call-notes'), dt = new DataTransfer();
+        dt.setData('text/plain', 'y'.repeat(5200));
+        box.focus();
+        box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+        box.value = 'y'.repeat(5000);
+        box.dispatchEvent(new Event('input', { bubbles: true }));
+    }""")
+    expect(count).to_contain_text("Limit reached")
+    expect(count).to_contain_text("the last 200 characters you pasted were left out")
+    page.fill("#call-notes", "z" * 5000)
+    expect(count).to_contain_text("Limit reached: a summary can be up to 5,000 characters.")
+
+
+def test_a_lead_without_an_address_shows_the_town_it_is_near(page):
+    lead = Lead(name="Lowe's Home Improvement", lat=40.6097, lon=-111.9391, source="osm",
+                source_id="node/9", raw_categories=["shop=doityourself"],
+                map_url="https://www.openstreetmap.org/node/9")
+    score_lead(lead, config.DEFAULT_KEYWORDS)
+    saved.save_search([lead], config.DEFAULT_KEYWORDS)
+    page.reload()
+    page.fill("#filter", "lowe")
+    row = _row(page, "Lowe's")
+    expect(row.locator(".contact")).to_contain_text("No street address · near West Jordan, UT 84088")
+    expect(row.locator(".contact a.map")).to_have_count(1)
+
+
+def test_the_history_shows_todays_search_while_it_runs(page, monkeypatch):
+    from leadgen.pipeline import RunResult
+    go = threading.Event()
+
+    def run(params, progress):
+        go.wait(20)
+        return RunResult([], params.center, params.place, [], {"leads kept": 0, "seconds": 1})
+    monkeypatch.setattr(web.finding, "run", run)
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    expect(page.locator("#history")).to_contain_text("No searches yet.")
+    page.fill("input[name=location]", "Murray")
+    page.click("#go")
+    page.click("#confirm-go")
+    page.wait_for_selector("#progress-card:not([hidden])")
+    expect(page.locator("#history .h-leads")).to_contain_text("Running…")
+    go.set()
+    page.wait_for_selector("#done-card:not([hidden])")
+    expect(page.locator("#history .h-leads")).not_to_contain_text("Running…")
+
+
+def test_saving_a_call_from_the_keyboard_keeps_the_focus_on_that_business(page):
+    row = _row(page, "Hampton")
+    key = row.get_attribute("data-key")
+    row.get_by_role("button", name="Just called").focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#call-dlg")).to_be_visible()
+    page.keyboard.type("Left a message.")
+    page.locator("#outcomes").get_by_role("button", name="No Contact").click()
+    page.locator("#call-save").focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#toast")).to_contain_text("Hampton Inn: saved as No Contact.")
+    assert _in_list(page)
+    assert page.evaluate("document.activeElement.closest('tr').dataset.key") == key

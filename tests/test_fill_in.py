@@ -128,3 +128,35 @@ def test_the_background_rounds_ask_only_the_missing_parts(monkeypatch):
     assert asked == [parts[0][0]] and len(found) == 1 and left == []
     assert osm.areas_left([((0, 0, 1, 1), 0.25, 1)] * 2, 9) == 4
     assert osm.areas_left([], 9) == 0
+
+
+def test_a_fill_in_past_midnight_stays_in_view_and_ends_before_the_next_days_search(filling, monkeypatch):
+    monkeypatch.setattr(config, "FILL_IN_PAUSE_SECONDS", 0.05)
+    monkeypatch.setattr(osm, "request_json", _servers(fail_times=10_000))
+    client = web.create_app().test_client()
+    first_day = daily.today()
+    job = client.post("/search", data={"location": "84101", "radius": "30"}).get_json()["job_id"]
+    assert _wait(client, job)["state"] == "done" and first_day in fillin.running
+    # Midnight passes while the missed areas are still being asked again.
+    next_day = "2999-01-01"
+    monkeypatch.setattr(daily, "today", lambda: next_day)
+    body = client.get("/searches").get_json()
+    assert body["current"] is None and not body["used_today"]
+    assert body["filling"]["day"] == first_day and body["filling"]["fill"]["state"] == "filling"
+    # The next day's search ends it before its own map step starts.
+    still_running = []
+    real_run = web.finding.run
+
+    def run(params, progress):
+        still_running.append(sorted(fillin.running))
+        return real_run(params, progress)
+    monkeypatch.setattr(web.finding, "run", run)
+    job = client.post("/search", data={"location": "84101", "radius": "30"}).get_json()["job_id"]
+    assert _wait(client, job)["state"] == "done"
+    assert still_running == [[]]
+    record = next(r for r in client.get("/searches").get_json()["searches"] if r["day"] == first_day)
+    assert record["fill"]["state"] == "stopped" and record["fill"]["why"] == fillin.NEW_SEARCH
+    assert any("stopped because the next day's search started" in w for w in record["warnings"])
+    # The new day's own fill-in (its areas fail too) is ended here, as the test is over.
+    fillin.end_others("", wait=10)
+    assert not fillin.running

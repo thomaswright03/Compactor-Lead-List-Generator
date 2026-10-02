@@ -127,10 +127,10 @@ function parseReason(r) {
 function whyCell(reasons) {
   const td = el("td", undefined, "c-why");
   // On a phone the reasons sit behind this toggle (each lead is a card there); wider screens show them.
-  const toggle = button("Why this score", "link why-toggle", () => {
+  const toggle = ctl(button("Why this score", "link why-toggle", () => {
     td.classList.toggle("open");
     toggle.setAttribute("aria-expanded", td.classList.contains("open"));
-  });
+  }), "why");
   toggle.setAttribute("aria-expanded", "false");
   td.append(toggle);
   const list = el("div", undefined, "reasons");
@@ -176,14 +176,21 @@ function unpinAll() { S.pinned.clear(); }
 const inTab = (l) => S.leadView === "all" || (S.leadView === "competitors" ? !l.prospect
   : S.leadView === "closed" ? l.closed
   : l.prospect && (l.has_baler || "") === S.leadView && !(l.closed && !S.leadView));
-// Just-marked rows stay while the mouse is over the list (or focus is in it), and PIN_MS after.
+// Just-marked rows stay while the mouse is over the list (or keyboard focus is in it), and PIN_MS after.
 // The hover is read from the page itself, so no pointer event can be missed.
 let pointerKind = "mouse";
 document.addEventListener("pointermove", (e) => { pointerKind = e.pointerType; }, true);
 document.addEventListener("pointerdown", (e) => { pointerKind = e.pointerType; }, true);
+// A press in progress (button down, not yet released) also holds them: rows never move between
+// the press and the release of one click.
+let pointerDown = false;
+document.addEventListener("pointerdown", () => { pointerDown = true; }, true);
+for (const type of ["pointerup", "pointercancel"]) document.addEventListener(type, () => { pointerDown = false; }, true);
+// Keyboard focus in the list holds them too (a button a mouse click left focused does not).
 function holdingRows() {
-  const wrap = $("leads-wrap");
-  return (pointerKind === "mouse" && wrap.matches(":hover")) || wrap.contains(document.activeElement);
+  const wrap = $("leads-wrap"), active = document.activeElement;
+  return pointerDown || (pointerKind === "mouse" && wrap.matches(":hover"))
+    || (wrap.contains(active) && (active === wrap || active.matches(":focus-visible")));
 }
 setInterval(() => {
   if (!S.pinned.size) return;
@@ -203,7 +210,12 @@ async function setMark(lead, value) {
   const before = lead.has_baler || "";
   // Clearing is only via Undo; clicking the current answer only confirms a lead whose buildings disagreed.
   if ((value === before && !lead.marks_disagreed) || lead.saving || !lead.key || !lead.prospect) return;
-  if (Date.now() - S.shiftedAt < SHIFT_GUARD_MS) return;     // aimed at a row that just left
+  if (Date.now() - S.shiftedAt < SHIFT_GUARD_MS) {
+    // The rows had just moved up: the click may have been aimed at the business that left. It is
+    // not saved, and the page says so (never a click that silently does nothing).
+    toast(`Nothing was saved for ${lead.name}: the list moved just as you clicked. Check the row, then click ${value === "yes" ? "Yes" : "No"} again.`, null, true);
+    return;
+  }
   const key = lead.key;
   // Keep the row where it is instead of letting the next one slide under the pointer.
   if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);
@@ -273,7 +285,10 @@ function markCell(lead, withCall) {
   for (const [value, label] of [["yes", "Yes"], ["no", "No"]]) {
     const b = button(label, value + (lead.has_baler === value ? " on" : "") + (lead.saving === value ? " sending" : ""),
                      () => withName(() => setMark(lead, value)));
-    b.disabled = !lead.key || Boolean(lead.saving);
+    // While saving the buttons only look disabled: a disabled button would lose the keyboard focus.
+    b.disabled = !lead.key;
+    if (lead.saving) b.setAttribute("aria-disabled", "true");
+    b.dataset.ctl = value;
     b.setAttribute("aria-pressed", lead.has_baler === value);
     b.setAttribute("aria-label", `${lead.name}: ${value === "yes" ? "has" : "doesn't have"} a baler or compactor`);
     box.append(b);
@@ -293,17 +308,20 @@ function markCell(lead, withCall) {
   // Marked more than once (changed, or merged from listings marked apart): the earlier marks.
   if (lead.has_baler && lead.mark_clicks > 1) {
     const more = el("div", undefined, "sub by");
-    more.append(button("Earlier marks", "link", () => openHistory(lead)));
+    const earlier = button("Earlier marks", "link", () => openHistory(lead)); earlier.dataset.ctl = "earlier";
+    more.append(earlier);
     td.append(more);
   }
   if (pinnedNow(lead.key) && !inTab(lead) && !lead.saving) {
     const tab = LEAD_TABS.find(([v]) => v === (lead.has_baler || ""));
     td.append(el("div", `Saved. Moves to “${tab ? tab[1] : "All"}”.`, "sub moved"));
   }
-  if (lead.undo_mark && leftOf(lead.undo_mark) > 0) td.append(undoButton(lead.undo_mark, "Undo", () => undoMark(lead.key)));
+  if (lead.undo_mark && leftOf(lead.undo_mark) > 0) td.append(ctl(undoButton(lead.undo_mark, "Undo", () => undoMark(lead.key)), "undo"));
   if (withCall) td.append(callBox(lead));
   return td;
 }
+// Names a row's control, so keyboard focus can come back to it when the list is drawn again.
+function ctl(node, name) { node.dataset.ctl = name; return node; }
 function callBox(lead) {
   const box = el("div", undefined, "call-cell");
   if (lead.call_outcome) {
@@ -312,14 +330,15 @@ function callBox(lead) {
     last.append(el("span", lead.call_outcome, "badge"), " ", el("span", lead.last_call + byWho(lead.last_call_by), "sub"));
     box.append(last);
   }
-  box.append(button("Just called", "", () => openCall(lead)));
-  if (lead.call_count) box.append(button(`History (${lead.call_count})`, "quiet", () => openHistory(lead)));
-  if (lead.undo_call && leftOf(lead.undo_call) > 0) box.append(undoButton(lead.undo_call, "Undo call", () => undoCall(lead.key)));
+  box.append(ctl(button("Just called", "", () => openCall(lead)), "call"));
+  if (lead.call_count) box.append(ctl(button(`History (${lead.call_count})`, "quiet", () => openHistory(lead)), "history"));
+  if (lead.undo_call && leftOf(lead.undo_call) > 0) box.append(ctl(undoButton(lead.undo_call, "Undo call", () => undoCall(lead.key)), "undo-call"));
   return box;
 }
 
 function leadRow(l, withCall) {
   const tr = el("tr");
+  tr.dataset.key = l.key;
   tr.className = l.tier + (l.lead_type === "Competitor" ? " competitor" : "")
     + (pinnedNow(l.key) && !inTab(l) ? " just-marked" : "");
   tr.append(markCell(l, withCall));
@@ -337,8 +356,18 @@ function leadRow(l, withCall) {
   tr.append(name);
   const contact = el("td", undefined, "contact");
   // A lead without a street address says so (like "No phone listed"), next to its map link.
-  const addr = el("div", [l.address, l.city, l.zip].filter(Boolean).join(", "));
-  if (!l.address) addr.prepend(el("span", "No street address", "sub"), l.city || l.zip ? " · " : "");
+  // One without a city shows the town its map position is near ("near West Jordan, UT 84088",
+  // worked out by the server), so same-named stores can be told apart.
+  const addr = el("div");
+  const add = (node) => addr.append(addr.childNodes.length ? " · " : "", node);
+  if (!l.address) add(el("span", "No street address", "sub"));
+  const place = [l.address, l.city, l.zip].filter(Boolean).join(", ");
+  if (place) add(place);
+  if (l.near) {
+    const near = el("span", l.near, "near");
+    near.title = "Worked out from the map position (the listing gives no town): the nearest town and ZIP code area.";
+    add(near);
+  }
   if (l.map_url) {
     const map = link(l.map_url, "map"); map.classList.add("map"); map.setAttribute("aria-label", `${l.name} on a map`);
     addr.append(" ", map);
@@ -452,7 +481,9 @@ function renderLeads() {
     }
   } else {
     // Every prospect can be called (a call is how staff find out); competitors have no buttons.
+    const spot = focusSpot();
     wrap.replaceChildren(leadTable(S.leads, true));
+    restoreFocus(spot);
   }
   $("sort-pick").value = `${S.sort}:${S.dir}`;
   if (!$("sort-pick").value) $("sort-pick").value = "score:desc";
@@ -462,6 +493,41 @@ function renderLeads() {
   more.textContent = `Show more (${left.toLocaleString()} left)`;
   if (!$("page-leads").hidden) writeHash("leads");
 }
+/* Keyboard focus survives the list being drawn again (after a mark, an undo, a call saved, a
+   refresh): it goes back to the same business's same control, or, when that business left the
+   view, to the next business's Yes. A focused element that was removed (an Undo that ran out)
+   leaves the focus on the page itself; the spot it was in is remembered for that case. */
+let lastSpot = null;
+document.addEventListener("focusin", (e) => {
+  const tr = e.target.closest && e.target.closest("#leads-wrap tr[data-key]");
+  lastSpot = tr ? { key: tr.dataset.key, ctl: e.target.dataset.ctl || "" } : null;
+});
+function focusSpot() {
+  const wrap = $("leads-wrap"), active = document.activeElement;
+  let spot = null;
+  if (active && active !== wrap && wrap.contains(active)) {
+    const tr = active.closest("tr[data-key]");
+    if (tr) spot = { key: tr.dataset.key, ctl: active.dataset.ctl || "" };
+  } else if (!active || active === document.body) spot = lastSpot;
+  if (!spot) return null;
+  // The businesses after it, in case it leaves the view.
+  const keys = [...wrap.querySelectorAll("tr[data-key]")].map((r) => r.dataset.key);
+  const at = keys.indexOf(spot.key);
+  return { ...spot, next: at < 0 ? [] : [...keys.slice(at + 1), ...keys.slice(0, at).reverse()] };
+}
+function rowControl(key, name) {
+  const row = [...$("leads-wrap").querySelectorAll("tr[data-key]")].find((r) => r.dataset.key === key);
+  if (!row) return null;
+  return (name && row.querySelector(`[data-ctl="${name}"]`)) || row.querySelector('[data-ctl="yes"]')
+    || row.querySelector('[data-ctl="call"]') || row.querySelector("button, a[href]");
+}
+function restoreFocus(spot) {
+  if (!spot) return;
+  let target = rowControl(spot.key, spot.ctl);
+  for (const key of spot.next) { if (target) break; target = rowControl(key, "yes"); }
+  if (target) target.focus({ preventScroll: true });
+}
+
 function renderRecent() {
   const items = [];
   for (const l of S.recent) {
@@ -491,12 +557,15 @@ async function showMore() {
   // Rows just marked that stay put for a moment aren't part of the view's order.
   p.set("offset", S.leads.filter((l) => !(pinnedNow(l.key) && !inTab(l))).length);
   p.set("limit", PAGE);
+  const hadFocus = document.activeElement === more;
   more.disabled = true; more.textContent = "Loading more...";
+  let added = [];
   try {
     const body = await api(`/leads?${p}`);
     if (seq !== S.seq) return;                     // the view changed meanwhile
     const have = new Set(S.leads.map((l) => l.key));
-    S.leads = S.leads.concat(body.leads.filter((l) => !have.has(l.key)));
+    added = body.leads.filter((l) => !have.has(l.key));
+    S.leads = S.leads.concat(added);
     S.limit = Math.max(S.limit, S.leads.length);
     S.total = body.total; S.counts = body.counts; S.recent = body.recent;
     S.refreshError = "";
@@ -505,6 +574,12 @@ async function showMore() {
     S.refreshError = `Couldn't show more leads. ${err.message}`;
   }
   renderAll();
+  // The button keeps the focus (it was disabled while loading); once nothing is left to show it
+  // goes, and the focus moves to the first business just added.
+  if (hadFocus) {
+    const first = added.length && rowControl(added[0].key, "yes");
+    if (!more.hidden) more.focus(); else if (first) first.focus();
+  }
 }
 $("leads-more").addEventListener("click", showMore);
 let filterTimer = null;

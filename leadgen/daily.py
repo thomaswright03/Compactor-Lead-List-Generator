@@ -89,6 +89,15 @@ def release(day: str, reason: str | None = None, extra: dict[str, Any] | None = 
                    (uuid.uuid4().hex, day, row[0], json.dumps(info)))
 
 
+def search_times() -> tuple[float | None, float | None]:
+    """(first, latest): when the first and the latest search that found leads started
+    (epoch seconds, the search history's "When"), or (None, None) before any."""
+    with store.connect() as db:
+        rows = db.all("SELECT at, info FROM searches")
+    started = [at for at, info in rows if "leads" in json.loads(info)]
+    return (min(started), max(started)) if started else (None, None)
+
+
 def incomplete_count(day: str) -> int:
     """How many of the day's searches were incomplete and gave the day back."""
     with store.connect() as db:
@@ -132,6 +141,10 @@ def history(limit: int = 60) -> dict[str, Any]:
     searches = sorted(records + [_as_record(r) for r in failed], key=lambda r: -r["at"])[:limit]
     day = today()
     partial = sum(1 for r in failed if r[0] == day and json.loads(r[2]).get("partial"))
+    # A search whose missed map areas are still being filled in, whatever its day (one
+    # started late in the evening goes on past midnight): the page keeps showing it.
+    filling = next((r for r in records if isinstance(r.get("fill"), dict)
+                    and r["fill"].get("state") == "filling"), None)
     return {"today": day, "used_today": bool(current) and not _abandoned(current, time.time()),
-            "current": current, "searches": searches,
+            "current": current, "searches": searches, "filling": filling,
             "reruns_left": max(0, INCOMPLETE_RERUNS - partial + 1) if partial else None}

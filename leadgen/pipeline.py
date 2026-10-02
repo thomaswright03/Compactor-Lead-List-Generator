@@ -38,6 +38,15 @@ class PipelineError(RuntimeError):
         self.detail = detail
 
 
+class SearchStopped(PipelineError):
+    """A search the administrator stopped (searching was paused) before it found
+    anything: a deliberate stop, not a failure. reason says why, in plain words."""
+
+    def __init__(self, message: str, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 def _names(sources: Sequence[str]) -> str:
     names = [SOURCE_NAMES[s] for s in sources]
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
@@ -202,13 +211,13 @@ def _sources_to_use(params: SearchParams, api_key: str, yelp_key: str,
     """(use Google, use Yelp, use the map data); raises PipelineError for settings
     that can't be searched."""
     if params.source not in SOURCES:
-        raise PipelineError(f"Unknown source '{params.source}'. Use one of {', '.join(SOURCES)}")
+        raise PipelineError(f"Unknown source '{params.source}'. Use one of {', '.join(SOURCES)}.")
     if not 0 < params.radius_miles <= 100:
-        raise PipelineError("Radius must be between 0 and 100 miles")
+        raise PipelineError("Radius must be between 0 and 100 miles.")
     if params.grid not in GRIDS:
-        raise PipelineError(f"Grid must be one of {', '.join(map(str, GRIDS))}")
+        raise PipelineError(f"Grid must be one of {', '.join(map(str, GRIDS))}.")
     if params.max_requests is not None and params.max_requests < 1:
-        raise PipelineError("max_requests must be at least 1")
+        raise PipelineError("max_requests must be at least 1.")
     off = [name for name, env, picked in (
         ("google", config.GOOGLE_OFF_ENV, ("google", "both")),
         ("yelp", config.YELP_OFF_ENV, ("yelp",)))
@@ -222,9 +231,9 @@ def _sources_to_use(params: SearchParams, api_key: str, yelp_key: str,
             raise PipelineError("GOOGLE_PLACES_API_KEY holds a Yelp key, not a Google key. "
                                 "Put it in YELP_API_KEY and use source 'auto' or 'yelp'.")
         raise PipelineError(f"Source '{params.source}' needs GOOGLE_PLACES_API_KEY "
-                            "(or use --source osm)")
+                            "(or use --source osm).")
     if params.source == "yelp" and not yelp_key:
-        raise PipelineError("Source 'yelp' needs YELP_API_KEY (or use --source osm)")
+        raise PipelineError("Source 'yelp' needs YELP_API_KEY (or use --source osm).")
     return (params.source in ("google", "both") or (params.source == "auto" and bool(api_key)),
             params.source == "yelp" or (params.source == "auto" and bool(yelp_key)),
             params.source in ("osm", "both", "auto"))
@@ -331,7 +340,7 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
     use_google, use_yelp, use_osm = use
     api_key, yelp_key = keys
     got = _Found(warnings, stats)
-    stopped: list[str] = []
+    stopped: list[tuple[str, str]] = []      # (source, why) for the sources skipped
     why: list[str] = []                      # why the search was cut short
     missing = missing if missing is not None else {}
 
@@ -340,7 +349,7 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
         since the search started; the source is then skipped."""
         reason = config.stop_reason(source)
         if reason:
-            stopped.append(source)
+            stopped.append((source, reason))
             why.append(reason)
             return True
         return False
@@ -365,8 +374,8 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
             got.add("osm", exc.leads, exc.warnings)
             why.append(exc.reason)
             if not got.raw:
-                raise PipelineError("The search was stopped by the administrator (searching "
-                                    "was paused) before it found anything.") from None
+                raise SearchStopped("The search was stopped by the administrator (searching "
+                                    "was paused) before it found anything.", exc.reason) from None
             got.warnings.append(f"The search was stopped by the administrator partway through "
                                 f"the free map data ({exc.reason}); the businesses already "
                                 "found were kept, and the rest of the area wasn't searched.")
@@ -409,18 +418,27 @@ def _ask_google(params: SearchParams, keywords: list[str], api_key: str, centre:
         got.fail("google", exc)
 
 
-def _check_found(got: _Found, stopped: list[str]) -> None:
-    """Log what failed, and raise PipelineError when nothing at all was found; else
-    add the plain notes for sources stopped, missing or incomplete."""
+def _check_found(got: _Found, stopped: list[tuple[str, str]]) -> None:
+    """Log what failed, and raise PipelineError when nothing at all was found (SearchStopped
+    when the administrator stopped it); else add the plain notes for sources stopped,
+    missing or incomplete."""
     for error in got.errors:
         log.warning("Search source failed: %s", error)
+    by_admin = [s for s, why in stopped if why.startswith("the administrator")]
+    unread = [s for s, why in stopped if not why.startswith("the administrator")]
     if stopped:
-        log.warning("Search stopped by the administrator's switch before: %s", ", ".join(stopped))
-        if not got.raw:
-            raise PipelineError("The search was stopped by the administrator before it found "
-                                "anything.")
+        log.warning("Search stopped before: %s", ", ".join(f"{s} ({why})" for s, why in stopped))
+    if stopped and not got.raw:
+        if not unread:
+            raise SearchStopped("The search was stopped by the administrator before it found "
+                                "anything.", next(why for _, why in stopped))
+        raise PipelineError(f"The search stopped before it found anything: {config.SWITCHES_UNREAD}.")
+    if by_admin:
         got.warnings.append(f"The search was stopped by the administrator before "
-                            f"{_names(stopped)} was searched; the businesses already found were kept.")
+                            f"{_names(by_admin)} was searched; the businesses already found were kept.")
+    if unread:
+        got.warnings.append(f"{_names(unread)[:1].upper()}{_names(unread)[1:]} wasn't searched: "
+                            f"{config.SWITCHES_UNREAD}. The businesses already found were kept.")
     if got.errors and not got.raw:
         raise PipelineError(f"Couldn't reach {_names(got.failed)}, so no leads were found.",
                             detail=" | ".join(got.errors))

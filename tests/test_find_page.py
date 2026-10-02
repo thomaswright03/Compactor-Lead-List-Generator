@@ -19,7 +19,7 @@ def test_find_leads_says_phones_will_be_few_without_google_or_yelp(monkeypatch):
 def test_form_messages_use_the_labels_on_screen():
     client = web.create_app().test_client()
     body = client.post("/search", data={"location": "84101", "radius": "0"}).get_json()
-    assert body == {"error": "How far must be between 1 and 100 miles", "field": "radius"}
+    assert body == {"error": "How far must be between 1 and 100 miles.", "field": "radius"}
     body = client.post("/search", data={"location": "84101", "min_score": "200"}).get_json()
     assert body["error"].startswith("The score to leave out weak leads below must be between 0 and 100")
     assert not daily.history()["used_today"]
@@ -29,7 +29,7 @@ def test_a_blank_radius_or_minimum_score_is_refused_not_defaulted():
     """The page always sends both fields: blank is a mistake to point out, not 30 miles."""
     client = web.create_app().test_client()
     body = client.post("/search", data={"location": "84101", "radius": " "}).get_json()
-    assert body == {"error": "How far must be between 1 and 100 miles", "field": "radius"}
+    assert body == {"error": "How far must be between 1 and 100 miles.", "field": "radius"}
     body = client.post("/search", data={"location": "84101", "radius": "30",
                                         "min_score": ""}).get_json()
     assert body["field"] == "min_score" and "between 0 and 100" in body["error"]

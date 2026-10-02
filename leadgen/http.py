@@ -21,7 +21,11 @@ CACHE_DIR = Path(os.environ.get("LEADGEN_CACHE_DIR", ".cache"))
 
 
 class HttpError(RuntimeError):
-    pass
+    """A request that failed; status is the HTTP status when the server answered."""
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 _SECRET_PARAM = re.compile(r"(?i)([?&](?:key|api_key)=)[^&\s)'\"]+")
@@ -88,11 +92,12 @@ def request_json(method: str, url: str, *, params: dict[str, Any] | None = None,
                 response_headers.update(resp.headers)
             if resp.status_code == 429 or resp.status_code >= 500:
                 last_error = HttpError(f"{url} returned HTTP {resp.status_code}: "
-                                       f"{redact(resp.text[:300])}")
+                                       f"{redact(resp.text[:300])}", resp.status_code)
                 if any(t in resp.text for t in no_retry):
                     raise last_error
             elif resp.status_code >= 400:
-                raise HttpError(f"{url} returned HTTP {resp.status_code}: {redact(resp.text[:300])}")
+                raise HttpError(f"{url} returned HTTP {resp.status_code}: {redact(resp.text[:300])}",
+                                resp.status_code)
             else:
                 try:
                     value = resp.json()

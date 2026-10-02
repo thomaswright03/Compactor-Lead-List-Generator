@@ -9,7 +9,7 @@ from typing import Any
 from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from .. import calls, config, daily, marks, reference, saved, stats, store
+from .. import calls, config, daily, marks, places, reference, saved, stats, store
 from ..export import saved_list_info, to_csv_bytes, to_xlsx_bytes
 from ..localtime import date_time_text
 from ..models import Lead
@@ -48,7 +48,7 @@ VIEWS = ("unchecked", "yes", "no", "competitors", "closed", "all", "called")
 SORTS = {
     "score": lambda l: l.score,
     "name": lambda l: l.name.lower(),
-    "city": lambda l: (l.city or "~").lower(),
+    "city": lambda l: (places.town_of(l) or "~").lower(),
     "miles": lambda l: 1e9 if l.distance_miles is None else l.distance_miles,
     "called": lambda l: l.last_call_at or 0,
 }
@@ -82,7 +82,7 @@ def matches(lead: Lead, q: str, tier: str, phone: bool = False) -> bool:
         return False
     if phone and not lead.phone.strip():
         return False
-    text = " ".join([lead.name, lead.city, lead.category, lead.address, lead.lead_type,
+    text = " ".join([lead.name, places.town_of(lead), lead.category, lead.address, lead.lead_type,
                      " ".join(lead.flags)]).lower()
     return q in text
 
@@ -320,12 +320,18 @@ def download(job_id: str, fmt: str) -> ResponseReturnValue:
             leads, _ = load_saved()
         except LoadError as exc:
             unavailable(str(exc))
+        # When the first and latest search started, as the search history shows them;
+        # leads saved without a search on record (the command line) go by when they were saved.
+        searched = True
         try:
-            first, latest = saved.date_range()
+            first, latest = daily.search_times()
+            if first is None:
+                searched = False
+                first, latest = saved.date_range()
         except Exception:
             log.warning("Reading the search dates failed", exc_info=True)
             first = latest = None                  # the file is still useful without them
-        info = saved_list_info(leads, first, latest)
+        info = saved_list_info(leads, first, latest, searched)
     else:
         job = state().jobs.get(job_id)
         if not job or job["state"] != "done":

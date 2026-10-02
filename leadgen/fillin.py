@@ -10,6 +10,11 @@ list as they arrive, and the day's record says how it stands ("fill": filling,
 complete, gave_up, stopped). It is never a second search: the day stays used,
 Yelp and Google are not asked, and nothing already saved is changed except by the
 usual merge of a business found again.
+
+A fill-in can run past midnight (Utah time). It then stays on the Find leads page
+(daily.history's "filling") until it ends, and when the next day's search starts it
+is ended first (end_others), so two map searches never ask the public servers at
+once; its record then says it stopped for the new search.
 """
 
 import logging
@@ -37,6 +42,14 @@ NOTE = ("The map areas that didn't answer are being asked again in the backgroun
 
 # The background threads, by day (only one search a day, so one fill-in at most).
 running: dict[str, threading.Thread] = {}
+# Set to end a day's fill-in early (the next day's search is starting), by day.
+_ending: dict[str, threading.Event] = {}
+# Why a fill-in stopped (the record's fill "why"): searching was paused, or the next
+# day's search started.
+PAUSED, NEW_SEARCH = "paused", "new_search"
+NEW_SEARCH_TEXT = "the next day's search started"
+# How long the next day's search waits for an earlier fill-in to end (seconds).
+END_WAIT_SECONDS = 60.0
 # Off in the tests, except those about filling in (they switch it on).
 ON = True
 
@@ -58,13 +71,42 @@ def start(day: str, params: SearchParams, result: RunResult) -> bool:
         daily.finish(day, {"fill": fill})
         thread = threading.Thread(target=_run, args=(day, params, result, fill), daemon=True,
                                   name=f"fill-in {day}")
+        _ending[day] = threading.Event()
         running[day] = thread
         thread.start()
     except Exception:
         log.exception("Starting to fill in the missing map areas failed")
         running.pop(day, None)
+        _ending.pop(day, None)
         return False
     return True
+
+
+def end_others(day: str, wait: float | None = None) -> list[str]:
+    """End every fill-in of another day than `day` (a new day's search is starting)
+    and wait for each to finish (up to `wait` seconds, END_WAIT_SECONDS by default),
+    so the two never ask the map servers at once. Returns the days ended."""
+    ended = []
+    for other, thread in list(running.items()):
+        if other == day:
+            continue
+        ending = _ending.get(other)
+        if ending is not None:
+            ending.set()
+        thread.join(END_WAIT_SECONDS if wait is None else wait)
+        if thread.is_alive():
+            log.warning("The fill-in of %s didn't end in time; the new search starts anyway", other)
+        ended.append(other)
+    return ended
+
+
+def _stop(day: str) -> str | None:
+    """Why the day's fill-in must stop now: searching was paused, or the next day's
+    search is starting."""
+    if config.stop_reason("osm"):
+        return PAUSED
+    ending = _ending.get(day)
+    return NEW_SEARCH if ending is not None and ending.is_set() else None
 
 
 def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]) -> None:
@@ -72,14 +114,16 @@ def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]
     lat, lon = result.center
     keywords = [k.strip() for k in params.keywords if k and k.strip()]
     unsaved: list[Lead] = []                 # found, but the database didn't answer yet
+    ending = _ending.setdefault(day, threading.Event())
     try:
         while parts and time.time() + config.FILL_IN_PAUSE_SECONDS < fill["until"]:
-            time.sleep(config.FILL_IN_PAUSE_SECONDS)   # let the busy servers cool down
-            if config.stop_reason("osm"):
-                fill["state"] = STOPPED
+            ending.wait(config.FILL_IN_PAUSE_SECONDS)   # let the busy servers cool down
+            why = _stop(day)
+            if why:
+                fill["state"], fill["why"] = STOPPED, why
                 break
             found, parts = osm.fill_in(lat, lon, params.radius_miles, keywords, parts,
-                                       config.OVERPASS_RETRY_SECONDS)
+                                       config.OVERPASS_RETRY_SECONDS, stop=lambda: _stop(day))
             fill["rounds"] += 1
             fill["left"] = osm.areas_left(parts, result.osm_areas)
             log.info("Search %s: filling in the map data, round %d: %d businesses, %d areas left",
@@ -87,6 +131,10 @@ def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]
             unsaved += finish_leads(found, result.center, replace(params, include_closed=True),
                                     keywords)
             unsaved = _save(day, unsaved, fill)
+            why = _stop(day)
+            if why and parts:
+                fill["state"], fill["why"] = STOPPED, why
+                break
         if fill["state"] == FILLING:
             fill["state"] = COMPLETE if not parts and not unsaved else GAVE_UP
     except Exception:
@@ -96,6 +144,7 @@ def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]
         fill["left"] = osm.areas_left(parts, result.osm_areas)
         _finish(day, fill, len(unsaved))
         running.pop(day, None)
+        _ending.pop(day, None)
 
 
 def _save(day: str, leads: list[Lead], fill: dict[str, Any]) -> list[Lead]:
@@ -154,7 +203,8 @@ def _finish(day: str, fill: dict[str, Any], unsaved: int) -> None:
     if fill["state"] == COMPLETE:
         final = f"Complete: the map areas that didn't answer at first were filled in later.{added}"
     elif fill["state"] == STOPPED:
-        final = ("Filling in the missing map areas was stopped because searching was paused"
+        because = NEW_SEARCH_TEXT if fill.get("why") == NEW_SEARCH else "searching was paused"
+        final = (f"Filling in the missing map areas was stopped because {because}"
                  + (f"; {_areas(left)} never answered." if left else ".") + added + lost)
     else:
         missing = (f"{_areas(left)[:1].upper()}{_areas(left)[1:]} of the free map data never "

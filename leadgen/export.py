@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from . import places
 from .localtime import date_time_text
 from .models import Lead
 from .pipeline import EXEMPT_TYPES
@@ -33,6 +34,32 @@ def plain_reason(reason: str) -> str:
 
 Column = tuple[str, Callable[[Lead], object], float]
 
+# A listing without a city or ZIP gets the town and ZIP area its map position is near
+# (places.py), written "near West Jordan" / "near 84088" so it never passes for an address.
+NEAR_NOTE = ("A City or ZIP starting with “near” was worked out from the map position, "
+             "because the listing gave none: it is the nearest town / ZIP code area, not an address.")
+
+
+def _city(lead: Lead) -> str:
+    if lead.city.strip():
+        return lead.city
+    near = places.for_lead(lead)
+    return f"near {near.town}" if near else ""
+
+
+def _state(lead: Lead) -> str:
+    if lead.state.strip():
+        return lead.state
+    near = places.for_lead(lead)
+    return near.state if near else ""
+
+
+def _zip(lead: Lead) -> str:
+    if lead.zip.strip():
+        return lead.zip
+    near = places.for_lead(lead)
+    return f"near {near.zip}" if near and near.zip else ""
+
 
 # Each column: its heading, the value for a lead, and its width in Excel.
 COLUMNS: list[Column] = [
@@ -43,9 +70,9 @@ COLUMNS: list[Column] = [
     ("Business Name", lambda l: l.name, 36),
     ("Category", lambda l: l.category, 30),
     ("Address", lambda l: l.address, 30),
-    ("City", lambda l: l.city, 18),
-    ("State", lambda l: l.state, 7),
-    ("ZIP", lambda l: l.zip, 8),
+    ("City", _city, 20),
+    ("State", _state, 7),
+    ("ZIP", _zip, 11),
     ("Phone", lambda l: format_phone(l.phone), 16),
     ("Website", lambda l: l.website, 32),
     ("Distance (mi)", lambda l: l.distance_miles, 12),
@@ -164,6 +191,8 @@ def to_xlsx_bytes(leads: list[Lead], run_info: dict[str, Any] | None = None) -> 
     info.append([])
     info.append(["Tiers", tier_text()])
     info.append(["Row colors", "Green = stronger lead, orange = competitor"])
+    if any(_city(l).startswith("near ") or _zip(l).startswith("near ") for l in leads):
+        info.append(["City / ZIP “near …”", NEAR_NOTE])
     left_out = [name for name, _, _ in COLUMNS if name not in {c for c, _, _ in columns}]
     if left_out:
         info.append(["Columns left out", "Empty for every lead in this file: " + ", ".join(left_out)])
@@ -174,9 +203,11 @@ def to_xlsx_bytes(leads: list[Lead], run_info: dict[str, Any] | None = None) -> 
 
 
 def saved_list_info(leads: list[Lead], first: float | None = None,
-                    latest: float | None = None) -> dict[str, Any]:
+                    latest: float | None = None, searched: bool = True) -> dict[str, Any]:
     """The Run Info of the saved list's download: what the file holds, in plain labels.
-    first / latest: when the first and latest search ran (epoch seconds)."""
+    first / latest: when the first and latest search started (epoch seconds, as the
+    search history shows them), or with searched=False when leads were first and
+    last saved (no search history to go by)."""
     prospects = [l for l in leads if l.lead_type not in EXEMPT_TYPES]
     info = {
         "List": "All saved leads",
@@ -189,10 +220,11 @@ def saved_list_info(leads: list[Lead], first: float | None = None,
     for tier, label in TIER_LABELS.items():
         info[f"Tier {label}"] = sum(l.tier == tier for l in leads)
     info["Called at least once"] = sum(bool(l.call_count) for l in leads)
+    what = "search" if searched else "saved"
     if first:
-        info["First search"] = date_time_text(first) + " (Utah time)"
+        info[f"First {what}"] = date_time_text(first) + " (Utah time)"
     if latest:
-        info["Latest search"] = date_time_text(latest) + " (Utah time)"
+        info[f"Latest {what}"] = date_time_text(latest) + " (Utah time)"
     return info
 
 

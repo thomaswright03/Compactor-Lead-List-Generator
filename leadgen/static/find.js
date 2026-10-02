@@ -73,8 +73,11 @@ async function loadSearches() {
     const n = body.reruns_left;
     setGo(true, `Today's search was incomplete, so it can be run again: ${n} re-run${n === 1 ? "" : "s"} left today.`);
   } else setGo(true, "One search a day. Today's is available.");
-  renderHistory(body.searches);
-  showFill(today && today.fill);
+  renderHistory(body.searches, body);
+  // A fill-in still going from an earlier day (a late search runs on past midnight) stays in view
+  // until it ends; today's own fill-in otherwise.
+  const filling = body.filling && (!today || body.filling.day !== today.day) ? body.filling : null;
+  showFill(filling ? { ...filling.fill, from: filling.when } : today && today.fill);
   renderProblems(body.problems, body.problems_unread);
   if (body.admin && body.admin !== "open") showAdmin(false);   // locked again elsewhere
   if (body.switches) { S.switches = body.switches; renderSwitches(body.switches); }
@@ -168,11 +171,12 @@ const areasText = (n) => (n === 1 ? "1 area" : `${n} areas`);
 function fillText(f) {
   const more = f.found ? ` ${num(f.found)} more businesses so far (${num(f.new)} new).` : "";
   if (f.state === "filling") {
-    return `Still filling in ${areasText(f.left)} of the free map data that didn't answer, in the background until about ${f.until_text}.${more} They join your saved leads as they arrive.`;
+    return `${f.from ? `The search of ${f.from} is still filling in` : "Still filling in"} ${areasText(f.left)} of the free map data that didn't answer, in the background until about ${f.until_text}.${more} They join your saved leads as they arrive.`
+      + (f.from ? " It stops when today's search starts." : "");
   }
   const added = f.found ? ` ${num(f.found)} more businesses were added (${num(f.new)} new).` : "";
   if (f.state === "complete") return `Complete: the map areas that didn't answer at first were filled in later.${added}`;
-  if (f.state === "stopped") return `Filling in the missing map areas stopped because searching was paused${f.left ? `; ${areasText(f.left)} never answered` : ""}.${added}`;
+  if (f.state === "stopped") return `Filling in the missing map areas stopped because ${f.why === "new_search" ? "the next day's search started" : "searching was paused"}${f.left ? `; ${areasText(f.left)} never answered` : ""}.${added}`;
   return `${f.left ? `${areasText(f.left)[0].toUpperCase()}${areasText(f.left).slice(1)} of the free map data never answered today; their businesses are missing until the next search.` : "The missing map areas answered later."}${added}`;
 }
 function showFill(f) {
@@ -190,7 +194,7 @@ function showFill(f) {
 const num = (v) => typeof v === "number" ? v.toLocaleString() : v ?? "-";
 // Each search is its own <tbody> (its row, then its reason or details), so on a phone
 // each becomes one stacked card with every field in view (app.css, table.plain.hist).
-function renderHistory(searches) {
+function renderHistory(searches, body) {
   const box = $("history");
   if (!searches.length) { box.replaceChildren(el("div", "No searches yet.", "muted")); return; }
   const table = el("table", undefined, "plain hist");
@@ -206,26 +210,41 @@ function renderHistory(searches) {
     return td;
   };
   for (const s of searches) {
-    const tbody = el("tbody", undefined, s.failed ? "failed" : "");
-    const tr = el("tr", undefined, s.failed ? "failed" : "");
+    // A search the administrator stopped before it found anything reads as stopped, not failed.
+    const failed = s.failed && !s.stopped;
+    const tbody = el("tbody", undefined, failed ? "failed" : "");
+    const tr = el("tr", undefined, failed ? "failed" : "");
     const leadsCell = cell(undefined, "h-leads", "Leads");
+    // Today's search while it runs: its row is there from the start, marked running.
+    const unfinished = !s.failed && s.leads === undefined;
+    const running = unfinished && body && s.day === body.today && (body.running || S.job);
+    if (running) leadsCell.append(el("span", "Running…", "tag info"));
+    else if (unfinished) leadsCell.append(el("span", "Interrupted", "tag"));
+    else if (s.failed && s.stopped) leadsCell.append(el("span", "Stopped by the administrator", "tag"));
     // An incomplete search (a source failed) saved what the others found, and gave the day back.
-    if (s.stopped) leadsCell.append(`${num(s.leads)} `, el("span", "Stopped", "tag"));
+    else if (s.stopped) leadsCell.append(`${num(s.leads)} `, el("span", "Stopped", "tag"));
     else if (s.fill && s.fill.state === "filling") leadsCell.append(`${num(s.leads)} `, el("span", "Filling in", "tag info"));
     else if (s.partial) leadsCell.append(`${num(s.leads)} `, el("span", "Incomplete", "tag"));
     else if (s.failed) leadsCell.append(el("span", "Failed", "tag"));
     else leadsCell.append(num(s.leads));
     tr.append(cell(s.when, "nowrap h-when"), whereCell(s),
               cell(s.radius ? `${s.radius} mi` : "", "h-radius", "Radius"),
-              leadsCell, cell(s.failed && !s.partial ? "" : num(s.new), "h-new", "New"));
+              leadsCell, cell((s.failed && !s.partial) || unfinished ? "" : num(s.new), "h-new", "New"));
     const td = cell(undefined, "h-act");
     tr.append(td); tbody.append(tr); table.append(tbody);
     if (s.failed) {
       const extra = el("tr", undefined, "failed");
       const why = el("td"); why.colSpan = 6; why.className = "sub h-why";
-      why.textContent = `${s.reason || "The search didn't finish."} It didn't use up the day's search.`;
+      why.textContent = s.stopped ? `Stopped by the administrator (${s.stopped}) before it found anything. It didn't use up the day's search.`
+        : `${s.reason || "The search didn't finish."} It didn't use up the day's search.`;
       extra.append(why); tbody.append(extra);
       continue;
+    }
+    if (s.fill && s.fill.state !== "filling") {
+      // How filling in the map areas it missed ended (complete, stopped, gave up).
+      const extra = el("tr");
+      const why = el("td", fillText(s.fill)); why.colSpan = 6; why.className = "sub h-why";
+      extra.append(why); tbody.append(extra);
     }
     if (s.stopped) {
       const extra = el("tr");
@@ -322,6 +341,7 @@ async function follow(jobId, misses = 0) {
   S.job = null;
   $("progress-card").hidden = true;
   if (job.state === "error") {
+    $("search-failed-title").textContent = job.stopped ? "Stopped by the administrator" : "The search didn't finish";
     $("search-failed-msg").textContent = job.message;
     $("search-failed").hidden = false;
     loadSearches();
@@ -369,11 +389,11 @@ const MAX_KEYWORDS = 20, MAX_KEYWORD_LEN = 60;
 function number(f, name, label, lo, hi, whole, unit, required) {
   const raw = (f.get(name) || "").trim();
   // A blank How far or minimum score is pointed out, never quietly replaced by the default.
-  if (!raw) return required ? `${label} must be between ${lo} and ${hi}${unit || ""}` : null;
+  if (!raw) return required ? `${label} must be between ${lo} and ${hi}${unit || ""}.` : null;
   const v = Number(raw);
-  if (!Number.isFinite(v)) return `${label} must be a number`;
-  if (whole && !Number.isInteger(v)) return `${label} must be a whole number`;
-  return v < lo || v > hi ? `${label} must be between ${lo} and ${hi}${unit || ""}` : null;
+  if (!Number.isFinite(v)) return `${label} must be a number.`;
+  if (whole && !Number.isInteger(v)) return `${label} must be a whole number.`;
+  return v < lo || v > hi ? `${label} must be between ${lo} and ${hi}${unit || ""}.` : null;
 }
 function checkForm(form) {
   const f = new FormData(form);
@@ -439,6 +459,7 @@ async function startSearch(confirmPlace) {
   try {
     const body = await api("/search", { method: "POST", body: form });
     follow(body.job_id);
+    loadSearches();                        // the history shows it running from the start
   } catch (err) {
     if (err.status === 429 && err.body && err.body.job_id) return follow(err.body.job_id);
     setGo(false, "");

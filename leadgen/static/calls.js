@@ -58,7 +58,7 @@ function renderCalls() {
   rows.sort((a, b) => (b.last_call_at || 0) - (a.last_call_at || 0));   // latest call first
   for (const l of rows) {
     const tr = el("tr");
-    const name = el("td", undefined, "c-name"); name.append(el("strong", l.name)); name.append(el("div", [l.address, l.city].filter(Boolean).join(", "), "sub"));
+    const name = el("td", undefined, "c-name"); name.append(el("strong", l.name)); name.append(el("div", [l.address || "No street address", l.city || l.near].filter(Boolean).join(" · "), "sub"));
     if (l.closed) name.append(el("div", "Closed for good", "flag"));
     tr.append(name);
     const phone = el("td", undefined, "c-phone");
@@ -82,7 +82,7 @@ function renderCalls() {
 
 // A called business matches the Calls filter when every word typed is in its name, address or city.
 function callMatches(l, q) {
-  const hay = [l.name, l.address, l.city, l.zip].filter(Boolean).join(" ").toLowerCase();
+  const hay = [l.name, l.address, l.city, l.zip, l.near].filter(Boolean).join(" ").toLowerCase();
   return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
 }
 function countOutcomes(leads) {
@@ -153,11 +153,32 @@ function openCallBox(lead) {
   callId = (draft && draft.id) || newId();
   $("call-notes").value = draft ? draft.notes : "";
   pickOutcome(draft && OUTCOMES.includes(draft.outcome) ? draft.outcome : "");
+  pastedOver = 0; notesCount();
   $("call-draft-note").textContent = draft ? "Your unsaved notes from before are back. They are kept until you save." : "Notes are kept as a draft until you save.";
   $("call-dlg").showModal();
   $("call-notes").focus();
 }
-$("call-notes").addEventListener("input", saveDraft);
+// A summary holds up to 5,000 characters (the server's calls.MAX_NOTES). Near the limit the box
+// says how many are left; at the limit, or when a paste didn't fit, it says so plainly.
+const NOTES_MAX = Number($("call-notes").maxLength) > 0 ? Number($("call-notes").maxLength) : 5000;
+let pastedOver = 0;
+function notesCount() {
+  const box = $("call-notes-count"), left = NOTES_MAX - $("call-notes").value.length;
+  const over = pastedOver; pastedOver = 0;
+  box.hidden = left > 500 && !over;
+  box.classList.toggle("limit", left <= 0 || over > 0);
+  box.textContent = over > 0
+    ? `Limit reached: a summary can be up to ${NOTES_MAX.toLocaleString()} characters, so the last ${over.toLocaleString()} characters you pasted were left out. Shorten it, or keep the rest elsewhere.`
+    : left <= 0 ? `Limit reached: a summary can be up to ${NOTES_MAX.toLocaleString()} characters. Anything more isn't kept.`
+    : `${left.toLocaleString()} characters left (${NOTES_MAX.toLocaleString()} at most).`;
+}
+$("call-notes").addEventListener("paste", (e) => {
+  const box = $("call-notes"), text = (e.clipboardData && e.clipboardData.getData("text")) || "";
+  const kept = box.value.length - (box.selectionEnd - box.selectionStart);
+  pastedOver = Math.max(0, kept + text.length - NOTES_MAX);
+  setTimeout(() => { if (pastedOver) notesCount(); }, 0);   // a paste that changed nothing (already full)
+});
+$("call-notes").addEventListener("input", () => { saveDraft(); notesCount(); });
 $("call-cancel").addEventListener("click", () => { saveDraft(); $("call-dlg").close(); });
 $("call-dlg").addEventListener("close", saveDraft);
 $("call-form").addEventListener("submit", async (e) => {

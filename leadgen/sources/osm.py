@@ -395,7 +395,7 @@ class _Parts:
                 self.checked = now
                 try:
                     self.stopped = self.stop()
-                except Exception:              # a switch that can't be read counts as off
+                except Exception:              # stop_reason reads the switches safely; this is a guard
                     log.warning("Reading the stop switch failed", exc_info=True)
                 if self.stopped:
                     log.warning("OpenStreetMap: stopping, %s", self.stopped)
@@ -598,11 +598,14 @@ def areas_left(parts: Sequence[Part], areas: int) -> int:
 
 
 def fill_in(lat: float, lon: float, radius_miles: float, keywords: Sequence[str],
-            parts: Sequence[Part], seconds: float) -> tuple[list[Lead], list[Part]]:
+            parts: Sequence[Part], seconds: float,
+            stop: Callable[[], str | None] | None = None) -> tuple[list[Lead], list[Part]]:
     """Ask again, within `seconds`, for the parts of a search the map servers missed
     (PartialResult.missing): returns (the businesses found in the parts that answered
     now, the parts still missing). A part not yet split is asked in quarters if it
-    fails, like in the search itself; nothing is raised when none answers."""
-    run = _Parts(lat, lon, radius_miles, keywords, None)
+    fails, like in the search itself; nothing is raised when none answers. `stop` is
+    looked at every few seconds, like in search(): once it gives a reason, nothing
+    more is asked (the parts not answered stay missing)."""
+    run = _Parts(lat, lon, radius_miles, keywords, None, stop)
     run.run_round(list(parts), seconds)
     return list(run.found.values()), run.missing
