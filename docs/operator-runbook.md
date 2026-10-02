@@ -324,10 +324,12 @@ kept). Off Render, a SQLite file in `.cache/` is used instead.
 
 The site keeps up to 8 database connections open between page loads (one per web
 server thread, `POOL_SIZE` in `leadgen/store.py`, matching `--threads 8` in
-`render.yaml`), so a click doesn't wait for a new connection to Neon. One that sat
-idle for more than 10 seconds is checked with a quick `SELECT 1` before it is used,
-and one idle for 4 minutes is closed (Neon drops idle connections itself), so a
-sleeping database costs one reconnect, not an error. Change both numbers together
+`render.yaml`), so a click doesn't wait for a new connection to Neon. Each one is
+checked with a quick `SELECT 1` before it is used, and one idle for 4 minutes is
+closed (Neon drops idle connections itself). When a check fails, the database has
+dropped its connections (a restart or network reset), so all the kept ones are
+closed at once: a blip costs one reconnect, not a run of "Can't reach your saved
+leads" errors. Change the pool size and thread count together
 if the thread count ever changes. The tables are checked and created once each time
 the site starts.
 

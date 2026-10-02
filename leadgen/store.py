@@ -118,10 +118,11 @@ _local = threading.local()      # the connection a web request shares (see scope
 # every thread can find one waiting. More are opened when more are busy at once
 # (a search's background thread as well), and closed when they come back.
 POOL_SIZE = 8
-# One idle this long is asked "SELECT 1" before it is handed out (the database may have
-# dropped it); one idle longer than POOL_MAX_IDLE is closed instead (Neon closes idle
-# connections after a few minutes).
-POOL_CHECK_AFTER = 10.0
+# Every idle one is asked "SELECT 1" before it is handed out, however briefly it sat:
+# the database may have dropped it (a Neon restart, a network reset) a moment ago. One
+# idle longer than POOL_MAX_IDLE is closed instead (Neon closes idle connections after a
+# few minutes).
+POOL_CHECK_AFTER = 0.0
 POOL_MAX_IDLE = 240.0
 _pool: dict[str, list[tuple["Db", float]]] = {}
 _pool_lock = threading.Lock()
@@ -299,10 +300,10 @@ def _idle_now(db: Db) -> bool:
 
 def _usable(db: Db, idle: float) -> bool:
     """Whether a pooled connection can be handed out: idle (_idle_now) for not too long
-    and, when it sat a while, still answering."""
+    and still answering."""
     if idle > POOL_MAX_IDLE or not _idle_now(db):
         return False
-    if idle > POOL_CHECK_AFTER:
+    if idle >= POOL_CHECK_AFTER:
         try:
             db.one("SELECT 1")
         except Exception:  # noqa: BLE001 - sqlite3 or psycopg: a dropped connection
@@ -311,15 +312,21 @@ def _usable(db: Db, idle: float) -> bool:
 
 
 def _from_pool(key: str) -> Db | None:
-    while True:
-        with _pool_lock:
-            idle = _pool.get(key)
-            if not idle:
-                return None
-            db, since = idle.pop()
-        if _usable(db, time.monotonic() - since):
-            return db
-        _close(db)
+    """The most recently used idle connection, when it is still usable. When it isn't,
+    the database has most likely dropped the older ones too, so they are all closed and
+    the caller opens a new one, rather than each next request finding a dead one."""
+    with _pool_lock:
+        idle = _pool.get(key)
+        if not idle:
+            return None
+        db, since = idle.pop()
+    if _usable(db, time.monotonic() - since):
+        return db
+    with _pool_lock:
+        rest = [old for old, _ in _pool.pop(key, [])]
+    for old in [db, *rest]:
+        _close(old)
+    return None
 
 
 def release(db: Db) -> None:

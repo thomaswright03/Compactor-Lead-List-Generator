@@ -130,7 +130,7 @@ def test_marks_are_read_for_the_businesses_asked_about():
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(store.Db, "all", spy)
         assert marks.get_all([leads[0].uid]) == {leads[0].uid: "no"}
-    assert all("WHERE uid IN" in sql for sql in seen)
+    assert all("WHERE uid IN" in sql for sql in seen if sql != "SELECT 1")   # not the pool's check
 
 
 # ---- the off switches stop a search that is already running

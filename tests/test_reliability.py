@@ -490,8 +490,7 @@ def test_a_dropped_connection_is_replaced_without_an_error(new_connections, monk
     (db, _), = store._pool[next(iter(store._pool))]
     db.conn.close()                                         # the database dropped it while idle
     assert client.get("/leads").status_code == 200
-    # One idle a while is asked first; one that doesn't answer is replaced too.
-    monkeypatch.setattr(store, "POOL_CHECK_AFTER", -1.0)
+    # One that doesn't answer when asked is replaced too.
     asked = []
     real_one = store.Db.one
 
@@ -504,3 +503,28 @@ def test_a_dropped_connection_is_replaced_without_an_error(new_connections, monk
     before = new_connections["connections"]
     assert client.get("/leads").status_code == 200
     assert asked and new_connections["connections"] == before + 1
+
+
+def test_after_the_database_drops_every_connection_the_next_request_works(new_connections):
+    """A Neon restart or network reset drops all the pooled connections at once: the very
+    next request must succeed, and only one new connection is opened for it."""
+    saved.save_search([_lead()])
+    client = web.create_app().test_client()
+    assert client.get("/leads").status_code == 200
+    busy = [store.open_db() for _ in range(4)]
+    for db in busy:
+        store.release(db)
+    pooled = [db for db, _ in store._pool[busy[0].key]]
+    assert len(pooled) >= 4
+    if pooled[0].postgres:                                  # really end them on the server
+        import psycopg
+        pids = [db.conn.info.backend_pid for db in pooled]
+        with psycopg.connect(pooled[0].key, autocommit=True) as admin:
+            admin.execute("SELECT pg_terminate_backend(pid) FROM unnest(%s::int[]) AS pid", (pids,))
+    else:
+        for db in pooled:
+            db.conn.close()
+    before = new_connections["connections"]
+    for _ in range(5):
+        assert client.get("/leads").status_code == 200
+    assert new_connections["connections"] == before + 1
