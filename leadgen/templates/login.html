@@ -22,6 +22,8 @@
   input:focus-visible, button:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
   .error { color:var(--bad-ink); font-weight:600; margin:0; }
   .help { margin:var(--sp-4) 0 0; font-size:var(--fs-sm); color:var(--muted); }
+  .help a { color:var(--accent); font-weight:600; white-space:nowrap; }
+  .help a:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
   footer { text-align:center; color:var(--side-ink); font-size:var(--fs-sm); padding:var(--sp-4); }
 </style>
 </head>
@@ -37,7 +39,7 @@
       <button type="submit">Log in</button>
     </form>
     <p class="help">Need access or forgot the password?
-      {% if contact %}Contact {{ contact }}.{% else %}Ask the person who manages the Lead Finder at Arco Compactor.{% endif %}</p>
+      {% if contact %}Contact {% for text, href in contact %}{% if href %}<a href="{{ href }}">{{ text }}</a>{% else %}{{ text }}{% endif %}{% endfor %}.{% else %}{{ no_contact }}{% endif %}</p>
   </div>
 </main>
 <footer>© {{ year }} Wright AI Solutions. All rights reserved.</footer>

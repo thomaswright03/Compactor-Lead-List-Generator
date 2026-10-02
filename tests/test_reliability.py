@@ -275,10 +275,21 @@ def test_logged_out_browsers_go_to_the_login_page():
 
 
 def test_login_page_says_what_it_is_and_whom_to_ask(monkeypatch):
-    monkeypatch.setenv("LEADGEN_SUPPORT_CONTACT", "Matt at (801) 555-0100")
     client = web.create_app(password="s3cret", username="Matt").test_client()
+    # Not set: the page still says whom to ask.
     page = client.get("/login").data.decode()
-    assert "baler or compactor" in page and "Contact Matt at (801) 555-0100" in page
+    assert "baler or compactor" in page
+    assert "Ask the person who gave you your login, or Wright AI Solutions." in page
+    # Set on Render: the named contact, the phone number and email ready to tap.
+    monkeypatch.setenv("LEADGEN_SUPPORT_CONTACT", "Jane Doe at (801) 555-0100 or jane@example.com.")
+    page = client.get("/login").data.decode()
+    assert ('Contact Jane Doe at <a href="tel:8015550100">(801) 555-0100</a> or '
+            '<a href="mailto:jane@example.com">jane@example.com</a>.</p>') in page
+    assert "Wright AI Solutions." not in page.split("<footer>")[0]
+    # Whatever is typed into the setting is shown as text, never as markup.
+    monkeypatch.setenv("LEADGEN_SUPPORT_CONTACT", "<b>IT</b> desk, +1 801-555-0199")
+    page = client.get("/login").data.decode()
+    assert 'Contact &lt;b&gt;IT&lt;/b&gt; desk, <a href="tel:+18015550199">+1 801-555-0199</a>.' in page
     monkeypatch.setattr(web.time, "sleep", lambda s: None)
     wrong = client.post("/login", data={"username": "Matt", "password": "no"}).data.decode()
     assert 'type="password" autocomplete="current-password" required autofocus' in wrong

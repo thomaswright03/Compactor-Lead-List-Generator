@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import ipaddress
 import os
+import re
 import time
 
 from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, session
@@ -16,6 +17,32 @@ LOGIN_TRIES = 10                # wrong passwords allowed per address ...
 LOGIN_WINDOW = 15 * 60          # ... in this many seconds
 
 bp = Blueprint("auth", __name__)
+
+# Whom the login page tells people to ask for access or a forgotten password: the
+# LEADGEN_SUPPORT_CONTACT setting (a name with a phone number or email, set on Render),
+# or else this.
+SUPPORT_DEFAULT = "Ask the person who gave you your login, or Wright AI Solutions."
+_REACH = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"
+                    r"|(?:\+?1[\s.-]?)?\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]\d{4}\b")
+
+
+def support_contact() -> list[tuple[str, str]]:
+    """The LEADGEN_SUPPORT_CONTACT text in (text, link) pieces, an email address linked
+    with mailto: and a phone number with tel: (so a phone offers to call it); [] when
+    the setting is empty."""
+    text = " ".join(os.environ.get("LEADGEN_SUPPORT_CONTACT", "").split()).rstrip(".")
+    pieces, at = [], 0
+    for found in _REACH.finditer(text):
+        reach = found.group()
+        if found.start() > at:
+            pieces.append((text[at:found.start()], ""))
+        href = (f"mailto:{reach}" if "@" in reach
+                else "tel:" + ("+" if reach.startswith("+") else "") + re.sub(r"\D", "", reach))
+        pieces.append((reach, href))
+        at = found.end()
+    if at < len(text):
+        pieces.append((text[at:], ""))
+    return pieces
 
 
 def _allowed_hosts() -> set[str]:
@@ -69,9 +96,8 @@ def require_login() -> ResponseReturnValue | None:
 
 
 def _login_page(error: str = "", name: str = "", status: int = 200) -> ResponseReturnValue:
-    return render_template("login.html", error=error, username=name,
-                           contact=os.environ.get("LEADGEN_SUPPORT_CONTACT", "").strip()
-                           ), status
+    return render_template("login.html", error=error, username=name, contact=support_contact(),
+                           no_contact=SUPPORT_DEFAULT), status
 
 
 @bp.get("/login")

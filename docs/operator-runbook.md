@@ -256,7 +256,7 @@ them in `.env` (see `.env.example`) or the shell.
 | `LEADGEN_GOOGLE_OFF` | No | off | `1` stops every Google call (no Google charges); searches use the other sources |
 | `LEADGEN_YELP_OFF` | No | off | `1` stops every Yelp call; searches use the other sources |
 | `LEADGEN_ALERT_WEBHOOK` | No (recommended on the live site) | none | An https incoming-webhook address (Slack, Microsoft Teams, Google Chat or Discord) that gets a message for every failed or incomplete search and server error; see "Problems: the webhook" above |
-| `LEADGEN_SUPPORT_CONTACT` | No | "the person who manages the Lead Finder" | Who the login page tells people to ask for access, e.g. `Matt at (801) 555-0100` |
+| `LEADGEN_SUPPORT_CONTACT` | Yes on the live site (see "Login and the free plan") | "Ask the person who gave you your login, or Wright AI Solutions." | Whom the login page names for access or a forgotten password: a name plus a phone number or email, e.g. `Jane Doe at (801) 555-0100 or jane@example.com` (the number and email become tap-to-call and email links) |
 | `LEADGEN_ALLOWED_HOSTS` | No | `localhost` | Without a password, extra host names the page answers on (comma separated) |
 | `LEADGEN_CACHE_DIR` | No | `.cache` | Folder for the API response cache and the local SQLite database |
 | `RENDER`, `RENDER_GIT_COMMIT`, `PORT` | Set by Render | | Render's own; `/healthz` shows the deployed commit |
@@ -273,7 +273,7 @@ The repo includes `render.yaml`, so Render can set everything up:
 
 1. Sign in at https://render.com with GitHub.
 2. **New** > **Blueprint**, pick this repo, and click **Apply**.
-3. When asked, set **APP_USERNAME** and **APP_PASSWORD** (the login page asks for them; both are case-sensitive) and, optionally, **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
+3. When asked, set **APP_USERNAME** and **APP_PASSWORD** (the login page asks for them; both are case-sensitive), **LEADGEN_SUPPORT_CONTACT** (whom the login page names for login help) and, optionally, **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
 4. Open the `onrender.com` link Render shows.
 
 ## The size of a clone
@@ -352,6 +352,14 @@ is listed as kept). Each removed row is kept, as it was, in the additive
 ## Login and the free plan
 
 Always set `APP_PASSWORD` on a public site: every search can spend your API keys.
+Also set `LEADGEN_SUPPORT_CONTACT` to the person who hands out the login, with a
+phone number or email (Render → the service → **Environment** → **Add Environment
+Variable**, then **Save Changes**): the login page's "Need access or forgot the
+password?" line names them, and a salesperson locked out first thing in the morning
+can call or email straight from it. Without it the line says "Ask the person who
+gave you your login, or Wright AI Solutions." The contact details belong in Render
+only, never in this repository. **Status (2026-10-02): not set on the live site**
+(the owner, Thomas, chooses the contact and sets it); change this line when it is.
 A login lasts 30 days on a device; changing the username or password logs everyone
 out. After 10 wrong passwords from one address, logins from it pause for 15 minutes.
 Without a password the page only answers on `localhost` or an IP address; to use

@@ -103,7 +103,12 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 - Works on phones, tablets and laptops: below 1,100 px wide each lead is a card,
   so the reasons for its score are always in view without scrolling sideways.
 - A login from `APP_USERNAME` / `APP_PASSWORD` in the environment, and a separate
-  `ADMIN_PASSWORD` that unlocks the administrator's section.
+  `ADMIN_PASSWORD` that unlocks the administrator's section. The login page's
+  "Need access or forgot the password?" line names the contact set in
+  `LEADGEN_SUPPORT_CONTACT` (a name with a phone number or email, which become
+  tap-to-call and email links); until it is set it says "Ask the person who gave you
+  your login, or Wright AI Solutions." Set it in Render's **Environment**, never in
+  the repository.
 
 ## Quick start
 
