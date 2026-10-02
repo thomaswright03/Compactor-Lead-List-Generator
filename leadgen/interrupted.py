@@ -26,7 +26,7 @@ import uuid
 from dataclasses import asdict, fields
 from typing import Any
 
-from . import daily, saved, store
+from . import THREAD_PREFIX, daily, saved, store
 from .models import Lead
 from .pipeline import SearchParams, finish_leads
 
@@ -96,7 +96,7 @@ class Run:
         with _live_lock:
             _live[self.id] = self
         self._beating = threading.Thread(target=self._beat, daemon=True,
-                                         name=f"search-heartbeat-{self.day}")
+                                         name=f"{THREAD_PREFIX}search heartbeat {self.day}")
         self._beating.start()
 
     def add(self, leads: list[Lead]) -> None:

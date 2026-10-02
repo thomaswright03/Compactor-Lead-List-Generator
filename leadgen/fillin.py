@@ -23,7 +23,7 @@ import time
 from dataclasses import replace
 from typing import Any
 
-from . import alerts, config, daily, saved
+from . import THREAD_PREFIX, alerts, config, daily, saved
 from .models import Lead
 from .pipeline import RunResult, SearchParams, finish_leads
 from .sources import osm
@@ -71,7 +71,7 @@ def start(day: str, params: SearchParams, result: RunResult) -> bool:
     try:
         daily.finish(day, {"fill": fill})
         thread = threading.Thread(target=_run, args=(day, params, result, fill), daemon=True,
-                                  name=f"fill-in {day}")
+                                  name=f"{THREAD_PREFIX}fill-in {day}")
         _ending[day] = threading.Event()
         running[day] = thread
         thread.start()
@@ -120,6 +120,20 @@ def _stop(day: str) -> str | None:
     return NEW_SEARCH if ending is not None and ending.is_set() else None
 
 
+def _pause(day: str, ending: threading.Event) -> str | None:
+    """Wait config.FILL_IN_PAUSE_SECONDS between rounds (the busy servers cool down),
+    looking every osm.STOP_CHECK_SECONDS at whether the fill-in must stop, so pausing
+    searching ends it within seconds, not at the next round; returns why it must
+    stop (_stop), or None once the wait is over."""
+    until = time.monotonic() + config.FILL_IN_PAUSE_SECONDS
+    while True:
+        why = _stop(day)
+        left = until - time.monotonic()
+        if why or left <= 0:
+            return why
+        ending.wait(min(left, osm.STOP_CHECK_SECONDS))
+
+
 def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]) -> None:
     parts = list(result.osm_missing)
     lat, lon = result.center
@@ -128,8 +142,7 @@ def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]
     ending = _ending.setdefault(day, threading.Event())
     try:
         while parts and time.time() + config.FILL_IN_PAUSE_SECONDS < fill["until"]:
-            ending.wait(config.FILL_IN_PAUSE_SECONDS)   # let the busy servers cool down
-            why = _stop(day)
+            why = _pause(day, ending)                    # let the busy servers cool down
             if why:
                 fill["state"], fill["why"] = STOPPED, why
                 break

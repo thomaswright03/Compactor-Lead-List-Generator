@@ -181,7 +181,12 @@ Points come from the kind of business (grocery, warehouse and big-box stores
 score highest), a well-known high-volume brand, how busy the place is (review
 counts), how big the building is, and the standard words compactor, baler,
 waste and recycling in its name or listing. **Why this score** lists every
-reason on each lead.
+reason on each lead, and **Explain** under it says where the kind of business comes
+from (the Google or Yelp listing, the map listing, its name, or the search that
+found it). When it says "Only the building type or the business name suggests what
+it does — confirm before calling", ask what the business does early in the call.
+The Excel file's **Why This Score** column says the same. Parcel delivery stations
+(Amazon, FedEx Home Delivery, UPS hubs) count as warehouse / logistics sites.
 
 Words you type under **Extra search words** add businesses to look for; they
 don't change scores, so a business scores the same whichever search found it.

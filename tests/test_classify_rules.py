@@ -2,6 +2,9 @@
 the first rule that applies decides, and the lead's explanation names it. A new rule
 needs an entry in its table and an example below (the last test checks there is one)."""
 
+import copy
+import re
+
 import pytest
 
 from leadgen import scoring
@@ -71,6 +74,8 @@ def test_the_first_rule_that_applies_decides():
 
 
 def test_the_explanation_names_the_rule_that_decided():
+    """The scoring's own record names the rule (for whoever maintains the rules); what a
+    salesperson reads says what it means instead (test_explanations_are_in_plain_words)."""
     lead = score_lead(make("Smith's Marketplace", ["supermarket"]))
     assert lead.reasons[0].startswith("+35 Grocery / supermarket (by Google category)")
     assert "category rule (own category): its own Google category, Yelp category or map tag decides" \
@@ -79,6 +84,43 @@ def test_the_explanation_names_the_rule_that_decided():
     assert any(r.startswith("category rule (self-storage)") for r in storage.reasons)
     # Nothing matched: no rule to name.
     assert not any("category rule" in r for r in score_lead(make("Nothing Here", ["point_of_interest"])).reasons)
+
+
+# What a salesperson must never read: the classifier's own terms.
+INTERNAL = re.compile(r"category rule|rule \(|catch-all|map tag|\btags?\b|\(by |matched by|high-volume list",
+                      re.IGNORECASE)
+
+
+def internal_words(text):
+    """The classifier's own terms in `text` (rule names and texts too), or []."""
+    found = INTERNAL.findall(text)
+    for rule in scoring.RULES:
+        found += [s for s in (f"({rule.name})", rule.says) if s in text]
+    return found
+
+
+@pytest.mark.parametrize(("rule", "lead", "category"), RULE_EXAMPLES, ids=[r[0] for r in RULE_EXAMPLES])
+def test_explanations_are_in_plain_words(rule, lead, category):
+    """Every rule's lead is explained in a salesperson's words: how its category is known
+    ("from the map listing"), and what the rule means when that helps, never its name."""
+    reasons = scoring.plain_reasons(score_lead(copy.deepcopy(lead)).reasons)
+    assert reasons and not internal_words(" | ".join(reasons)), reasons
+    note = next(r for r in scoring.RULES if r.name == rule).note
+    assert (note in reasons) if note else len(reasons) == len([r for r in reasons if r[0] in "+-"]) + \
+        sum(r.startswith("Also looks like") for r in reasons)
+
+
+def test_explanations_saved_by_earlier_versions_read_plainly_too():
+    saved_before = ["+28 Manufacturing / industrial (by map tag): Manufacturing sites compact scrap",
+                    "category rule (catch-all tag or name): only a catch-all industrial tag or words in its "
+                    "name say what it is", "+10 matches keyword(s): baler", "also looks like: Warehouse",
+                    "category rule (a rule since renamed): internal words", "+0 category not on the high-volume list"]
+    assert scoring.plain_reasons(saved_before) == [
+        "+28 Manufacturing / industrial (from the map listing): Manufacturing sites compact scrap",
+        "+10 matches the search words: baler",
+        "+0 not a kind of business that usually runs a compactor or baler",
+        "Only the building type or the business name suggests what it does — confirm before calling",
+        "Also looks like: Warehouse"]
 
 
 def test_a_listing_merged_from_google_and_the_map_is_classified():

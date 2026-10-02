@@ -77,11 +77,20 @@ CSS variables in `templates/_theme.html` (`--sp-1` … `--sp-6`, `--fs-xs` …
 14 px (`--fs-sm`); only badges and counts use `--fs-xs` (12 px).
 
 The tests never call Google, Yelp or OpenStreetMap (they are mocked), and
-`tests/conftest.py` makes sure of it: for the whole run, connections to
-anything but this machine fail, and the cache folder (with the SQLite database)
-is a temporary one, so even a search thread that outlives its test can't reach
-the internet or write into the folder pytest was started from. A test that
-starts a search waits for it to finish.
+`tests/conftest.py` makes sure of it, for the whole run: connections to anything
+but this machine fail (in the socket layer and in requests, and the proxy
+variables are removed from the environment first, so a proxy on this machine
+can't carry a request out either), and the cache folder (with the SQLite
+database) is a temporary one, set before the app is imported, so nothing is
+written into the folder pytest was started from (no `.cache`). Every thread the
+app starts is named `leadgen ...` (`leadgen.THREAD_PREFIX`: a search, its
+heartbeat, a fill-in, a map query, an alert); after each test, while its stand-ins
+are still in place, its fill-ins are ended and those threads are waited for. A
+test that leaves one running for more than a few seconds fails (the thread is
+stopped first, by pausing searching), and so does the run if any is alive at its
+end; the pytest process exits as soon as it prints its result. A test that starts
+a search waits for it to finish. For the browser tests, `LEADGEN_CHROMIUM` can point
+at a Chromium binary when Playwright's own isn't installed.
 `tests/test_browser.py` drives the real pages in Chromium (mark Yes, a
 double-click marks one business only, Undo, Just called and its kept draft, the
 Calls page opening on the latest call and keeping earlier notes in view,
@@ -327,7 +336,9 @@ the sidebar to the page's list (Leads, Calls) or heading.
   history row tags "Filling in"; the search's own note names them too ("about 6 of
   9 areas searched; not yet: ..."). Complete, the
   search is no longer marked incomplete; areas that never answered are reported
-  as a problem (and the webhook). Pausing searching stops it, and a fill-in cut
+  as a problem (and the webhook). Pausing searching stops it within a few seconds (between rounds it
+  looks at the switch every `osm.STOP_CHECK_SECONDS`, not only at the next round; Find leads then
+  polls every 2.5 seconds until it has ended), and a fill-in cut
   short by a restart reads as interrupted (`daily.FILL_GRACE_SECONDS`). Only an
   area that never answers even then leaves the search incomplete; a map server that
   hasn't answered an area after 25 seconds (`OVERPASS_STAGGER_SECONDS`) is not
@@ -474,9 +485,20 @@ addresses and server errors show a branded page with a link back.
 
 `scoring.classify` reads a business's facts once (`Facts`: its name, Google types,
 Yelp aliases and map tags, and the categories they match) and then asks the rules
-in `scoring.RULES` in order; the first rule that decides gives the category and the
-"Why" column says which one ("category rule (retail chain): a retail chain's name
-decides over the building it is mapped as"). `scoring.VETOES` are the narrow exceptions that hold
+in `scoring.RULES` in order; the first rule that decides gives the category. The
+lead's stored explanation (`lead.reasons`, the scoring's own record) names it for
+whoever maintains the rules ("category rule (retail chain): a retail chain's name
+decides over the building it is mapped as"), and `scoring.classify(lead).rule` gives it
+at any time. Salespeople never see that: the Leads page (`web/common.py lead_json`)
+and the downloads' "Why This Score" (`export.py`) show `scoring.plain_reasons(...)`,
+which says how the category is known in their words ("(from the map listing)",
+"(from its name)") and puts each rule's `note` in place of its name ("Only the
+building type or the business name suggests what it does — confirm before calling";
+no note when the category's own line says it all). It reads the explanations saved
+by earlier versions too, so saved leads never need rewriting. A new rule needs a
+`note` (or "" on purpose); `tests/test_classify_rules.py` and `tests/test_downloads.py`
+fail if a rule name, a rule's text or terms such as "map tag" or "catch-all" reach the
+page or a download. `scoring.VETOES` are the narrow exceptions that hold
 a category back before any rule runs (a campus word on a place that is not the
 campus, a production word in a small shop's name...). To add a rule or a veto, add one
 entry to the table where it belongs in the order and one example business to

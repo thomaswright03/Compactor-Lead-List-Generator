@@ -122,15 +122,18 @@ function tabs(box, items, current, onPick) {
   }
 }
 
-// "+35 Grocery / supermarket (by Yelp category): Grocery stores bale..." -> parts
+// The server sends the reasons in a salesperson's words (scoring.plain_reasons):
+// "+35 Grocery / supermarket (from the Yelp listing): Grocery stores bale..." -> parts.
 function parseReason(r) {
   const m = /^([+-]\d+)\s+(.*)$/.exec(r);
   if (!m) return { pts: null, title: r, note: "" };
   let title = m[2], note = "";
-  const by = /^(.*?) \(by ([^)]+)\): (.*)$/.exec(title);
-  if (by) { title = by[1]; note = `${by[3]} (matched by ${by[2]}).`; }
+  const from = /^(.*?) \((from [^)]+)\): (.*)$/.exec(title);
+  if (from) { title = from[1]; note = sentence(`${from[3]} (its type is taken ${from[2]})`); }
   return { pts: parseInt(m[1], 10), title: title.charAt(0).toUpperCase() + title.slice(1), note };
 }
+// A note as a sentence: a capital first, a full stop last (unless it has its own).
+const sentence = (text) => text.charAt(0).toUpperCase() + text.slice(1) + (/[.!?…]$/.test(text) ? "" : ".");
 function whyCell(reasons) {
   const td = el("td", undefined, "c-why");
   // On a phone the reasons sit behind this toggle (each lead is a card there); wider screens show them.
@@ -144,7 +147,7 @@ function whyCell(reasons) {
   const notes = [];
   for (const r of reasons) {
     const p = parseReason(r);
-    if (p.pts === null) { notes.push(p.title.charAt(0).toUpperCase() + p.title.slice(1) + "."); continue; }
+    if (p.pts === null) { notes.push(sentence(p.title)); continue; }
     const row = el("div", undefined, "reason");
     row.title = r;
     row.append(el("span", (p.pts > 0 ? "+" : "") + p.pts, "pts" + (p.pts < 0 ? " neg" : p.pts === 0 ? " zero" : "")));

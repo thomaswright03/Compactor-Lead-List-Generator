@@ -42,6 +42,7 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   uses up the day, as the owner asked; the filling in is not a second search). A
   filling in that runs past midnight stays on Find leads until it ends, and is ended
   first when the next day's search starts, so two map searches never run at once.
+  Pausing searching ends it within a few seconds, and Find leads says so.
   The progress bar covers only the steps the search runs (with the free map data
   alone it starts near 0%), its map step moves with the areas that answered, not
   with the clock, and the "N of M areas done" count stays in view until that step
@@ -76,7 +77,14 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   city added to its name and ranks below named places. A brand counts only when the
   business is that brand (a hotel named after the air base next to it is not the base).
   A name word alone never makes a small shop a plant ("Day Dairy Barn" is not a
-  dairy). When the buildings of one site marked Yes and No are joined
+  dairy). Parcel delivery stations and depots (mapped as a post depot, or named for a
+  carrier's delivery station or home-delivery hub: "FedEx Home Delivery", "Amazon
+  Delivery Station") are warehouse / logistics sites, not manufacturing; a carrier's
+  shop ("The UPS Store") or lockers are not.
+  **Why this score** and the Excel and CSV **Why This Score** column explain each
+  lead in a salesperson's words: where its kind of business comes from ("from the map
+  listing", "from its name") and, when only the building type or the name suggests
+  it, "confirm before calling". The classifier's own rule names stay in the code. When the buildings of one site marked Yes and No are joined
   (`python -m leadgen merge-sites --apply`), the lead keeps Yes and says the marks
   disagreed until someone presses Yes or No on it again.
 - Every Yes / No mark and call needs **Your name**: the server refuses one without it.

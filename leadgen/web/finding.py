@@ -13,7 +13,7 @@ from typing import Any
 from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from .. import alerts, config, daily, fillin, interrupted, saved, store
+from .. import THREAD_PREFIX, alerts, config, daily, fillin, interrupted, saved, store
 from .. import switches as site_switches
 from ..geo import GeocodeError, LookupDown, haversine_miles, miles_from_arco
 from ..localtime import clock_text, date_time_text
@@ -686,7 +686,8 @@ def search() -> ResponseReturnValue:
                 break
             del s.jobs[old]
     try:
-        threading.Thread(target=_worker, args=(job, params, day), daemon=True).start()
+        threading.Thread(target=_worker, args=(job, params, day), daemon=True,
+                         name=f"{THREAD_PREFIX}search {day}").start()
     except RuntimeError:
         log.exception("Starting the search thread failed")
         with s.lock:

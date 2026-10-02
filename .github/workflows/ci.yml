@@ -62,3 +62,6 @@ jobs:
         run: |
           python -m pytest -q -rs | tee pytest.log
           ! grep -q "SKIPPED" pytest.log
+      # The tests keep their cache and database in a temporary folder (tests/conftest.py).
+      - name: The tests wrote no cache into the working copy
+        run: test ! -e .cache

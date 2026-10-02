@@ -21,7 +21,7 @@ import urllib.request
 import uuid
 from typing import Any
 
-from . import store
+from . import THREAD_PREFIX, store
 from .localtime import date_time_text
 
 WEBHOOK_ENV = "LEADGEN_ALERT_WEBHOOK"
@@ -57,7 +57,8 @@ def report(kind: str, text: str) -> None:
             for old in sorted(_last, key=_last.__getitem__)[:100]:
                 del _last[old]
     if BACKGROUND:
-        threading.Thread(target=_deliver, args=(kind, text, now), daemon=True).start()
+        threading.Thread(target=_deliver, args=(kind, text, now), daemon=True,
+                         name=f"{THREAD_PREFIX}alert").start()
     else:
         _deliver(kind, text, now)
 

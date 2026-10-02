@@ -1539,3 +1539,30 @@ def test_the_browser_bar_colour_follows_the_chosen_theme(browser, site, page):
     tab.click("[data-theme-pick=system]")
     assert tab.evaluate(bar) == "#15304d"
     context.close()
+
+
+def test_why_this_score_and_explain_are_in_plain_words(browser, site, page):
+    """A lead decided by each classifying rule: its "Why this score" and "Explain" say
+    in a salesperson's words how its type is known and what to check, never a rule's
+    name or the map's own terms."""
+    import copy
+
+    from test_classify_rules import RULE_EXAMPLES, internal_words
+    leads = []
+    for i, (_, example, _) in enumerate(RULE_EXAMPLES):
+        lead = copy.deepcopy(example)
+        lead.lat += 0.05 + i * 0.02
+        leads.append(score_lead(lead, config.DEFAULT_KEYWORDS))
+    saved.save_search(leads, config.DEFAULT_KEYWORDS)
+    page.goto(site + "#leads?tab=all")
+    expect(page.locator("table.leads tbody tr")).to_have_count(len(RULE_EXAMPLES) + 4)
+    for details in page.locator("td.c-why details.explain").all():
+        details.locator("summary").click()
+    texts = page.eval_on_selector_all("td.c-why", "(cells) => cells.map((c) => c.innerText)")
+    assert len(texts) == len(RULE_EXAMPLES) + 4
+    for text in texts:
+        assert not internal_words(text), text
+    acme = _row(page, "Acme Industries").locator("td.c-why")
+    expect(acme).to_contain_text("Only the building type or the business name suggests what it does — "
+                                 "confirm before calling.")
+    expect(acme).to_contain_text("(its type is taken from the map listing).")

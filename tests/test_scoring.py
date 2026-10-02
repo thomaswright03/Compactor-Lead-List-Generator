@@ -527,7 +527,7 @@ def test_generic_names_rank_below_named_places():
 def test_brands_are_written_properly_in_the_reasons():
     """The reasons (on the Leads page and in the downloads) name each brand as it is
     written, never in lower case."""
-    from leadgen.export import plain_reason
+    from leadgen.scoring import plain_reasons
     cases = [("Harmons Grocery", ["grocery_store"], "https://harmonsgrocery.com", "Harmons"),
              ("Intermountain Medical Center", ["hospital"], "", "Intermountain Medical Center"),
              ("Costco Wholesale", ["warehouse_store"], "", "Costco"),
@@ -537,4 +537,29 @@ def test_brands_are_written_properly_in_the_reasons():
         lead = score_lead(make(name, types, website=site))
         reason = next(r for r in lead.reasons if "high-volume brand" in r)
         assert reason.endswith(f"({written})"), (name, reason)
-        assert f"({written})" in plain_reason(reason)
+        assert f"({written})" in plain_reasons([reason])[0]
+
+
+def test_parcel_delivery_stations_are_warehouse_logistics():
+    """A carrier's delivery station is a warehouse / logistics site (+34), not a plant,
+    whatever building it is mapped as: by its post_depot tag, or by a name or operator
+    naming a carrier and a delivery station or hub. Its own shop, post office or lockers
+    are not."""
+    distribution = "Warehouse / distribution / logistics"
+    amazon = score_lead(make("Amazon", ["amenity=post_depot", "building=industrial"], "osm"))
+    fedex = score_lead(make("FedEx Home Delivery", ["operator=FedEx", "building=industrial"], "osm"))
+    station = score_lead(make("Amazon Delivery Station DSL5", ["building=industrial"], "osm"))
+    by_operator = score_lead(make("Home Delivery", ["operator=FedEx Ground", "building=industrial"], "osm"))
+    for lead in (amazon, fedex, station, by_operator):
+        assert lead.category == distribution and lead.category_key == "distribution", lead.name
+        assert lead.reasons[0].startswith(f"+34 {distribution} (by ") and "Manufacturing" not in lead.reasons[0]
+    assert amazon.score == fedex.score == 34 + 20         # the carrier is a high-volume brand too
+    # A carrier's shop, a post office and a parcel locker keep what they were.
+    assert score_lead(make("The UPS Store", ["shop=copyshop"], "osm")).category_key == "retail"
+    assert score_lead(make("FedEx Office Print & Ship Center", ["shop=copyshop", "brand=FedEx Office"],
+                           "osm")).category_key == "retail"
+    assert score_lead(make("Sugar House Station", ["amenity=post_office", "operator=USPS"], "osm")).category_key == ""
+    assert score_lead(make("Amazon Hub Locker", ["amenity=parcel_locker"], "osm")).category_key == ""
+    # A plant or warehouse without a carrier's station words is unchanged.
+    assert score_lead(make("Acme Industries", ["building=industrial"], "osm")).category_key == "manufacturing"
+    assert score_lead(make("FedEx Freight", ["building=industrial"], "osm")).category_key == "distribution"

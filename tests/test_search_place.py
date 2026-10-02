@@ -162,7 +162,7 @@ def test_the_run_uses_the_place_found_without_looking_it_up_again(monkeypatch):
 def test_pausing_stops_the_map_data_step_within_seconds(monkeypatch):
     monkeypatch.setattr(osm, "STOP_CHECK_SECONDS", 0.2)
     monkeypatch.setattr(config, "OVERPASS_ENDPOINTS", config.OVERPASS_ENDPOINTS[:2])
-    asked, paused = [], threading.Event()
+    asked, paused, answered = [], threading.Event(), threading.Event()
 
     def slow(method, url, data, **kw):
         asked.append(url)
@@ -170,7 +170,7 @@ def test_pausing_stops_the_map_data_step_within_seconds(monkeypatch):
             return {"elements": [{"type": "node", "id": 1, "lat": 40.7, "lon": -111.9,
                                   "tags": {"name": "Market 1", "shop": "supermarket"}}]}
         paused.set()                    # the administrator pauses while this part is asked
-        time.sleep(3)
+        answered.wait(3)                # a hanging server (it answers once the test is over)
         return {"elements": []}
     monkeypatch.setattr(osm, "request_json", slow)
     stop = lambda: "the administrator paused searching" if paused.is_set() else None  # noqa: E731
@@ -187,6 +187,11 @@ def test_pausing_stops_the_map_data_step_within_seconds(monkeypatch):
     assert len(asked) == n and n <= 3                         # nothing more is asked
     assert said[-1] == "OpenStreetMap: stopped, the administrator paused searching"
     assert web.finding.plain_progress(said[-1]).startswith("Stopping: the administrator paused searching")
+    # The query left waiting on the hanging server ends with the test.
+    answered.set()
+    for thread in threading.enumerate():
+        if thread.name.startswith("leadgen map server"):
+            thread.join(5)
 
 
 def test_a_search_paused_during_the_map_data_says_so_and_keeps_what_it_found(monkeypatch):

@@ -94,9 +94,10 @@ CATEGORIES = [
     Category(
         "distribution", "Warehouse / distribution / logistics", 34,
         "Distribution and fulfillment centers generate heavy cardboard and pallet waste",
+        # amenity=post_depot: a parcel carrier's delivery station or sorting depot.
         osm_tags=[("building", "warehouse"), ("industrial", "warehouse"),
                   ("industrial", "logistics"), ("office", "logistics"),
-                  ("landuse", "logistics")],
+                  ("landuse", "logistics"), ("amenity", "post_depot")],
         name_keywords=["distribution", "distributing", "distributor", "distributors", "warehouse",
                        "warehouses", "warehousing", "logistics", "fulfillment",
                        "cold storage", "freight", "supply chain", "3pl"],
@@ -382,6 +383,22 @@ NOT_PLANT_NAME_WORDS = [
     "city yards", "county yard", "streets division", "street department", "road shed",
     "roads shed", "maintenance shops",
 ]
+
+# A parcel carrier's delivery station or home-delivery hub is a warehouse / logistics
+# site (cardboard by the trailer-load), whatever building it is mapped as: its name or
+# its operator / brand tag names a carrier (PARCEL_CARRIERS), and one of them says it is a
+# station or hub (PARCEL_STATION_WORDS): "FedEx Home Delivery" (operator FedEx),
+# "Amazon Delivery Station DSL5", "UPS Customer Center". A carrier's shop ("The UPS
+# Store", "FedEx Office") or post office has no such word; its lockers are
+# NON_PROSPECT_NAME_WORDS.
+PARCEL_CARRIERS = ["amazon", "amazon logistics", "fedex", "fedex ground", "ups", "united parcel service",
+                   "usps", "united states postal service", "us postal service", "dhl", "ontrac",
+                   "lasership", "purolator"]
+PARCEL_STATION_WORDS = ["home delivery", "delivery station", "delivery center", "delivery centre",
+                        "delivery hub", "delivery depot", "sort center", "sortation center",
+                        "sorting center", "sorting facility", "processing center",
+                        "processing and distribution", "ground hub", "customer center", "hub",
+                        "depot"]
 
 # Retail chains whose name holds a warehouse or industrial word ("Harbor Freight" sells
 # tools; the word "freight" says nothing): the name counts for the retail category

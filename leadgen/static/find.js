@@ -96,7 +96,7 @@ async function loadSearches() {
   // A fill-in still going from an earlier day (a late search runs on past midnight) stays in view
   // until it ends; today's own fill-in otherwise.
   const filling = body.filling && (!today || body.filling.day !== today.day) ? body.filling : null;
-  showFill(filling ? { ...filling.fill, from: filling.when } : today && today.fill);
+  showFill(filling ? { ...filling.fill, from: filling.when } : today && today.fill, Boolean(body.paused));
   renderProblems(body.problems, body.problems_unread);
   if (body.admin && body.admin !== "open") showAdmin(false);   // locked again elsewhere
   if (body.switches) { S.switches = body.switches; renderSwitches(body.switches); }
@@ -107,8 +107,8 @@ const SWITCH_SHOWN = { search_paused: () => true, google_off: () => CONFIG.googl
 const SWITCH_ASK = {
   search_paused: [["Pause all searching for everyone?",
                    "Find leads will refuse to start, for everyone, until this is turned off. A search running now " +
-                   "stops within a few seconds; what it already found is saved. Saved leads, marks and calls keep " +
-                   "working.", "Pause searching"],
+                   "(or still filling in missing map areas) stops within a few seconds; what it already found is " +
+                   "saved. Saved leads, marks and calls keep working.", "Pause searching"],
                   ["Let everyone search again?", "Find leads works again for everyone straight away.",
                    "Turn searching back on"]],
   google_off: [["Stop using Google for everyone?",
@@ -203,7 +203,8 @@ function renderProblems(p, unread) {
                       el("p", "If these keep happening, tell whoever looks after the site.", "sub"));
 }
 // Map areas today's search missed are filled in in the background (fillin.py): how that stands,
-// in words, and the page looks again every half minute while it goes on.
+// in words, and the page looks again every half minute while it goes on (every few seconds once
+// searching is paused: the fill-in then ends within seconds, and the page says so).
 const areasText = (n) => (n === 1 ? "1 area" : `${n} areas`);
 // Which towns the missing areas hold, nearest the search's centre first (fillin.py's "where").
 const aroundText = (f) => (f.where ? ` (around ${f.where})` : "");
@@ -229,16 +230,17 @@ function fillText(f) {
   return `${areas[0].toUpperCase()}${areas.slice(1)} of the free map data${aroundText(f)} never answered today; ` +
     `their businesses are missing until the next search.${added}`;
 }
-function showFill(f) {
+function showFill(f, paused) {
   const box = $("fill-note");
   clearTimeout(S.fillTimer);
   box.hidden = !f;
   if (!f) return;
-  box.textContent = fillText(f);
+  box.textContent = f.state === "filling" && paused
+    ? "Stopping the filling in of the missing map areas, because searching was paused…" : fillText(f);
   box.classList.toggle("done", f.state === "complete");
   if (S.fillFound !== undefined && f.found !== S.fillFound) loadLeads();   // new businesses arrived
   S.fillFound = f.found;
-  if (f.state === "filling") S.fillTimer = setTimeout(loadSearches, 30000);
+  if (f.state === "filling") S.fillTimer = setTimeout(loadSearches, paused ? 2500 : 30000);
 }
 // Every count on the page reads the same way: 1,135.
 const num = (v) => typeof v === "number" ? v.toLocaleString() : v ?? "-";

@@ -17,11 +17,12 @@ def _lead(name, source_id, tier="A", score=70, **kw):
 
 
 def _wait(client, job):
-    for _ in range(100):
+    for _ in range(200):
         body = client.get(f"/status/{job}").get_json()
         if body["state"] != "running":
             return body
         time.sleep(0.05)
+    raise AssertionError("the search never finished")
 
 
 def test_find_leads_works_once_per_calendar_day(monkeypatch):
@@ -40,7 +41,9 @@ def test_find_leads_works_once_per_calendar_day(monkeypatch):
     assert history["searches"][0]["location"] == "84101"
     assert history["searches"][0]["warnings"] == ["a note"] and history["searches"][0]["when"]
     day["now"] = "2026-09-30"                  # a new calendar day, however soon
-    assert client.post("/search", data={"location": "84101"}).status_code == 200
+    tomorrow = client.post("/search", data={"location": "84101"})
+    assert tomorrow.status_code == 200
+    assert _wait(client, tomorrow.get_json()["job_id"])["state"] == "done"
 
 
 def test_a_failed_search_gives_the_day_back(monkeypatch):
@@ -299,3 +302,15 @@ def test_marks_only_for_saved_businesses():
     from leadgen import store
     with store.connect() as db:
         assert db.all("SELECT uid FROM marks") == []
+
+
+def test_stats_round_halves_up_as_people_do():
+    """5 of 8 is 63% and an average of 62.5 is 63, as on a calculator (Python's round()
+    would give 62 for both)."""
+    leads = [_lead(f"A{i}", f"a{i}", "A", 70, has_baler="yes" if i < 5 else "no") for i in range(8)]
+    tier_a = stats.summarize(leads)["by_tier"][0]
+    assert (tier_a["yes"], tier_a["checked"], tier_a["pct"]) == (5, 8, 63)
+    two = [_lead("Y1", "y1", "A", 60, has_baler="yes"), _lead("Y2", "y2", "A", 65, has_baler="yes")]
+    assert stats.summarize(two)["average_score"] == 63            # (60 + 65) / 2 = 62.5
+    assert [stats.ratio(1, 8, 100), stats.ratio(3, 8, 100), stats.ratio(1, 3, 100),
+            stats.ratio(2, 3, 100), stats.ratio(0, 4, 100), stats.ratio(4, 4, 100)] == [13, 38, 33, 67, 0, 100]

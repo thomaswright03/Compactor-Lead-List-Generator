@@ -99,7 +99,7 @@ def test_pausing_searches_stops_the_filling_in(filling, monkeypatch):
     real = config.stop_reason
 
     def paused_for_the_background(source=None):
-        if threading.current_thread().name.startswith("fill-in"):
+        if threading.current_thread().name.startswith("leadgen fill-in"):
             return "the administrator paused searching"
         return real(source)
     monkeypatch.setattr(config, "stop_reason", paused_for_the_background)
@@ -167,3 +167,43 @@ def test_a_fill_in_past_midnight_stays_in_view_and_ends_before_the_next_days_sea
     # The new day's own fill-in (its areas fail too) is ended here, as the test is over.
     fillin.end_others("", wait=10)
     assert not fillin.running
+
+
+@pytest.mark.parametrize("how", ["site switch", "environment"])
+def test_pausing_searching_ends_a_fill_in_within_seconds(filling, monkeypatch, how):
+    """Between its rounds (5 minutes apart) a fill-in looks at Pause searching every few
+    seconds: switched on, by the administrator's switch or the server's setting, the
+    fill-in ends within seconds, its record says why, and no more map areas are asked."""
+    from leadgen import switches
+    monkeypatch.setattr(config, "FILL_IN_PAUSE_SECONDS", 300)
+    asked = []
+    servers = _servers(fail_times=10_000)
+
+    def counted(method, url, data, **kw):
+        asked.append(url)
+        return servers(method, url, data, **kw)
+    monkeypatch.setattr(osm, "request_json", counted)
+    client = web.create_app().test_client()
+    job = client.post("/search", data={"location": "84101", "radius": "30"}).get_json()["job_id"]
+    assert _wait(client, job)["state"] == "done"
+    assert client.get("/searches").get_json()["current"]["fill"]["state"] == "filling"
+    before = len(asked)
+    if how == "site switch":
+        switches.set_switch(config.SEARCH_PAUSED_ENV, True, "Matt")
+    else:
+        monkeypatch.setenv(config.SEARCH_PAUSED_ENV, "1")
+    paused = time.monotonic()
+    while time.monotonic() - paused < 10:
+        fill = client.get("/searches").get_json()["current"]["fill"]
+        if fill["state"] != "filling":
+            break
+        time.sleep(0.1)
+    took = time.monotonic() - paused
+    assert fill["state"] == "stopped" and fill["why"] == fillin.PAUSED and took < 10, took
+    record = client.get("/searches").get_json()["current"]
+    assert any("stopped because searching was paused" in w for w in record["warnings"])
+    for _ in range(100):
+        if not fillin.running:
+            break
+        time.sleep(0.05)
+    assert not fillin.running and len(asked) == before         # no more map requests

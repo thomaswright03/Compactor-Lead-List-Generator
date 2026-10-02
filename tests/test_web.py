@@ -13,15 +13,21 @@ def test_web_flow(monkeypatch):
     client = web.create_app().test_client()
     assert b"Lead Finder" in client.get("/").data
     job = client.post("/search", data={"location": "84101", "radius": "30"}).get_json()["job_id"]
-    for _ in range(50):
-        body = client.get(f"/status/{job}").get_json()
-        if body["state"] != "running":
-            break
-        time.sleep(0.05)
+    body = _finished(client, job)
     assert body["state"] == "done" and body["found"] == 1 and body["saved"]
     assert client.get(f"/download/{job}.csv").status_code == 200
     assert client.get(f"/download/{job}.xlsx").data[:2] == b"PK"
     assert client.get(f"/download/{job}.pdf").status_code == 404
+
+
+def _finished(client, job):
+    """The search's status once it has ended (a test waits for the searches it starts)."""
+    for _ in range(200):
+        body = client.get(f"/status/{job}").get_json()
+        if body["state"] != "running":
+            return body
+        time.sleep(0.05)
+    raise AssertionError("the search never finished")
 
 
 def _client(monkeypatch, block=None):
@@ -60,6 +66,7 @@ def test_web_allows_one_running_search(monkeypatch):
     assert second.status_code == 429
     assert second.get_json()["job_id"] == first.get_json()["job_id"]
     gate.set()
+    assert _finished(client, first.get_json()["job_id"])["state"] == "done"
 
 
 def test_web_blocks_dns_rebinding_without_password(monkeypatch):
@@ -78,6 +85,7 @@ def test_web_accepts_browser_number_formats(monkeypatch):
     res = client.post("/search", data={"min_score": "20.0", "max_requests": "1e3", "radius": "30"})
     assert res.status_code == 200
     assert client.post("/search", data={"min_score": "20.5"}).status_code in (400, 429)
+    assert _finished(client, res.get_json()["job_id"])["state"] == "done"
 
 
 def _login(client, username="Matt", password="s3cret"):

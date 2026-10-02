@@ -34,7 +34,9 @@ before every paid Google or Yelp call, and every 2 seconds during the free map d
 step: no more map requests are sent). It keeps and saves the businesses it had already
 found; its progress card says "Stopping: the administrator paused searching", its
 result and the search history say "Stopped by the administrator", and today's search
-stays used (one a day). A search stopped before it found anything gives the day back
+stays used (one a day). The background filling in of map areas a search missed stops
+within a few seconds as well (no more map requests), and Find leads then says "Filling in
+the missing map areas stopped because searching was paused". A search stopped before it found anything gives the day back
 and is listed as "Stopped by the administrator", not as failed, and not under Recent
 problems or on the webhook (a deliberate stop is not a problem). If the switches can't
 be read while a search runs (the database stopped answering), a switch last seen on
@@ -168,7 +170,7 @@ the day like a complete one. Map areas the free map servers missed are then aske
 again in the background for up to an hour, within that same search (not a second
 one): Find leads shows "Still filling in N areas" with the towns they hold
 ("around Kaysville and Centerville"), then "Complete" or "N areas never answered" (that last one is also reported under Recent problems and to the
-webhook). Pausing searching stops the filling in too, and so does the next day's search
+webhook). Pausing searching stops the filling in too, within a few seconds, and so does the next day's search
 starting (the history then says "stopped because the next day's search started"): a
 filling in that runs past midnight stays on Find leads until it ends. A restart or deploy during
 it cuts it short (the history then says so). Only a search that failed outright (an unknown place,

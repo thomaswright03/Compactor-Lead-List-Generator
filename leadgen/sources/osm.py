@@ -15,7 +15,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import Any
 
-from .. import config, places
+from .. import THREAD_PREFIX, config, places
 from ..geo import METERS_PER_MILE, haversine_miles
 from ..http import HttpError, cache_get, cache_put, request_json
 from ..models import Lead
@@ -359,7 +359,8 @@ def _fetch(query: str, deadline: float, first: int = 0,
             if said:
                 said(asked, len(endpoints))
             log.info("OpenStreetMap: querying %s", endpoint.split("/")[2])
-            threading.Thread(target=ask, args=(endpoint, left), daemon=True).start()
+            threading.Thread(target=ask, args=(endpoint, left), daemon=True,
+                             name=f"{THREAD_PREFIX}map server {endpoint.split('/')[2]}").start()
             continue
         if waiting == 0 or left <= 0:
             if waiting:
@@ -526,7 +527,8 @@ class _Parts:
         deadline = time.monotonic() + seconds
         self.split = False
         self.areas()
-        with ThreadPoolExecutor(max_workers=config.OVERPASS_PARALLEL) as pool:
+        with ThreadPoolExecutor(max_workers=config.OVERPASS_PARALLEL,
+                                thread_name_prefix=f"{THREAD_PREFIX}map area") as pool:
             running: dict[Any, Part] = {}
             while todo or running:
                 if self.halted() or not self._start(pool, running, todo, deadline):

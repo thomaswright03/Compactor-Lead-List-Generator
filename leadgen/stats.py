@@ -16,6 +16,13 @@ from .scoring import TIERS
 TIER_ORDER = ("A", "B", "C", "D")
 
 
+def ratio(part: int, whole: int, scale: int = 1) -> int:
+    """scale * part / whole as a whole number, halves rounded up as people round them
+    (62.5 -> 63, 5 of 8 -> 63%), never to the even neighbour as Python's round() does.
+    Whole-number arithmetic, so no fraction is lost on the way."""
+    return (2 * scale * part + whole) // (2 * whole)
+
+
 def summarize(leads: list[Lead]) -> dict[str, Any]:
     """leads: saved leads with has_baler set."""
     prospects = [l for l in leads if l.lead_type not in EXEMPT_TYPES]
@@ -23,13 +30,13 @@ def summarize(leads: list[Lead]) -> dict[str, Any]:
     leads = prospects
     yes = [l for l in leads if l.has_baler == "yes"]
     checked = [l for l in leads if l.has_baler in ("yes", "no")]
-    avg = round(sum(l.score for l in yes) / len(yes)) if yes else None
+    avg = ratio(sum(l.score for l in yes), len(yes)) if yes else None
     by_tier = []
     for tier in TIER_ORDER:
         asked = [l for l in checked if l.tier == tier]
         have = sum(l.has_baler == "yes" for l in asked)
         by_tier.append({"tier": tier, "checked": len(asked), "yes": have,
-                        "pct": round(100 * have / len(asked)) if asked else None,
+                        "pct": ratio(have, len(asked), 100) if asked else None,
                         # Saved in this tier, checked or not (the page's note on tier D).
                         "saved": sum(l.tier == tier for l in leads)})
     return {

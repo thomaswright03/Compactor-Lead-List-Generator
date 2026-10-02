@@ -167,6 +167,16 @@ def self_storage(lead: Lead) -> bool:
                         for w in config.COLD_STORAGE_WORDS + config.LOGISTICS_NAME_WORDS))
 
 
+def parcel_station(lead: Lead) -> bool:
+    """True for a parcel carrier's delivery station or home-delivery hub, by its name and
+    its operator / brand tags: a carrier (config.PARCEL_CARRIERS) and a station word
+    (config.PARCEL_STATION_WORDS), "FedEx Home Delivery" operated by FedEx, say."""
+    tags = " ".join(c.split("=", 1)[1] for c in lead.raw_categories if c.startswith(("operator=", "brand=")))
+    text = f"{normalize(lead.name)} {normalize(tags)}"
+    return (any(_contains_term(text, c, whole=True) for c in config.PARCEL_CARRIERS)
+            and any(_contains_term(text, w, whole=True) for w in config.PARCEL_STATION_WORDS))
+
+
 def _not_plant_named(name: str) -> bool:
     """True when the name says a catch-all industrial building is a data centre, a career
     centre or a city's shops (config.NOT_PLANT_NAME_WORDS)."""
@@ -221,6 +231,8 @@ def generic_name(name: str) -> bool:
 # The ways a category can match a lead, strongest first.
 GOOGLE, YELP, TAG, NAME, QUERY = "Google category", "Yelp category", "map tag", "name", "search query"
 TAGGED = (GOOGLE, YELP, TAG)
+# A retail chain's name decided the category (the rule "retail chain").
+RETAIL_BRAND = "retail brand name"
 
 
 class Facts:
@@ -263,6 +275,8 @@ class Facts:
             return TAG
         if any(_contains_term(self.name, kw, whole=True) for kw in cat.name_keywords):
             return NAME
+        if cat.key == "distribution" and parcel_station(self.lead):
+            return NAME                  # a carrier's delivery station (config.PARCEL_CARRIERS)
         if self.use_hint and any(config.QUERY_CATEGORY.get(t) == cat.key for t in self.lead.search_terms):
             return QUERY
         return None
@@ -313,11 +327,15 @@ Decision = tuple[Match | None, list[Match]]
 @dataclass(frozen=True)
 class Rule:
     """One step of classifying: `decide` gives the decision when the rule applies, else
-    None (the next rule is tried); `says` is the rule in the lead's explanation."""
+    None (the next rule is tried). `name` and `says` are for whoever maintains the
+    rules (the stored explanation keeps them: "category rule (name): says"); `note` is
+    what a salesperson reads about it on the Leads page and in the downloads
+    (plain_reasons), or "" when the category's own line says it all."""
 
     name: str
     says: str
     decide: Callable[[Facts], Decision | None]
+    note: str = ""
 
 
 def _best(options: list[Match]) -> Match:
@@ -336,7 +354,7 @@ def _no_category_if(test: Callable[[Lead], bool]) -> Callable[[Facts], Decision 
 def _retail_chain(f: Facts) -> Decision | None:
     if not f.retail_brand or f.specific:
         return None
-    brand = (f.retail_brand, "retail brand name")
+    brand = (f.retail_brand, RETAIL_BRAND)
     return brand, f.kept + [brand]
 
 
@@ -396,24 +414,38 @@ def _anything(f: Facts) -> Decision | None:
 RULES = (
     Rule("equipment name", "an equipment dealer's or hauler's name decides", _equipment_name),
     Rule("not-a-prospect name", "its name says it is not a prospect (police, fire, an impound or trailer "
-         "yard, parcel lockers)", _no_category_if(non_prospect_name)),
+         "yard, parcel lockers)", _no_category_if(non_prospect_name),
+         "Its name says it isn't a business that would use a compactor or baler (police, fire, an impound "
+         "or trailer yard, parcel lockers)"),
     Rule("utility structure", "a pumping station, well or substation has no waste stream to compact",
-         _no_category_if(utility_structure)),
-    Rule("self-storage", "self-storage: the tenants take their rubbish home", _no_category_if(self_storage)),
-    Rule("retail chain", "a retail chain's name decides over the building it is mapped as", _retail_chain),
+         _no_category_if(utility_structure),
+         "It's a pumping station, well or substation, which has no rubbish to compact"),
+    Rule("self-storage", "self-storage: the tenants take their rubbish home", _no_category_if(self_storage),
+         "It's self-storage: tenants take their own rubbish home, so there is little to compact on site"),
+    Rule("retail chain", "a retail chain's name decides over the building it is mapped as", _retail_chain,
+         "It's a known store chain, so it counts as a store even where the map shows a warehouse building"),
     Rule("production listing", "a brewery's or bakery's production listing decides over its taproom or cafe "
-         "label", _production_food),
+         "label", _production_food,
+         "It's listed as a brewery or bakery that makes its products there, not only a taproom or café"),
     Rule("own category", "its own Google category, Yelp category or map tag decides", _specific),
     Rule("name beats type", "its name decides over a listing type that is usually not a prospect",
-         _name_beats_type),
+         _name_beats_type,
+         "Its name says what it does, although its listing is a kind of place that usually isn't a prospect"),
     Rule("not-a-prospect type", "its listing type says it is not a prospect (a vet, clinic, park, gas "
-         "station...)", _non_prospect_type),
-    Rule("shop", "a shop counts as retail, whatever its name says", _shop),
+         "station...)", _non_prospect_type,
+         "Its listing says it's a kind of place that rarely needs a compactor or baler (a vet, clinic, park, "
+         "gas station…)"),
+    Rule("shop", "a shop counts as retail, whatever its name says", _shop,
+         "It's listed as a shop, so it counts as a store whatever its name says"),
     Rule("not a plant", "only a catch-all industrial tag, on a small building, a utility's structure, a data "
-         "centre or a career centre", _not_a_plant),
+         "centre or a career centre", _not_a_plant,
+         "The map shows only an industrial building, and it's small or belongs to a utility, a data center, a "
+         "job center or a city yard, so it's unlikely to need a compactor or baler"),
     Rule("catch-all tag or name", "only a catch-all industrial tag or words in its name say what it is",
-         _catch_all),
-    Rule("search phrase", "the search phrase that found it says what it is", _anything),
+         _catch_all,
+         "Only the building type or the business name suggests what it does — confirm before calling"),
+    Rule("search phrase", "the search phrase that found it says what it is", _anything,
+         "Only the search that found it suggests what it does — confirm before calling"),
 )
 NO_MATCH = Rule("nothing matched", "nothing on the high-volume list matched", lambda f: (None, []))
 
@@ -603,3 +635,51 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
     lead.reasons = reasons
     lead.flags = flags
     return lead
+
+
+# ---- the explanation as a salesperson reads it
+#
+# lead.reasons is the scoring's own record, saved with each lead: "+35 Grocery /
+# supermarket (by map tag): ...", and "category rule (own category): ..." naming the
+# rule that decided, for whoever maintains the rules. The Leads page and the downloads
+# show plain_reasons() of it instead, which also reads the explanations saved by earlier
+# versions (saved leads are never rewritten).
+
+# How a category matched, in a salesperson's words.
+PLAIN_HOW = {GOOGLE: "from the Google listing", YELP: "from the Yelp listing", TAG: "from the map listing",
+             NAME: "from its name", QUERY: "from the search that found it",
+             RETAIL_BRAND: "from the store chain's name"}
+_RULE_LINE = re.compile(r"category rule \(([^)]*)\)")
+_HOW_PART = re.compile(r" \(by ([^)]+)\)")
+_POINTS = re.compile(r"[+-]\d+ ")
+# Lines of the record that read differently on the page and in the downloads.
+_PLAIN_LINES = {"+0 category not on the high-volume list":
+                "+0 not a kind of business that usually runs a compactor or baler"}
+_PLAIN_WORDS = (("matches keyword(s): ", "matches the search words: "),)
+
+
+def plain_reasons(reasons: Iterable[str]) -> list[str]:
+    """A lead's explanation as the Leads page and the downloads show it: the points
+    first ("+35 Grocery / supermarket (from the map listing): ..."), then the notes,
+    starting with what the rule that decided its category means for a salesperson
+    (Rule.note: "Only the building type or the business name suggests what it does —
+    confirm before calling"), never the rule's name or the map's own terms."""
+    notes_of = {rule.name: rule.note for rule in RULES}
+    points: list[str] = []
+    notes: list[str] = []
+    for reason in reasons:
+        rule = _RULE_LINE.match(reason)
+        if rule:
+            note = notes_of.get(rule.group(1), "")
+            if note:
+                notes.append(note)
+            continue
+        reason = _HOW_PART.sub(lambda m: f" ({PLAIN_HOW.get(m.group(1), 'from its listing')})", reason, count=1)
+        reason = _PLAIN_LINES.get(reason, reason)
+        for old, new in _PLAIN_WORDS:
+            reason = reason.replace(old, new)
+        if _POINTS.match(reason):
+            points.append(reason)
+        else:
+            notes.append(reason[:1].upper() + reason[1:])
+    return points + notes

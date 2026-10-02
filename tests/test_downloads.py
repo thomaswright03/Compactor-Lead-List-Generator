@@ -50,3 +50,32 @@ def test_download_file_names_carry_the_utah_date(monkeypatch):
         assert res.status_code == 200
         assert res.headers["Content-Disposition"] == \
             f"attachment; filename=compactor-leads-2026-09-30.{fmt}"
+
+
+def test_no_rule_names_or_map_terms_in_the_downloads_or_on_the_leads_page():
+    """A lead decided by each of the classifier's rules, saved: the Leads page's reasons
+    and every cell of the Excel and CSV downloads are in a salesperson's words (no
+    "category rule (...)", "map tag", "catch-all", rule texts...)."""
+    import copy
+
+    from test_classify_rules import RULE_EXAMPLES, internal_words
+
+    from leadgen import saved, web
+    leads = []
+    for i, (_, example, _) in enumerate(RULE_EXAMPLES):
+        lead = copy.deepcopy(example)
+        lead.lat += i * 0.02                           # far apart: never merged as one site
+        leads.append(score_lead(lead, config.DEFAULT_KEYWORDS))
+    saved.save_search(leads, config.DEFAULT_KEYWORDS)
+    client = web.create_app().test_client()
+    shown = client.get("/leads?tab=all&limit=100").get_json()["leads"]
+    assert len(shown) == len(RULE_EXAMPLES)
+    for lead in shown:
+        assert lead["reasons"] and not internal_words(" | ".join(lead["reasons"])), lead["reasons"]
+    text = client.get("/download/saved.csv").data.decode("utf-8-sig")
+    assert "Only the building type or the business name suggests what it does" in text
+    from openpyxl import load_workbook
+    book = load_workbook(io.BytesIO(client.get("/download/saved.xlsx").data))
+    cells = [str(c) for ws in book.worksheets for row in ws.iter_rows(values_only=True) for c in row if c]
+    for found in (internal_words(text), internal_words(" | ".join(cells))):
+        assert not found, found

@@ -14,7 +14,7 @@ from ..export import format_phone
 from ..localtime import date_time_text
 from ..models import Lead, Undo
 from ..pipeline import EXEMPT_TYPES, SearchParams
-from ..scoring import TIER_LABELS
+from ..scoring import TIER_LABELS, plain_reasons
 
 log = logging.getLogger("leadgen.web")
 
@@ -113,7 +113,7 @@ def lead_json(lead: Lead, undo: Undos | None = None) -> dict[str, Any]:
         "category": lead.category, "address": lead.address, "city": city,
         "zip": lead.zip, "near": near.text() if near else "",
         "phone": format_phone(lead.phone), "website": lead.website,
-        "distance": lead.distance_miles, "reasons": lead.reasons, "map_url": lead.map_url,
+        "distance": lead.distance_miles, "reasons": plain_reasons(lead.reasons), "map_url": lead.map_url,
         "sources": lead.sources, "key": lead.uid, "has_baler": lead.has_baler,
         "marked_by": lead.marked_by, "mark_clicks": lead.mark_clicks,
         "marks_disagreed": lead.marks_disagreed,

@@ -11,7 +11,7 @@ from . import places
 from .localtime import date_time_text
 from .models import Lead
 from .pipeline import EXEMPT_TYPES
-from .scoring import TIER_LABELS, TIERS
+from .scoring import TIER_LABELS, TIERS, plain_reasons
 from .xlsx import Book, Cell, clean
 
 # A private scratch column, worded unlike the site's own "Has Baler or Compactor?"
@@ -21,15 +21,6 @@ OFFLINE_CHOICES = ("Saw a compactor", "Saw a baler", "Saw neither", "Not sure")
 
 # The sources in the downloads' words.
 SOURCE_NAMES = {"google": "Google", "yelp": "Yelp", "osm": "OpenStreetMap map data"}
-# How a category was matched ("+35 Grocery (by map tag): ..."), in the downloads' words.
-_HOW = {"Google category": "from the Google listing", "Yelp category": "from the Yelp listing",
-        "map tag": "from the map listing", "name": "from its name",
-        "search query": "from the search that found it"}
-
-
-def plain_reason(reason: str) -> str:
-    """A score reason in plain words: "(by map tag)" -> "(from the map listing)"."""
-    return re.sub(r"\(by ([^)]+)\)", lambda m: f"({_HOW.get(m.group(1), m.group(1))})", reason, count=1)
 
 
 Column = tuple[str, Callable[[Lead], object], float]
@@ -77,7 +68,8 @@ COLUMNS: list[Column] = [
     ("Phone", lambda l: format_phone(l.phone), 16),
     ("Website", lambda l: l.website, 32),
     ("Distance (mi)", lambda l: l.distance_miles, 12),
-    ("Why This Score", lambda l: "Points: " + " | ".join(map(plain_reason, l.reasons)) if l.reasons else "", 60),
+    # In a salesperson's words, like the Leads page (scoring.plain_reasons).
+    ("Why This Score", lambda l: "Points: " + " | ".join(plain_reasons(l.reasons)) if l.reasons else "", 60),
     ("Matched Keywords", lambda l: ", ".join(l.matched_keywords), 18),
     ("Google Reviews", lambda l: l.rating_count, 10),
     ("Yelp Reviews", lambda l: l.yelp_reviews, 10),
