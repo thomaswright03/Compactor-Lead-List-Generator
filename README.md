@@ -195,6 +195,12 @@ only once its checks are green. The
 classic-rule alternative, how to check the rule is on and its current status (not
 set yet on 2026-10-02).
 
+**Still open for the owner** (each a few minutes, with exact steps and a check in the
+runbook's [Owner actions still open](docs/operator-runbook.md#owner-actions-still-open)):
+protect `main` as above; set `LEADGEN_SUPPORT_CONTACT` in Render so the login page
+names a real contact (until then each start of the site logs that it is not set);
+and delete the finished branch `wip-yelp-cap-and-baler-marks` on GitHub.
+
 ---
 
 © Wright AI Solutions.

@@ -12,6 +12,36 @@ in Render → the service → **Environment** → **Save Changes**. Details just
 - [Alerts: the webhook](#problems-the-webhook)
 - [Settings](#settings-environment-variables) · [Put it online and the database](#put-it-online-render)
 - [Login](#login-and-the-free-plan) · [Yelp limits](#yelp-notes) · [Google costs](#cost-notes-google)
+- [Owner actions still open](#owner-actions-still-open)
+
+## Owner actions still open
+
+Three settings only the owner (Thomas) can make, on GitHub and on Render; the code
+can't make them, and nothing else is waiting on them. Each takes a few minutes. When
+one is done, change its **Open** to **Done (the date)** here and in the section it
+links to.
+
+1. **Protect `main`** (GitHub; **Open**, checked 2026-10-02). So a commit with a
+   failing check can't land on `main`. Steps: [Deploying → Protect `main`](#deploying)
+   (a ruleset that requires the checks `lint`, `test (sqlite)` and `test (postgres)`).
+   *Check:* `gh api repos/thomaswright03/Compactor-Lead-List-Generator/branches/main --jq .protected`
+   prints `true` (or the repository's **Branches** page shows `main` as protected).
+2. **Name a real contact on the login page** (Render; **Open**, checked 2026-10-02).
+   So a salesperson who forgot the password, or is locked out, knows whom to call. In
+   Render open the **compactor-lead-finder** service → **Environment** → **Add
+   Environment Variable**: key `LEADGEN_SUPPORT_CONTACT`, value a name with a phone
+   number or email, such as `Jane Doe at (801) 555-0100 or jane@example.com` → **Save
+   Changes** (the site restarts in about a minute). Set it in Render only, never in
+   this repository. Until it is set, every start of the site logs "LEADGEN_SUPPORT_CONTACT
+   is not set" (Render → **Logs**). *Check:*
+   `curl -s https://compactor-lead-finder.onrender.com/login | grep -oE 'href="(tel|mailto):[^"]+"'`
+   prints the contact's `tel:` or `mailto:` link (nothing printed: not set yet). More
+   in [Login and the free plan](#login-and-the-free-plan).
+3. **Delete the old branch `wip-yelp-cap-and-baler-marks`** (GitHub; **Open**, checked
+   2026-10-02). Everything on it reached `main` long ago; it only confuses whoever reads
+   the repository next. Steps, with an optional archive tag that keeps its commit:
+   [Old branches](#the-size-of-a-clone). *Check:* `git ls-remote --heads origin` lists
+   only `refs/heads/main`.
 
 ## Emergency switches: stop searches or paid calls
 
@@ -299,9 +329,11 @@ once): GitHub → the repository → **Branches** → the bin icon next to it, o
 ```bash
 git push origin 20eb26110c8537af04bd3e68420251e18a50696d:refs/tags/archive/wip-yelp-cap-and-baler-marks  # optional: keep a tag
 git push origin --delete wip-yelp-cap-and-baler-marks
+git ls-remote --heads origin        # check: lists only refs/heads/main
 ```
 
-Then remove this paragraph. `main` is the only branch the site needs.
+Then mark it **Done** under [Owner actions still open](#owner-actions-still-open)
+and remove this paragraph. `main` is the only branch the site needs.
 
 ## The database (saved leads, marks, calls, the Yelp count)
 
@@ -388,6 +420,9 @@ can call or email straight from it. Without it the line says "Ask the person who
 gave you your login, or Wright AI Solutions." The contact details belong in Render
 only, never in this repository. **Status (2026-10-02): not set on the live site**
 (the owner, Thomas, chooses the contact and sets it); change this line when it is.
+Until then every start of the site logs "LEADGEN_SUPPORT_CONTACT is not set". To check
+it from anywhere: `curl -s https://compactor-lead-finder.onrender.com/login | grep -oE
+'href="(tel|mailto):[^"]+"'` prints the contact's link once it is set.
 A login lasts 30 days on a device; changing the username or password logs everyone
 out. After 10 wrong passwords from one address, logins from it pause for 15 minutes.
 Without a password the page only answers on `localhost` or an IP address; to use

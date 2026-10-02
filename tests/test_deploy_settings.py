@@ -47,3 +47,16 @@ def test_ci_lints_and_type_checks_every_page_script():
     # The type check is strict (no untyped parameter, no unchecked null), like mypy's.
     assert re.search(r'^\s*"strict": true,', _read("tsconfig.json"), re.M)
     assert not re.search(r'"(noImplicitAny|strictNullChecks)": false', _read("tsconfig.json"))
+
+
+def test_the_runbook_lists_the_owners_open_steps_with_a_check_for_each():
+    """Protecting main, the login page's contact and the old branch are the owner's to do:
+    the runbook lists them in one place, each with exact steps and a way to check it."""
+    runbook = _read("docs/operator-runbook.md")
+    section = runbook.split("## Owner actions still open", 1)[1].split("\n## ", 1)[0]
+    text = " ".join(section.split())
+    assert "--jq .protected" in text and "`lint`, `test (sqlite)` and `test (postgres)`" in text
+    assert "`LEADGEN_SUPPORT_CONTACT`" in text and "(tel|mailto)" in text and "never in this repository" in text
+    assert "wip-yelp-cap-and-baler-marks" in text and "git ls-remote --heads origin" in text
+    assert "git push origin --delete wip-yelp-cap-and-baler-marks" in runbook
+    assert "docs/operator-runbook.md#owner-actions-still-open" in _read("README.md")

@@ -295,6 +295,19 @@ def test_login_page_says_what_it_is_and_whom_to_ask(monkeypatch):
     assert 'type="password" autocomplete="current-password" required autofocus' in wrong
 
 
+def test_a_site_without_a_login_contact_says_so_in_its_logs(monkeypatch, caplog):
+    """Until the owner sets LEADGEN_SUPPORT_CONTACT, every start says so in the logs."""
+    with caplog.at_level("WARNING", logger="leadgen.web"):
+        web.create_app(password="s3cret")
+    assert "LEADGEN_SUPPORT_CONTACT is not set" in caplog.text
+    caplog.clear()
+    monkeypatch.setenv("LEADGEN_SUPPORT_CONTACT", "Jane Doe at (801) 555-0100")
+    with caplog.at_level("WARNING", logger="leadgen.web"):
+        web.create_app(password="s3cret")
+        web.create_app(password="")                 # a local copy without a login needs no contact
+    assert "LEADGEN_SUPPORT_CONTACT" not in caplog.text and "555-0100" not in caplog.text
+
+
 # ---- one database connection per page load
 
 def test_leads_page_uses_one_database_connection(monkeypatch):
