@@ -50,7 +50,17 @@ LEADGEN_TEST_DATABASE_URL=postgresql://... python -m pytest   # a throwaway Post
 python -m ruff check .                         # lint and layout (settings in pyproject.toml)
 python -m vulture                              # dead code (settings in pyproject.toml)
 python -m mypy                                 # strict type check (settings in pyproject.toml)
+npm ci                                         # the page scripts' lint and type tools (package-lock.json)
+npm run lint:js                                # ESLint over leadgen/static/*.js (eslint.config.mjs)
+npm run types:js                               # TypeScript's check of the same scripts (tsconfig.json)
 ```
+
+The page's scripts are classic scripts that share their top-level names. Each lists the
+names it shares at its top (`/* exported ... */`); ESLint lets the other files use only
+those, so a misspelt or renamed function, an undeclared (implicit) global or an unused
+name fails the lint, and the type check (JSDoc types where the DOM needs them; what the
+scripts use from the page itself is declared in `types/page.d.ts`) fails on a name no
+script declares or two declare. Lines are at most 120 characters, as in the Python.
 
 The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
 `leadgen/saved.py`, `marks.py`, `calls.py` and `daily.py` keep the saved data
@@ -109,7 +119,7 @@ rules (indentation, whitespace, blank lines, lines of at most 120 characters)
 and the lint fails on a badly laid-out file.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the lint, the dead-code and
-strict type checks and every test, on SQLite and on Postgres, for each push and
+strict type checks (and the page scripts' lint and type check) and every test, on SQLite and on Postgres, for each push and
 pull request. Render deploys a push to `main` only once `lint`, `test (sqlite)`
 and `test (postgres)` are all green (`autoDeployTrigger: checksPass` in
 `render.yaml`, "After CI Checks Pass" in Render), so a red commit reaches `main`

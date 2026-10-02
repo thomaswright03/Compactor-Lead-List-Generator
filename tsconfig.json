@@ -1,0 +1,27 @@
+{
+  // Type check of the page's scripts (leadgen/static/*.js, JSDoc types where needed).
+  // Run: npm run types:js   CI runs it on every push. The scripts are classic scripts
+  // sharing one global scope, so a name used in one and missing from all (a typo, a
+  // renamed function) fails here, as does a name declared twice.
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": false,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "files": [
+    "types/page.d.ts",
+    "leadgen/static/core.js",
+    "leadgen/static/leads.js",
+    "leadgen/static/calls.js",
+    "leadgen/static/find.js",
+    "leadgen/static/stats.js",
+    "leadgen/static/start.js",
+    "leadgen/static/tour.js"
+  ]
+}

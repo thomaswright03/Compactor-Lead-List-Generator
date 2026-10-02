@@ -1,4 +1,6 @@
 /* Part 3: the Calls page, the "Just called" box and call history. */
+// The names this part shares with the others (eslint.config.mjs reads this list).
+/* exported emptyNote, loadCalled, renderCalls, openCall, openHistory */
 // An empty page that says how it fills up, with a link to where that happens.
 function emptyNote(title, text, href, label) {
   const box = el("div", undefined, "empty");
@@ -35,13 +37,16 @@ function renderCalls() {
   const tabItems = [["", "All called businesses", called.length], ...OUTCOMES.map((o) => [o, o, outcomes[o] || 0])];
   tabs($("call-tabs"), tabItems, S.callView, pickCallTab);
   // Phones: the same choice as one list, with the counts.
-  $("call-pick").replaceChildren(...tabItems.map(([v, t, n]) => { const o = el("option", `${t}: ${n.toLocaleString()}`); o.value = v; return o; }));
+  $("call-pick").replaceChildren(...tabItems.map(([v, t, n]) => {
+    const o = el("option", `${t}: ${n.toLocaleString()}`); o.value = v; return o;
+  }));
   $("call-pick").value = S.callView;
   const rows = S.callView ? called.filter((l) => l.call_outcome === S.callView) : [...called];
   const wrap = $("calls-wrap");
   if (!S.called.length) {
     wrap.replaceChildren(emptyNote("No calls logged yet.",
-      "Log a call with Just called on any business on the Leads page. It doesn't change the business's Yes / No answer.",
+      "Log a call with Just called on any business on the Leads page. It doesn't change the business's " +
+      "Yes / No answer.",
       "#leads", "Go to Leads"));
     return;
   }
@@ -53,7 +58,10 @@ function renderCalls() {
     wrap.replaceChildren(box);
     return;
   }
-  if (!rows.length) { wrap.replaceChildren(el("div", `No calls with the result “${S.callView}” yet.`, "empty")); return; }
+  if (!rows.length) {
+    wrap.replaceChildren(el("div", `No calls with the result “${S.callView}” yet.`, "empty"));
+    return;
+  }
   const table = el("table", undefined, "plain calls");
   const head = el("tr");
   for (const t of ["Business", "Phone", "Latest call", "Conversation summary", ""]) head.append(el("th", t));
@@ -62,7 +70,9 @@ function renderCalls() {
   rows.sort((a, b) => (b.last_call_at || 0) - (a.last_call_at || 0));   // latest call first
   for (const l of rows) {
     const tr = el("tr");
-    const name = el("td", undefined, "c-name"); name.append(el("strong", l.name)); name.append(el("div", [l.address || "No street address", l.city || l.near].filter(Boolean).join(" · "), "sub"));
+    const name = el("td", undefined, "c-name");
+    name.append(el("strong", l.name),
+                el("div", [l.address || "No street address", l.city || l.near].filter(Boolean).join(" · "), "sub"));
     if (l.closed) name.append(el("div", "Closed for good", "flag"));
     tr.append(name);
     const phone = el("td", undefined, "c-phone");
@@ -120,14 +130,18 @@ function notesCell(l) {
 const draftMemory = new Map();
 const draftKey = (key) => `call-draft:${key}`;
 function readDraft(key) {
-  try { const d = JSON.parse(localStorage.getItem(draftKey(key)) || "null"); if (d) return d; } catch (e) { /* not kept */ }
+  try {
+    const d = JSON.parse(localStorage.getItem(draftKey(key)) || "null");
+    if (d) return d;
+  } catch (e) { /* not kept */ }
   return draftMemory.get(key) || null;
 }
 function writeDraft(key, draft) {
   const empty = !draft.notes.trim() && !draft.outcome;
   if (empty) draftMemory.delete(key); else draftMemory.set(key, draft);
-  try { if (empty) localStorage.removeItem(draftKey(key)); else localStorage.setItem(draftKey(key), JSON.stringify(draft)); }
-  catch (e) { /* kept for this visit only */ }
+  try {
+    if (empty) localStorage.removeItem(draftKey(key)); else localStorage.setItem(draftKey(key), JSON.stringify(draft));
+  } catch (e) { /* kept for this visit only */ }
 }
 // Each call gets its own id when the box opens (kept with the draft), so sending it twice
 // (a retry after a lost answer) records it once.
@@ -139,12 +153,16 @@ function newId() {
 }
 function pickOutcome(o) {
   callOutcome = o;
-  $("outcomes").querySelectorAll("button").forEach((x) => { const on = x.textContent === o; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on); });
+  $("outcomes").querySelectorAll("button").forEach((x) => {
+    const on = x.textContent === o; x.classList.toggle("on", on); x.setAttribute("aria-pressed", String(on));
+  });
   $("outcomes").classList.remove("need");
   $("call-need").hidden = Boolean(o);
   if (o && $("call-error").dataset.need) { $("call-error").textContent = ""; delete $("call-error").dataset.need; }
 }
-function saveDraft() { if (callLead) writeDraft(callLead.key, { notes: $("call-notes").value, outcome: callOutcome, id: callId }); }
+function saveDraft() {
+  if (callLead) writeDraft(callLead.key, { notes: $("call-notes").value, outcome: callOutcome, id: callId });
+}
 function openCall(lead) { withName(() => openCallBox(lead)); }
 function openCallBox(lead) {
   callLead = lead;
@@ -162,7 +180,8 @@ function openCallBox(lead) {
   $("call-notes").value = draft ? draft.notes : "";
   pickOutcome(draft && OUTCOMES.includes(draft.outcome) ? draft.outcome : "");
   pastedOver = 0; notesCount();
-  $("call-draft-note").textContent = draft ? "Your unsaved notes from before are back. They are kept until you save." : "Notes are kept as a draft until you save.";
+  $("call-draft-note").textContent = draft ? "Your unsaved notes from before are back. They are kept until you save."
+    : "Notes are kept as a draft until you save.";
   $("call-dlg").showModal();
   $("call-notes").focus();
 }
@@ -176,8 +195,10 @@ function notesCount() {
   box.hidden = left > 500 && !over;
   box.classList.toggle("limit", left <= 0 || over > 0);
   box.textContent = over > 0
-    ? `Limit reached: a summary can be up to ${NOTES_MAX.toLocaleString()} characters, so the last ${over.toLocaleString()} characters you pasted were left out. Shorten it, or keep the rest elsewhere.`
-    : left <= 0 ? `Limit reached: a summary can be up to ${NOTES_MAX.toLocaleString()} characters. Anything more isn't kept.`
+    ? `Limit reached: a summary can be up to ${NOTES_MAX.toLocaleString()} characters, so the last ` +
+      `${over.toLocaleString()} characters you pasted were left out. Shorten it, or keep the rest elsewhere.`
+    : left <= 0
+      ? `Limit reached: a summary can be up to ${NOTES_MAX.toLocaleString()} characters. Anything more isn't kept.`
     : `${left.toLocaleString()} characters left (${NOTES_MAX.toLocaleString()} at most).`;
 }
 $("call-notes").addEventListener("paste", (e) => {
@@ -203,7 +224,8 @@ $("call-form").addEventListener("submit", async (e) => {
   const target = callLead, key = callLead.key;
   $("call-save").disabled = true; S.busy++;
   try {
-    const { call } = await post("/calls", { key, outcome: callOutcome, notes: $("call-notes").value, id: callId, by: myName() });
+    const { call } = await post("/calls", { key, outcome: callOutcome, notes: $("call-notes").value, id: callId,
+                                            by: myName() });
     writeDraft(key, { notes: "", outcome: "" });
     // Update the lead as it is now (the list may have been reloaded while saving).
     const lead = leadByKey(key) || target;
@@ -211,7 +233,8 @@ $("call-form").addEventListener("submit", async (e) => {
     const earlier = call.notes ? { earlier_notes: "", earlier_notes_when: "" }
       : lead.call_notes ? { earlier_notes: lead.call_notes, earlier_notes_when: lead.last_call } : {};
     updateLead({ key, ...earlier, call_outcome: call.outcome, call_notes: call.notes, last_call: call.when,
-                 last_call_at: call.at, last_call_by: call.by, call_count: (lead.call_count || 0) + 1, undo_call: call.undo });
+                 last_call_at: call.at, last_call_by: call.by, call_count: (lead.call_count || 0) + 1,
+                 undo_call: call.undo });
     addRecent(leadByKey(key) || lead);
     if (S.counts && first) S.counts.called++;
     if (callLead && callLead.key === key) { callLead = null; $("call-dlg").close(); }
@@ -236,7 +259,8 @@ async function openHistory(lead) {
     list.replaceChildren(el("h3", "Calls", "hist-head"));
     for (const c of calls) {
       const item = el("div", undefined, "item");
-      const top = el("div"); top.append(el("span", c.outcome, "badge")); top.append(el("span", `  ${c.when}${byWho(c.by)}`, "sub"));
+      const top = el("div");
+      top.append(el("span", c.outcome, "badge"), el("span", `  ${c.when}${byWho(c.by)}`, "sub"));
       item.append(top, el("div", c.notes || "(no notes)", "notes"));
       list.append(item);
     }
@@ -247,7 +271,8 @@ async function openHistory(lead) {
       list.append(el("h3", "Yes / No marks", "hist-head"));
       for (const m of marks) {
         const item = el("div", undefined, "item");
-        item.append(el("span", m.value === "yes" ? "Yes" : "No", "badge"), el("span", `  ${m.when}${byWho(m.by)}`, "sub"));
+        item.append(el("span", m.value === "yes" ? "Yes" : "No", "badge"),
+                    el("span", `  ${m.when}${byWho(m.by)}`, "sub"));
         list.append(item);
       }
     }

@@ -1,4 +1,5 @@
-# Runs on every push and pull request: lint, the dead-code check and the type check, then the whole
+# Runs on every push and pull request: lint, the dead-code check and the type check (of the
+# Python and of the page's scripts), then the whole
 # test suite on SQLite and on Postgres (like the live site), including the browser
 # tests. Render deploys a push to main only once all three jobs (lint, test (sqlite),
 # test (postgres)) are green (render.yaml: autoDeployTrigger: checksPass); a red commit
@@ -23,6 +24,15 @@ jobs:
       - run: ruff check .
       - run: vulture                                   # settings in pyproject.toml
       - run: mypy                                      # settings in pyproject.toml
+      # The page's scripts (leadgen/static/*.js): lint and type check, with the exact tool
+      # versions in package-lock.json (the site itself needs no Node).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:js                           # settings in eslint.config.mjs
+      - run: npm run types:js                          # settings in tsconfig.json
 
   test:
     runs-on: ubuntu-latest

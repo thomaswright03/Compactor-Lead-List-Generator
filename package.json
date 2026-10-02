@@ -1,0 +1,13 @@
+{
+  "name": "compactor-lead-list-generator-checks",
+  "private": true,
+  "description": "Lint and type check of the Lead Finder page's scripts (leadgen/static/*.js); the site itself needs no Node.",
+  "scripts": {
+    "lint:js": "eslint leadgen/static",
+    "types:js": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "eslint": "10.1.0",
+    "typescript": "6.0.2"
+  }
+}

@@ -1,7 +1,19 @@
 /* The Lead Finder page, part 1 of 6: shared helpers, the colour theme and page switching.
    One HTML page (templates/index.html) holds Find leads, Leads, Calls and Stats, switched by
    the #address; these scripts load in order and share their top-level names. */
+// The names this part shares with the others (eslint.config.mjs reads this list).
+/* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, S, el, link, phoneLink,
+   button, api, post, fmtTime, serverNow, leftOf, problem, themeChoice, applyTheme, myName,
+   withName, byWho, parseHash, readLeadView, route, writeHash */
+// An element of the page by its id: an input, a dialog, a button... (typed `any`, as the page's
+// ids name every kind; the type check still catches a misspelt function or variable).
+/** @type {(id: string) => any} */
 const $ = (id) => document.getElementById(id);
+// The page's elements a CSS selector picks, and the element an event happened on.
+/** @type {(selector: string) => NodeListOf<HTMLElement>} */
+const $all = (selector) => document.querySelectorAll(selector);
+/** @type {(e: Event) => HTMLElement} */
+const eventEl = (e) => /** @type {HTMLElement} */ (e.target);
 const CONFIG = JSON.parse($("page-config").textContent);
 const OUTCOMES = CONFIG.outcomes;
 const PAUSED = CONFIG.paused;
@@ -16,10 +28,11 @@ const PAGE = 100;
 const SHIFT_GUARD_MS = 700;
 // The Leads page holds only the rows it shows (one tab, filtered and sorted by the server,
 // the first `limit` of them), every tab's count, and the leads that can still be undone.
-const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "", sending: new Map(),
-            loaded: false, loadError: "", refreshError: "", viewLoading: false, seq: 0,
-            leadView: "", callView: "", callQ: "", q: "", tier: "", phone: false, sort: "score", dir: "desc", limit: PAGE,
-            job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0, cutOffTimer: 0 };
+const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "",
+            sending: new Map(), loaded: false, loadError: "", refreshError: "", viewLoading: false, seq: 0,
+            leadView: "", callView: "", callQ: "", q: "", tier: "", phone: false, sort: "score", dir: "desc",
+            limit: PAGE, job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0,
+            cutOffTimer: 0 };
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);
@@ -48,17 +61,21 @@ function button(text, cls, onClick) {
 async function api(path, opts) {
   let res;
   try { res = await fetch(path, opts); }
-  catch (err) { throw Object.assign(new Error("Can't reach the Lead Finder. Check your internet connection and try again."), { status: 0 }); }
+  catch (err) {
+    throw Object.assign(new Error("Can't reach the Lead Finder. Check your internet connection and try again."),
+                        { status: 0 });
+  }
   if (res.status === 401) { location.href = "/login"; throw new Error("Logged out"); }
   const body = await res.json().catch(() => ({}));
   if (typeof body.now === "number") S.skew = body.now - Date.now() / 1000;
   if (!res.ok) {
-    const e = new Error(body.error || "Something went wrong. Try again in a minute.");
-    e.status = res.status; e.body = body; throw e;
+    throw Object.assign(new Error(body.error || "Something went wrong. Try again in a minute."),
+                        { status: res.status, body });
   }
   return body;
 }
-const post = (path, data) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+const post = (path, data) => api(path, { method: "POST", headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify(data) });
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const serverNow = () => Date.now() / 1000 + S.skew;
 const leftOf = (undo) => undo ? Math.max(0, Math.floor(undo.until - serverNow())) : 0;
@@ -74,13 +91,17 @@ function themeChoice() { try { return localStorage.getItem("theme") || "system";
 function applyTheme(choice) {
   if (choice === "light" || choice === "dark") document.documentElement.setAttribute("data-theme", choice);
   else document.documentElement.removeAttribute("data-theme");
-  try { if (choice === "system") localStorage.removeItem("theme"); else localStorage.setItem("theme", choice); } catch (e) { /* not kept */ }
-  document.querySelectorAll("[data-theme-pick]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.themePick === choice));
+  try {
+    if (choice === "system") localStorage.removeItem("theme"); else localStorage.setItem("theme", choice);
+  } catch (e) { /* not kept */ }
+  $all("[data-theme-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themePick === choice)));
   window.setThemeColor(choice);              // the browser's bar matches (templates/_theme.html)
   if (chartRows && !$("page-stats").hidden) drawChart(chartRows);
 }
-document.querySelectorAll("[data-theme-pick]").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.themePick)));
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (chartRows) drawChart(chartRows); });
+$all("[data-theme-pick]").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.themePick)));
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (chartRows) drawChart(chartRows);
+});
 
 /* Who is using this browser: the name saved with each Yes / No and call made here, so the
    team can see who to ask. Kept in this browser; asked once before the first mark or call. */
@@ -164,8 +185,10 @@ function readLeadView(params) {
 }
 function route() {
   const { page: asked, params } = parseHash();
-  const page = ["find", "leads", "calls", "stats"].includes(asked) ? asked : (S.counts && S.counts.all ? "leads" : "find");
-  if (typeof hideToast === "function") hideToast();   // a note about one page never covers the next (leads.js may not be loaded yet)
+  const page = ["find", "leads", "calls", "stats"].includes(asked) ? asked
+    : (S.counts && S.counts.all ? "leads" : "find");
+  // A note about one page never covers the next (leads.js may not be loaded yet).
+  if (typeof hideToast === "function") hideToast();
   if (page === "leads" && params.toString() && readLeadView(params)) { S.pinned.clear(); S.limit = PAGE; changeView(); }
   if (page === "calls") {
     const tab = params.get("tab");
@@ -175,7 +198,7 @@ function route() {
   }
   for (const p of ["find", "leads", "calls", "stats"]) $(`page-${p}`).hidden = p !== page;
   document.title = `${TITLES[page]} · ${SITE}`;
-  document.querySelectorAll("nav a").forEach((a) => {
+  $all("nav a").forEach((a) => {
     a.classList.toggle("on", a.dataset.page === page);
     if (a.dataset.page === page) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
@@ -203,9 +226,11 @@ window.addEventListener("hashchange", route);
 // A double-click on a dialog's button (Start search, Save, Close) closes the dialog with the
 // first click; the second must not land on the page underneath and select its text.
 let dialogClickAt = 0;
-document.addEventListener("click", (e) => { if (e.target.closest("dialog button")) dialogClickAt = Date.now(); }, true);
+document.addEventListener("click", (e) => {
+  if (eventEl(e).closest("dialog button")) dialogClickAt = Date.now();
+}, true);
 document.addEventListener("mousedown", (e) => {
-  if (e.detail > 1 && (Date.now() - dialogClickAt < 800 || e.target.closest("dialog button"))) e.preventDefault();
+  if (e.detail > 1 && (Date.now() - dialogClickAt < 800 || eventEl(e).closest("dialog button"))) e.preventDefault();
 }, true);
 document.addEventListener("dblclick", () => {
   if (Date.now() - dialogClickAt < 800) window.getSelection().removeAllRanges();

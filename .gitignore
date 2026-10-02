@@ -11,3 +11,4 @@ output/
 .pytest_cache/
 *.whl
 .coverage
+node_modules/
