@@ -9,10 +9,12 @@ every redeploy, so on Render there is no fallback: without DATABASE_URL
 nothing is saved and Yelp is paused (its daily limit could not be kept).
 """
 
+import atexit
 import logging
 import os
 import sqlite3
 import threading
+import time
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any
@@ -106,9 +108,23 @@ TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "m
 BY_ID_LIMIT = 1000
 _CHUNK = 500
 
-_ready: set[str] = set()
+_ready: set[str] = set()       # the databases whose tables this process has created
 _lock = threading.Lock()
 _local = threading.local()      # the connection a web request shares (see scope())
+
+# Connections are kept open between requests and handed out again, so a page load
+# doesn't open a new (TLS) connection to Postgres each time. At most POOL_SIZE idle
+# ones are kept per database: the web server's threads (render.yaml: --threads 8), so
+# every thread can find one waiting. More are opened when more are busy at once
+# (a search's background thread as well), and closed when they come back.
+POOL_SIZE = 8
+# One idle this long is asked "SELECT 1" before it is handed out (the database may have
+# dropped it); one idle longer than POOL_MAX_IDLE is closed instead (Neon closes idle
+# connections after a few minutes).
+POOL_CHECK_AFTER = 10.0
+POOL_MAX_IDLE = 240.0
+_pool: dict[str, list[tuple["Db", float]]] = {}
+_pool_lock = threading.Lock()
 
 
 # A row as the database returns it.
@@ -149,6 +165,7 @@ class Db:
         self.conn = conn
         self.postgres = postgres
         self.key = key          # which database this is (for caches kept per database)
+        self.pid = os.getpid()  # the process that opened it (a pooled one never crosses a fork)
 
     def _sql(self, sql: str) -> str:
         return sql.replace("?", "%s") if self.postgres else sql
@@ -213,39 +230,125 @@ def rows_for(db: Db, select: str, column: str, ids: Iterable[str], order: str = 
     return rows
 
 
+def _database() -> tuple[str, bool]:
+    """(which database, is it Postgres): the DATABASE_URL, or the local SQLite file's path.
+    Raises Unavailable on Render without DATABASE_URL."""
+    url = database_url()
+    if url:
+        return url, True
+    if on_render():
+        raise Unavailable("no database is connected yet (DATABASE_URL is not set in Render)")
+    return str((http.CACHE_DIR / "leadgen.db").resolve()), False
+
+
 def open_db() -> Db:
-    """A Db on a new connection (autocommit); close it with db.conn.close().
+    """A Db (autocommit) for one user at a time: an idle one from the pool, else a new
+    connection. Give it back with release(db) (or close it with db.conn.close()).
 
     Raises Unavailable when there is no database.
     """
-    url = database_url()
+    key, postgres = _database()
+    db = _from_pool(key)
+    return db if db is not None else _new_connection(key, postgres)
+
+
+def _new_connection(key: str, postgres: bool) -> Db:
+    """A new connection; the first one in this process also creates any missing tables."""
     conn: Any
-    if url:
+    if postgres:
         import psycopg
         try:
-            conn = psycopg.connect(url, autocommit=True, connect_timeout=15)
+            conn = psycopg.connect(key, autocommit=True, connect_timeout=15)
         except (psycopg.Error, OSError) as exc:
             log.warning("Database connection failed: %s", exc.__class__.__name__)
             raise Unavailable("the database could not be reached") from exc
-        db, ready_key = Db(conn, True, url), url
-    elif on_render():
-        raise Unavailable("no database is connected yet (DATABASE_URL is not set in Render)")
     else:
         http.CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        path = http.CACHE_DIR / "leadgen.db"
-        conn = sqlite3.connect(path, timeout=30, isolation_level=None, check_same_thread=False)
-        ready_key = str(path.resolve())
-        db = Db(conn, False, ready_key)
+        conn = sqlite3.connect(key, timeout=30, isolation_level=None, check_same_thread=False)
+    db = Db(conn, postgres, key)
     try:
         with _lock:
-            if ready_key not in _ready or not db.postgres:
+            # Once per process and database; on SQLite also when the file is new (a
+            # deleted cache folder), as the tables went with it.
+            if key not in _ready or (not postgres and not _has_tables(db)):
                 _create_tables(db)
-                if db.postgres:
-                    _ready.add(ready_key)
+                _ready.add(key)
     except Exception:
         conn.close()
         raise
     return db
+
+
+def _has_tables(db: Db) -> bool:
+    return db.one("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'search_found'") is not None
+
+
+def _idle_now(db: Db) -> bool:
+    """Whether a connection is from this process, open and not inside a transaction."""
+    try:
+        if db.pid != os.getpid():
+            return False
+        if db.postgres:
+            from psycopg.pq import TransactionStatus
+            return (not db.conn.closed and not db.conn.broken
+                    and db.conn.info.transaction_status == TransactionStatus.IDLE)
+        return not db.conn.in_transaction
+    except Exception:  # noqa: BLE001 - a closed SQLite connection raises; not reused
+        return False
+
+
+def _usable(db: Db, idle: float) -> bool:
+    """Whether a pooled connection can be handed out: idle (_idle_now) for not too long
+    and, when it sat a while, still answering."""
+    if idle > POOL_MAX_IDLE or not _idle_now(db):
+        return False
+    if idle > POOL_CHECK_AFTER:
+        try:
+            db.one("SELECT 1")
+        except Exception:  # noqa: BLE001 - sqlite3 or psycopg: a dropped connection
+            return False
+    return True
+
+
+def _from_pool(key: str) -> Db | None:
+    while True:
+        with _pool_lock:
+            idle = _pool.get(key)
+            if not idle:
+                return None
+            db, since = idle.pop()
+        if _usable(db, time.monotonic() - since):
+            return db
+        _close(db)
+
+
+def release(db: Db) -> None:
+    """Hand a connection from open_db() back: kept for the next user when it is healthy
+    and the pool has room, else closed."""
+    if _idle_now(db):
+        with _pool_lock:
+            idle = _pool.setdefault(db.key, [])
+            if len(idle) < POOL_SIZE:
+                idle.append((db, time.monotonic()))
+                return
+    _close(db)
+
+
+def _close(db: Db) -> None:
+    try:
+        db.conn.close()
+    except Exception as exc:  # noqa: BLE001 - sqlite3 or psycopg; it is being dropped
+        log.info("Closing a database connection failed: %s", exc.__class__.__name__)
+
+
+@atexit.register
+def close_pool() -> None:
+    """Close every idle pooled connection (at exit, and in tests)."""
+    with _pool_lock:
+        idle = [db for dbs in _pool.values() for db, _ in dbs]
+        _pool.clear()
+    for db in idle:
+        _close(db)
 
 
 def _create_tables(db: Db) -> None:
@@ -276,7 +379,7 @@ def connect() -> Iterator[Db]:
     try:
         yield db
     finally:
-        db.conn.close()
+        release(db)
 
 
 def begin_scope() -> None:
@@ -286,16 +389,13 @@ def begin_scope() -> None:
 
 
 def end_scope() -> int:
-    """Close the shared connection; returns how many were opened (0 or 1)."""
+    """Give back the shared connection; returns how many were taken (0 or 1)."""
     shared = getattr(_local, "scope", None)
     _local.scope = None
     if not shared:
         return 0
     if shared["db"] is not None:
-        try:
-            shared["db"].conn.close()
-        except Exception as exc:  # noqa: BLE001 - sqlite3 or psycopg; the request is done
-            log.warning("Closing the database connection failed: %s", exc)
+        release(shared["db"])
     return int(shared["opened"])
 
 

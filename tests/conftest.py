@@ -84,3 +84,7 @@ def no_real_keys(monkeypatch, tmp_path):
         with store.connect() as db:
             for table in store.TABLES:
                 db.run(f"DELETE FROM {table}")
+    yield
+    # The connections a test's requests left in the pool go with its database file.
+    from leadgen import store
+    store.close_pool()

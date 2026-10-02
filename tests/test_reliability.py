@@ -425,3 +425,82 @@ def test_one_place_for_utah_time():
     from leadgen import localtime
     assert localtime.clock_text(1790709540) == "1:19 PM"   # 19:19 UTC, daylight time
     assert daily.today() == localtime.now().strftime("%Y-%m-%d")
+
+
+# ---- connections are kept between requests (store.py's pool)
+
+@pytest.fixture
+def new_connections(monkeypatch):
+    """How many new database connections were opened, and how many times the tables
+    were created, from now on."""
+    made = {"connections": 0, "tables": 0}
+    real_new, real_create = store._new_connection, store._create_tables
+
+    def counted_new(key, postgres):
+        made["connections"] += 1
+        return real_new(key, postgres)
+
+    def counted_create(db):
+        made["tables"] += 1
+        real_create(db)
+    monkeypatch.setattr(store, "_new_connection", counted_new)
+    monkeypatch.setattr(store, "_create_tables", counted_create)
+    store.close_pool()
+    return made
+
+
+def test_ten_page_loads_reuse_one_connection(new_connections):
+    saved.save_search([_lead(), _lead("Walmart", "w")])
+    client = web.create_app().test_client()
+    store.close_pool()
+    new_connections["connections"] = 0
+    for _ in range(10):
+        assert client.get("/leads").status_code == 200
+    assert new_connections["connections"] == 1
+
+
+def test_the_tables_are_created_once_per_process(new_connections, monkeypatch):
+    monkeypatch.setattr(store, "_ready", set())             # as if the server just started
+    client = web.create_app().test_client()
+    for _ in range(5):
+        assert client.get("/leads").status_code == 200
+        store.close_pool()                                  # every load on a new connection
+    assert new_connections["connections"] >= 5 and new_connections["tables"] == 1
+
+
+def test_the_pool_keeps_at_most_one_connection_per_server_thread(new_connections):
+    import threading
+    busy = [store.open_db() for _ in range(store.POOL_SIZE + 3)]   # a busy moment
+    threads = [threading.Thread(target=store.release, args=(db,)) for db in busy]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(store._pool[busy[0].key]) == store.POOL_SIZE
+    # The pool matches the web server's threads (render.yaml).
+    import pathlib
+    render = (pathlib.Path(__file__).resolve().parent.parent / "render.yaml").read_text()
+    assert f"--threads {store.POOL_SIZE} " in render
+
+
+def test_a_dropped_connection_is_replaced_without_an_error(new_connections, monkeypatch):
+    saved.save_search([_lead()])
+    client = web.create_app().test_client()
+    assert client.get("/leads").status_code == 200
+    (db, _), = store._pool[next(iter(store._pool))]
+    db.conn.close()                                         # the database dropped it while idle
+    assert client.get("/leads").status_code == 200
+    # One idle a while is asked first; one that doesn't answer is replaced too.
+    monkeypatch.setattr(store, "POOL_CHECK_AFTER", -1.0)
+    asked = []
+    real_one = store.Db.one
+
+    def failing_ping(self, sql, params=()):
+        if sql == "SELECT 1":
+            asked.append(sql)
+            raise OSError("server closed the connection")
+        return real_one(self, sql, params)
+    monkeypatch.setattr(store.Db, "one", failing_ping)
+    before = new_connections["connections"]
+    assert client.get("/leads").status_code == 200
+    assert asked and new_connections["connections"] == before + 1

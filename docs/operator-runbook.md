@@ -307,6 +307,15 @@ and call, `switches`, which holds the emergency switches flipped on the site, an
 still run, but nothing is saved and Yelp is paused (its daily limit could not be
 kept). Off Render, a SQLite file in `.cache/` is used instead.
 
+The site keeps up to 8 database connections open between page loads (one per web
+server thread, `POOL_SIZE` in `leadgen/store.py`, matching `--threads 8` in
+`render.yaml`), so a click doesn't wait for a new connection to Neon. One that sat
+idle for more than 10 seconds is checked with a quick `SELECT 1` before it is used,
+and one idle for 4 minutes is closed (Neon drops idle connections itself), so a
+sleeping database costs one reconnect, not an error. Change both numbers together
+if the thread count ever changes. The tables are checked and created once each time
+the site starts.
+
 **Saved leads.** Every search merges into one saved list: a business found again
 (the same listing, or the duplicate rules in the [developer overview](developer-overview.md)) updates its row instead of
 adding one. The buildings of one site (an apartment complex's numbered buildings,
