@@ -1053,13 +1053,17 @@ def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, 
     from leadgen import daily
     day, _ = daily.claim({"location": "876 Fortune Rd, Salt Lake City, UT 84104", "radius": 30})
     fill = {"state": "filling", "left": 4, "areas": 9, "found": 0, "new": 0, "rounds": 1,
+            "where": "Layton, West Point, Coalville and the area to the north-west",
             "until": time.time() + 3000}
     daily.finish(day, {"leads": 512, "new": 512, "partial": True, "fill": fill})
     context = _context(browser, viewport={"width": width, "height": 800})
     tab = context.new_page()
     tab.goto(site + "#find")
     note = tab.locator("#fill-note")
-    expect(note).to_contain_text("Still filling in 4 areas of the free map data")
+    # Which towns are still missing, so staff know the list isn't complete there yet.
+    expect(note).to_contain_text("Still filling in 4 areas of the free map data that didn't answer "
+                                 "(around Layton, West Point, Coalville and the area to the "
+                                 "north-west)")
     expect(tab.locator("#history tbody").first).to_contain_text("Filling in")
     assert tab.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     daily.finish(day, {"leads": 530, "new": 530, "partial": False,

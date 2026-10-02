@@ -15,7 +15,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import Any
 
-from .. import config
+from .. import config, places
 from ..geo import METERS_PER_MILE, haversine_miles
 from ..http import HttpError, cache_get, cache_put, request_json
 from ..models import Lead
@@ -259,25 +259,38 @@ def _descriptive(name: str, tags: dict[str, str], street: str) -> str:
     return f"{name}, {city}" if city else name
 
 
-def _parts(lat: float, lon: float, radius_miles: float) -> list[Box]:
-    """The search circle's bounding square cut into a grid of boxes no wider than
-    config.OVERPASS_PART_MILES, keeping only the boxes that reach into the circle."""
-    n = max(1, math.ceil(2 * radius_miles / config.OVERPASS_PART_MILES))
+def _square(lat: float, lon: float, radius_miles: float) -> Box:
+    """The search circle's bounding square."""
     dlat = radius_miles / MILES_PER_DEGREE_LAT
     dlon = dlat / max(0.01, math.cos(math.radians(lat)))
-    south, west = lat - dlat, lon - dlon
-    step_lat, step_lon = 2 * dlat / n, 2 * dlon / n
+    return (lat - dlat, lon - dlon, lat + dlat, lon + dlon)
+
+
+def _distance(lat: float, lon: float, box: Box | None) -> tuple[float, float]:
+    """How far a part lies from the search centre, for asking the nearest first: miles
+    to its nearest point (0 for the part the centre is in), then to its middle."""
+    if box is None:
+        return 0.0, 0.0
+    near = haversine_miles(lat, lon, min(max(lat, box[0]), box[2]), min(max(lon, box[1]), box[3]))
+    return near, haversine_miles(lat, lon, (box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
+
+
+def _parts(lat: float, lon: float, radius_miles: float) -> list[Box]:
+    """The search circle's bounding square cut into a grid of boxes no wider than
+    config.OVERPASS_PART_MILES, keeping only the boxes that reach into the circle,
+    nearest the centre first (the part the centre is in, then outwards)."""
+    n = max(1, math.ceil(2 * radius_miles / config.OVERPASS_PART_MILES))
+    south, west, north, east = _square(lat, lon, radius_miles)
+    step_lat, step_lon = (north - south) / n, (east - west) / n
     boxes = []
     for i in range(n):
         for j in range(n):
             box = (south + i * step_lat, west + j * step_lon,
                    south + (i + 1) * step_lat, west + (j + 1) * step_lon)
             # The box's point nearest the centre is inside the circle.
-            near_lat = min(max(lat, box[0]), box[2])
-            near_lon = min(max(lon, box[1]), box[3])
-            if haversine_miles(lat, lon, near_lat, near_lon) <= radius_miles:
+            if _distance(lat, lon, box)[0] <= radius_miles:
                 boxes.append(box)
-    return boxes
+    return sorted(boxes, key=lambda box: _distance(lat, lon, box))
 
 
 def _quarters(box: Box) -> list[Box]:
@@ -378,8 +391,11 @@ class _Parts:
     """The state of one map-data search across its rounds: what was found, which
     parts are still missing, and the progress counts the page shows.
 
-    Progress counts the search's areas (len(boxes), fixed for the whole search): an
-    area answered in quarters counts once all four have answered."""
+    The parts are asked nearest the centre first (the area the search centre is in,
+    then outwards; a failed part's quarters take their place in that order), so the
+    first businesses found, and the ones a search cut short keeps, are the nearest.
+    Progress counts the search's areas (len(boxes), fixed for the whole search):
+    an area answered in quarters counts once all four have answered."""
 
     def __init__(self, lat: float, lon: float, radius_miles: float, keywords: Sequence[str],
                  progress: Callable[[str], None] | None,
@@ -504,8 +520,9 @@ class _Parts:
             self.missing.append(part)
 
     def run_round(self, todo: list[Part], seconds: float) -> None:
-        """Ask for the parts in todo, config.OVERPASS_PARALLEL at a time, within
-        `seconds`; parts no server answered for end up in self.missing."""
+        """Ask for the parts in todo, config.OVERPASS_PARALLEL at a time and nearest the
+        centre first, within `seconds`; parts no server answered for end up in
+        self.missing."""
         deadline = time.monotonic() + seconds
         self.split = False
         self.areas()
@@ -533,14 +550,15 @@ class _Parts:
 
     def _start(self, pool: ThreadPoolExecutor, running: dict[Any, Part], todo: list[Part],
                deadline: float) -> bool:
-        """Start parts until config.OVERPASS_PARALLEL run; False when none is running."""
+        """Start the parts nearest the centre until config.OVERPASS_PARALLEL run; False
+        when none is running."""
         while todo and len(running) < config.OVERPASS_PARALLEL:
             if deadline - time.monotonic() < MIN_SECONDS_LEFT:
                 self.missing += todo
                 self.errors.append("out of time before asking for every part")
                 todo.clear()
                 break
-            part = todo.pop(0)
+            part = todo.pop(min(range(len(todo)), key=lambda i: _distance(self.lat, self.lon, todo[i][0])))
             if part[2] < config.OVERPASS_SPLITS and self.split_before(part[0]):
                 todo += self.quarters(part)          # go straight to the quarters
                 continue
@@ -625,6 +643,40 @@ def areas_left(parts: Sequence[Part], areas: int) -> int:
     part is missing), for the page's "still filling in N areas"."""
     share = sum(part[1] for part in parts)
     return max(1, round(share * areas)) if share > 0.001 else 0
+
+
+_DIRECTIONS = ("north", "north-east", "east", "south-east", "south", "south-west", "west",
+               "north-west")
+
+
+def _area_name(lat: float, lon: float, radius_miles: float, box: Box) -> str:
+    """A part of a search's area in words: its biggest town ("Salt Lake City"), or
+    where it lies from the centre ("the area to the north-west") when it has none."""
+    town = places.biggest_town(box, (lat, lon), radius_miles)
+    if town:
+        return town
+    mid_lat, mid_lon = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+    if box[0] <= lat <= box[2] and box[1] <= lon <= box[3]:
+        return "the area around the search's centre"
+    east = (mid_lon - lon) * math.cos(math.radians(lat))
+    bearing = math.degrees(math.atan2(east, mid_lat - lat)) % 360
+    return f"the area to the {_DIRECTIONS[round(bearing / 45) % 8]}"
+
+
+def areas_text(parts: Sequence[Part], lat: float, lon: float, radius_miles: float,
+               most: int = 4) -> str:
+    """The parts of a search's area still missing, in words for the page, nearest the
+    centre first: "Salt Lake City, West Valley City and the area to the west" (at most
+    `most` names, then "and more"); "" when none is."""
+    names: list[str] = []
+    square = _square(lat, lon, radius_miles)
+    for box, _, _ in sorted(parts, key=lambda part: _distance(lat, lon, part[0])):
+        name = _area_name(lat, lon, radius_miles, box or square)
+        if name not in names:
+            names.append(name)
+    if len(names) > most:
+        return ", ".join(names[:most]) + " and more"
+    return ", ".join(names[:-1]) + (" and " if len(names) > 1 else "") + (names[-1] if names else "")
 
 
 def fill_in(lat: float, lon: float, radius_miles: float, keywords: Sequence[str],

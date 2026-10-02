@@ -65,6 +65,7 @@ def start(day: str, params: SearchParams, result: RunResult) -> bool:
     if not ON or not wanted(result):
         return False
     fill = {"state": FILLING, "left": osm.areas_left(result.osm_missing, result.osm_areas),
+            "where": where(result.osm_missing, result, params),
             "areas": result.osm_areas, "found": 0, "new": 0, "rounds": 0,
             "until": time.time() + config.FILL_IN_SECONDS}
     try:
@@ -80,6 +81,16 @@ def start(day: str, params: SearchParams, result: RunResult) -> bool:
         _ending.pop(day, None)
         return False
     return True
+
+
+def where(parts: list[osm.Part], result: RunResult, params: SearchParams) -> str:
+    """The missing parts in words, nearest the centre first ("Salt Lake City and West
+    Valley City"): the page says which towns are still being filled in."""
+    try:
+        return osm.areas_text(parts, result.center[0], result.center[1], params.radius_miles)
+    except Exception:                 # only words for the page; never stops the fill-in
+        log.warning("Naming the missing map areas failed", exc_info=True)
+        return ""
 
 
 def end_others(day: str, wait: float | None = None) -> list[str]:
@@ -126,6 +137,7 @@ def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]
                                        config.OVERPASS_RETRY_SECONDS, stop=lambda: _stop(day))
             fill["rounds"] += 1
             fill["left"] = osm.areas_left(parts, result.osm_areas)
+            fill["where"] = where(parts, result, params)
             log.info("Search %s: filling in the map data, round %d: %d businesses, %d areas left",
                      day, fill["rounds"], len(found), fill["left"])
             unsaved += finish_leads(found, result.center, replace(params, include_closed=True),
@@ -142,6 +154,7 @@ def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]
         fill["state"] = GAVE_UP
     finally:
         fill["left"] = osm.areas_left(parts, result.osm_areas)
+        fill["where"] = where(parts, result, params) if parts else ""
         _finish(day, fill, len(unsaved))
         running.pop(day, None)
         _ending.pop(day, None)
@@ -191,7 +204,13 @@ def _write(day: str, fill: dict[str, Any], more: dict[str, int] | None = None,
 
 def _areas_text(fill: dict[str, Any]) -> str:
     return (f"{fill['found']:,} businesses ({fill['new']:,} new)"
-            + (f", {fill['left']} areas still missing" if fill["left"] else ", every area in"))
+            + (f", {fill['left']} areas still missing{_around(fill)}" if fill["left"]
+               else ", every area in"))
+
+
+def _around(fill: dict[str, Any]) -> str:
+    """" (around Salt Lake City and Magna)": which towns the missing areas hold."""
+    return f" (around {fill['where']})" if fill.get("where") else ""
 
 
 def _finish(day: str, fill: dict[str, Any], unsaved: int) -> None:
@@ -205,11 +224,12 @@ def _finish(day: str, fill: dict[str, Any], unsaved: int) -> None:
     elif fill["state"] == STOPPED:
         because = NEW_SEARCH_TEXT if fill.get("why") == NEW_SEARCH else "searching was paused"
         final = (f"Filling in the missing map areas was stopped because {because}"
-                 + (f"; {_areas(left)} never answered." if left else ".") + added + lost)
+                 + (f"; {_areas(left)}{_around(fill)} never answered." if left else ".")
+                 + added + lost)
     else:
-        missing = (f"{_areas(left)[:1].upper()}{_areas(left)[1:]} of the free map data never "
-                   "answered today, so their businesses are missing until the next search."
-                   if left else "The missing map areas answered later.")
+        missing = (f"{_areas(left)[:1].upper()}{_areas(left)[1:]} of the free map data"
+                   f"{_around(fill)} never answered today, so their businesses are missing "
+                   "until the next search." if left else "The missing map areas answered later.")
         final = missing + added + lost
         alerts.report("search", f"Today's search stayed incomplete: {final}")
     _write(day, fill, final=final)

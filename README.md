@@ -31,11 +31,13 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 - **Find leads** once a day (Utah calendar day) around Arco's shop or any ZIP or
   city, from Google Places, Yelp (at most 50 calls in any 24 hours, with the reset
   time shown, "today at ..." or "tomorrow at ...") and the free OpenStreetMap data
-  (asked in parts, so busy public servers still answer; areas a busy server missed
-  are asked again automatically once during the search, which so takes about 7
-  minutes at most, and then **in the background for up to an hour**, within the
-  same search: their businesses join the saved list as they arrive, and Find leads
-  and the search history say "Still filling in N areas", then "Complete" or "N
+  (asked in parts, the area around the search's centre first and then outwards, so
+  the nearest businesses come first and busy public servers still answer; areas a
+  busy server missed are asked again automatically once during the search, which so
+  takes about 7 minutes at most, and then **in the background for up to an hour**,
+  within the same search: their businesses join the saved list as they arrive, and
+  Find leads and the search history say "Still filling in N areas" with the towns
+  they hold ("around Kaysville, Centerville and Morgan"), then "Complete" or "N
   areas never answered". A search with missing areas saves what it found and still
   uses up the day, as the owner asked; the filling in is not a second search). A
   filling in that runs past midnight stays on Find leads until it ends, and is ended

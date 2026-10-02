@@ -480,9 +480,15 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str],
     whole = [s for s in result.failed_sources if s not in result.partial_sources]
     parts = [f"Couldn't reach {_source_names(whole)}, so its businesses are missing"] if whole else []
     coverage = result.stats.get("osm areas searched")
+    if coverage and result.osm_missing:
+        # Which towns the areas that didn't answer hold, nearest the centre first.
+        around = fillin.where(result.osm_missing, result, params)
+        coverage = f"{coverage} searched; not yet: {around}" if around else f"{coverage} searched"
+    elif coverage:
+        coverage = f"{coverage} searched"
     if result.partial_sources:
         parts.append(f"{_source_names(result.partial_sources)} answered for only part of the "
-                     f"area{f' ({coverage} searched)' if coverage else ''}, so some of its "
+                     f"area{f' ({coverage})' if coverage else ''}, so some of its "
                      "businesses are missing")
     reason = (" and ".join(parts)[:1].upper() + " and ".join(parts)[1:]
               + f" from this search; the {len(result.leads):,} businesses found were "
@@ -492,7 +498,7 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str],
     how = ("answered for only part of the area" if not whole
            else "couldn't be reached" if not result.partial_sources else "didn't fully answer")
     missing = (f"Some businesses are missing: {names} {how}"
-               + (f" ({coverage} searched)." if coverage and not whole else "."))
+               + (f" ({coverage})." if coverage and not whole else "."))
     try:
         earlier = daily.incomplete_count(day)
     except Exception:

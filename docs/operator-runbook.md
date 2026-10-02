@@ -142,8 +142,8 @@ came back incomplete (a source failed, or map areas never answered even after th
 automatic retries) saves what it found, says which source was missing, and uses up
 the day like a complete one. Map areas the free map servers missed are then asked
 again in the background for up to an hour, within that same search (not a second
-one): Find leads shows "Still filling in N areas", then "Complete" or "N areas
-never answered" (that last one is also reported under Recent problems and to the
+one): Find leads shows "Still filling in N areas" with the towns they hold
+("around Kaysville and Centerville"), then "Complete" or "N areas never answered" (that last one is also reported under Recent problems and to the
 webhook). Pausing searching stops the filling in too, and so does the next day's search
 starting (the history then says "stopped because the next day's search started"): a
 filling in that runs past midnight stays on Find leads until it ends. A restart or deploy during

@@ -177,16 +177,18 @@ function renderProblems(p, unread) {
 // Map areas today's search missed are filled in in the background (fillin.py): how that stands,
 // in words, and the page looks again every half minute while it goes on.
 const areasText = (n) => (n === 1 ? "1 area" : `${n} areas`);
+// Which towns the missing areas hold, nearest the search's centre first (fillin.py's "where").
+const aroundText = (f) => (f.where ? ` (around ${f.where})` : "");
 function fillText(f) {
   const more = f.found ? ` ${num(f.found)} more businesses so far (${num(f.new)} new).` : "";
   if (f.state === "filling") {
-    return `${f.from ? `The search of ${f.from} is still filling in` : "Still filling in"} ${areasText(f.left)} of the free map data that didn't answer, in the background until about ${f.until_text}.${more} They join your saved leads as they arrive.`
+    return `${f.from ? `The search of ${f.from} is still filling in` : "Still filling in"} ${areasText(f.left)} of the free map data that didn't answer${aroundText(f)}, in the background until about ${f.until_text}.${more} They join your saved leads as they arrive.`
       + (f.from ? " It stops when today's search starts." : "");
   }
   const added = f.found ? ` ${num(f.found)} more businesses were added (${num(f.new)} new).` : "";
   if (f.state === "complete") return `Complete: the map areas that didn't answer at first were filled in later.${added}`;
-  if (f.state === "stopped") return `Filling in the missing map areas stopped because ${f.why === "new_search" ? "the next day's search started" : "searching was paused"}${f.left ? `; ${areasText(f.left)} never answered` : ""}.${added}`;
-  return `${f.left ? `${areasText(f.left)[0].toUpperCase()}${areasText(f.left).slice(1)} of the free map data never answered today; their businesses are missing until the next search.` : "The missing map areas answered later."}${added}`;
+  if (f.state === "stopped") return `Filling in the missing map areas stopped because ${f.why === "new_search" ? "the next day's search started" : "searching was paused"}${f.left ? `; ${areasText(f.left)}${aroundText(f)} never answered` : ""}.${added}`;
+  return `${f.left ? `${areasText(f.left)[0].toUpperCase()}${areasText(f.left).slice(1)} of the free map data${aroundText(f)} never answered today; their businesses are missing until the next search.` : "The missing map areas answered later."}${added}`;
 }
 function showFill(f) {
   const box = $("fill-note");

@@ -2,6 +2,7 @@
 search: their businesses join the saved list as they arrive, the day's record says
 how it stands, and the day's one search is used only once."""
 
+import re
 import threading
 import time
 
@@ -80,10 +81,16 @@ def test_areas_that_never_answer_are_reported_after_the_hour(filling, monkeypatc
     client = web.create_app().test_client()
     body = _search(client)
     assert body["state"] == "done" and "being asked again" in body["note"]
+    # The search's own note names the towns still missing when it ends.
+    assert re.search(r"\(about 6 of 9 areas searched; not yet: (Centerville|Kaysville)", body["note"])
     record = client.get("/searches").get_json()["searches"][0]
     assert record["fill"]["state"] == "gave_up" and record["fill"]["left"] == 3
     assert record["fill"]["rounds"] >= 1 and record["partial"] and record["leads"] == 6
-    assert any("3 areas of the free map data never answered today" in w for w in record["warnings"])
+    # The towns the missing (northern) areas hold are named, the nearest first.
+    where = record["fill"]["where"]
+    assert where.split(", ")[0] in ("Centerville", "Kaysville") and "Salt Lake City" not in where
+    assert any(f"3 areas of the free map data (around {record['fill']['where']}) never answered "
+               "today" in w for w in record["warnings"])
     assert not any("being asked again" in w for w in record["warnings"])
 
 
@@ -100,8 +107,8 @@ def test_pausing_searches_stops_the_filling_in(filling, monkeypatch):
     _search(client)
     record = client.get("/searches").get_json()["searches"][0]
     assert record["fill"]["state"] == "stopped" and record["fill"]["rounds"] == 0
-    assert any("stopped because searching was paused; 3 areas never answered" in w
-               for w in record["warnings"])
+    assert any(re.search(r"stopped because searching was paused; 3 areas \(around (Centerville|Kaysville)"
+                         r"[^)]*\) never answered\.", w) for w in record["warnings"])
 
 
 def test_a_filling_in_cut_short_by_a_restart_reads_as_interrupted():

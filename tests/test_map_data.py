@@ -240,7 +240,49 @@ def test_the_map_search_reports_parts_done(monkeypatch):
     assert [m.done for m in counts] == numbers
 
 
-# ---- the area count stays in view
+# ---- the nearest areas first; the area count stays in view
+
+def _from_centre(box, lat=40.76, lon=-111.89):
+    return osm._distance(lat, lon, box)
+
+
+def test_the_area_around_the_centre_is_asked_first_then_outwards(monkeypatch):
+    monkeypatch.setattr(config, "OVERPASS_PARALLEL", 1)
+    monkeypatch.setattr(config, "OVERPASS_ENDPOINTS", config.OVERPASS_ENDPOINTS[:1])
+    asked = []
+
+    def servers(method, url, data, **kw):
+        asked.append(_box_of(data["data"]))
+        return _answer(asked[-1])
+    monkeypatch.setattr(osm, "request_json", servers)
+    leads, _ = osm.search(40.76, -111.89, 30)
+    first = asked[0]
+    assert first[0] <= 40.76 <= first[2] and first[1] <= -111.89 <= first[3]
+    assert [_from_centre(b) for b in asked] == sorted(_from_centre(b) for b in asked)
+    # The first business found (and saved) is the one nearest the centre.
+    assert leads[0].lat == pytest.approx((first[0] + first[2]) / 2)
+
+
+def test_a_failed_area_near_the_centre_is_asked_again_before_the_far_ones(monkeypatch):
+    monkeypatch.setattr(config, "OVERPASS_PARALLEL", 1)
+    monkeypatch.setattr(config, "OVERPASS_ENDPOINTS", config.OVERPASS_ENDPOINTS[:1])
+    centre = osm._parts(40.76, -111.89, 30)[0]
+    asked = []
+
+    def servers(method, url, data, **kw):
+        box = _box_of(data["data"])
+        asked.append(box)
+        if box == pytest.approx(centre):
+            raise HttpError(f"{url} returned HTTP 504")
+        return _answer(box)
+    monkeypatch.setattr(osm, "request_json", servers)
+    osm.search(40.76, -111.89, 30)
+    # The centre fails, so its four quarters go next, before any of the eight around it.
+    quarters = asked[1:5]
+    assert all(centre[0] - 1e-5 <= q[0] < q[2] <= centre[2] + 1e-5
+               and centre[1] - 1e-5 <= q[1] < q[3] <= centre[3] + 1e-5 for q in quarters)
+    assert len(asked) == 1 + 4 + 8
+
 
 def test_the_area_count_stays_on_the_page_until_the_map_step_ends(monkeypatch):
     """With the northern areas refused in the first round, the catch-up round still
@@ -293,6 +335,17 @@ def test_the_map_data_alone_starts_the_bar_near_zero(monkeypatch):
     finally:
         gate.set()
     _wait(client, job)
+
+
+def test_the_missing_areas_are_named_by_their_towns():
+    parts = [(box, 1 / 9, 0) for box in osm._parts(40.76, -111.89, 30)]
+    assert osm.areas_text(parts[:1], 40.76, -111.89, 30) == "Salt Lake City"
+    named = osm.areas_text(parts, 40.76, -111.89, 30)
+    assert named.startswith("Salt Lake City, ") and named.endswith(" and more")
+    # An area with no town in it is named by where it lies from the centre.
+    lake = (41.0, -112.6, 41.2, -112.4)
+    assert osm.areas_text([(lake, 0.1, 0)], 40.76, -111.89, 40) == "the area to the north-west"
+    assert osm.areas_text([], 40.76, -111.89, 30) == ""
 
 
 # ---- building labels are left out; OSM-only searches say phones will be few

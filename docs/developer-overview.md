@@ -275,7 +275,9 @@ the sidebar to the page's list (Leads, Calls) or heading.
   notice them (see "Problems: the webhook" in the [operator runbook](operator-runbook.md)). The public map servers often
   refuse or time out on one big query, so a wide search asks the free map data
   **in parts**: a grid of areas up to 20 miles wide (`OVERPASS_PART_MILES`; a
-  30-mile search is 9 areas), two at a time, each starting at a different map server (the
+  30-mile search is 9 areas), two at a time, **nearest the centre first** (the area
+  the search's centre is in, then outwards; a failed area's quarters take their place
+  in that order, `osm._distance`), each starting at a different map server (the
   progress text says "3 of 9 areas done": the search's areas, fixed for the whole
   search, an area asked in quarters counting once all four answered; the count only
   moves forward and stays in the text through the catch-up round). An area no server answers is
@@ -299,9 +301,13 @@ the sidebar to the page's list (Leads, Calls) or heading.
   (`FILL_IN_SECONDS`), never asking Yelp or Google. What they find is merged,
   scored and filtered like the search's own (`pipeline.finish_leads`) and saved
   into the list as it arrives; the day's record gets a `fill` entry (state
-  filling / complete / gave_up / stopped, areas left, businesses found and new),
-  which Find leads shows above the search history ("Still filling in 4 areas...",
-  polled every 30 seconds) and the history row tags "Filling in". Complete, the
+  filling / complete / gave_up / stopped, areas left and the towns they hold
+  (`where`: each missing area's biggest town from the bundled places table, or its
+  direction from the centre, nearest first: `osm.areas_text`), businesses found and
+  new), which Find leads shows above the search history ("Still filling in 4 areas
+  ... (around Kaysville, Centerville and Morgan)", polled every 30 seconds) and the
+  history row tags "Filling in"; the search's own note names them too ("about 6 of
+  9 areas searched; not yet: ..."). Complete, the
   search is no longer marked incomplete; areas that never answered are reported
   as a problem (and the webhook). Pausing searching stops it, and a fill-in cut
   short by a restart reads as interrupted (`daily.FILL_GRACE_SECONDS`). Only an

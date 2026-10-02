@@ -73,6 +73,23 @@ def town_names(state: str = "UT") -> list[str]:
     return [name.split("|")[0] for name, *_ in towns if name.endswith(f"|{state}")]
 
 
+def biggest_town(box: tuple[float, float, float, float], centre: tuple[float, float],
+                 radius_miles: float, state: str = "UT") -> str:
+    """The biggest (by land area) of the state's towns whose centre is in the box
+    (south, west, north, east) and within radius_miles of centre, or "" when none is:
+    how the page names a part of a search's area ("Still filling in: around Salt Lake
+    City", osm.areas_text)."""
+    towns, _ = _table()
+    south, west, north, east = box
+    best, size = "", -1.0
+    for name, lat, lon, radius in towns:
+        if not (south <= lat <= north and west <= lon <= east and name.endswith(f"|{state}")):
+            continue
+        if radius > size and haversine_miles(centre[0], centre[1], lat, lon) <= radius_miles:
+            best, size = name.split("|")[0], radius
+    return best
+
+
 @lru_cache(maxsize=20000)
 def _near(lat: float, lon: float) -> Near | None:
     towns, zips = _table()

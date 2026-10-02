@@ -41,7 +41,9 @@ step-by-step tour of every page. It only looks around and never changes anything
    distance: **Search there anyway** uses the day's search there; **Go back and edit**
    spends nothing.
 4. The progress bar shows each step; during the free map data its percentage moves
-   with the areas that answered ("3 of 17 areas done"). A search takes a few
+   with the areas that answered ("3 of 9 areas done"). The map data is asked for
+   the area around the search's centre first, so the nearest businesses come in
+   first. A search takes a few
    minutes; you can use the other pages meanwhile. The search history shows it as
    "Running…" until it finishes.
 5. When it finishes, press **View leads**. New businesses join the saved list.
@@ -55,7 +57,8 @@ Good to know:
   areas they missed (the progress bar says so), so you don't need to do anything.
   It can then take up to about 7 minutes. Areas still missing after that are asked
   again in the background for up to an hour: Find leads says "Still filling in 4
-  areas..." above the search history, the businesses they find appear on the Leads
+  areas ... (around Kaysville, Centerville and Morgan)" above the search history, so
+  you know which towns aren't in the list yet; the businesses they find appear on the Leads
   page as they arrive, and the note then says "Complete" (or how many areas never
   answered). It is still the day's one search. If it is still going at midnight,
   the note stays (naming the search it belongs to) until it ends, and it stops by
