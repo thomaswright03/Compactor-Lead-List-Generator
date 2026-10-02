@@ -19,6 +19,7 @@ from .. import config
 from ..geo import METERS_PER_MILE, haversine_miles
 from ..http import HttpError, cache_get, cache_put, request_json
 from ..models import Lead
+from ..progress import MAP, Step
 from ..scoring import generic_name
 from . import SourceError, report_found
 
@@ -375,7 +376,10 @@ def _fetch(query: str, deadline: float, first: int = 0,
 
 class _Parts:
     """The state of one map-data search across its rounds: what was found, which
-    parts are still missing, and the progress counts the page shows."""
+    parts are still missing, and the progress counts the page shows.
+
+    Progress counts the search's areas (len(boxes), fixed for the whole search): an
+    area answered in quarters counts once all four have answered."""
 
     def __init__(self, lat: float, lon: float, radius_miles: float, keywords: Sequence[str],
                  progress: Callable[[str], None] | None,
@@ -395,9 +399,16 @@ class _Parts:
         self.errors: list[str] = []
         self.missing: list[Part] = []            # parts no server answered for (yet)
         self.done = 0                            # parts that answered
+        self.share = 0.0                         # the share of the whole area they cover
         self.started = 0                         # queries sent (spreads parts over mirrors)
-        self.settled, self.total, self.first_total = 0, 0, 0
+        self.split = False                       # a part of this round was asked in quarters
         self.again = ""                          # progress wording during a catch-up round
+
+    def areas_done(self) -> int:
+        """How many of the search's areas have answered (an area asked in quarters
+        counts once all of them have)."""
+        n = len(self.boxes)
+        return min(n, int(self.share * n + 1e-6))
 
     def halted(self) -> bool:
         """True once the administrator paused searching (looked at now and then)."""
@@ -412,9 +423,13 @@ class _Parts:
                 if self.stopped:
                     log.warning("OpenStreetMap: stopping, %s", self.stopped)
                     self.cancel.set()
-                    if self.progress:
-                        self.progress(f"OpenStreetMap: stopped, {self.stopped}")
+                    self.say(f"OpenStreetMap: stopped, {self.stopped}", "stopped")
         return self.stopped is not None
+
+    def say(self, text: str, note: str = "") -> None:
+        """A progress message about the map data, with the areas done of the search's."""
+        if self.progress:
+            self.progress(Step(text, MAP, self.areas_done(), len(self.boxes), note=note))
 
     def pause(self, seconds: float) -> None:
         """Wait `seconds` (a busy server cooling down), unless the search is stopped."""
@@ -430,19 +445,22 @@ class _Parts:
         return build_query(self.lat, self.lon, self.radius, self.keywords, box=box)
 
     def areas(self) -> None:
-        # Counts only go forward: parts finish out of order, and a part that failed
-        # counts as finished once it is replaced by its four smaller quarters.
-        if self.progress and self.total > 1:
-            split = (", some areas asked again in smaller parts"
-                     if self.total > self.first_total and not self.again else "")
-            self.progress(f"OpenStreetMap: {self.again or 'searching the free map data'} "
-                          f"({self.settled} of {self.total} areas done{split})")
+        # Parts finish out of order on several threads; the count is of the search's
+        # areas, so it only goes forward.
+        if len(self.boxes) > 1:
+            split = ", some areas asked again in smaller parts" if self.split and not self.again else ""
+            self.say(f"OpenStreetMap: {self.again or 'searching the free map data'} "
+                     f"({self.areas_done()} of {len(self.boxes)} areas done{split})",
+                     "retry" if self.again else "split" if split else "")
 
     def said(self) -> Callable[[int, int], None]:
         def note(server: int, servers: int) -> None:
-            if self.progress and self.total == 1:
-                self.progress(f"OpenStreetMap: {self.again or 'searching the free map data'} "
-                              f"(server {server} of {servers})")
+            # Only a search asked in one piece says which server it is on (a wide one
+            # counts its areas instead).
+            if self.whole:
+                self.say(f"OpenStreetMap: {self.again or 'searching the free map data'} "
+                         f"(server {server} of {servers})",
+                         "retry" if self.again else "another" if server > 1 else "")
         return note
 
     def ask(self, n: int, box: Box | None, deadline: float) -> tuple[Any, list[str]]:
@@ -459,10 +477,12 @@ class _Parts:
 
     def quarters(self, part: Part) -> list[Part]:
         box, share, depth = part
+        self.split = True
         return [(q, share / 4, depth + 1) for q in _quarters(box or self.boxes[0])]
 
-    def answered(self, data: Any) -> None:
+    def answered(self, part: Part, data: Any) -> None:
         self.done += 1
+        self.share += part[1]
         new = []
         for lead in map(parse_element, data.get("elements", [])):
             if lead and lead.source_id not in self.found:
@@ -480,7 +500,6 @@ class _Parts:
         if part[2] < config.OVERPASS_SPLITS:
             # Smaller parts are what busy servers still answer: ask again, split.
             todo += self.quarters(part)
-            self.total += 4
         else:
             self.missing.append(part)
 
@@ -488,8 +507,7 @@ class _Parts:
         """Ask for the parts in todo, config.OVERPASS_PARALLEL at a time, within
         `seconds`; parts no server answered for end up in self.missing."""
         deadline = time.monotonic() + seconds
-        self.settled, self.total = 0, len(todo)
-        self.first_total = self.total
+        self.split = False
         self.areas()
         with ThreadPoolExecutor(max_workers=config.OVERPASS_PARALLEL) as pool:
             running: dict[Any, Part] = {}
@@ -500,13 +518,12 @@ class _Parts:
                                    return_when=FIRST_COMPLETED)
                 for future in finished:
                     part = running.pop(future)
-                    self.settled += 1
                     try:
                         data, _ = future.result()
                     except Exception as exc:  # noqa: BLE001 - SourceError, or a thread that broke
                         self.failed(part, exc, todo)
                     else:
-                        self.answered(data)
+                        self.answered(part, data)
                     self.areas()
             if self.stopped:
                 # Stopped: the parts not yet answered are left (their queries see the
@@ -526,7 +543,6 @@ class _Parts:
             part = todo.pop(0)
             if part[2] < config.OVERPASS_SPLITS and self.split_before(part[0]):
                 todo += self.quarters(part)          # go straight to the quarters
-                self.total += 3
                 continue
             running[pool.submit(self.ask, self.started, part[0], deadline)] = part
             self.started += 1
@@ -572,8 +588,7 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
         log.info("OpenStreetMap: asking again for %d part(s) (round %d)", len(todo), n + 1)
         run.again = (f"asking again for the areas the busy map servers missed "
                      f"(try {n} of {config.OVERPASS_RETRY_ROUNDS})")
-        if progress:
-            progress(f"OpenStreetMap: {run.again}, in a moment")
+        run.say(f"OpenStreetMap: {run.again}, in a moment", "retry")
         run.pause(config.OVERPASS_RETRY_PAUSE_SECONDS)    # let a throttling server cool down
         if run.halted():
             run.missing = todo

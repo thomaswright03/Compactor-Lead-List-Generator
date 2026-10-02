@@ -13,6 +13,7 @@ from leadgen.export import to_xlsx_bytes
 from leadgen.http import HttpError
 from leadgen.models import Lead
 from leadgen.pipeline import PipelineError, RunResult, SearchParams
+from leadgen.progress import MAP, Step
 from leadgen.scoring import score_lead
 from leadgen.sources import osm
 
@@ -162,7 +163,7 @@ def test_skipped_steps_and_slow_steps(monkeypatch):
     assert web.skipped_steps(SearchParams(source="google")) == [2]
     job = {}
     progress = web._Progress(job)
-    progress("OpenStreetMap: querying overpass-api.de")
+    progress(Step("OpenStreetMap: (server 1 of 4)", MAP, 0, 1))
     assert not progress.slow()
     progress.step_started -= web.SLOW_SECONDS[2] + 1
     assert progress.slow()

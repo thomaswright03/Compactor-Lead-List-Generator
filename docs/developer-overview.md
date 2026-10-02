@@ -275,8 +275,10 @@ the sidebar to the page's list (Leads, Calls) or heading.
   notice them (see "Problems: the webhook" in the [operator runbook](operator-runbook.md)). The public map servers often
   refuse or time out on one big query, so a wide search asks the free map data
   **in parts**: a grid of areas up to 20 miles wide (`OVERPASS_PART_MILES`; a
-  30-mile search is 9 areas), two at a time, each starting at a different map
-  server (the progress text says "3 of 9 areas done"; the count only moves forward, and when areas are asked again in smaller parts the total grows with a short note saying so). An area no server answers is
+  30-mile search is 9 areas), two at a time, each starting at a different map server (the
+  progress text says "3 of 9 areas done": the search's areas, fixed for the whole
+  search, an area asked in quarters counting once all four answered; the count only
+  moves forward and stays in the text through the catch-up round). An area no server answers is
   asked again as four smaller ones; if one still gets no answer, the search is
   **incomplete** (the businesses from the areas that answered are saved, as
   above), and it says how much answered ("about 8 of 9 areas searched"; the
@@ -305,7 +307,17 @@ the sidebar to the page's list (Leads, Calls) or heading.
   short by a restart reads as interrupted (`daily.FILL_GRACE_SECONDS`). Only an
   area that never answers even then leaves the search incomplete; a map server that
   hasn't answered an area after 25 seconds (`OVERPASS_STAGGER_SECONDS`) is not
-  waited out: the next one is asked as well and the first good answer wins. The progress bar says when a step
+  waited out: the next one is asked as well and the first good answer wins.
+  **Progress** goes from the search to the page as values, not as text to parse:
+  each message is a `progress.Step` (a `str`, so the command line prints it as it
+  is) carrying its step (locate, Yelp and Google, map data, merge, save), done and
+  total (calls made of the calls a paid source may make; map areas done of the
+  search's areas), the paid source and a note ("split", "retry", "another",
+  "stopped"). `web/finding.py`'s `_Progress` words the page's message from those
+  values (`plain_progress`) and draws the bar: each step has a share
+  (`STEP_WEIGHTS`), a step the search skips has none, and once past Yelp and Google
+  their share is the calls they really made, so a map-data-only search starts near
+  0% and its bar tracks the area count; the percentage never goes back. The progress bar says when a step
   is taking longer than usual. Steps that don't apply (Google and Yelp when
   neither is set up) are shown as skipped.
 - **Leads**: the saved list, with **Yes** / **No** buttons for "has a baler or

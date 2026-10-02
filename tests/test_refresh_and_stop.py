@@ -11,6 +11,7 @@ import pytest
 from leadgen import calls, config, geo, marks, pipeline, saved, store, web
 from leadgen.models import Lead
 from leadgen.pipeline import PipelineError, SearchParams
+from leadgen.progress import MAP, PAID, Step
 from leadgen.scoring import score_lead
 from leadgen.sources import google_places, osm
 
@@ -179,12 +180,16 @@ def test_progress_and_details_are_in_plain_words():
     job = {}
     progress = web._Progress(job)
     osm_note = []
-    progress("OpenStreetMap: searching the free map data (server 2 of 4)")
+    progress(Step("Yelp page 1: 'grocery' (3/19)", PAID, 3, 19, "yelp", "grocery"))
     osm_note.append(job["message"])
-    progress("Yelp page 1: 'grocery' (3/19)")
+    progress(Step("Google page 2: 'warehouse' (1/4)", PAID, 4, 120, "google", "warehouse"))
     osm_note.append(job["message"])
-    assert osm_note == ["Searching the free map data, trying another source…",
-                        "Searching Yelp for grocery (3 of 19)"]
+    progress(Step("OpenStreetMap: searching the free map data (server 2 of 4)", MAP, 0, 1,
+                  note="another"))
+    osm_note.append(job["message"])
+    assert osm_note == ["Searching Yelp for grocery (3 of up to 19 calls)",
+                        "Searching Google for warehouse (4 of up to 120 lookups)",
+                        "Searching the free map data, trying another source…"]
     # An older record (no funnel numbers): labelled and put in funnel order all the same.
     details = web.plain_details({"seconds": 8.2, "osm raw results": 40, "after dedupe": 30,
                                  "results in radius": 35, "google requests": 3})

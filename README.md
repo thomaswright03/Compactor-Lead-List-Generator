@@ -40,8 +40,10 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   uses up the day, as the owner asked; the filling in is not a second search). A
   filling in that runs past midnight stays on Find leads until it ends, and is ended
   first when the next day's search starts, so two map searches never run at once.
-  The progress bar's map step moves with the areas that answered, not with the clock,
-  and the search history shows today's search as "Running…" from the moment it starts.
+  The progress bar covers only the steps the search runs (with the free map data
+  alone it starts near 0%), its map step moves with the areas that answered, not
+  with the clock, and the "N of M areas done" count stays in view until that step
+  ends; the search history shows today's search as "Running…" from the moment it starts.
   A search cut off by a server restart (a deploy) keeps what it had found: it is
   saved, the day's search is given back at once, and the history says so
   ("Interrupted by a server restart: the 128 businesses it had found were saved").

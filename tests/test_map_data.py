@@ -3,6 +3,7 @@ that fail asked again in quarters, and parts busy servers missed asked again
 automatically, so an ordinary search finishes complete without a manual re-run."""
 
 import re
+import threading
 import time
 
 import pytest
@@ -10,6 +11,7 @@ import pytest
 from leadgen import config, pipeline, web
 from leadgen.http import HttpError
 from leadgen.models import Lead
+from leadgen.progress import MAP, Step
 from leadgen.scoring import score_lead
 from leadgen.sources import osm
 
@@ -194,12 +196,18 @@ def test_a_partial_map_result_is_saved_and_the_search_marked_incomplete(monkeypa
     assert [l["name"] for l in client.get("/leads").get_json()["leads"]] == ["Costco"]
 
 
+def _areas(done, total, note=""):
+    return Step(f"OpenStreetMap: searching the free map data ({done} of {total} areas done)", MAP,
+                done, total, note=note)
+
+
 def test_progress_says_how_many_parts_of_the_map_are_done():
     job = {}
     progress = web._Progress(job)
-    progress("OpenStreetMap: searching the free map data (3 of 9 areas done)")
+    progress(_areas(3, 9))
     assert job["message"] == "Searching the free map data: 3 of 9 areas done…"
-    assert job["step"] == 2 and job["pct"] == pytest.approx(62, abs=1)
+    # Yelp and Google made no calls: the bar is locate, the map data, merge and save.
+    assert job["step"] == 2 and job["pct"] == pytest.approx(100 * (3 + 36 * 3 / 9) / 53, abs=0.1)
 
 
 # ---- the map data's progress only moves forward
@@ -208,16 +216,14 @@ def test_map_progress_never_counts_backwards():
     job = {}
     progress = web._Progress(job)
     seen = []
-    for msg in ["(8 of 17 areas done)", "(7 of 17 areas done)",
-                "(9 of 21 areas done, some areas asked again in smaller parts)",
-                "(10 of 25 areas done, some areas asked again in smaller parts)",
-                "(9 of 21 areas done, some areas asked again in smaller parts)"]:
-        progress(f"OpenStreetMap: searching the free map data {msg}")
+    for msg in [_areas(8, 17), _areas(7, 17), _areas(9, 17, "split"), _areas(10, 17, "split"),
+                _areas(9, 17, "split")]:
+        progress(msg)
         seen.append(job["message"])
     done = [int(m.split(": ")[1].split(" of ")[0]) for m in seen]
     assert done == sorted(done) == [8, 8, 9, 10, 10]
     assert seen[0] == "Searching the free map data: 8 of 17 areas done…"
-    assert seen[-1] == ("Searching the free map data: 10 of 25 areas done (some areas are being "
+    assert seen[-1] == ("Searching the free map data: 10 of 17 areas done (some areas are being "
                         "asked again in smaller parts)…")
 
 
@@ -229,6 +235,64 @@ def test_the_map_search_reports_parts_done(monkeypatch):
     assert counts[0].endswith("(0 of 9 areas done)") and counts[-1].endswith("(9 of 9 areas done)")
     numbers = [int(m.rsplit("(", 1)[1].split()[0]) for m in counts]
     assert numbers == sorted(numbers)
+    # The page's values are the same numbers: the map step, done of the search's 9 areas.
+    assert all(m.step == MAP and m.total == 9 for m in said)
+    assert [m.done for m in counts] == numbers
+
+
+# ---- the area count stays in view
+
+def test_the_area_count_stays_on_the_page_until_the_map_step_ends(monkeypatch):
+    """With the northern areas refused in the first round, the catch-up round still
+    says how many of the 9 areas are done (it used to drop the count)."""
+    monkeypatch.setattr(config, "OVERPASS_ENDPOINTS", config.OVERPASS_ENDPOINTS[:1])
+    monkeypatch.setattr(config, "OVERPASS_RETRY_PAUSE_SECONDS", 0)
+    servers, _ = _throttled(fail_rounds=1)
+    monkeypatch.setattr(osm, "request_json", servers)
+    job = {"skipped": [1]}
+    progress = web._Progress(job)
+    shown, bar = [], []
+
+    def follow(msg):
+        progress(msg)
+        shown.append(job["message"])
+        bar.append(progress.pct())
+    osm.search(40.76, -111.89, 30, progress=follow)
+    assert all(re.search(r": \d+ of 9 areas done", m) for m in shown), shown
+    assert any("asking again for the areas the busy map servers missed" in m for m in shown)
+    assert shown[-1].startswith("Searching the free map data: 9 of 9 areas done")
+    # The bar starts in single digits and follows the count.
+    assert bar[0] < 10 and bar == sorted(bar)
+    done = [int(m.split(": ")[1].split(" of ")[0]) for m in shown]
+    assert done == sorted(done)
+
+
+def test_the_map_data_alone_starts_the_bar_near_zero(monkeypatch):
+    """No Google or Yelp: the bar covers locate, the map data, merge and save only."""
+    from leadgen.progress import MAP, Step
+
+    gate = threading.Event()
+
+    def search(lat, lon, radius, keywords=(), progress=None, stats=None, stop=None):
+        progress(Step("OpenStreetMap: (0 of 9 areas done)", MAP, 0, 9))
+        gate.wait(5)
+        progress(Step("OpenStreetMap: (3 of 9 areas done)", MAP, 3, 9))
+        return [], []
+    monkeypatch.setattr(pipeline.osm, "search", search)
+    monkeypatch.setattr(pipeline, "geocode", lambda location, key: (40.76, -111.89, "Salt Lake City"))
+    client = web.create_app().test_client()
+    job = client.post("/search", data={"location": "84101", "radius": "30"}).get_json()["job_id"]
+    try:
+        for _ in range(100):
+            body = client.get(f"/status/{job}").get_json()
+            if body["step"] == 2:
+                break
+            time.sleep(0.02)
+        assert body["skipped"] == [1] and body["pct"] < 10
+        assert body["message"] == "Searching the free map data: 0 of 9 areas done…"
+    finally:
+        gate.set()
+    _wait(client, job)
 
 
 # ---- building labels are left out; OSM-only searches say phones will be few

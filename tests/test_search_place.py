@@ -13,6 +13,7 @@ from leadgen import alerts, cleanup, cli, config, daily, geo, marks, pipeline, s
 from leadgen.http import HttpError
 from leadgen.models import Lead
 from leadgen.pipeline import RunResult, SearchParams
+from leadgen.progress import MAP, Step
 from leadgen.scoring import score_lead
 from leadgen.sources import osm
 
@@ -274,23 +275,30 @@ def test_error_messages_are_short_full_sentences(monkeypatch):
 def test_the_map_steps_percent_follows_the_areas_done(monkeypatch):
     clock = [1000.0]
     monkeypatch.setattr(web.finding.time, "time", lambda: clock[0])
-    progress = web.finding._Progress({})
-    progress("OpenStreetMap: searching the free map data (0 of 17 areas done)")
-    progress("OpenStreetMap: searching the free map data (3 of 17 areas done)")
+    progress = web.finding._Progress({"skipped": [1]})
+
+    def at(areas):            # the bar at `areas` of 17 done: locate 3, map 36, merge 8, save 6
+        return 100 * (3 + 36 * areas / 17) / 53
+
+    def areas(done, note=""):
+        return Step(f"OpenStreetMap: ({done} of 17 areas done)", MAP, done, 17, note=note)
+    progress(areas(0))
+    assert progress.pct() < 10                        # starts in single digits
+    progress(areas(3))
     clock[0] += 180                                   # three minutes, no area answers
-    one_more = 50 + 36 * 4 / 17
-    assert 50 + 36 * 3 / 17 <= progress.pct() <= one_more
+    assert at(3) <= progress.pct() <= at(4)
     clock[0] += 3600
-    assert progress.pct() < one_more                  # never past the next area's mark
-    progress("OpenStreetMap: searching the free map data (9 of 17 areas done)")
-    assert 50 + 36 * 9 / 17 <= progress.pct() <= 50 + 36 * 10 / 17
-    # Parts asked again in smaller pieces add to the areas to ask: the bar never goes back.
+    assert progress.pct() < at(4)                     # never past the next area's mark
+    progress(areas(9))
+    assert at(9) <= progress.pct() <= at(10)
+    # Parts asked again in smaller pieces, or in a catch-up round: the count stays.
     before = progress.pct()
-    progress("OpenStreetMap: searching the free map data (9 of 25 areas done, some areas asked again "
-             "in smaller parts)")
+    progress(areas(9, "retry"))
     assert progress.pct() == before
-    progress("OpenStreetMap: searching the free map data (25 of 25 areas done)")
-    assert progress.pct() == 86
+    assert progress.job["message"] == ("Searching the free map data: 9 of 17 areas done (asking "
+                                       "again for the areas the busy map servers missed)…")
+    progress(areas(17))
+    assert progress.pct() == pytest.approx(at(17))
 
 
 # ---- leads from a search around the wrong place: taken out only on request

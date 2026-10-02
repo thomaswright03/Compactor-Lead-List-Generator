@@ -15,6 +15,7 @@ from typing import Any, Protocol
 
 from ..http import HttpError, cache_get, cache_put
 from ..models import Lead
+from ..progress import PAID, Step
 from . import SourceError, report_found
 
 
@@ -150,7 +151,9 @@ class _Rounds:
                 self.capped = True
                 return False
             if self.progress:
-                self.progress(f"{self.source} page {page + 1}: '{chain['q']}' ({n}/{len(active)})")
+                self.progress(Step(f"{self.source} page {page + 1}: '{chain['q']}' ({n}/{len(active)})",
+                                   PAID, self.requests_made + 1, self.max_requests,
+                                   self.source.lower(), chain["q"]))
             self._one(chain)
         return True
 

@@ -18,6 +18,7 @@ from .. import switches as site_switches
 from ..geo import GeocodeError, LookupDown, haversine_miles, miles_from_arco
 from ..localtime import clock_text, date_time_text
 from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, SearchStopped, locate, run
+from ..progress import LOCATE, MAP, MERGE, ORDER, PAID, SAVE, Step
 from ..sources import collecting
 from .auth import admin_open, admin_refusal, admin_state
 from .common import (
@@ -139,40 +140,45 @@ def plain_details(details: dict[str, object] | None) -> list[list[object]]:
     return out
 
 
-_AREAS = re.compile(r"(\d+) of (\d+) areas done")
+# How each paid source names one of its calls, on the page as in the search's details.
+_CALLS = {"google": ("Google", "lookups"), "yelp": ("Yelp", "calls")}
+# What the map step is doing besides counting its areas (progress.Step's note).
+_MAP_NOTES = {"split": " (some areas are being asked again in smaller parts)",
+              "retry": " (asking again for the areas the busy map servers missed)"}
 
 
 def plain_progress(msg: str) -> str:
-    """The search's progress message in the page's words."""
-    page = re.match(r"(Yelp|Google) page \d+: '(.*)' \((\d+)/(\d+)\)", msg)
-    if page:
-        return f"Searching {page.group(1)} for {page.group(2)} ({page.group(3)} of {page.group(4)})"
-    if msg.startswith("Locating"):
+    """The search's progress message in the page's words, made from the values a
+    progress.Step carries (the text is for the command line); any other message is
+    shown as it is."""
+    if not isinstance(msg, Step):
+        return str(msg)
+    if msg.step == LOCATE:
         return "Finding the location"
-    if msg.startswith(("Yelp: ", "Google: ")):
-        return f"Searching {msg.split(':')[0]}"
-    if msg.startswith("OpenStreetMap: stopped"):
-        return "Stopping: the administrator paused searching. Keeping what was already found…"
-    if msg.startswith("OpenStreetMap"):
-        areas = _AREAS.search(msg)
-        if areas:
-            again = (" (some areas are being asked again in smaller parts)"
-                     if "again" in msg else "")
-            return (f"Searching the free map data: {int(areas.group(1)):,} of "
-                    f"{int(areas.group(2)):,} areas done{again}…")
-        # Which mirror is answering means nothing to a salesperson; only say one is being tried.
-        server = re.search(r"server (\d+) of \d+", msg)
-        return ("Searching the free map data"
-                + (", trying another source" if server and server.group(1) != "1" else "") + "…")
-    if msg.startswith("Filtering"):
-        return "Keeping the businesses within the radius"
-    if msg.startswith("Merging"):
-        return "Merging duplicates and scoring"
-    return msg
+    if msg.step == PAID:
+        name, calls = _CALLS.get(msg.source, (msg.source.title(), "calls"))
+        if not msg.note:
+            return f"Searching {name}"
+        return f"Searching {name} for {msg.note} ({msg.done:,} of up to {msg.total:,} {calls})"
+    if msg.step == MAP:
+        count = (f": {msg.done:,} of {msg.total:,} areas done" if msg.total > 1 else "")
+        if msg.note == "stopped":
+            return ("Stopping: the administrator paused searching. Keeping what was already "
+                    f"found{f' ({count[2:]})' if count else ''}…")
+        if msg.note == "another" and not count:
+            # Which mirror is answering means nothing to a salesperson; only say one is being tried.
+            return "Searching the free map data, trying another source…"
+        return f"Searching the free map data{count}{_MAP_NOTES.get(msg.note, '')}…"
+    if msg.step == MERGE:
+        return ("Keeping the businesses within the radius" if msg.note == "radius"
+                else "Merging duplicates and scoring")
+    return "Saving leads"
 
 
-# The map data's share of the bar: from MAP_START to MAP_START + MAP_SHARE percent.
-MAP_START, MAP_SHARE = 50.0, 36.0
+# Each step's share of the bar (in progress.ORDER: locate, Yelp and Google, map data,
+# merge, save), out of the steps the search runs.
+STEP_WEIGHTS = (3.0, 47.0, 36.0, 8.0, 6.0)
+PAID_STEP, MAP_STEP = ORDER.index(PAID), ORDER.index(MAP)
 # While an area is awaited the bar creeps on through most of that area's share, about
 # this fast (seconds), but never reaches the next area's mark before the area answers.
 CREEP_SECONDS = 60.0
@@ -180,19 +186,24 @@ CREEP_PART = 0.9
 
 
 class _Progress:
-    """Turns the search's progress messages into a step and a percentage for the page.
+    """Turns the search's progress (progress.Step values: which step, how far it is)
+    into the page's message, step and percentage.
 
-    The Yelp / Google part advances with each call; the map data's share moves with
-    the areas that answered out of the areas to ask (parts asked again in smaller
-    pieces add to that count), plus a small creep within the area being waited for,
-    so the number never runs ahead of the "N of M areas" line by more than one area.
-    The percentage shown never goes back.
+    The bar spans only the steps the search runs: a step it skips (job["skipped"]:
+    no Google or Yelp set up, say) has no share, and once past Yelp and Google their
+    share is what they really did (calls made of the calls they could have made; none
+    when they made none: out of calls, switched off, or answered from saved results),
+    so a search of the free map data alone starts near 0 and its bar follows the areas
+    done. Within the map step the bar moves with the areas that answered, plus a small
+    creep within the area being waited for, never past the next area's mark. The
+    percentage shown never goes back, and the "N of M areas done" count stays in the
+    message until the map step ends.
     """
 
     def __init__(self, job: Job) -> None:
         self.job = job
-        self.calls = 0
-        self.cap: int | None = None
+        self.calls = 0                           # Yelp and Google calls made
+        self.cap = 0                             # ... of the calls they may make
         self.map_started: float | None = None
         self.areas_done = self.areas_total = 0
         self.area_at: float | None = None        # when the latest area answered
@@ -206,52 +217,55 @@ class _Progress:
 
     def __call__(self, msg: str) -> None:
         job = self.job
-        areas = _AREAS.search(msg)
-        if areas:
-            # Parts finish on several threads, so a message can arrive after a newer
-            # one: the page's count only moves forward.
-            if int(areas.group(1)) > self.areas_done:
-                self.area_at = time.time()
-            self.areas_done = max(self.areas_done, int(areas.group(1)))
-            self.areas_total = max(self.areas_total, int(areas.group(2)))
-            msg = _AREAS.sub(f"{self.areas_done} of {self.areas_total} areas done", msg)
-        job["message"] = plain_progress(msg)
-        if msg.startswith("Locating"):
-            self._at(0, 3)
-        elif re.match(r"(Yelp|Google): ", msg):
-            cap = re.search(r"up to (\d+)", msg)
-            self.cap = (self.cap or 0) + (int(cap.group(1)) if cap else 0)
-            self._at(1, 6)
-        elif re.match(r"(Yelp|Google) page \d", msg):
-            self.calls += 1
-            self._at(1, 6 + 42 * min(1.0, self.calls / max(self.cap or 1, 1)))
-        elif msg.startswith("OpenStreetMap"):
+        if not isinstance(msg, Step):
+            job["message"] = plain_progress(msg)   # a note with no values: the bar stays
+            return
+        step = ORDER.index(msg.step)
+        if msg.step == PAID:
+            if msg.done:
+                self.calls += 1
+            else:
+                self.cap += msg.total               # a source says how many calls it may make
+            fraction = min(1.0, self.calls / self.cap) if self.cap else 0.0
+        elif msg.step == MAP:
             self.map_started = self.map_started or time.time()
-            # A wide search is asked in parts: the bar moves on with each one done.
-            self._at(2, MAP_START + (MAP_SHARE * self.areas_done / self.areas_total if areas else 0))
-        elif msg.startswith("Filtering"):
-            self._at(3, 88)
-        elif msg.startswith("Merging"):
-            self._at(3, 92)
-        elif msg.startswith("Saving"):
-            self._at(4, 96)
-
-    def _at(self, step: int, pct: float) -> None:
-        if step > self.job["step"]:
+            # Parts finish on several threads, so a message can arrive after a newer
+            # one: the count only moves forward.
+            if msg.done > self.areas_done:
+                self.area_at = time.time()
+            self.areas_done = max(self.areas_done, msg.done)
+            self.areas_total = max(self.areas_total, msg.total)
+            msg = Step(msg, MAP, self.areas_done, self.areas_total, msg.source, msg.note)
+            fraction = self.areas_done / self.areas_total if self.areas_total else 0.0
+        else:
+            fraction = msg.done / msg.total if msg.total else 0.0
+        job["message"] = plain_progress(msg)
+        if step > job["step"]:
             self.step_started = time.time()
-        self.job["step"] = max(self.job["step"], step)
-        self.job["pct"] = max(self.job["pct"], pct)
+        job["step"] = max(job["step"], step)
+        job["pct"] = max(job["pct"], self._percent(step, fraction))
+
+    def _weights(self) -> list[float]:
+        """Each step's share of the bar: the steps that run; Yelp and Google's, once
+        past them, by the share of their calls they made."""
+        weights = list(STEP_WEIGHTS)
+        for skipped in self.job.get("skipped", []):
+            weights[skipped] = 0.0
+        if self.job["step"] > PAID_STEP:
+            weights[PAID_STEP] *= min(1.0, self.calls / self.cap) if self.cap else 0.0
+        return weights
+
+    def _percent(self, step: int, fraction: float) -> float:
+        weights = self._weights()
+        return 100 * (sum(weights[:step]) + weights[step] * fraction) / (sum(weights) or 1.0)
 
     def pct(self) -> float:
         pct = float(self.job["pct"])
-        if self.job["step"] == 2 and self.map_started:
-            # One area's share (the whole share for a search asked in one piece).
+        if self.job["step"] == MAP_STEP and self.map_started:
             total = max(self.areas_total, 1)
-            share = MAP_SHARE / total
-            done = MAP_START + share * min(self.areas_done, total)
             waited = time.time() - (self.area_at or self.map_started)
-            creep = share * CREEP_PART * (1 - math.exp(-waited / CREEP_SECONDS))
-            pct = max(pct, min(MAP_START + MAP_SHARE, done + creep))
+            creep = CREEP_PART * (1 - math.exp(-waited / CREEP_SECONDS))
+            pct = max(pct, self._percent(MAP_STEP, (min(self.areas_done, total) + creep) / total))
         self.shown = max(self.shown, pct)
         return self.shown
 
@@ -341,7 +355,7 @@ def parse_form(form: Mapping[str, str]) -> SearchParams:
 def _save(job: Job, result: RunResult, params: SearchParams) -> str | None:
     """Save the search's leads; None when saved, else why not (in the page's words)."""
     try:
-        job["progress"]("Saving leads")
+        job["progress"](Step("Saving leads", SAVE, 1, 3))
         job["new_leads"], _ = saved.save_search(result.leads, params.keywords)
         job["saved"] = True
     except Exception as exc:

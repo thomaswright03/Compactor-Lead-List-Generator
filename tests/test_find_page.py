@@ -4,6 +4,7 @@ Yelp aren't set up, and progress in plain words."""
 import pytest
 
 from leadgen import daily, pipeline, web
+from leadgen.progress import MAP, Step
 
 
 def test_find_leads_says_phones_will_be_few_without_google_or_yelp(monkeypatch):
@@ -49,7 +50,8 @@ def test_an_unknown_place_gives_the_same_advice_as_the_hint(monkeypatch):
 def test_progress_never_names_servers():
     job = {}
     progress = web._Progress(job)
-    progress("OpenStreetMap: searching the free map data (server 1 of 4)")
+    progress(Step("OpenStreetMap: searching the free map data (server 1 of 4)", MAP, 0, 1))
     assert job["message"] == "Searching the free map data…"
-    progress("OpenStreetMap: searching the free map data (server 3 of 4)")
+    progress(Step("OpenStreetMap: searching the free map data (server 3 of 4)", MAP, 0, 1,
+                  note="another"))
     assert "server" not in job["message"] and "trying another source" in job["message"]

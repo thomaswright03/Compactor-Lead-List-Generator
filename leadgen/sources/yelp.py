@@ -20,6 +20,7 @@ from .. import config, usage
 from ..geo import METERS_PER_MILE, search_grid
 from ..http import HttpError, request_json
 from ..models import Lead
+from ..progress import PAID, Step
 from . import SourceError
 from .paging import Cell, run_searches
 
@@ -195,8 +196,8 @@ def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], 
                         else radius_miles, n_cells)
     quota: dict[str, int | None] = {"left": None}
     if progress:
-        progress(f"Yelp: {len(queries)} searches x {n_cells} area(s), up to {cap} calls "
-                 f"({left} of {budget.limit} left in the last 24 hours)")
+        progress(Step(f"Yelp: {len(queries)} searches x {n_cells} area(s), up to {cap} calls "
+                      f"({left} of {budget.limit} left in the last 24 hours)", PAID, 0, cap, "yelp"))
     warnings = _area_warnings(n_cells < grid_for(radius_miles, grid_cells) and cap > 0,
                               cells[0][2], radius_miles)
 

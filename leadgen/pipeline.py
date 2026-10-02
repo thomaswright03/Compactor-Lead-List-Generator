@@ -12,6 +12,7 @@ from . import config
 from .dedupe import SAME_PHONE_MILES, dedupe
 from .geo import geocode, haversine_miles
 from .models import Lead
+from .progress import LOCATE, MERGE, PAID, Step
 from .scoring import keyword_hits, score_lead
 from .sources import SourceError, google_places, osm, yelp
 
@@ -25,7 +26,8 @@ SOURCE_NAMES = {"google": "Google", "yelp": "Yelp", "osm": "the map data service
 
 log = logging.getLogger(__name__)
 
-# Called with each progress message of a search (the page turns them into its steps).
+# Called with each progress message of a search: a progress.Step (the page draws its steps and
+# bar from the Step's values; the command line prints its text).
 Progress = Callable[[str], None]
 
 
@@ -132,7 +134,7 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
     use = _sources_to_use(params, api_key, yelp_key, misplaced)
 
     say = progress or (lambda msg: None)
-    say(f"Locating '{params.location}'")
+    say(Step(f"Locating '{params.location}'", LOCATE))
     if params.center is not None:
         (lat, lon), label = params.center, params.place or params.location
     else:
@@ -146,7 +148,8 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
                                                  missing)
     stopped = missing.get("stopped", "")
 
-    say(f"Filtering {len(raw)} raw results to {params.radius_miles:g} miles")
+    say(Step(f"Filtering {len(raw)} raw results to {params.radius_miles:g} miles", MERGE, 1, 4,
+             note="radius"))
     kept = finish_leads(raw, (lat, lon), params, keywords, stats, say)
     stats["seconds"] = round(time.time() - started, 1)
     return RunResult(kept, (lat, lon), label, warnings, stats, problems=errors,
@@ -178,7 +181,7 @@ def finish_leads(raw: list[Lead], centre: tuple[float, float], params: SearchPar
     near = [l for l in raw if haversine_miles(lat, lon, l.lat, l.lon) <= margin]
     n_in_radius = sum(haversine_miles(lat, lon, l.lat, l.lon) <= params.radius_miles for l in near)
 
-    say("Merging duplicates")
+    say(Step("Merging duplicates", MERGE, 3, 4, note="merge"))
     merged = _merge_and_score(near, (lat, lon), params, keywords)
     n_merged = len(merged)
     closed = sum(l.business_status == "CLOSED_PERMANENTLY" for l in merged)
@@ -408,7 +411,8 @@ def _ask_google(params: SearchParams, keywords: list[str], api_key: str, centre:
     queries = list(dict.fromkeys(keywords + list(config.COMPETITORS) + config.GOOGLE_QUERIES))
     cap = params.max_requests or google_places.estimate_requests(queries, params.grid)
     if progress:
-        progress(f"Google: {len(queries)} phrases x {params.grid} area(s), up to {cap} requests")
+        progress(Step(f"Google: {len(queries)} phrases x {params.grid} area(s), up to {cap} requests",
+                      PAID, 0, cap, "google"))
     try:
         found, n_requests, w = google_places.search(
             centre[0], centre[1], params.radius_miles, queries, api_key, params.grid,

@@ -2,10 +2,13 @@
 
 import time
 
+import pytest
+
 from leadgen import calls, daily, marks, saved, stats, web
 from leadgen.geo import GeocodeError
 from leadgen.models import Lead
 from leadgen.pipeline import RunResult
+from leadgen.progress import LOCATE, MAP, PAID, SAVE, Step
 
 
 def _lead(name, source_id, tier="A", score=70, **kw):
@@ -215,16 +218,19 @@ def test_the_page_gets_one_view_at_a_time():
 def test_progress_steps():
     job = {}
     progress = web._Progress(job)
-    progress("Locating '84101'")
-    assert job["step"] == 0
-    progress("Yelp: 19 searches x 1 area(s), up to 10 calls (50 of today's 50 left)")
+    progress(Step("Locating '84101'", LOCATE))
+    assert job["step"] == 0 and job["message"] == "Finding the location"
+    progress(Step("Yelp: ... up to 10 calls", PAID, 0, 10, "yelp"))
     for n in range(5):
-        progress(f"Yelp page 1: 'q{n}' ({n + 1}/19)")
-    assert job["step"] == 1 and 25 < progress.pct() < 30
-    progress("OpenStreetMap: querying overpass-api.de")
-    assert job["step"] == 2 and 50 <= progress.pct() < 86
-    progress("Saving leads")
-    assert job["step"] == 4 and progress.pct() == 96
+        progress(Step(f"Yelp page 1: 'q{n}' ({n + 1}/19)", PAID, n + 1, 10, "yelp", f"q{n}"))
+    # Half the calls: half of Yelp's share (3 + 47 / 2).
+    assert job["step"] == 1 and progress.pct() == pytest.approx(26.5)
+    assert job["message"] == "Searching Yelp for q4 (5 of up to 10 calls)"
+    progress(Step("OpenStreetMap: (server 1 of 4)", MAP, 0, 1))
+    # Yelp's share is now the 5 calls it made: the bar goes on from where it was.
+    assert job["step"] == 2 and progress.pct() == pytest.approx(100 * 26.5 / 76.5)
+    progress(Step("Saving leads", SAVE, 1, 3))
+    assert job["step"] == 4 and progress.pct() == pytest.approx(100 * (26.5 + 36 + 8 + 2) / 76.5)
 
 
 def test_misclicks_can_be_undone_right_after(monkeypatch):
