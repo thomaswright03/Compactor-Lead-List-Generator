@@ -3,29 +3,32 @@
 /* exported setGo, loadSearches */
 // The note beside Find leads says how the day stands (in plain, muted text); a refusal or a
 // problem goes in the red line under it (showError) and stays until the form is edited.
+/** @param {boolean} enabled @param {string} [note] */
 function setGo(enabled, note) {
   $("go").disabled = !enabled;
   if (note !== undefined) $("day-note").textContent = note;
 }
 // Once today's search is used, the form reads as closed: a notice at its top and its fields
 // greyed out, so nobody edits settings for a search that can't run until tomorrow.
+/** @param {string} note "" when the form is open */
 function lockForm(note) {
   const locked = Boolean(note);
   $("form-closed").hidden = !locked;
   if (locked) $("form-closed-text").textContent = note;
   $("form").classList.toggle("closed", locked);
-  $("form").querySelectorAll("input, select").forEach((x) => { x.disabled = locked; });
+  $("form").querySelectorAll("input, select").forEach((/** @type {HTMLInputElement} */ x) => { x.disabled = locked; });
 }
 function clearErrors() {
   S.error = "";
   $("go-error").textContent = ""; $("go-error").hidden = true;
-  $("form").querySelectorAll(".field-error").forEach((e) => e.remove());
-  $("form").querySelectorAll("[aria-invalid]").forEach((e) => {
+  $("form").querySelectorAll(".field-error").forEach((/** @type {Element} */ e) => e.remove());
+  $("form").querySelectorAll("[aria-invalid]").forEach((/** @type {Element} */ e) => {
     e.removeAttribute("aria-invalid"); e.removeAttribute("aria-describedby");
   });
 }
 // Show why the search can't start: once, beside the field it is about, or (for a problem
 // that belongs to no field) in the red line beside the button.
+/** @param {string} message @param {string} [field] the form field it is about, if any */
 function showError(message, field) {
   clearErrors();
   S.error = message;
@@ -43,13 +46,15 @@ function showError(message, field) {
 }
 $("form").addEventListener("input", () => { if (S.error) clearErrors(); });
 // Lists and the tick box say "change" (a text box's late "change" on leaving it is not an edit).
-$("form").addEventListener("change", (e) => {
+$("form").addEventListener("change", (/** @type {Event} */ e) => {
   if (S.error && eventEl(e).matches("select, input[type=checkbox]")) clearErrors();
 });
 async function loadSearches() {
+  /** @type {SearchesAnswer} */
   let body;
   try { body = await api("/searches"); }
-  catch (err) {
+  catch (e) {
+    const err = /** @type {ApiError} */ (e);
     if (err.status === 401) return;
     problem($("history"), "Can't load the search history", err.message, () => {
       $("history").replaceChildren(el("div", "Loading...", "muted")); loadSearches();
@@ -71,17 +76,19 @@ async function loadSearches() {
   if (body.cut_off && !S.job) S.cutOffTimer = setTimeout(loadSearches, 8000);
   const cutToday = !today && body.searches.find((s) => s.day === body.today && s.interrupted);
   // A refusal or failure stays in its own red line (showError, the failure box); this only says how the day stands.
-  lockForm(!S.job && body.used_today && !body.running && today.leads !== undefined
+  // Today's search, when it holds the day (it ran, or is running, or stopped short of finishing).
+  const used = body.used_today ? today : null;
+  lockForm(!S.job && used && !body.running && used.leads !== undefined
     ? "The next one can run tomorrow, from midnight Utah time." : "");
   if (S.job) setGo(false, "");
   else if (body.paused) setGo(false, "Searching is paused by the administrator.");
   else if (body.cut_off) {
     setGo(false, "Today's search was cut off by a server restart (the site was updated). What it had found is " +
                  "being saved; this page updates by itself in a moment.");
-  } else if (body.used_today && today.leads === undefined && !body.running) {
-    setGo(false, `Today's search was interrupted before it finished. It can be run again after ${today.free_at}.`);
-  } else if (body.used_today) {
-    setGo(false, `Today's search ran at ${today.when.split(", ").pop()}. The next one can run tomorrow.`);
+  } else if (used && used.leads === undefined && !body.running) {
+    setGo(false, `Today's search was interrupted before it finished. It can be run again after ${used.free_at}.`);
+  } else if (used) {
+    setGo(false, `Today's search ran at ${used.when.split(", ").pop()}. The next one can run tomorrow.`);
   } else if (today) {
     setGo(true, "Today's search didn't finish, so it can be run again.");
   } else if (cutToday) {
@@ -102,8 +109,10 @@ async function loadSearches() {
   if (body.switches) { S.switches = body.switches; renderSwitches(body.switches); }
 }
 // The emergency switches (web/finding.py flip_switch): each takes effect on the next request.
+/** @type {Record<string, () => boolean>} */
 const SWITCH_SHOWN = { search_paused: () => true, google_off: () => CONFIG.google_on, yelp_off: () => CONFIG.yelp_on };
 // What turning each switch on or off does, for the confirmation: [question, effect, button].
+/** @type {Record<string, [string, string, string][]>} */
 const SWITCH_ASK = {
   search_paused: [["Pause all searching for everyone?",
                    "Find leads will refuse to start, for everyone, until this is turned off. A search running now " +
@@ -118,7 +127,9 @@ const SWITCH_ASK = {
   yelp_off: [["Stop using Yelp for everyone?", "Searches will skip Yelp until this is turned off.", "Stop using Yelp"],
              ["Use Yelp again?", "Searches will use Yelp again straight away.", "Use Yelp again"]],
 };
+/** @type {(() => void) | null} */
 let switchThen = null;
+/** @param {string} key @param {boolean} on @param {() => void} then */
 function askSwitch(key, on, then) {
   const [title, why, label] = SWITCH_ASK[key][on ? 0 : 1];
   $("switch-title").textContent = title; $("switch-why").textContent = why; $("switch-go").textContent = label;
@@ -127,7 +138,7 @@ function askSwitch(key, on, then) {
   $("switch-dlg").showModal();
   $("switch-cancel").focus();
 }
-$("switch-form").addEventListener("submit", (e) => {
+$("switch-form").addEventListener("submit", (/** @type {SubmitEvent} */ e) => {
   e.preventDefault(); $("switch-dlg").close();
   const then = switchThen; switchThen = null;
   if (then) then();
@@ -137,11 +148,13 @@ $("switch-dlg").addEventListener("cancel", () => { switchThen = null; });
 // Each switch reads as what it controls and how that stands now ("Yelp: In use"), never
 // as "Switch Yelp off: Off"; its button says what pressing it does.
 // [thing, state when the switch is off, state when on, button to switch on, button to switch off]
+/** @type {Record<string, string[]>} */
 const SWITCH_TEXT = {
   search_paused: ["Searching", "Working normally", "Paused", "Pause searching", "Resume searching"],
   google_off: ["Google", "In use", "Stopped", "Stop using Google", "Use Google again"],
   yelp_off: ["Yelp", "In use", "Stopped", "Stop using Yelp", "Use Yelp again"],
 };
+/** @param {Record<string, SiteSwitch>} list */
 function renderSwitches(list) {
   const box = $("switch-list");
   // A switch the database didn't answer for can be neither shown nor flipped: say so, never an empty list.
@@ -151,7 +164,7 @@ function renderSwitches(list) {
   }
   box.replaceChildren();
   for (const [key, s] of Object.entries(list)) {
-    if (!SWITCH_SHOWN[key]() || !SWITCH_TEXT[key]) continue;
+    if (!SWITCH_SHOWN[key] || !SWITCH_SHOWN[key]() || !SWITCH_TEXT[key]) continue;
     const [thing, offText, onText, turnOn, turnOff] = SWITCH_TEXT[key];
     const row = el("div", undefined, "switch-row");
     const text = el("div");
@@ -165,7 +178,7 @@ function renderSwitches(list) {
       const b = button(s.on ? turnOff : turnOn, s.on ? "" : "quiet", () => askSwitch(key, !s.on, async () => {
         b.disabled = true;
         try { await post("/switches", { key, on: !s.on, by: myName() }); }
-        catch (err) { box.append(el("div", err.message, "error")); }
+        catch (err) { box.append(el("div", /** @type {Error} */ (err).message, "error")); }
         loadSearches();
       }));
 
@@ -190,6 +203,7 @@ function adminUnread() {
 // The site's problems in the last 7 days (failed searches, errors), so they are never only in the
 // logs. They sit in the administrator's section (closed by default): a note, not an alarm.
 // "Nothing went wrong" only when the problems were read and there were none.
+/** @param {Problems | null} p @param {boolean} [unread] */
 function renderProblems(p, unread) {
   const box = $("problems");
   if (unread) { problem(box, "Couldn't load recent problems", ADMIN_UNREAD, adminRetry); return; }
@@ -205,9 +219,12 @@ function renderProblems(p, unread) {
 // Map areas today's search missed are filled in in the background (fillin.py): how that stands,
 // in words, and the page looks again every half minute while it goes on (every few seconds once
 // searching is paused: the fill-in then ends within seconds, and the page says so).
+/** @type {(n: number | undefined) => string} */
 const areasText = (n) => (n === 1 ? "1 area" : `${n} areas`);
 // Which towns the missing areas hold, nearest the search's centre first (fillin.py's "where").
+/** @type {(f: Fill) => string} */
 const aroundText = (f) => (f.where ? ` (around ${f.where})` : "");
+/** @param {Fill} f */
 function fillText(f) {
   const more = f.found ? ` ${num(f.found)} more businesses so far (${num(f.new)} new).` : "";
   if (f.state === "filling") {
@@ -230,6 +247,7 @@ function fillText(f) {
   return `${areas[0].toUpperCase()}${areas.slice(1)} of the free map data${aroundText(f)} never answered today; ` +
     `their businesses are missing until the next search.${added}`;
 }
+/** @param {Fill | null | undefined} f @param {boolean} paused */
 function showFill(f, paused) {
   const box = $("fill-note");
   clearTimeout(S.fillTimer);
@@ -243,9 +261,11 @@ function showFill(f, paused) {
   if (f.state === "filling") S.fillTimer = setTimeout(loadSearches, paused ? 2500 : 30000);
 }
 // Every count on the page reads the same way: 1,135.
+/** @type {(v: number | string | null | undefined) => string} */
 const num = (v) => typeof v === "number" ? v.toLocaleString() : v ?? "-";
 // Each search is its own <tbody> (its row, then its reason or details), so on a phone
 // each becomes one stacked card with every field in view (app.css, table.plain.hist).
+/** @param {SearchRow[]} searches @param {SearchesAnswer} body */
 function renderHistory(searches, body) {
   const box = $("history");
   if (!searches.length) { box.replaceChildren(el("div", "No searches yet.", "muted")); return; }
@@ -255,6 +275,7 @@ function renderHistory(searches, body) {
   const thead = el("thead"); thead.append(head);
   table.append(thead);
   // On a phone each value gets its column's name above it (the table's header is hidden there).
+  /** @type {(text: string | undefined, cls: string, label?: string) => HTMLTableCellElement} */
   const cell = (text, cls, label) => {
     const td = el("td", undefined, cls);
     if (label) td.append(el("span", label, "h-label"));
@@ -333,7 +354,7 @@ function renderHistory(searches, body) {
       const toggle = button("Details", "link", () => {
         extra.hidden = !extra.hidden;
         toggle.textContent = extra.hidden ? "Details" : "Hide details";
-        toggle.setAttribute("aria-expanded", !extra.hidden);
+        toggle.setAttribute("aria-expanded", String(!extra.hidden));
       });
       toggle.setAttribute("aria-expanded", "false");
       td.append(toggle);
@@ -345,20 +366,24 @@ function renderHistory(searches, body) {
 
 // What was typed, and under it the place the search actually ran around (and how far that
 // is from Arco's shop) when it says more than the typed words.
+/** @param {SearchRow} s */
 function whereCell(s) {
   const td = el("td", undefined, "h-where");
   td.append(el("span", s.location || ""));
   const place = s.place || s.found_near;
   if (place && place.toLowerCase() !== (s.location || "").toLowerCase()) {
+    const far = typeof s.miles === "number" && s.miles > CONFIG.area_miles;
     const miles = typeof s.miles === "number" ? ` · ${milesText(s.miles)} from Arco` : "";
-    td.append(el("span", `Searched around ${place}${miles}`, `sub${s.miles > CONFIG.area_miles ? " far" : ""}`));
+    td.append(el("span", `Searched around ${place}${miles}`, `sub${far ? " far" : ""}`));
   } else if (typeof s.miles === "number" && s.miles > CONFIG.area_miles) {
     td.append(el("span", `${milesText(s.miles)} from Arco`, "sub far"));
   }
   return td;
 }
+/** @type {(m: number) => string} */
 const milesText = (m) => `${m < 10 ? m.toFixed(1) : Math.round(m).toLocaleString()} miles`;
 
+/** @param {Job} job */
 function showProgress(job) {
   $("progress-card").hidden = false;
   const steps = $("steps"); steps.replaceChildren();
@@ -380,6 +405,7 @@ function showProgress(job) {
   $("slow-note").hidden = !job.slow;
 }
 // One short note (an incomplete search's summary, or the first warning); the details behind "More".
+/** @param {string | null} note @param {string[]} warnings */
 function showNotes(note, warnings) {
   const box = $("done-warnings"); box.replaceChildren();
   const rest = note ? warnings : warnings.slice(1), main = note || warnings[0];
@@ -392,13 +418,17 @@ function showNotes(note, warnings) {
   }
   box.append(div);
 }
+/** @param {string} jobId @param {number} [misses] how many times in a row the server didn't answer */
 async function follow(jobId, misses = 0) {
   S.job = jobId;
   setGo(false, ""); $("done-card").hidden = true; $("search-failed").hidden = true;
+  /** @type {Job} */
   let job;
   try { job = await api(`/status/${jobId}`); }
   catch (err) {
-    if (err.status !== 404 && misses < 5) { setTimeout(() => follow(jobId, misses + 1), 3000); return; }
+    if (/** @type {ApiError} */ (err).status !== 404 && misses < 5) {
+      setTimeout(() => follow(jobId, misses + 1), 3000); return;
+    }
     S.job = null; $("progress-card").hidden = true;
     // The server restarted mid-search: it keeps what the search found and gives the day back.
     setGo(false, "The server restarted during the search (the site was updated). Checking what it had found…");
@@ -430,6 +460,7 @@ async function follow(jobId, misses = 0) {
 // Today's only search: show what it will do and ask first. "Everywhere available" is
 // spelled out as the sources that will actually be asked.
 function autoSources() {
+  /** @type {(key: string) => boolean} */
   const off = (key) => Boolean(S.switches && S.switches[key] && S.switches[key].on);
   const google = CONFIG.google_on && !off("google_off"), yelp = CONFIG.yelp_on && !off("yelp_off");
   if (!google && !yelp) {
@@ -440,25 +471,34 @@ function autoSources() {
   const names = [google && "Google (paid)", yelp && "Yelp", "free map data"].filter(Boolean);
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
+/** @type {Record<string, string>} */
 const SOURCE_TEXT = { auto: "Everywhere available", osm: "Free map data only", yelp: "Yelp only",
                       google: "Google only (paid)", both: "Google and free map data (paid)" };
+/** @param {HTMLFormElement} form @returns {[string, string][]} */
 function searchSummary(form) {
-  const f = new FormData(form), rows = [];
+  const f = new FormData(form);
+  /** @type {[string, string][]} */
+  const rows = [];
   rows.push(["Search around", String(f.get("location")).trim()]);
   rows.push(["How far", `${f.get("radius")} miles`]);
   rows.push(["Also look for",
              String(f.get("keywords") || "").split(",").map((k) => k.trim()).filter(Boolean).join(", ")
              || "Nothing extra"]);
-  const source = f.get("source") || "auto";
+  const source = String(f.get("source") || "auto");
   rows.push(["Where to look", source === "auto" ? autoSources() : SOURCE_TEXT[source] || autoSources()]);
-  rows.push(["Leave out scores below", f.get("min_score")]);
+  rows.push(["Leave out scores below", String(f.get("min_score"))]);
   if (f.get("grid") && f.get("grid") !== "1") rows.push(["Coverage for Google and Yelp", `${f.get("grid")} searches`]);
-  if (f.get("max_requests")) rows.push(["Most paid lookups", f.get("max_requests")]);
+  if (f.get("max_requests")) rows.push(["Most paid lookups", String(f.get("max_requests"))]);
   if (f.get("only_keyword_matches")) rows.push(["Only", "businesses matching the search words"]);
   return rows;
 }
 // The server's limits, checked here first so a mistake is caught before the confirmation.
 const MAX_KEYWORDS = 20, MAX_KEYWORD_LEN = 60;
+/**
+ * Why a number field is wrong, or null when it is fine.
+ * @param {FormData} f @param {string} name @param {string} label @param {number} lo @param {number} hi
+ * @param {boolean} whole @param {string} [unit] @param {boolean} [required]
+ */
 function number(f, name, label, lo, hi, whole, unit, required) {
   const raw = String(f.get(name) || "").trim();
   // A blank How far or minimum score is pointed out, never quietly replaced by the default.
@@ -468,6 +508,7 @@ function number(f, name, label, lo, hi, whole, unit, required) {
   if (whole && !Number.isInteger(v)) return `${label} must be a whole number.`;
   return v < lo || v > hi ? `${label} must be between ${lo} and ${hi}${unit || ""}.` : null;
 }
+/** The first field that is wrong and why, or null. @param {HTMLFormElement} form @returns {[string, string] | null} */
 function checkForm(form) {
   const f = new FormData(form);
   if (!String(f.get("location") || "").trim()) {
@@ -483,6 +524,7 @@ function checkForm(form) {
                         `${long.length}. Separate words with commas.`];
   }
   // The same words as the server's (web/finding.py parse_form): the field's own label.
+  /** @type {[string, string, number, number, boolean, string?, boolean?][]} */
   const fields = [["radius", "How far", 1, 100, false, " miles", true],
                   ["min_score", "The score to leave out weak leads below", 0, 100, true, "", true],
                   ["max_requests", "Most paid lookups for this search", 1, 5000, true]];
@@ -495,18 +537,23 @@ function checkForm(form) {
 // Before anything is spent the server finds the place typed (web/finding.py place): the
 // confirmation names it and how far it is from Arco's shop. A place outside Arco's area needs a
 // second, explicit yes (farDialog) that names it again.
+/** @type {(p: Place) => string} */
 const farText = (p) => `“${p.label}” is ${milesText(p.miles)} from Arco's shop, outside Arco's area ` +
   `(about ${p.area_miles} miles around it).`;
-$("form").addEventListener("submit", async (e) => {
+$("form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
   e.preventDefault();
   if ($("go").disabled || S.locating) return;
   const bad = checkForm($("form"));
   if (bad) { showError(bad[1], bad[0]); return; }
   const note = $("day-note").textContent;
   S.locating = true; $("go").disabled = true; $("day-note").textContent = "Finding the place...";
+  /** @type {Place} */
   let place;
   try { place = await api(`/place?${new URLSearchParams({ location: $("form").location.value.trim() })}`); }
-  catch (err) { showError(err.message, err.body && err.body.field); return; }
+  catch (e) {
+    const err = /** @type {ApiError} */ (e);
+    showError(err.message, err.body && err.body.field); return;
+  }
   finally { S.locating = false; setGo(!S.job, note); }
   S.place = place;
   const dl = $("confirm-list"); dl.replaceChildren();
@@ -521,10 +568,11 @@ $("form").addEventListener("submit", async (e) => {
 });
 const backToPlace = () => $("form").querySelector("input[name=location]").focus();
 $("confirm-back").addEventListener("click", () => { $("confirm-dlg").close(); backToPlace(); });
-$("confirm-form").addEventListener("submit", (e) => {
+$("confirm-form").addEventListener("submit", (/** @type {SubmitEvent} */ e) => {
   e.preventDefault(); $("confirm-dlg").close();
   if (S.place && S.place.outside) farDialog(S.place); else startSearch();
 });
+/** @param {Place} place */
 function farDialog(place) {
   S.place = place;
   $("far-why").textContent = farText(place);
@@ -532,9 +580,10 @@ function farDialog(place) {
   $("far-back").focus();                 // the safe choice is the one already in focus
 }
 $("far-back").addEventListener("click", () => { $("far-dlg").close(); backToPlace(); });
-$("far-form").addEventListener("submit", (e) => {
-  e.preventDefault(); $("far-dlg").close(); startSearch(S.place.confirm);
+$("far-form").addEventListener("submit", (/** @type {SubmitEvent} */ e) => {
+  e.preventDefault(); $("far-dlg").close(); startSearch(S.place && S.place.confirm);
 });
+/** @param {string} [confirmPlace] the place outside Arco's area that was confirmed */
 async function startSearch(confirmPlace) {
   setGo(false, "Starting...");
   clearErrors(); $("search-failed").hidden = true;
@@ -544,23 +593,25 @@ async function startSearch(confirmPlace) {
     const body = await api("/search", { method: "POST", body: form });
     follow(body.job_id);
     loadSearches();                        // the history shows it running from the start
-  } catch (err) {
+  } catch (e) {
+    const err = /** @type {ApiError} */ (e);
     if (err.status === 429 && err.body && err.body.job_id) return follow(err.body.job_id);
     setGo(false, "");
     loadSearches();
     // The place turned out to be outside Arco's area: ask, naming it (nothing was spent).
-    if (err.body && err.body.confirm_far) { farDialog(err.body.place); return; }
+    if (err.body && err.body.confirm_far && err.body.place) { farDialog(err.body.place); return; }
     showError(err.message, err.status === 400 && err.body ? err.body.field : "");
   }
 }
 
 // The administrator's section is locked with its own password (web/auth.py admin_unlock).
 // Unlocking lasts as long as the login; the problems and switches then load.
+/** @param {boolean} open */
 function showAdmin(open) {
   $("admin-lock").hidden = open;
   $("admin-content").hidden = !open;
 }
-$("admin-lock").addEventListener("submit", async (e) => {
+$("admin-lock").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
   e.preventDefault();
   const err = $("admin-error"), go = $("admin-unlock");
   err.hidden = true;
@@ -571,7 +622,7 @@ $("admin-lock").addEventListener("submit", async (e) => {
     $("admin-pass").value = "";
     showAdmin(true);
     loadSearches();
-  } catch (x) { err.textContent = x.message; err.hidden = false; $("admin-pass").select(); }
+  } catch (x) { err.textContent = /** @type {Error} */ (x).message; err.hidden = false; $("admin-pass").select(); }
   finally { go.disabled = false; }
 });
 $("admin-relock").addEventListener("click", async () => {

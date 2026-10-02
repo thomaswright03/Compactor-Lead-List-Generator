@@ -44,3 +44,6 @@ def test_ci_lints_and_type_checks_every_page_script():
     assert re.findall(r'"(\w+\.js)"', eslint) == loaded
     assert re.findall(r'"leadgen/static/(\w+\.js)"', _read("tsconfig.json")) == loaded
     assert '"lint:js": "eslint leadgen/static"' in _read("package.json")
+    # The type check is strict (no untyped parameter, no unchecked null), like mypy's.
+    assert re.search(r'^\s*"strict": true,', _read("tsconfig.json"), re.M)
+    assert not re.search(r'"(noImplicitAny|strictNullChecks)": false', _read("tsconfig.json"))

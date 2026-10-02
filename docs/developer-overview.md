@@ -52,15 +52,20 @@ python -m vulture                              # dead code (settings in pyprojec
 python -m mypy                                 # strict type check (settings in pyproject.toml)
 npm ci                                         # the page scripts' lint and type tools (package-lock.json)
 npm run lint:js                                # ESLint over leadgen/static/*.js (eslint.config.mjs)
-npm run types:js                               # TypeScript's check of the same scripts (tsconfig.json)
+npm run types:js                               # TypeScript's strict check of the same scripts (tsconfig.json)
 ```
 
 The page's scripts are classic scripts that share their top-level names. Each lists the
 names it shares at its top (`/* exported ... */`); ESLint lets the other files use only
 those, so a misspelt or renamed function, an undeclared (implicit) global or an unused
-name fails the lint, and the type check (JSDoc types where the DOM needs them; what the
-scripts use from the page itself is declared in `types/page.d.ts`) fails on a name no
-script declares or two declare. Lines are at most 120 characters, as in the Python.
+name fails the lint, and the type check fails on a name no script declares or two
+declare. The type check is strict (`"strict": true`, like mypy's for the Python): every
+function's parameters have JSDoc types, a value that may be missing (`null`, an element
+not on the page, a field the server may leave out) must be checked before use, and the
+server's answers are read through the shapes in `types/page.d.ts` (`Lead`, `LeadsPage`,
+`SearchesAnswer`, `Job`...), along with the page's state (`PageState`) and what the
+scripts use from the page itself. A server change that adds or renames a field the page
+reads updates that file too. Lines are at most 120 characters, as in the Python.
 
 The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
 `leadgen/saved.py`, `marks.py`, `calls.py` and `daily.py` keep the saved data

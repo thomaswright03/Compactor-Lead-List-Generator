@@ -14,10 +14,11 @@ const $ = (id) => document.getElementById(id);
 const $all = (selector) => document.querySelectorAll(selector);
 /** @type {(e: Event) => HTMLElement} */
 const eventEl = (e) => /** @type {HTMLElement} */ (e.target);
-const CONFIG = JSON.parse($("page-config").textContent);
+const CONFIG = /** @type {PageConfig} */ (JSON.parse($("page-config").textContent));
 const OUTCOMES = CONFIG.outcomes;
 const PAUSED = CONFIG.paused;
 const SITE = "Arco Compactor Lead Finder";
+/** @type {Record<string, string>} */
 const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", stats: "Stats" };
 // A row just marked Yes or No stays where it is (showing its answer and Undo) for this long
 // after the pointer leaves the table, so a double-click can never land on the next business.
@@ -31,6 +32,7 @@ const SHIFT_GUARD_MS = 700;
 // `failed`: the Yes / No clicks that didn't reach the server, by lead, until retried or dismissed.
 // The Calls page likewise holds the first `callLimit` called businesses of its tab and filter
 // (`called`, of `calledTotal`), and its tabs' counts (`callCounts`).
+/** @type {PageState} */
 const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "",
             calledTotal: 0, callCounts: null, callLimit: PAGE, callSeq: 0, calledLoading: false,
             sending: new Map(), failed: new Map(), loaded: false, loadError: "", refreshError: "",
@@ -39,30 +41,45 @@ const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoa
             limit: PAGE, job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0,
             cutOffTimer: 0 };
 
+/**
+ * A new element: <tag>, with its text and class names when given.
+ * @template {keyof HTMLElementTagNameMap} K
+ * @param {K} tag
+ * @param {string | number | null} [text]
+ * @param {string} [cls]
+ * @returns {HTMLElementTagNameMap[K]}
+ */
 function el(tag, text, cls) {
   const e = document.createElement(tag);
-  if (text !== undefined && text !== null) e.textContent = text;
+  if (text !== undefined && text !== null) e.textContent = String(text);
   if (cls) e.className = cls;
   return e;
 }
+/** A link opening in a new tab (a plain span when href isn't a web address).
+    @param {string} href @param {string} [text] @returns {HTMLElement} */
 function link(href, text) {
   if (!href || !/^https?:\/\//i.test(href)) return el("span", "");
   const a = el("a", text || href.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, ""));
   a.href = href; a.target = "_blank"; a.rel = "noopener";
   return a;
 }
+/** @param {string} phone @returns {HTMLElement} */
 function phoneLink(phone) {
   const digits = (phone || "").replace(/[^\d+]/g, "");
   if (digits.replace(/\D/g, "").length < 7) return el("span", phone || "");
   const a = el("a", phone); a.href = `tel:${digits}`; a.className = "nowrap";
   return a;
 }
+/** @param {string} text @param {string} [cls] @param {(e: MouseEvent) => unknown} [onClick] */
 function button(text, cls, onClick) {
   const b = el("button", text, cls);
   b.type = "button";
   if (onClick) b.addEventListener("click", onClick);
   return b;
 }
+// The server's JSON answer (typed `any`: each caller names the answer it reads, LeadsPage...);
+// an answer that isn't OK throws an ApiError saying why.
+/** @param {string} path @param {RequestInit} [opts] @returns {Promise<any>} */
 async function api(path, opts) {
   let res;
   try { res = await fetch(path, opts); }
@@ -79,16 +96,21 @@ async function api(path, opts) {
   }
   return body;
 }
+/** @type {(path: string, data: unknown) => Promise<any>} */
 const post = (path, data) => api(path, { method: "POST", headers: { "Content-Type": "application/json" },
                                         body: JSON.stringify(data) });
+/** @type {(s: number) => string} */
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const serverNow = () => Date.now() / 1000 + S.skew;
+/** @type {(undo: Undo | null | undefined) => number} */
 const leftOf = (undo) => undo ? Math.max(0, Math.floor(undo.until - serverNow())) : 0;
 // A list whose next view (a tab, filter or sort) is on its way: its old rows stay, dimmed, and
 // after LOADING_MS it says "Loading…" over them (the cue `id`, a role="status" box), after SLOW_MS
 // also that it is taking longer than usual. on=false (the view arrived, or failed) clears it.
 const LOADING_MS = 300, SLOW_MS = 5000;
+/** @type {Map<string, number[]>} */
 const cueTimers = new Map();
+/** @param {string} id @param {boolean} on */
 function loadingCue(id, on) {
   const cue = $(id), timers = cueTimers.get(id);
   if (on) {
@@ -103,6 +125,7 @@ function loadingCue(id, on) {
   cueTimers.delete(id);
   if (cue.childNodes.length) cue.replaceChildren();
 }
+/** @param {HTMLElement} box @param {string} title @param {string} message @param {() => unknown} [retry] */
 function problem(box, title, message, retry) {
   const p = el("div", undefined, "problem");
   const text = el("div"); text.append(el("strong", title), el("span", message, "muted"));
@@ -112,6 +135,7 @@ function problem(box, title, message, retry) {
 }
 
 function themeChoice() { try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; } }
+/** @param {string} choice "light", "dark" or "system" */
 function applyTheme(choice) {
   if (choice === "light" || choice === "dark") document.documentElement.setAttribute("data-theme", choice);
   else document.documentElement.removeAttribute("data-theme");
@@ -122,7 +146,9 @@ function applyTheme(choice) {
   window.setThemeColor(choice);              // the browser's bar matches (templates/_theme.html)
   if (chartRows && !$("page-stats").hidden) drawChart(chartRows);
 }
-$all("[data-theme-pick]").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.themePick)));
+$all("[data-theme-pick]").forEach((b) => {
+  b.addEventListener("click", () => applyTheme(b.dataset.themePick || "system"));
+});
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   if (chartRows) drawChart(chartRows);
 });
@@ -130,10 +156,13 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 /* Who is using this browser: the name saved with each Yes / No and call made here, so the
    team can see who to ask. Kept in this browser; asked once before the first mark or call. */
 const NAME_KEY = "my-name";
-let nameMemory = "", nameThen = null;
+let nameMemory = "";
+/** @type {(() => void) | null} */
+let nameThen = null;
 function myName() {
   try { return localStorage.getItem(NAME_KEY) || nameMemory; } catch (e) { return nameMemory; }
 }
+/** @param {string} name */
 function setMyName(name) {
   nameMemory = name.trim().replace(/\s+/g, " ").slice(0, 60);
   try { if (nameMemory) localStorage.setItem(NAME_KEY, nameMemory); else localStorage.removeItem(NAME_KEY); }
@@ -145,6 +174,7 @@ function showMyName() {
   $("me-name").textContent = name || "not set";
   $("me-change").textContent = name ? "Change" : "Set";
 }
+/** @param {() => void} [then] */
 function askName(then) {
   nameThen = then || null;
   $("name-input").value = myName();
@@ -153,8 +183,9 @@ function askName(then) {
   $("name-input").focus();
 }
 // Runs fn once the name is known: every mark and call says who made it, so there is no skipping.
+/** @param {() => void} fn */
 function withName(fn) { if (myName()) fn(); else askName(fn); }
-$("name-form").addEventListener("submit", (e) => {
+$("name-form").addEventListener("submit", (/** @type {SubmitEvent} */ e) => {
   e.preventDefault();
   if (!$("name-input").value.trim()) {
     $("name-error").hidden = false;
@@ -173,12 +204,13 @@ $("name-cancel").addEventListener("click", () => { nameThen = null; $("name-dlg"
 $("name-dlg").addEventListener("cancel", () => { nameThen = null; });
 $("me-change").addEventListener("click", () => askName());
 showMyName();
+/** @type {(name: string) => string} */
 const byWho = (name) => name ? ` by ${name}` : "";
 
 // Phones fold the Yelp count, the colour theme and Log out into a Menu button, so the
 // navigation stays one short bar at the top.
 $("menu-btn").addEventListener("click", () => {
-  const open = document.querySelector(".side").classList.toggle("open");
+  const open = /** @type {HTMLElement} */ (document.querySelector(".side")).classList.toggle("open");
   $("menu-btn").setAttribute("aria-expanded", open);
 });
 
@@ -197,12 +229,14 @@ function parseHash() {
   return { page, params: new URLSearchParams(query || "") };
 }
 // Take the Leads view (tab, filter, tier, sort) from the address; true when it changed.
+/** @param {URLSearchParams} params */
 function readLeadView(params) {
   const before = [S.leadView, S.q, S.tier, S.phone, S.sort, S.dir].join("|");
   S.leadView = params.get("tab") || "";
   if (!LEAD_TABS.some(([v]) => v === S.leadView)) S.leadView = "";
   S.q = params.get("q") || ""; S.tier = params.get("tier") || ""; S.phone = params.get("phone") === "1";
-  S.sort = SORTS[params.get("sort")] ? params.get("sort") : "score";
+  const sort = params.get("sort") || "";
+  S.sort = SORTS[sort] ? sort : "score";
   S.dir = params.get("dir") === "asc" ? "asc" : params.get("dir") === "desc" ? "desc" : SORTS[S.sort].dir;
   $("filter").value = S.q; $("tier").value = S.tier; $("has-phone").checked = S.phone;
   return before !== [S.leadView, S.q, S.tier, S.phone, S.sort, S.dir].join("|");
@@ -231,6 +265,7 @@ function route() {
   if (page === "stats") loadStats();
   if (page === "find") loadSearches();
 }
+/** @param {string} page */
 function writeHash(page) {
   const params = new URLSearchParams();
   if (page === "leads") {
@@ -258,5 +293,5 @@ document.addEventListener("mousedown", (e) => {
   if (e.detail > 1 && (Date.now() - dialogClickAt < 800 || eventEl(e).closest("dialog button"))) e.preventDefault();
 }, true);
 document.addEventListener("dblclick", () => {
-  if (Date.now() - dialogClickAt < 800) window.getSelection().removeAllRanges();
+  if (Date.now() - dialogClickAt < 800) window.getSelection()?.removeAllRanges();
 }, true);

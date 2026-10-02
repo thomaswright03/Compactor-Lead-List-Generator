@@ -2,6 +2,7 @@
    Tutorial button in the sidebar (in Menu on phones). Each step switches to its page,
    highlights one part of it and explains it. The tour only looks: it never clicks, marks,
    calls or searches. Loaded after the six parts in core.js to start.js. */
+/** @type {TourStep[]} */
 const TOUR = [
   { page: "find", title: "Welcome to the Lead Finder",
     text: "This site finds businesses around Salt Lake City that are likely to run a baler or compactor. " +
@@ -58,13 +59,18 @@ const TOUR = [
           "Find leads, then work through Leads." },
 ];
 
-const tour = { steps: [], i: -1, box: null, spot: null, shade: null, keys: null, last: null, timer: 0 };
+// The tutorial's own parts (made the first time it opens) and where it is.
+/** @typedef {{box: HTMLElement, spot: HTMLElement, shade: HTMLElement, keys: (e: KeyboardEvent) => void}} TourParts */
+/** @type {{steps: TourStep[], i: number, parts: TourParts | null, last: Element | null, timer: number}} */
+const tour = { steps: [], i: -1, parts: null, last: null, timer: 0 };
 
+/** @param {Element | undefined} node */
 function tourVisible(node) {
   if (!node) return false;
   const r = node.getBoundingClientRect();
   return r.width > 0 && r.height > 0 && getComputedStyle(node).visibility !== "hidden";
 }
+/** @param {TourStep} step @returns {Element | null} */
 function tourTarget(step) {
   // A step can list several places, best first: the first one on screen is used.
   for (const sel of (step.target || "").split(",").map((s) => s.trim()).filter(Boolean)) {
@@ -74,7 +80,9 @@ function tourTarget(step) {
   return null;
 }
 
-function buildTour() {
+/** @returns {TourParts} */
+function tourParts() {
+  if (tour.parts) return tour.parts;
   const spot = el("div", undefined, "tour-spot");
   spot.setAttribute("aria-hidden", "true");
   const box = el("div", undefined, "tour-box");
@@ -90,52 +98,58 @@ function buildTour() {
   const shade = el("div", undefined, "tour-shade");
   shade.addEventListener("click", endTour);
   document.body.append(shade, spot, box);
-  box.querySelector("#tour-close").addEventListener("click", endTour);
-  box.querySelector("#tour-back").addEventListener("click", () => showStep(tour.i - 1));
-  box.querySelector("#tour-next").addEventListener("click", () => showStep(tour.i + 1));
-  tour.keys = (e) => {
+  $("tour-close").addEventListener("click", endTour);
+  $("tour-back").addEventListener("click", () => showStep(tour.i - 1));
+  $("tour-next").addEventListener("click", () => showStep(tour.i + 1));
+  /** @param {KeyboardEvent} e */
+  const keys = (e) => {
     if (e.key === "Escape") { e.preventDefault(); endTour(); }
     else if (e.key === "ArrowRight") showStep(tour.i + 1);
     else if (e.key === "ArrowLeft") showStep(tour.i - 1);
     else if (e.key === "Tab") {                      // keep the keyboard inside the tutorial
-      const keys = [...box.querySelectorAll("button:not([disabled])")];
-      const at = keys.indexOf(document.activeElement);
-      if (e.shiftKey && at <= 0) { e.preventDefault(); keys[keys.length - 1].focus(); }
-      else if (!e.shiftKey && (at === keys.length - 1 || at < 0)) { e.preventDefault(); keys[0].focus(); }
+      const buttons = /** @type {HTMLButtonElement[]} */ ([...box.querySelectorAll("button:not([disabled])")]);
+      const at = buttons.indexOf(/** @type {HTMLButtonElement} */ (document.activeElement));
+      if (e.shiftKey && at <= 0) { e.preventDefault(); buttons[buttons.length - 1].focus(); }
+      else if (!e.shiftKey && (at === buttons.length - 1 || at < 0)) { e.preventDefault(); buttons[0].focus(); }
     }
   };
-  Object.assign(tour, { box, spot, shade });
+  tour.parts = { box, spot, shade, keys };
+  return tour.parts;
 }
 
 function startTour() {
   if (tour.i >= 0) return;
-  if (!tour.box) buildTour();
+  const { box, spot, shade, keys } = tourParts();
   tour.last = document.activeElement;
   // A step about something this site doesn't have (Yelp not set up) is left out.
   tour.steps = TOUR.filter((step) => !step.needs || document.querySelector(step.needs));
   $("side-bottom").closest(".side").classList.remove("open");   // the phone menu closes
-  tour.box.hidden = tour.spot.hidden = tour.shade.hidden = false;
+  box.hidden = spot.hidden = shade.hidden = false;
   document.body.classList.add("touring");
   window.addEventListener("resize", placeTour);
   window.addEventListener("scroll", placeTour, true);
-  document.addEventListener("keydown", tour.keys);   // wherever the focus is while it opens
+  document.addEventListener("keydown", keys);        // wherever the focus is while it opens
   showStep(0);
 }
 
 function endTour() {
   if (tour.i < 0) return;
+  const { box, spot, shade, keys } = tourParts();
   tour.i = -1;
   clearTimeout(tour.timer);
-  tour.box.hidden = tour.spot.hidden = tour.shade.hidden = true;
+  box.hidden = spot.hidden = shade.hidden = true;
   document.body.classList.remove("touring");
   window.removeEventListener("resize", placeTour);
   window.removeEventListener("scroll", placeTour, true);
-  document.removeEventListener("keydown", tour.keys);
-  if (tour.last && tour.last.focus) tour.last.focus();
+  document.removeEventListener("keydown", keys);
+  const last = /** @type {HTMLElement | null} */ (tour.last);
+  if (last && last.focus) last.focus();
 }
 
+/** @param {number} i */
 function showStep(i) {
   if (i < 0 || i >= tour.steps.length) { if (i >= tour.steps.length) endTour(); return; }
+  const { box } = tourParts();
   tour.i = i;
   const step = tour.steps[i];
   if (parseHash().page !== step.page) location.hash = step.page;
@@ -144,14 +158,14 @@ function showStep(i) {
   $("tour-text").textContent = step.text;
   $("tour-back").disabled = i === 0;
   $("tour-next").textContent = i === tour.steps.length - 1 ? "Finish" : "Next";
-  tour.box.classList.add("moving");
+  box.classList.add("moving");
   clearTimeout(tour.timer);
   // Give the page a moment to switch and draw before finding the part to highlight.
   tour.timer = setTimeout(() => {
     const node = tourTarget(step);
     if (node) node.scrollIntoView({ block: "center", behavior: "instant" });
     placeTour();
-    tour.box.classList.remove("moving");
+    box.classList.remove("moving");
     $("tour-next").focus();
   }, 150);
 }
@@ -159,22 +173,22 @@ function showStep(i) {
 function placeTour() {
   if (tour.i < 0) return;
   const node = tourTarget(tour.steps[tour.i]);
-  const box = tour.box, pad = 6, gap = 12, edge = 12;
+  const { box, spot, shade } = tourParts(), pad = 6, gap = 12, edge = 12;
   const vw = document.documentElement.clientWidth, vh = window.innerHeight;
   if (!node) {                                       // nothing to point at: the box sits in the middle
-    tour.spot.hidden = true;
-    tour.shade.classList.add("dim");
+    spot.hidden = true;
+    shade.classList.add("dim");
     box.style.left = `${Math.max(edge, (vw - box.offsetWidth) / 2)}px`;
     box.style.top = `${Math.max(edge, (vh - box.offsetHeight) / 2)}px`;
     return;
   }
-  tour.shade.classList.remove("dim");                // the spot's own shadow dims the rest
+  shade.classList.remove("dim");                     // the spot's own shadow dims the rest
   const r = node.getBoundingClientRect();
   const top = Math.max(0, r.top - pad), left = Math.max(0, r.left - pad);
   const bottom = Math.min(vh, r.bottom + pad), right = Math.min(vw, r.right + pad);
-  Object.assign(tour.spot.style, { top: `${top}px`, left: `${left}px`,
-                                   width: `${Math.max(0, right - left)}px`, height: `${Math.max(0, bottom - top)}px` });
-  tour.spot.hidden = false;
+  Object.assign(spot.style, { top: `${top}px`, left: `${left}px`,
+                              width: `${Math.max(0, right - left)}px`, height: `${Math.max(0, bottom - top)}px` });
+  spot.hidden = false;
   const w = box.offsetWidth, h = box.offsetHeight;
   let x, y;
   if (vh - bottom >= h + gap) { y = bottom + gap; x = left; }          // below

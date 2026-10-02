@@ -2,9 +2,11 @@
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported loadStats, chartRows, drawChart */
 async function loadStats() {
+  /** @type {StatsAnswer} */
   let s;
   try { s = await api("/stats"); }
-  catch (err) {
+  catch (e) {
+    const err = /** @type {ApiError} */ (e);
     if (err.status === 401) return;
     problem($("stats-problem"), "Can't show the stats right now", err.message, loadStats);
     $("stats-body").hidden = true; return;
@@ -55,10 +57,14 @@ async function loadStats() {
 }
 
 // Columns: one series (share with equipment), so one hue, no legend; the title names it.
+/** @type {TierRow[] | null} */
 let chartRows = null;
+/** @param {TierRow[]} rows */
 function drawChart(rows) {
   chartRows = rows;
-  const css = getComputedStyle(document.documentElement), c = (n) => css.getPropertyValue(n).trim();
+  const css = getComputedStyle(document.documentElement);
+  /** @type {(name: string) => string} a colour of the theme shown */
+  const c = (name) => css.getPropertyValue(name).trim();
   const box = $("chart"); box.replaceChildren();
   const W = Math.max(300, Math.round(box.clientWidth || 560)), H = 260, L = 48, R = 12, T = 24, B = 52;
   const NS = "http://www.w3.org/2000/svg";
@@ -67,12 +73,14 @@ function drawChart(rows) {
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", "Share of checked businesses with a baler or compactor, by tier: " +
     rows.map((r) => `${r.tier} ${r.pct === null ? "no data" : r.pct + "%"}`).join(", "));
+  /** @type {(tag: string, attrs: Record<string, string | number>, text?: string) => SVGElement} */
   const node = (tag, attrs, text) => {
-    const n = document.createElementNS(NS, tag);
-    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    const n = /** @type {SVGElement} */ (document.createElementNS(NS, tag));
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
     if (text !== undefined) n.textContent = text;
     svg.append(n); return n;
   };
+  /** @type {(p: number) => number} the height of p% */
   const y = (p) => T + (H - T - B) * (1 - p / 100);
   for (const p of [0, 25, 50, 75, 100]) {
     node("line", { x1: L, x2: W - R, y1: y(p), y2: y(p), stroke: p === 0 ? c("--chart-base") : c("--chart-grid"),
@@ -114,7 +122,7 @@ function drawChart(rows) {
   box.prepend(svg);
 }
 
-let resizeTimer;
+let resizeTimer = 0;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => { if (chartRows && !$("page-stats").hidden) drawChart(chartRows); }, 150);

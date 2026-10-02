@@ -2,6 +2,7 @@
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported emptyNote, loadCalled, renderCalls, openCall, openHistory */
 // An empty page that says how it fills up, with a link to where that happens.
+/** @param {string} title @param {string} text @param {string} href @param {string} label */
 function emptyNote(title, text, href, label) {
   const box = el("div", undefined, "empty");
   box.append(el("strong", title), el("p", text));
@@ -20,6 +21,7 @@ function callQuery() {
   return p;
 }
 // quiet: a refresh in the background (colleagues' calls, a call just saved), the rows not dimmed.
+/** @param {boolean} [quiet] */
 async function loadCalled(quiet) {
   const seq = ++S.callSeq;
   const p = callQuery();
@@ -29,17 +31,19 @@ async function loadCalled(quiet) {
     if (S.calledLoaded) renderCalls();               // the rows shown stay, dimmed, until the new ones arrive
   }
   try {
-    const body = await api(`/leads?${p}`);
+    const body = /** @type {LeadsPage} */ (await api(`/leads?${p}`));
     if (seq !== S.callSeq) return;                   // a newer tab or filter was asked for meanwhile
-    S.called = body.leads; S.calledTotal = body.total; S.callCounts = body.call_counts; S.counts = body.counts;
-    S.calledLoaded = true; S.calledError = "";
-  } catch (err) {
+    S.called = body.leads; S.calledTotal = body.total; S.callCounts = body.call_counts || null;
+    S.counts = body.counts; S.calledLoaded = true; S.calledError = "";
+  } catch (e) {
+    const err = /** @type {ApiError} */ (e);
     if (seq !== S.callSeq || err.status === 401) return;
     S.calledError = err.message;
   }
   S.calledLoading = false;
   renderCalls(); counts();
 }
+/** @param {string} view an outcome, or "" for every called business */
 function pickCallTab(view) { S.callView = view; S.callLimit = PAGE; writeHash("calls"); loadCalled(); }
 function renderCalls() {
   if (S.calledError && !S.calledLoaded) {
@@ -51,12 +55,16 @@ function renderCalls() {
     ? [el("div", `Couldn't update the calls just now. ${S.calledError}`, "warn")] : []));
   $("calls-body").hidden = !S.calledLoaded;
   if (!S.calledLoaded) return;
+  /** @type {CallCounts} */
   const c = S.callCounts || { all: S.called.length, outcomes: {} };
   const anyCalls = (S.counts ? S.counts.called : c.all) > 0;
   $("call-filter-row").hidden = !anyCalls && !S.callQ;
   if ($("call-filter").value.trim() !== S.callQ) $("call-filter").value = S.callQ;
   // Every called business first (one row each, latest call first), so a call just saved is always in view.
-  const tabItems = [["", "All called businesses", c.all], ...OUTCOMES.map((o) => [o, o, c.outcomes[o] || 0])];
+  /** @type {[string, string, number][]} */
+  const tabItems = [["", "All called businesses", c.all],
+                    ...OUTCOMES.map((/** @type {string} */ o) => /** @type {[string, string, number]} */ (
+                      [o, o, c.outcomes[o] || 0]))];
   tabs($("call-tabs"), tabItems, S.callView, pickCallTab);
   // Phones: the same choice as one list, with the counts.
   $("call-pick").replaceChildren(...tabItems.map(([v, t, n]) => {
@@ -134,13 +142,15 @@ async function showMoreCalls() {
   const hadFocus = document.activeElement === more;
   more.disabled = true; more.textContent = "Loading more...";
   try {
-    const body = await api(`/leads?${p}`);
+    const body = /** @type {LeadsPage} */ (await api(`/leads?${p}`));
     if (seq !== S.callSeq) return;                   // the tab or filter changed meanwhile
     const have = new Set(S.called.map((l) => l.key));
     S.called = S.called.concat(body.leads.filter((l) => !have.has(l.key)));
     S.callLimit = Math.max(S.callLimit, S.called.length);
-    S.calledTotal = body.total; S.callCounts = body.call_counts; S.counts = body.counts; S.calledError = "";
-  } catch (err) {
+    S.calledTotal = body.total; S.callCounts = body.call_counts || null; S.counts = body.counts;
+    S.calledError = "";
+  } catch (e) {
+    const err = /** @type {ApiError} */ (e);
     if (err.status === 401) return;
     S.calledError = err.message;
   }
@@ -162,6 +172,7 @@ $("call-filter").addEventListener("input", () => {
 $("call-pick").addEventListener("change", () => pickCallTab($("call-pick").value));
 
 // The latest call's notes; when it had none, the latest notes from an earlier call, with their date.
+/** @param {Lead} l */
 function notesCell(l) {
   const td = el("td", undefined, "notes");
   if (l.call_notes) { td.textContent = l.call_notes; return td; }
@@ -173,8 +184,11 @@ function notesCell(l) {
 
 /* Unsent call notes are kept per business (in this browser) until they are saved, so closing
    the box, pressing Escape or reloading never loses them. */
+/** @type {Map<string, CallDraft>} */
 const draftMemory = new Map();
+/** @type {(key: string) => string} */
 const draftKey = (key) => `call-draft:${key}`;
+/** @param {string} key @returns {CallDraft | null} */
 function readDraft(key) {
   try {
     const d = JSON.parse(localStorage.getItem(draftKey(key)) || "null");
@@ -182,6 +196,7 @@ function readDraft(key) {
   } catch (e) { /* not kept */ }
   return draftMemory.get(key) || null;
 }
+/** @param {string} key @param {CallDraft} draft */
 function writeDraft(key, draft) {
   const empty = !draft.notes.trim() && !draft.outcome;
   if (empty) draftMemory.delete(key); else draftMemory.set(key, draft);
@@ -191,15 +206,18 @@ function writeDraft(key, draft) {
 }
 // Each call gets its own id when the box opens (kept with the draft), so sending it twice
 // (a retry after a lost answer) records it once.
-let callLead = null, callOutcome = "", callId = "";
+/** @type {Lead | null} */
+let callLead = null;
+let callOutcome = "", callId = "";
 function newId() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+/** @param {string} o an outcome, or "" for none picked */
 function pickOutcome(o) {
   callOutcome = o;
-  $("outcomes").querySelectorAll("button").forEach((x) => {
+  $("outcomes").querySelectorAll("button").forEach((/** @type {HTMLButtonElement} */ x) => {
     const on = x.textContent === o; x.classList.toggle("on", on); x.setAttribute("aria-pressed", String(on));
   });
   $("outcomes").classList.remove("need");
@@ -209,7 +227,9 @@ function pickOutcome(o) {
 function saveDraft() {
   if (callLead) writeDraft(callLead.key, { notes: $("call-notes").value, outcome: callOutcome, id: callId });
 }
+/** @param {Lead} lead */
 function openCall(lead) { withName(() => openCallBox(lead)); }
+/** @param {Lead} lead */
 function openCallBox(lead) {
   callLead = lead;
   $("call-title").textContent = `Just called: ${lead.name}`;
@@ -247,7 +267,7 @@ function notesCount() {
       ? `Limit reached: a summary can be up to ${NOTES_MAX.toLocaleString()} characters. Anything more isn't kept.`
     : `${left.toLocaleString()} characters left (${NOTES_MAX.toLocaleString()} at most).`;
 }
-$("call-notes").addEventListener("paste", (e) => {
+$("call-notes").addEventListener("paste", (/** @type {ClipboardEvent} */ e) => {
   const box = $("call-notes"), text = (e.clipboardData && e.clipboardData.getData("text")) || "";
   const kept = box.value.length - (box.selectionEnd - box.selectionStart);
   pastedOver = Math.max(0, kept + text.length - NOTES_MAX);
@@ -256,7 +276,7 @@ $("call-notes").addEventListener("paste", (e) => {
 $("call-notes").addEventListener("input", () => { saveDraft(); notesCount(); });
 $("call-cancel").addEventListener("click", () => { saveDraft(); $("call-dlg").close(); });
 $("call-dlg").addEventListener("close", saveDraft);
-$("call-form").addEventListener("submit", async (e) => {
+$("call-form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
   e.preventDefault();
   if (!callLead) return;
   if (!callOutcome) {
@@ -270,8 +290,8 @@ $("call-form").addEventListener("submit", async (e) => {
   const target = callLead, key = callLead.key;
   $("call-save").disabled = true; S.busy++;
   try {
-    const { call } = await post("/calls", { key, outcome: callOutcome, notes: $("call-notes").value, id: callId,
-                                            by: myName() });
+    const { call } = /** @type {{call: SavedCall}} */ (await post("/calls", {
+      key, outcome: callOutcome, notes: $("call-notes").value, id: callId, by: myName() }));
     writeDraft(key, { notes: "", outcome: "" });
     // Update the lead as it is now (the list may have been reloaded while saving).
     const lead = leadByKey(key) || target;
@@ -289,19 +309,20 @@ $("call-form").addEventListener("submit", async (e) => {
     toast(`${lead.name}: saved as ${call.outcome}.`, () => undoCall(key));
   } catch (err) {
     if (callLead && callLead.key === key) {
-      $("call-error").textContent = `Not saved. ${err.message}`;
+      $("call-error").textContent = `Not saved. ${/** @type {Error} */ (err).message}`;
       $("call-save").disabled = false;
     }
   } finally { S.busy--; }
 });
 
+/** @param {Lead} lead */
 async function openHistory(lead) {
   $("hist-title").textContent = `History of ${lead.name}`;
   const list = $("hist-list");
   list.replaceChildren(el("div", "Loading...", "muted"));
   $("hist-dlg").showModal();
   try {
-    const { calls, marks } = await api(`/calls/${encodeURIComponent(lead.key)}`);
+    const { calls, marks } = /** @type {CallHistory} */ (await api(`/calls/${encodeURIComponent(lead.key)}`));
     list.replaceChildren(el("h3", "Calls", "hist-head"));
     for (const c of calls) {
       const item = el("div", undefined, "item");
@@ -322,6 +343,6 @@ async function openHistory(lead) {
         list.append(item);
       }
     }
-  } catch (err) { list.replaceChildren(el("div", err.message, "error")); }
+  } catch (err) { list.replaceChildren(el("div", /** @type {Error} */ (err).message, "error")); }
 }
 $("hist-close").addEventListener("click", () => $("hist-dlg").close());
