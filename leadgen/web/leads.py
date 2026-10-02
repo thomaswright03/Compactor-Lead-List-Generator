@@ -77,14 +77,17 @@ def in_view(lead: Lead, view: str) -> bool:
 
 
 def matches(lead: Lead, q: str, tier: str, phone: bool = False) -> bool:
-    """The page's filter box, tier choice and "Has phone" tick."""
+    """The page's filter box, tier choice and "Has phone" tick. Several words typed
+    ("walmart layton") match a lead when each is somewhere in its name, town, ZIP,
+    category, address, type or flags, in any order and any case (q is lowercased),
+    like the Calls page's filter (calls.js, callMatches)."""
     if tier and lead.tier != tier:
         return False
     if phone and not lead.phone.strip():
         return False
-    text = " ".join([lead.name, places.town_of(lead), lead.category, lead.address, lead.lead_type,
-                     " ".join(lead.flags)]).lower()
-    return q in text
+    text = " ".join([lead.name, places.town_of(lead), lead.zip, lead.category, lead.address,
+                     lead.lead_type, " ".join(lead.flags)]).lower()
+    return all(word in text for word in q.split())
 
 
 def view_counts(leads: list[Lead]) -> dict[str, Any]:

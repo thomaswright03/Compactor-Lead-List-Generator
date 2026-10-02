@@ -84,9 +84,12 @@ function renderCalls() {
   wrap.replaceChildren(table);
 }
 
-// A called business matches the Calls filter when every word typed is in its name, address or city.
+// A called business matches the Calls filter when every word typed is somewhere in its name,
+// town, ZIP, category, address, type or flags, in any order and any case: the Leads filter's
+// rule (web/leads.py, matches).
 function callMatches(l, q) {
-  const hay = [l.name, l.address, l.city, l.zip, l.near].filter(Boolean).join(" ").toLowerCase();
+  const hay = [l.name, l.address, l.city, l.near, l.zip, l.category, l.lead_type, ...(l.flags || [])]
+    .filter(Boolean).join(" ").toLowerCase();
   return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
 }
 function countOutcomes(leads) {

@@ -84,3 +84,22 @@ def test_the_parsed_list_is_reused_until_a_search_changes_it(monkeypatch):
     saved.save_search([_lead("Harmons", "h1", raw_categories=["shop=supermarket"])])
     parsed.clear()
     assert len(saved.load()) == 21 and len(parsed) == 21     # parsed again after the change
+
+
+# ---- the filter box: every word typed, in any order
+
+def test_several_words_find_a_lead_when_each_is_somewhere_in_its_row():
+    saved.save_search([
+        _lead("Walmart Supercenter", "w1", city="Layton", lat=41.06),
+        _lead("Walmart Supercenter", "w2", city="Ogden", lat=41.22),
+        _lead("Smith's Marketplace", "s1", city="Layton", lat=41.07, lon=-111.95,
+              raw_categories=["shop=supermarket"])])
+    client = web.create_app().test_client()
+
+    def names(q):
+        rows = client.get(f"/leads?tab=all&q={q}").get_json()["leads"]
+        return sorted(f"{r['name']} ({r['city']})" for r in rows)
+    assert names("walmart") == ["Walmart Supercenter (Layton)", "Walmart Supercenter (Ogden)"]
+    assert names("walmart layton") == names("Layton  WALMART") == ["Walmart Supercenter (Layton)"]
+    assert names("layton") == ["Smith's Marketplace (Layton)", "Walmart Supercenter (Layton)"]
+    assert names("walmart provo") == []

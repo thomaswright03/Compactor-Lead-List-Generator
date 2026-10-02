@@ -417,8 +417,9 @@ the sidebar to the page's list (Leads, Calls) or heading.
   saved is in view (every call is under **History**); then there is a tab per
   result, where a business sits under its latest call's result (`#calls?tab=Follow Up`
   in the address opens that tab). A filter box above the tabs narrows the list
-  (and the tab counts) to businesses whose name, address or city hold every word
-  typed; it is kept in the address (`#calls?q=costco`), and with no match the page
+  (and the tab counts) to businesses whose name, town, ZIP, category, address, type
+  or flags hold every word typed, in any order (the Leads filter's rule,
+  `web/leads.py` `matches`, so "walmart layton" works on both pages); it is kept in the address (`#calls?q=costco`), and with no match the page
   says "No calls match ..." with **Clear filter**. The call box's **Save** is always
   pressable: without a result picked, a hint beside "How did it go?" and a red line
   say to pick one, and the result buttons are ringed. The Conversation summary column shows the

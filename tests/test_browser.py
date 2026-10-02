@@ -879,6 +879,30 @@ def test_the_calls_page_can_be_filtered_and_keeps_the_filter(page):
     expect(page.locator("#calls-wrap tbody tr")).to_have_count(2)
 
 
+def test_several_words_filter_the_leads_and_the_calls_alike(page):
+    """A name plus a town, in either order, finds the business on both pages."""
+    for query in ("costco salt lake", "Lake COSTCO"):
+        page.fill("#filter", query)
+        expect(page.locator("table.leads tbody tr")).to_have_count(1)
+        assert "Costco Wholesale" in page.inner_text("table.leads tbody")
+    page.fill("#filter", "costco provo")
+    expect(page.locator("#leads-wrap")).to_contain_text("No leads match “costco provo”")
+    page.fill("#filter", "")
+    expect(page.locator("table.leads tbody tr")).to_have_count(3)      # Pro Baler is a competitor
+    for name in ("Smith", "Costco"):
+        _row(page, name).get_by_role("button", name="Just called").click()
+        page.locator("#outcomes").get_by_role("button", name="Follow Up").click()
+        page.click("#call-save")
+        page.wait_for_selector("#call-dlg:not([open])", state="attached")
+    page.click("nav a[data-page=calls]")
+    for query in ("costco salt lake", "Lake COSTCO"):
+        page.fill("#call-filter", query)
+        expect(page.locator("#calls-wrap tbody tr")).to_have_count(1)
+        assert "Costco Wholesale" in page.inner_text("#calls-wrap")
+    page.fill("#call-filter", "costco provo")
+    expect(page.locator("#calls-wrap")).to_contain_text("No calls match “costco provo”")
+
+
 def test_a_blank_radius_is_pointed_out(page):
     page.click("nav a[data-page=find]")
     page.wait_for_selector("text=Today's is available")

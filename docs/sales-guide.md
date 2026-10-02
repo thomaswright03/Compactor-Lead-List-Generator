@@ -80,7 +80,8 @@ Good to know:
 - Open **Leads**. The tabs are **Not checked**, **Has baler or compactor**,
   **No baler or compactor**, **Competitors**, **Closed** and **All**. On a phone
   they are one list at the top.
-- Type in the filter box to find a business by name, city or type; pick a tier
+- Type in the filter box to find a business by name, city or type; several words
+  narrow it down in any order ("walmart layton" finds the Walmart in Layton); pick a tier
   to narrow the list; tick **Has phone** to see only businesses with a phone
   number. **Clear filters** brings the whole list back. Under **Not checked**,
   among businesses with the same score, the ones with a phone number come first.
@@ -141,7 +142,8 @@ Logging a call never changes the Yes / No answer.
   call first. The other tabs group them by how the latest call went (on a phone,
   pick them from the list at the top, which shows each one's count).
 - Type part of a business's name, address or city in the filter box to find its
-  calls; it works with the tabs and stays after a reload.
+  calls (several words work as on the Leads page: "walmart layton"); it works with
+  the tabs and stays after a reload.
 - **History** shows every call to a business: when, who made it, how it went and
   the notes, and below them every Yes / No the business was given.
 

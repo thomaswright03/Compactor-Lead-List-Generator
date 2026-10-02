@@ -82,7 +82,8 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 - Every Yes / No mark and call needs **Your name**: the server refuses one without it.
 - **Yes / No** "has a baler or compactor" marks (permanent; a click can be undone
   for 5 minutes), **Just called** notes with six results and a Calls tab for each
-  (with a filter box for a business's name, address or city),
+  (with a filter box: several words, such as "walmart layton", find the rows that
+  hold every one of them, in any order, on Leads and Calls alike),
   a **Stats** page, and Excel / CSV downloads (named with the Utah date, in plain words; columns empty for
   every lead in the file are left out and named on the Run Info sheet). Each mark and call records who made
   it (the name set under **Your name** in that browser, asked before the first
