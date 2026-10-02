@@ -4,9 +4,10 @@ Many businesses in the free map data have no street address and no city, and cha
 names repeat (a dozen Smith's, ten Walmarts), so a row needs at least a town to be
 told apart. A lead with coordinates but no city (or no ZIP) gets the nearest town and
 ZIP code area from a small table built from the US Census Bureau's Gazetteer files
-(data/places.json, see its "about"), with no lookup over the internet. It is an
-estimate from the map position, so the pages and downloads show it as "near West
-Jordan, UT 84088", never as an address; nothing saved is changed.
+(data/places.json, see its "about"; rebuilt by `python -m leadgen.build_places`),
+with no lookup over the internet. It is an estimate from the map position, so the
+pages and downloads show it as "near West Jordan, UT 84088", never as an address;
+nothing saved is changed.
 """
 
 import json

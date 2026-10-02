@@ -561,7 +561,12 @@ search history's "When"; "First saved" / "Latest saved" for leads saved with no
 search on record). A lead with no city or ZIP gets the town / ZIP area its map
 position is near (`leadgen/places.py`, offline, from `leadgen/data/places.json`:
 the Census 2023 Gazetteer's places and ZIP areas within 200 miles of Salt Lake
-City), written "near West Jordan" / "near 84088" and explained on Run Info. The
+City), written "near West Jordan" / "near 84088" and explained on Run Info. To
+rebuild that table (a new Gazetteer year, a missing town), run
+`python -m leadgen.build_places --download` (or give it the two Gazetteer files;
+`--check` only says whether the file would change, `--year` picks another year);
+its docstring lists the source URLs and the filter, and from the 2023 files it
+writes the committed file byte for byte. The
 Excel file is written by `leadgen/xlsx.py` in time that grows in step with the
 list (10,000 leads in about a second).
 
