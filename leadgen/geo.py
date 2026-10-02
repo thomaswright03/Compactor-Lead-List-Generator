@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 EARTH_RADIUS_MILES = 3958.8
 METERS_PER_MILE = 1609.344
 
-# Works offline for Arco's shop, the default area and common nearby cities.
+# Works offline for Arco's shop and the default area (the label is what the page shows).
 KNOWN_PLACES = {
     config.OWN_ADDRESS.lower(): config.OWN_COORDS,
     "876 fortune rd": config.OWN_COORDS,
@@ -21,22 +21,50 @@ KNOWN_PLACES = {
     "1876 w fortune rd, salt lake city, ut 84104": config.OWN_COORDS,
     "arco": config.OWN_COORDS,
     "arco compactor": config.OWN_COORDS,
-    "salt lake city": (40.7608, -111.8910),
-    "salt lake city, ut": (40.7608, -111.8910),
     "slc": (40.7608, -111.8910),
-    "west valley city, ut": (40.6916, -112.0011),
-    "west jordan, ut": (40.6097, -111.9391),
-    "sandy, ut": (40.5649, -111.8389),
-    "south jordan, ut": (40.5622, -111.9297),
-    "ogden, ut": (41.2230, -111.9738),
-    "provo, ut": (40.2338, -111.6585),
-    "orem, ut": (40.2969, -111.6946),
-    "layton, ut": (41.0602, -111.9711),
-    "draper, ut": (40.5247, -111.8638),
-    "murray, ut": (40.6669, -111.8880),
-    "lehi, ut": (40.3916, -111.8508),
-    "bountiful, ut": (40.8894, -111.8808),
-    "tooele, ut": (40.5308, -112.2983),
+}
+OWN_LABEL = f"Arco Compactor, {config.OWN_ADDRESS}"
+
+# Cities and towns of the Salt Lake area (and nearby): typed bare ("Murray"), with
+# ", UT" or with ", Utah", they mean the Utah place, never a same-named one elsewhere
+# (Murray, Georgia). They work offline.
+UTAH_PLACES = {
+    "Salt Lake City": (40.7608, -111.8910), "South Salt Lake": (40.7188, -111.8883),
+    "North Salt Lake": (40.8486, -111.9069), "West Valley City": (40.6916, -112.0011),
+    "West Valley": (40.6916, -112.0011), "West Jordan": (40.6097, -111.9391),
+    "South Jordan": (40.5622, -111.9297), "Sandy": (40.5649, -111.8389),
+    "Draper": (40.5247, -111.8638), "Murray": (40.6669, -111.8880),
+    "Midvale": (40.6111, -111.8999), "Cottonwood Heights": (40.6197, -111.8102),
+    "Holladay": (40.6688, -111.8247), "Millcreek": (40.6866, -111.8755),
+    "Taylorsville": (40.6677, -111.9388), "Kearns": (40.6600, -111.9963),
+    "Magna": (40.7091, -112.1016), "Riverton": (40.5219, -111.9391),
+    "Herriman": (40.5141, -112.0330), "Bluffdale": (40.4897, -111.9388),
+    "Bountiful": (40.8894, -111.8808), "Woods Cross": (40.8716, -111.8922),
+    "Centerville": (40.9180, -111.8722), "Farmington": (40.9805, -111.8874),
+    "Kaysville": (41.0352, -111.9386), "Layton": (41.0602, -111.9711),
+    "Clearfield": (41.1108, -112.0261), "Syracuse": (41.0894, -112.0647),
+    "Ogden": (41.2230, -111.9738), "Tooele": (40.5308, -112.2983),
+    "Stansbury Park": (40.6377, -112.2961), "Lehi": (40.3916, -111.8508),
+    "American Fork": (40.3769, -111.7958), "Pleasant Grove": (40.3641, -111.7385),
+    "Saratoga Springs": (40.3491, -111.9047), "Eagle Mountain": (40.3141, -112.0069),
+    "Orem": (40.2969, -111.6946), "Provo": (40.2338, -111.6585),
+    "Park City": (40.6461, -111.4980),
+}
+# Utah's bounding box (west, north, east, south), which online lookups prefer.
+UTAH_BOX = (-114.06, 42.01, -109.04, 36.99)
+_STATES = {
+    "al": "alabama", "ak": "alaska", "az": "arizona", "ar": "arkansas", "ca": "california",
+    "co": "colorado", "ct": "connecticut", "de": "delaware", "fl": "florida", "ga": "georgia",
+    "hi": "hawaii", "id": "idaho", "il": "illinois", "in": "indiana", "ia": "iowa",
+    "ks": "kansas", "ky": "kentucky", "la": "louisiana", "me": "maine", "md": "maryland",
+    "ma": "massachusetts", "mi": "michigan", "mn": "minnesota", "ms": "mississippi",
+    "mo": "missouri", "mt": "montana", "ne": "nebraska", "nv": "nevada",
+    "nh": "new hampshire", "nj": "new jersey", "nm": "new mexico", "ny": "new york",
+    "nc": "north carolina", "nd": "north dakota", "oh": "ohio", "ok": "oklahoma",
+    "or": "oregon", "pa": "pennsylvania", "ri": "rhode island", "sc": "south carolina",
+    "sd": "south dakota", "tn": "tennessee", "tx": "texas", "vt": "vermont",
+    "va": "virginia", "wa": "washington", "wv": "west virginia", "wi": "wisconsin",
+    "wy": "wyoming", "dc": "district of columbia",
 }
 
 
@@ -49,7 +77,35 @@ def _place_key(text: str) -> str:
     return " ".join(re.sub(r"[,.]", " ", text.lower()).split())
 
 
-_KNOWN = {_place_key(k): v for k, v in KNOWN_PLACES.items()}
+def _known_places() -> dict[str, tuple[float, float, str]]:
+    known = {_place_key(k): (v[0], v[1], OWN_LABEL if v == config.OWN_COORDS
+                             else "Salt Lake City, UT") for k, v in KNOWN_PLACES.items()}
+    for name, (lat, lon) in UTAH_PLACES.items():
+        for typed in (name, f"{name}, UT", f"{name}, Utah"):
+            known.setdefault(_place_key(typed), (lat, lon, f"{name}, UT"))
+    return known
+
+
+_KNOWN = _known_places()
+
+
+def names_another_state(text: str) -> bool:
+    """True when the place typed names a US state other than Utah ("Portland, OR",
+    "Murray, Kentucky", "Austin TX 78701"); then it isn't looked for in Utah first."""
+    words = _place_key(re.sub(r"\b\d{5}(?:-\d{4})?\b", " ", text))
+    if not words:
+        return False
+    tail = text.rsplit(",", 1)[1] if "," in text else ""
+    tail = _place_key(re.sub(r"\b\d{5}(?:-\d{4})?\b", " ", tail))
+    names = set(_STATES.values())
+    if tail and (tail in _STATES or tail in names):
+        return True
+    return any(words == n or words.endswith(" " + n) for n in names)
+
+
+def miles_from_arco(lat: float, lon: float) -> float:
+    """How far a point is from the centre of Arco's area (config.SERVICE_CENTER)."""
+    return haversine_miles(config.SERVICE_CENTER[0], config.SERVICE_CENTER[1], lat, lon)
 
 
 def haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -96,7 +152,12 @@ _ZIP = re.compile(r"^\s*(\d{5})(?:-\d{4})?\s*$")
 
 
 def geocode(location: str, api_key: str | None = None) -> tuple[float, float, str]:
-    """Return (lat, lon, label) for a ZIP code, city, address, or "lat,lon"."""
+    """Return (lat, lon, label) for a ZIP code, city, address, or "lat,lon".
+
+    A place that doesn't name another state is looked for in Utah first, so a bare
+    "Murray" is Murray, Utah (the Salt Lake area's towns are known offline, see
+    UTAH_PLACES); the label names the place found, for the page to show before the
+    search starts."""
     location = (location or "").strip() or config.DEFAULT_LOCATION
     m = _LATLON.match(location)
     if m:
@@ -107,7 +168,7 @@ def geocode(location: str, api_key: str | None = None) -> tuple[float, float, st
 
     known = _KNOWN.get(_place_key(location))
     if known:
-        return known[0], known[1], location
+        return known
 
     errors = []
     zm = _ZIP.match(location)
@@ -120,12 +181,18 @@ def geocode(location: str, api_key: str | None = None) -> tuple[float, float, st
         except (HttpError, KeyError, IndexError, ValueError) as exc:
             errors.append(str(exc))
 
+    elsewhere = names_another_state(location)
     if api_key is None:        # "" means the caller resolved that there is no Google key
         api_key = os.environ.get("GOOGLE_PLACES_API_KEY", "")
     if api_key:
         try:
+            params = {"address": location, "key": api_key, "components": "country:US"}
+            if not elsewhere:
+                # Prefer Utah: Google returns the Utah place for an ambiguous name.
+                west, north, east, south = UTAH_BOX
+                params["bounds"] = f"{south},{west}|{north},{east}"
             data = request_json("GET", "https://maps.googleapis.com/maps/api/geocode/json",
-                                params={"address": location, "key": api_key}, retries=2,
+                                params=params, retries=2,
                                 cache_key_extra="google",
                                 cacheable=lambda v: isinstance(v, dict)
                                 and v.get("status") in ("OK", "ZERO_RESULTS"))
@@ -139,17 +206,31 @@ def geocode(location: str, api_key: str | None = None) -> tuple[float, float, st
         except (HttpError, KeyError) as exc:
             errors.append(str(exc))
 
-    try:
-        data = request_json("GET", "https://nominatim.openstreetmap.org/search",
-                            params={"q": location, "format": "json", "limit": 1,
-                                    "countrycodes": "us"}, retries=2,
-                            cacheable=lambda v: isinstance(v, list))
-        if data:
-            return float(data[0]["lat"]), float(data[0]["lon"]), data[0].get("display_name", location)
-    except (HttpError, KeyError, ValueError) as exc:
-        errors.append(str(exc))
-
+    # The free lookup: in Utah first (unless another state is named), then anywhere in the US.
+    for in_utah in ((False,) if elsewhere else (True, False)):
+        try:
+            found = _nominatim(location, in_utah)
+        except (HttpError, KeyError, ValueError) as exc:
+            errors.append(str(exc))
+            continue
+        if found:
+            return found
     if errors:
         log.info("Geocoding %r failed: %s", location, "; ".join(errors))
     raise GeocodeError(f"Could not find the place '{location}'. Check the spelling, or try a "
                        "ZIP code, city or street address.")
+
+
+def _nominatim(location: str, in_utah: bool) -> tuple[float, float, str] | None:
+    """The free OpenStreetMap lookup: the best match in the US, or (in_utah) only in
+    Utah, preferring a town or city over a street or business of the same name."""
+    params: dict[str, str | int] = {"q": location, "format": "json", "countrycodes": "us",
+                                    "limit": 5 if in_utah else 1}
+    if in_utah:
+        params.update(viewbox=",".join(str(v) for v in UTAH_BOX), bounded=1)
+    data = request_json("GET", "https://nominatim.openstreetmap.org/search", params=params,
+                        retries=2, cacheable=lambda v: isinstance(v, list))
+    if not data:
+        return None
+    best = next((d for d in data if d.get("class") in ("place", "boundary")), data[0])
+    return float(best["lat"]), float(best["lon"]), best.get("display_name", location)

@@ -128,7 +128,13 @@ python -m leadgen run --source yelp --max-requests 20                 # Yelp onl
 python -m leadgen run --grid 7 --max-requests 300                     # wider, but capped spend
 python -m leadgen run --min-score 40 --limit 200                      # only strong leads
 python -m leadgen reference       # copy the site's Yes / No marks into the scoring tests
+python -m leadgen out-of-area     # list saved leads more than 60 miles from Arco (--remove / --restore)
 ```
+
+`run` warns when the place is outside Arco's area (`config.SERVICE_AREA_MILES`).
+`out-of-area` (`cleanup.py`) is the only way leads leave the saved list, and only on
+request: `--remove` moves the rows of leads nobody marked or called into the additive
+`removed_leads` table, and `--restore` puts them back.
 
 Yelp is only used on the command line when `DATABASE_URL` points at the
 website's database, so its calls count against the site's one limit of 50 a
@@ -192,7 +198,21 @@ the sidebar to the page's list (Leads, Calls) or heading.
   what was left out (closed for good, a score below the minimum, e.g. "Left out:
   score below 20", not matching the search words, over a lead limit), leads kept,
   competitors among them, the leads per tier A to D, then the paid lookups and how
-  long it took. The form checks itself before anything runs: **Search around** must
+  long it took. Before anything is spent, the page asks the server where the search will
+  run (`GET /place`, `web/finding.py`): the place found for what was typed (offline for
+  Arco and the Salt Lake area's towns in `geo.UTAH_PLACES`, typed bare or with ", UT";
+  online lookups ask in Utah first unless another state is named) and its distance from
+  Arco's shop (`config.SERVICE_CENTER`). The confirmation names both. A place more than
+  `config.SERVICE_AREA_MILES` (30) away needs a second confirmation (`#far-dlg`, its safe
+  button focused); `POST /search` refuses such a place with 409 `confirm_far` unless
+  `confirm_place` names that same place (within a mile), and it looks the place up before
+  the day is claimed, so an unknown or unconfirmed place spends nothing. The search then
+  runs around exactly that point (`SearchParams.center` / `place`, no second lookup), and
+  the day's record keeps `place` and `miles`, which the history shows under what was
+  typed. Pausing searching stops a running search within seconds: `osm.search` takes a
+  `stop` callable (`config.stop_reason`), looks at it every `STOP_CHECK_SECONDS`, asks no
+  more mirrors once it says stop, and raises `osm.Stopped` with what it had; the result's
+  `stopped` reason marks the job and the record. The form checks itself before anything runs: **Search around** must
   not be empty (it is never quietly replaced by Arco's address), and the search
   words are limited to 20, each up to 60 characters (the hint says so). When
   a search can't start, whether the browser catches it or the server refuses
@@ -283,8 +303,12 @@ the sidebar to the page's list (Leads, Calls) or heading.
   so they get no Yes / No buttons, aren't in Not checked and aren't counted in
   Stats (they still appear under All and in the downloads). The sidebar badge
   counts the prospects still to check. The server filters, sorts and pages the
-  list, so opening the page fetches only the rows shown (300 at a time, **Show
-  more** for the next 300) and the tab counts, not the whole saved list. A
+  list: `GET /leads` always answers with one page of rows (`offset` / `limit`, 100 by
+  default, `PAGE_SIZE`) and the exact tab counts, never the whole saved list, and
+  **Show more** fetches only the next page (`offset` = the rows already shown) and adds
+  it under them. While a Yes / No is on its way the row says "Saving Yes…" with both
+  buttons disabled; the answer, "Marked by" and "Saved. Moves to …" appear only once
+  the server confirms (a failure leaves the row as it was, with a red note). A
   business just marked stays where it is, showing its answer ("Saved. Moves to
   …") and its Undo, until the pointer leaves the list (then a few seconds), or
   you change tab, filter or sort, so a double-click or a quick second click can
@@ -316,8 +340,8 @@ the sidebar to the page's list (Leads, Calls) or heading.
   up without a reload; each refresh only fetches the businesses that changed
   (`GET /leads?since=…`, which also sends the new tab counts): in full the ones
   in the view shown, just their id for the rest, and when more changed than the
-  page shows (a search just touched them all) the page simply asks for its 300
-  rows again, so a refresh is never bigger than one page. The server keeps the
+  page shows (a search just touched them all) the page simply asks for the rows
+  it shows again, so a refresh is never bigger than one page. The server keeps the
   parsed saved list between requests and reads it again only when a search has
   changed it, so opening a tab stays quick however long the list grows.
   **Just called** is on every business (not competitors): staff usually find
@@ -373,9 +397,10 @@ the sidebar to the page's list (Leads, Calls) or heading.
   every figure (the page says how many), since the numbers measure how well the
   scoring finds prospects. Businesses that have since closed for good still
   count (the page says how many of the checked ones have closed). On a wide
-  screen the table sits beside the chart. Tier D is usually empty, and the page says why:
-  searches only save businesses scoring at least the minimum score (20; the tier
-  boundaries come from the scoring settings). Before anything is marked, the page
+  screen the table sits beside the chart. When tier D has no checked businesses, the page
+  says why, truthfully whatever minimum score the searches used: either it is empty
+  (searches leave out scores below the minimum, 20, unless a search lowered it under More
+  options), or how many saved tier D leads there are, none checked yet (`by_tier[].saved`). Before anything is marked, the page
   shows only a note saying how to fill it, with a link to the Leads page.
 
 Marks and the latest call (result, time and notes) are also columns in the downloads.

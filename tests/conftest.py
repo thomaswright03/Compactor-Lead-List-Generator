@@ -54,9 +54,15 @@ def no_real_keys(monkeypatch, tmp_path):
     daily usage counter."""
     for var in ("GOOGLE_PLACES_API_KEY", "YELP_API_KEY", "APP_PASSWORD", "DATABASE_URL", "RENDER",
                 "LEADGEN_SEARCH_PAUSED", "LEADGEN_GOOGLE_OFF", "LEADGEN_YELP_OFF",
-                "LEADGEN_SUPPORT_CONTACT"):
+                "LEADGEN_SUPPORT_CONTACT",
+                # A proxy on this machine would carry requests past the network block above.
+                "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr("leadgen.http.CACHE_DIR", tmp_path / "cache")
+    # The ZIP code the tests search around is found offline (the site looks the place up
+    # before a search starts; the ZIP lookup service is never reached from the tests).
+    import leadgen.geo
+    monkeypatch.setitem(leadgen.geo._KNOWN, "84101", (40.7559, -111.8967, "Salt Lake City, UT 84101"))
     # The map data's catch-up rounds don't wait for busy servers to cool down.
     monkeypatch.setattr("leadgen.config.OVERPASS_RETRY_PAUSE_SECONDS", 0)
     # The map areas a search missed are filled in in the background only in the tests

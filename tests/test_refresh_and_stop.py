@@ -78,7 +78,7 @@ def test_refresh_of_a_big_list_is_small_and_quick(monkeypatch):
     monkeypatch.setattr(web.leads, "SINCE_OVERLAP", 0.0)
     _saved(5000)
     client = web.create_app().test_client()
-    full = client.get("/leads")
+    full = client.get("/leads?limit=5000")
     assert len(full.get_json()["leads"]) == 5000
     time.sleep(0.01)
     start = time.perf_counter()
@@ -87,6 +87,34 @@ def test_refresh_of_a_big_list_is_small_and_quick(monkeypatch):
     assert res.get_json()["leads"] == [] and len(res.data) < 200
     assert len(full.data) > 1000 * len(res.data)
     assert took < 0.5, took                        # a few ms locally; generous for CI
+
+
+def test_the_leads_page_gets_one_page_of_a_big_list_at_a_time():
+    """Opening Leads sends one page of rows however long the list is; "Show more" asks for
+    the next page (offset), and the pages put together are the same rows, in the same order,
+    as the whole filtered and sorted view. The counts are always exact."""
+    leads = _saved(5000)
+    client = web.create_app().test_client()
+    first = client.get("/leads?tab=unchecked&sort=score&dir=desc")
+    body = first.get_json()
+    assert len(body["leads"]) == web.leads.PAGE_SIZE == 100
+    assert body["total"] == 5000 and body["counts"]["unchecked"] == 5000 and body["offset"] == 0
+    assert len(first.data) < 150_000                   # bounded, whatever the list's length
+    for query in ("tab=unchecked&sort=name&dir=asc", "tab=all&sort=miles&dir=desc&q=business 4",
+                  "tab=unchecked&sort=score&dir=desc"):
+        whole = [r["key"] for r in client.get(f"/leads?{query}&limit=5000").get_json()["leads"]]
+        paged, offset = [], 0
+        while True:
+            page = client.get(f"/leads?{query}&offset={offset}&limit=100").get_json()
+            assert page["total"] == len(whole) and page["counts"]["all"] == 5000
+            if not page["leads"]:
+                break
+            paged += [r["key"] for r in page["leads"]]
+            offset += len(page["leads"])
+        assert paged == whole, query
+    # Rows kept in view after a mark only ride along on the first page.
+    keep = leads[0].uid
+    assert keep not in [r["key"] for r in client.get(f"/leads?tab=yes&offset=1&keep={keep}").get_json()["leads"]]
 
 
 def test_marks_are_read_for_the_businesses_asked_about():

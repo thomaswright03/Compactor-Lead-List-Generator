@@ -45,9 +45,22 @@ def test_a_failed_search_gives_the_day_back(monkeypatch):
         raise GeocodeError("Could not find 'nowhere'")
     monkeypatch.setattr(web.finding, "run", fail)
     client = web.create_app().test_client()
-    job = client.post("/search", data={"location": "nowhere"}).get_json()["job_id"]
+    job = client.post("/search", data={"location": "84101"}).get_json()["job_id"]
     assert _wait(client, job)["state"] == "error"
     assert not client.get("/searches").get_json()["used_today"]
+
+
+def test_a_place_that_cant_be_found_is_refused_before_the_day_is_claimed(monkeypatch):
+    from leadgen import geo
+    monkeypatch.setattr(geo, "request_json", lambda *a, **k: [])
+    started = []
+    monkeypatch.setattr(web.finding, "run", lambda *a: started.append(1))
+    client = web.create_app().test_client()
+    res = client.post("/search", data={"location": "nowhere zz"})
+    assert res.status_code == 400 and res.get_json()["field"] == "location"
+    assert "Could not find the place 'nowhere zz'" in res.get_json()["error"]
+    assert not started and not client.get("/searches").get_json()["used_today"]
+    assert daily.history()["searches"] == []                # not even a failed attempt
 
 
 def test_an_unfinished_search_frees_the_day_after_a_while(monkeypatch):

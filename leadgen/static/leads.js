@@ -17,6 +17,7 @@ async function loadLeads(quiet) {
     if (seq !== S.seq) return;                     // a newer view was asked for meanwhile
     S.leads = body.leads; S.total = body.total; S.counts = body.counts; S.recent = body.recent;
     S.since = body.now; S.loaded = true; S.loadError = ""; S.refreshError = "";
+    for (const [key, value] of S.sending) updateLead({ key, saving: value });   // still being saved
   } catch (err) {
     if (seq !== S.seq || err.status === 401) return;
     if (S.loaded) S.refreshError = quiet ? "Couldn't refresh the list just now; it will try again shortly."
@@ -204,23 +205,26 @@ async function setMark(lead, value) {
   if ((value === before && !lead.marks_disagreed) || lead.saving || !lead.key || !lead.prospect) return;
   if (Date.now() - S.shiftedAt < SHIFT_GUARD_MS) return;     // aimed at a row that just left
   const key = lead.key;
-  // Keep the row where it is (with its new answer) instead of letting the next one slide under the pointer.
+  // Keep the row where it is instead of letting the next one slide under the pointer.
   if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);
-  lead.saving = true; S.busy++;
-  const beforeBy = lead.marked_by || "", beforeDisagreed = lead.marks_disagreed;
-  updateLead({ key, has_baler: value, marked_by: myName(), marks_disagreed: false }); moveCount(lead, before, value);
+  // Until the server has saved it the row says "Saving…" (Yes / No disabled); the answer, "Marked
+  // by" and "Saved. Moves to …" appear only once it confirms. Every copy of the lead shows it.
+  S.busy++; S.sending.set(key, value);
+  updateLead({ key, saving: value });
   renderAll();
   try {
     const { undo } = await post("/mark", { key, value, by: myName() });
-    updateLead({ key, undo_mark: undo });
+    if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);   // "Saved. Moves to …" gets its moment
+    updateLead({ key, saving: "", has_baler: value, marked_by: myName(), marks_disagreed: false, undo_mark: undo });
+    moveCount(lead, before, value);
     addRecent(leadByKey(key) || lead);
     renderAll();
     toast(`${lead.name}: marked ${value === "yes" ? "Yes" : "No"}.`, () => undoMark(key));
   } catch (err) {
-    updateLead({ key, has_baler: before, marked_by: beforeBy, marks_disagreed: beforeDisagreed }); moveCount(lead, value, before);
+    updateLead({ key, saving: "" });
     renderAll();
     toast(`${lead.name}: answer not saved. ${err.message}`, null, true);
-  } finally { lead.saving = false; S.busy--; }
+  } finally { S.sending.delete(key); if (lead.saving) lead.saving = ""; S.busy--; }
 }
 async function undoMark(key) {
   const lead = leadByKey(key);
@@ -267,14 +271,20 @@ function markCell(lead, withCall) {
   }
   const box = el("div", undefined, "mark");
   for (const [value, label] of [["yes", "Yes"], ["no", "No"]]) {
-    const b = button(label, value + (lead.has_baler === value ? " on" : ""), () => withName(() => setMark(lead, value)));
-    b.disabled = !lead.key;
+    const b = button(label, value + (lead.has_baler === value ? " on" : "") + (lead.saving === value ? " sending" : ""),
+                     () => withName(() => setMark(lead, value)));
+    b.disabled = !lead.key || Boolean(lead.saving);
     b.setAttribute("aria-pressed", lead.has_baler === value);
     b.setAttribute("aria-label", `${lead.name}: ${value === "yes" ? "has" : "doesn't have"} a baler or compactor`);
     box.append(b);
   }
   td.append(box);
-  if (lead.has_baler && lead.marked_by) td.append(el("div", `Marked by ${lead.marked_by}`, "sub by"));
+  if (lead.saving) {
+    const note = el("div", `Saving ${lead.saving === "yes" ? "Yes" : "No"}…`, "sub saving");
+    note.setAttribute("role", "status");
+    td.append(note);
+  }
+  if (lead.has_baler && lead.marked_by && !lead.saving) td.append(el("div", `Marked by ${lead.marked_by}`, "sub by"));
   // Joined from buildings marked Yes and No (python -m leadgen merge-sites keeps Yes).
   if (lead.marks_disagreed) {
     td.append(el("div", "Its buildings were marked differently (Yes and No), so it was kept as Yes. " +
@@ -286,7 +296,7 @@ function markCell(lead, withCall) {
     more.append(button("Earlier marks", "link", () => openHistory(lead)));
     td.append(more);
   }
-  if (pinnedNow(lead.key) && !inTab(lead)) {
+  if (pinnedNow(lead.key) && !inTab(lead) && !lead.saving) {
     const tab = LEAD_TABS.find(([v]) => v === (lead.has_baler || ""));
     td.append(el("div", `Saved. Moves to “${tab ? tab[1] : "All"}”.`, "sub moved"));
   }
@@ -363,7 +373,7 @@ function sortHeader(label, sort) {
   const b = button("", "sort", () => {
     if (S.sort === sort) S.dir = S.dir === "asc" ? "desc" : "asc";
     else { S.sort = sort; S.dir = SORTS[sort].dir; }
-    S.limit = 300; unpinAll(); changeView();
+    S.limit = PAGE; unpinAll(); changeView();
   });
   b.append(el("span", label), el("span", on ? (S.dir === "asc" ? "▲" : "▼") : "↕", "arrow"));
   th.setAttribute("aria-sort", on ? (S.dir === "asc" ? "ascending" : "descending") : "none");
@@ -374,7 +384,7 @@ function sortHeader(label, sort) {
 function leadTable(rows, withCall) {
   const table = el("table", undefined, "leads");
   // Shown from 1100px wide (narrower windows show cards); the Why column takes the rest.
-  const cols = [[withCall ? "Baler? / Call" : "Baler or compactor?", withCall ? "250px" : "118px"],
+  const cols = [[withCall ? "Baler? / Call" : "Baler or compactor?", withCall ? "176px" : "118px"],
                 ["Score", "74px", "score"], ["Business", "20%", "name"], ["Contact", "20%", "city"],
                 ["Miles", "72px", "miles"], ["Why this score", null]];
   const cg = el("colgroup");
@@ -394,10 +404,10 @@ function orList(names) {
 }
 function clearFilters() {
   S.q = ""; S.tier = ""; S.phone = false; $("filter").value = ""; $("tier").value = ""; $("has-phone").checked = false;
-  S.limit = 300; unpinAll(); changeView();
+  S.limit = PAGE; unpinAll(); changeView();
   $("filter").focus();
 }
-function pickTab(v) { S.leadView = v; S.limit = 300; unpinAll(); changeView(); }
+function pickTab(v) { S.leadView = v; S.limit = PAGE; unpinAll(); changeView(); }
 function renderLeads() {
   const problemBox = $("leads-problem");
   if (S.loadError && !S.loaded) {
@@ -474,21 +484,43 @@ function renderRecent() {
 }
 const recentShown = () => (window.matchMedia("(max-width: 700px)").matches ? 1 : 2);
 $("recent-more").addEventListener("click", () => { S.recentOpen = !S.recentOpen; renderRecent(); });
-$("leads-more").addEventListener("click", () => { S.limit += 300; S.viewLoading = true; renderLeads(); loadLeads(); });
+// The next page of the view, added under the rows already shown (only those rows are sent).
+async function showMore() {
+  const more = $("leads-more"), seq = S.seq;
+  const p = viewQuery();
+  // Rows just marked that stay put for a moment aren't part of the view's order.
+  p.set("offset", S.leads.filter((l) => !(pinnedNow(l.key) && !inTab(l))).length);
+  p.set("limit", PAGE);
+  more.disabled = true; more.textContent = "Loading more...";
+  try {
+    const body = await api(`/leads?${p}`);
+    if (seq !== S.seq) return;                     // the view changed meanwhile
+    const have = new Set(S.leads.map((l) => l.key));
+    S.leads = S.leads.concat(body.leads.filter((l) => !have.has(l.key)));
+    S.limit = Math.max(S.limit, S.leads.length);
+    S.total = body.total; S.counts = body.counts; S.recent = body.recent;
+    S.refreshError = "";
+  } catch (err) {
+    if (err.status === 401) return;
+    S.refreshError = `Couldn't show more leads. ${err.message}`;
+  }
+  renderAll();
+}
+$("leads-more").addEventListener("click", showMore);
 let filterTimer = null;
 $("filter").addEventListener("input", () => {
-  S.q = $("filter").value; S.limit = 300; unpinAll();
+  S.q = $("filter").value; S.limit = PAGE; unpinAll();
   clearTimeout(filterTimer);
   filterTimer = setTimeout(changeView, 250);       // ask once typing pauses
 });
 // Cards (below 1100px wide) sort with this list: the table's column headers aren't shown there.
 $("sort-pick").addEventListener("change", () => {
   [S.sort, S.dir] = $("sort-pick").value.split(":");
-  S.limit = 300; unpinAll(); changeView();
+  S.limit = PAGE; unpinAll(); changeView();
 });
 $("tab-pick").addEventListener("change", () => pickTab($("tab-pick").value));
-$("tier").addEventListener("change", () => { S.tier = $("tier").value; S.limit = 300; unpinAll(); changeView(); });
-$("has-phone").addEventListener("change", () => { S.phone = $("has-phone").checked; S.limit = 300; unpinAll(); changeView(); });
+$("tier").addEventListener("change", () => { S.tier = $("tier").value; S.limit = PAGE; unpinAll(); changeView(); });
+$("has-phone").addEventListener("change", () => { S.phone = $("has-phone").checked; S.limit = PAGE; unpinAll(); changeView(); });
 
 /* The downloads: building a big Excel file takes a moment, so the button says so and a second
    click doesn't start another. The server's answer is fetched and saved as a file. */

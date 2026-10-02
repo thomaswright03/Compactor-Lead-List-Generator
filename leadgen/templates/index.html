@@ -52,7 +52,7 @@
         <div class="form-grid">
           <label>Search around
             <input name="location" value="{{ defaults.location }}" autocomplete="off" maxlength="200" required>
-            <span class="hint">A ZIP code, city or street address. Distances are measured from here.</span></label>
+            <span class="hint">A ZIP code, city or street address. A town name on its own means the Utah one. Before the search starts you'll see the place found and how far it is from Arco's shop.</span></label>
           <label>How far (miles)
             <input name="radius" type="number" min="1" max="100" step="1" value="{{ defaults.radius|int }}">
             <span class="hint">Businesses farther away are left out.</span></label>
@@ -146,7 +146,9 @@
           <div id="problems" class="problems"><p class="muted">Loading...</p></div>
           <h2>Site switches</h2>
           <p class="muted">Stop searches (or the paid sources) straight away, for example if something
-            goes wrong. It works at once, with no restart; saved leads, marks and calls keep working.</p>
+            goes wrong. It works at once, with no restart: new searches are refused, and a search that is
+            running stops within a few seconds, keeping and saving what it had already found (today's search
+            stays used). Saved leads, marks and calls keep working.</p>
           <div id="switch-list"><p class="muted">Loading...</p></div>
           <h2>Scoring check</h2>
           <p class="muted">Once a month, download this file and send it to whoever looks after the code:
@@ -279,9 +281,24 @@
     <p class="confirm-why" id="confirm-why"><strong>This uses today's only search.</strong>
       Find leads works once a day (Utah time); check the settings before you start.</p>
     <dl class="details confirm-list" id="confirm-list"></dl>
+    <p class="warn" id="confirm-far" hidden></p>
     <div class="dlg-actions">
       <button type="button" class="quiet" id="confirm-back">Go back and edit</button>
       <button type="submit" id="confirm-go">Start search</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- A place outside Arco's area needs a second, explicit yes (web/finding.py search). -->
+<dialog id="far-dlg" aria-labelledby="far-title" aria-describedby="far-why">
+  <form class="dlg" method="dialog" id="far-form">
+    <h2 id="far-title">Search outside Arco's area?</h2>
+    <p id="far-why"></p>
+    <p><strong>This uses today's only search</strong>, and the businesses it finds stay in your saved leads.
+      If this isn't the place you meant, go back and type a ZIP code or the town with its state (for example, Murray, UT).</p>
+    <div class="dlg-actions">
+      <button type="button" class="quiet" id="far-back">Go back and edit</button>
+      <button type="submit" class="danger" id="far-go">Search there anyway</button>
     </div>
   </form>
 </dialog>
@@ -319,7 +336,7 @@
   </div>
 </dialog>
 
-<script id="page-config" type="application/json">{{ {"outcomes": outcomes, "paused": switches.search_paused, "google_on": google_on, "yelp_on": yelp_on, "flagged": flagged, "admin": admin}|tojson }}</script>
+<script id="page-config" type="application/json">{{ {"outcomes": outcomes, "paused": switches.search_paused, "google_on": google_on, "yelp_on": yelp_on, "flagged": flagged, "admin": admin, "area_miles": area_miles}|tojson }}</script>
 <script src="/static/core.js?v={{ asset_version }}" defer></script>
 <script src="/static/leads.js?v={{ asset_version }}" defer></script>
 <script src="/static/calls.js?v={{ asset_version }}" defer></script>

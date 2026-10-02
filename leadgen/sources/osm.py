@@ -43,6 +43,9 @@ _NOT_PLACES = ["highway", "waterway", "railway", "route", "boundary", "natural",
 MAX_BUILDING_SQFT = 3_000_000   # bigger bounding boxes are campuses/resorts, not buildings
 # A mirror is only asked when at least this many seconds of the map-data time are left.
 MIN_SECONDS_LEFT = 5
+# While the map data is being asked, the administrator's pause (config.stop_reason) is
+# looked at this often (seconds): a paused search stops within a few seconds.
+STOP_CHECK_SECONDS = 2.0
 # An area to search, as Overpass writes it: (south, west, north, east) in degrees.
 Box = tuple[float, float, float, float]
 MILES_PER_DEGREE_LAT = 69.05
@@ -66,6 +69,16 @@ class PartialResult(SourceError):
         self.coverage = coverage          # "about 7 of 9 areas": how much of the radius answered
         self.missing = list(missing or [])
         self.areas = areas
+
+
+class Stopped(SourceError):
+    """The administrator paused searching while the map data was being asked: `leads`
+    and `warnings` hold what the parts that had answered found (the search keeps
+    them); `reason` says who stopped it, in plain words."""
+
+    def __init__(self, reason: str, leads: list[Lead], warnings: list[str]) -> None:
+        super().__init__(f"Stopped: {reason}")
+        self.reason, self.leads, self.warnings = reason, leads, warnings
 
 
 def _tag_filters() -> tuple[dict[str, set[str]], set[str]]:
@@ -266,10 +279,12 @@ def _answer_key(query: str) -> str:
 
 
 def _fetch(query: str, deadline: float, first: int = 0,
-           said: Callable[[int, int], None] | None = None) -> tuple[Any, list[str]]:
+           said: Callable[[int, int], None] | None = None,
+           cancel: threading.Event | None = None) -> tuple[Any, list[str]]:
     """Ask the mirrors (starting with mirror `first`) for one query's answer before
     `deadline` (time.monotonic()); returns (the answer, errors of mirrors that failed
-    first) or raises SourceError when none answered.
+    first) or raises SourceError when none answered, or as soon as `cancel` is set
+    (the search was stopped: no other mirror is asked).
 
     A mirror that fails is followed at once by the next one; a mirror that is slow to
     answer is not waited out: after config.OVERPASS_STAGGER_SECONDS the next one is
@@ -300,6 +315,8 @@ def _fetch(query: str, deadline: float, first: int = 0,
             answers.put((endpoint, data, None))
 
     while True:
+        if cancel is not None and cancel.is_set():
+            raise SourceError("stopped by the administrator")
         now = time.monotonic()
         left = deadline - now
         if asked < len(endpoints) and (waiting == 0 or now >= next_at):
@@ -323,6 +340,8 @@ def _fetch(query: str, deadline: float, first: int = 0,
                 errors.append("no server answered in time")
             break
         until = left if asked >= len(endpoints) else min(left, next_at - now)
+        if cancel is not None:
+            until = min(until, 1.0)                 # look at the stop now and then
         try:
             endpoint, data, exc = answers.get(timeout=max(0.01, until))
         except queue.Empty:
@@ -347,9 +366,16 @@ class _Parts:
     parts are still missing, and the progress counts the page shows."""
 
     def __init__(self, lat: float, lon: float, radius_miles: float, keywords: Sequence[str],
-                 progress: Callable[[str], None] | None) -> None:
+                 progress: Callable[[str], None] | None,
+                 stop: Callable[[], str | None] | None = None) -> None:
         self.lat, self.lon, self.radius, self.keywords = lat, lon, radius_miles, keywords
         self.progress = progress
+        # Why the search must stop now (config.stop_reason), looked at every
+        # STOP_CHECK_SECONDS; once it says so, nothing more is asked.
+        self.stop = stop
+        self.stopped: str | None = None
+        self.cancel = threading.Event()
+        self.checked = 0.0
         self.boxes = _parts(lat, lon, radius_miles)
         self.whole = len(self.boxes) == 1
         self.found: dict[str, Lead] = {}
@@ -360,6 +386,29 @@ class _Parts:
         self.started = 0                         # queries sent (spreads parts over mirrors)
         self.settled, self.total, self.first_total = 0, 0, 0
         self.again = ""                          # progress wording during a catch-up round
+
+    def halted(self) -> bool:
+        """True once the administrator paused searching (looked at now and then)."""
+        if self.stopped is None and self.stop is not None:
+            now = time.monotonic()
+            if now - self.checked >= STOP_CHECK_SECONDS:
+                self.checked = now
+                try:
+                    self.stopped = self.stop()
+                except Exception:              # a switch that can't be read counts as off
+                    log.warning("Reading the stop switch failed", exc_info=True)
+                if self.stopped:
+                    log.warning("OpenStreetMap: stopping, %s", self.stopped)
+                    self.cancel.set()
+                    if self.progress:
+                        self.progress(f"OpenStreetMap: stopped, {self.stopped}")
+        return self.stopped is not None
+
+    def pause(self, seconds: float) -> None:
+        """Wait `seconds` (a busy server cooling down), unless the search is stopped."""
+        until = time.monotonic() + seconds
+        while not self.halted() and time.monotonic() < until:
+            time.sleep(min(0.5, max(0.0, until - time.monotonic())))
 
     def first(self) -> list[Part]:
         return ([(None, 1.0, 0)] if self.whole
@@ -388,7 +437,8 @@ class _Parts:
         # The query's text doesn't depend on the time left, so a part answered on an
         # earlier run (or round) today comes from the cache.
         budget = min(deadline, time.monotonic() + config.OVERPASS_PART_SECONDS)
-        return _fetch(self.query(box), budget, first=n, said=self.said())
+        return _fetch(self.query(box), budget, first=n, said=self.said(),
+                      cancel=self.cancel if self.stop else None)
 
     def split_before(self, box: Box | None) -> bool:
         """An earlier run today had to ask this part in quarters."""
@@ -429,9 +479,10 @@ class _Parts:
         with ThreadPoolExecutor(max_workers=config.OVERPASS_PARALLEL) as pool:
             running: dict[Any, Part] = {}
             while todo or running:
-                if not self._start(pool, running, todo, deadline):
+                if self.halted() or not self._start(pool, running, todo, deadline):
                     break
-                finished, _ = wait(running, return_when=FIRST_COMPLETED)
+                finished, _ = wait(running, timeout=STOP_CHECK_SECONDS if self.stop else None,
+                                   return_when=FIRST_COMPLETED)
                 for future in finished:
                     part = running.pop(future)
                     self.settled += 1
@@ -442,6 +493,11 @@ class _Parts:
                     else:
                         self.answered(data)
                     self.areas()
+            if self.stopped:
+                # Stopped: the parts not yet answered are left (their queries see the
+                # stop within a second and ask no other server).
+                self.missing += todo + list(running.values())
+                todo.clear()
 
     def _start(self, pool: ThreadPoolExecutor, running: dict[Any, Part], todo: list[Part],
                deadline: float) -> bool:
@@ -467,7 +523,8 @@ class _Parts:
 
 def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] = (),
            progress: Callable[[str], None] | None = None,
-           stats: dict[str, Any] | None = None) -> tuple[list[Lead], list[str]]:
+           stats: dict[str, Any] | None = None,
+           stop: Callable[[], str | None] | None = None) -> tuple[list[Lead], list[str]]:
     """Return (leads, warnings).
 
     One big query for a whole 30-mile circle is what the free public map servers
@@ -482,14 +539,18 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
     a re-run the same day) asks only for what is still missing. `stats`, when given,
     records how many parts had to be asked again.
 
+    `stop` (config.stop_reason) is looked at every few seconds throughout: once it
+    gives a reason (the administrator paused searching), nothing more is asked and
+    Stopped is raised, holding what the parts that had answered found.
+
     Raises SourceError when no part answered, and PartialResult (holding what was
     found) when only some did.
     """
-    run = _Parts(lat, lon, radius_miles, keywords, progress)
+    run = _Parts(lat, lon, radius_miles, keywords, progress, stop)
     run.run_round(run.first(), config.OVERPASS_DEADLINE_SECONDS)
     retried = 0
     for n in range(1, config.OVERPASS_RETRY_ROUNDS + 1):
-        if not run.missing:
+        if not run.missing or run.stopped:
             break
         todo, run.missing = run.missing, []
         retried = max(retried, len(todo))
@@ -498,7 +559,10 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
                      f"(try {n} of {config.OVERPASS_RETRY_ROUNDS})")
         if progress:
             progress(f"OpenStreetMap: {run.again}, in a moment")
-        time.sleep(config.OVERPASS_RETRY_PAUSE_SECONDS)   # let a throttling server cool down
+        run.pause(config.OVERPASS_RETRY_PAUSE_SECONDS)    # let a throttling server cool down
+        if run.halted():
+            run.missing = todo
+            break
         run.run_round(todo, config.OVERPASS_RETRY_SECONDS)
     if stats is not None and retried:
         stats["osm areas asked again"] = (
@@ -508,6 +572,8 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
 
 def _result(run: _Parts) -> tuple[list[Lead], list[str]]:
     leads = list(run.found.values())
+    if run.stopped:
+        raise Stopped(run.stopped, leads, run.warnings)
     if not run.done:
         raise SourceError("All OpenStreetMap (Overpass) servers failed: " + " | ".join(run.errors))
     missing = run.missing_share()

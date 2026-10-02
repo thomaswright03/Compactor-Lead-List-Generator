@@ -15,9 +15,9 @@ from flask.typing import ResponseReturnValue
 
 from .. import alerts, config, daily, fillin, saved, store
 from .. import switches as site_switches
-from ..geo import GeocodeError
+from ..geo import GeocodeError, haversine_miles, miles_from_arco
 from ..localtime import clock_text, date_time_text
-from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, run
+from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, locate, run
 from .auth import admin_open, admin_refusal, admin_state
 from .common import (
     NOT_USED_UP,
@@ -146,6 +146,8 @@ def plain_progress(msg: str) -> str:
         return "Finding the location"
     if msg.startswith(("Yelp: ", "Google: ")):
         return f"Searching {msg.split(':')[0]}"
+    if msg.startswith("OpenStreetMap: stopped"):
+        return "Stopping: the administrator paused searching. Keeping what was already found…"
     if msg.startswith("OpenStreetMap"):
         areas = _AREAS.search(msg)
         if areas:
@@ -256,9 +258,7 @@ def _number(form: Mapping[str, str], name: str, default: Num | None, cast: type,
     return value
 
 
-def parse_form(form: Mapping[str, str]) -> SearchParams:
-    """Validate the form strictly; raise FormError with a message for the page (and the
-    field it is about)."""
+def _location(form: Mapping[str, str]) -> str:
     # The page always sends the field; a bare POST without it (a script) searches around Arco.
     location = (form.get("location", config.DEFAULT_LOCATION) or "").strip()
     if not location:
@@ -266,6 +266,13 @@ def parse_form(form: Mapping[str, str]) -> SearchParams:
                         "location")
     if len(location) > 200:
         raise FormError("Search around is too long: use at most 200 characters.", "location")
+    return location
+
+
+def parse_form(form: Mapping[str, str]) -> SearchParams:
+    """Validate the form strictly; raise FormError with a message for the page (and the
+    field it is about)."""
+    location = _location(form)
     keywords = [k.strip() for k in form.get("keywords", "").split(",") if k.strip()]
     if len(keywords) > MAX_KEYWORDS:
         raise FormError(f"Use at most {MAX_KEYWORDS} search words (you have {len(keywords)}).",
@@ -365,7 +372,9 @@ def _worker(job: Job, params: SearchParams, day: str) -> None:
             result.leads = [lead for lead in result.leads
                             if lead.business_status != "CLOSED_PERMANENTLY"]
         result.warnings = warnings
-        if result.failed_sources:
+        if result.stopped:
+            _stopped(day, result, job, warnings)
+        elif result.failed_sources:
             _incomplete(day, result, job, warnings, params)
         else:
             _record(day, result, job, warnings)
@@ -381,6 +390,18 @@ def _worker(job: Job, params: SearchParams, day: str) -> None:
         _fail(job, day, f"Something went wrong during the search. {NOT_USED_UP} {RETRY} If it "
                         "keeps happening, tell whoever looks after the site.",
                         "Something went wrong during the search.")
+
+
+def _stopped(day: str, result: RunResult, job: Job, warnings: list[str]) -> None:
+    """A search the administrator stopped (searching was paused while it ran): what it
+    had found is saved, the rest of the area wasn't searched, and the day stays used
+    (one search a day). Its record and the page say who stopped it."""
+    kept = f"the {len(result.leads):,} businesses it had found were saved" if job.get("saved") \
+        else f"the {len(result.leads):,} businesses it had found were kept"
+    job["stopped"] = result.stopped
+    job["note"] = (f"Stopped by the administrator ({result.stopped}): {kept}; the rest of the "
+                   "area wasn't searched. Today's search is used up.")
+    _record(day, result, job, warnings, {"stopped": result.stopped})
 
 
 def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str],
@@ -472,12 +493,67 @@ def _give_back(day: str, reason: str | None = None, extra: dict[str, Any] | None
         log.exception("Giving back today's search failed")
 
 
-def _claim(params: SearchParams) -> str | tuple[Response, int]:
+# A far place's confirmation is for the place it named: within this many miles of it.
+CONFIRM_MILES = 1.0
+
+
+def where(params: SearchParams) -> dict[str, Any]:
+    """Where a search will actually run, for the page to show before it starts: the
+    place found for the location typed, how far it is from Arco's shop, and whether
+    that is outside Arco's area (config.SERVICE_AREA_MILES). Raises GeocodeError."""
+    lat, lon, label = locate(params)
+    miles = miles_from_arco(lat, lon)
+    return {"label": label, "lat": round(lat, 5), "lon": round(lon, 5),
+            "miles": round(miles, 1), "outside": miles > config.SERVICE_AREA_MILES,
+            "area_miles": config.SERVICE_AREA_MILES, "confirm": f"{lat:.5f},{lon:.5f}"}
+
+
+def far_message(place: dict[str, Any]) -> str:
+    return (f"“{place['label']}” is {place['miles']:,.0f} miles from Arco's shop, outside "
+            f"Arco's area (about {place['area_miles']:g} miles around it).")
+
+
+def confirmed(answer: str | None, place: dict[str, Any]) -> bool:
+    """True when the page confirmed searching this far place (the place it showed)."""
+    try:
+        lat, lon = (float(x) for x in (answer or "").split(","))
+    except ValueError:
+        return False
+    return haversine_miles(lat, lon, place["lat"], place["lon"]) <= CONFIRM_MILES
+
+
+def _place(params: SearchParams) -> dict[str, Any] | tuple[Response, int]:
+    """The place a search will run around, or the response for the page when it
+    can't be found (nothing is spent then)."""
+    try:
+        return where(params)
+    except GeocodeError as exc:
+        return jsonify({"error": str(exc), "field": "location"}), 400
+    except Exception:
+        log.exception("Looking up the place to search failed")
+        return jsonify({"error": "Couldn't look up the place to search around just now. "
+                                 "Nothing was spent. Try again in a minute."}), 503
+
+
+@bp.get("/place")
+def place() -> ResponseReturnValue:
+    """Where a search for ?location= would run, and how far that is from Arco (the
+    page shows it in the confirmation before anything is spent)."""
+    try:
+        params = SearchParams(location=_location(request.args))
+    except FormError as exc:
+        return jsonify({"error": str(exc), "field": exc.field}), 400
+    found = _place(params)
+    return found if isinstance(found, tuple) else jsonify(found)
+
+
+def _claim(params: SearchParams, place: dict[str, Any]) -> str | tuple[Response, int]:
     """Claim today's search: the day, or the response for the page when it can't be had."""
     try:
         day, done = daily.claim({"location": params.location, "radius": params.radius_miles,
                                  "keywords": ", ".join(params.keywords),
-                                 "source": params.source})
+                                 "source": params.source, "place": place["label"],
+                                 "miles": place["miles"]})
     except Exception as exc:
         log.error("Recording the search failed", exc_info=True)
         if isinstance(exc, store.Unavailable) and "DATABASE_URL" in str(exc):
@@ -509,7 +585,17 @@ def search() -> ResponseReturnValue:
     if running is not None:
         # The page attaches to it (e.g. after a reload) instead of starting another.
         return jsonify({"error": "A search is already running.", "job_id": running}), 429
-    claimed = _claim(params)
+    # Where it will run is found first: a place that can't be found, or one outside
+    # Arco's area that the person hasn't confirmed, never uses up the day.
+    found = _place(params)
+    if isinstance(found, tuple):
+        return found
+    if found["outside"] and not confirmed(request.form.get("confirm_place"), found):
+        return jsonify({"error": f"{far_message(found)} Check the place, or confirm that "
+                                 "you want to search there.",
+                        "field": "location", "place": found, "confirm_far": True}), 409
+    params = replace(params, center=(found["lat"], found["lon"]), place=found["label"])
+    claimed = _claim(params, found)
     if not isinstance(claimed, str):
         return claimed
     day = claimed
@@ -578,7 +664,7 @@ def _switch_list() -> dict[str, Any]:
 @bp.post("/switches")
 def flip_switch() -> ResponseReturnValue:
     """Flip an emergency switch inside the site: it takes effect on the next request (a
-    running search stops at its next check), with no restart."""
+    running search stops within seconds), with no restart."""
     if not same_origin():
         abort(403)
     if not admin_open():
@@ -600,6 +686,7 @@ def status(job_id: str) -> ResponseReturnValue:
     job = state().jobs.get(job_id) or abort(404)
     progress = job["progress"]
     body = {"state": job["state"], "message": job["message"], "steps": STEPS,
+            "stopping": job["state"] == "running" and job["message"].startswith("Stopping"),
             "step": job.get("step", 0), "pct": round(progress.pct(), 1),
             "elapsed": round(time.time() - job.get("started", time.time())),
             "skipped": job.get("skipped", []),
@@ -609,6 +696,6 @@ def status(job_id: str) -> ResponseReturnValue:
         res = job["result"]
         body.update(found=len(res.leads), new_leads=job.get("new_leads"),
                     saved_count=job.get("saved_count"), warnings=list(res.warnings),
-                    note=job.get("note"),
+                    note=job.get("note"), stopped=job.get("stopped"),
                     location=res.location_label, yelp=yelp_quota(), saved=bool(job.get("saved")))
     return jsonify(body)

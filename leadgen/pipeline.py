@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
@@ -57,6 +58,11 @@ class SearchParams:
     api_key: str = ""          # Google Places
     yelp_api_key: str = ""
     skip_yelp: bool = False    # the command line without the site's database (cli.py)
+    # Where the place was already found (web/finding.py locates it before the day is
+    # claimed, so the person sees it first): (lat, lon), and its label. None: run()
+    # looks the location up itself.
+    center: tuple[float, float] | None = None
+    place: str = ""
 
     def resolved_keys(self) -> tuple[str, str, bool]:
         """Return (google key, yelp key, misplaced) from the params or the environment.
@@ -96,9 +102,12 @@ class RunResult:
     # areas the map search was cut into: the site asks them again in the background (fillin.py).
     osm_missing: list[osm.Part] = field(default_factory=list)
     osm_areas: int = 0
+    # Why the search was cut short ("the administrator paused searching"), or "".
+    stopped: str = ""
 
     def run_info(self, params: SearchParams) -> dict[str, Any]:
-        info = {k: v for k, v in asdict(params).items() if k not in ("api_key", "yelp_api_key", "skip_yelp")}
+        info = {k: v for k, v in asdict(params).items()
+                if k not in ("api_key", "yelp_api_key", "skip_yelp", "center", "place")}
         info["keywords"] = ", ".join(params.keywords)
         info["resolved location"] = f"{self.location_label} ({self.center[0]:.4f}, {self.center[1]:.4f})"
         info.update(self.stats)
@@ -115,7 +124,10 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
 
     say = progress or (lambda msg: None)
     say(f"Locating '{params.location}'")
-    lat, lon, label = geocode(params.location, api_key)
+    if params.center is not None:
+        (lat, lon), label = params.center, params.place or params.location
+    else:
+        lat, lon, label = geocode(params.location, api_key)
 
     warnings = _key_warnings(params, api_key, yelp_key, misplaced, use[1])
     stats: dict[str, object] = {}
@@ -123,13 +135,21 @@ def run(params: SearchParams, progress: Progress | None = None) -> RunResult:
     raw, errors, failed, partly = _query_sources(params, use, (api_key, yelp_key),
                                                  keywords, lat, lon, progress, warnings, stats,
                                                  missing)
+    stopped = missing.get("stopped", "")
 
     say(f"Filtering {len(raw)} raw results to {params.radius_miles:g} miles")
     kept = finish_leads(raw, (lat, lon), params, keywords, stats, say)
     stats["seconds"] = round(time.time() - started, 1)
     return RunResult(kept, (lat, lon), label, warnings, stats, problems=errors,
                      failed_sources=failed, partial_sources=partly,
-                     osm_missing=missing.get("parts", []), osm_areas=missing.get("areas", 0))
+                     osm_missing=missing.get("parts", []), osm_areas=missing.get("areas", 0),
+                     stopped=stopped)
+
+
+def locate(params: SearchParams) -> tuple[float, float, str]:
+    """Where the search will run: (lat, lon, label) for its location, looked up with
+    the Google key when there is one (geo.geocode). Raises GeocodeError."""
+    return geocode(params.location, params.resolved_keys()[0])
 
 
 def finish_leads(raw: list[Lead], centre: tuple[float, float], params: SearchParams,
@@ -306,17 +326,22 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
     failed, those of them that failed for only part of the area). Adds plain notes to
     warnings, counts to stats and (in missing: "parts", "areas") the map-data parts no
     server answered for. A source the administrator switched off since the search
-    started is skipped; raises PipelineError when nothing at all was found."""
+    started is skipped, and pausing searching also stops the map data partway (in
+    missing: "stopped", why); raises PipelineError when nothing at all was found."""
     use_google, use_yelp, use_osm = use
     api_key, yelp_key = keys
     got = _Found(warnings, stats)
     stopped: list[str] = []
+    why: list[str] = []                      # why the search was cut short
+    missing = missing if missing is not None else {}
 
     def halted(source: str) -> bool:
         """True when the administrator switched searching (or this source) off
         since the search started; the source is then skipped."""
-        if config.stop_reason(source):
+        reason = config.stop_reason(source)
+        if reason:
             stopped.append(source)
+            why.append(reason)
             return True
         return False
 
@@ -332,8 +357,19 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
             got.fail("yelp", exc)
     if use_osm and not halted("osm"):
         try:
-            found, w = osm.search(lat, lon, params.radius_miles, keywords, progress, stats=stats)
+            found, w = osm.search(lat, lon, params.radius_miles, keywords, progress, stats=stats,
+                                  stop=lambda: config.stop_reason("osm"))
             got.add("osm", found, w)
+        except osm.Stopped as exc:
+            # Paused partway: what the areas that had answered found is kept.
+            got.add("osm", exc.leads, exc.warnings)
+            why.append(exc.reason)
+            if not got.raw:
+                raise PipelineError("The search was stopped by the administrator (searching "
+                                    "was paused) before it found anything.") from None
+            got.warnings.append(f"The search was stopped by the administrator partway through "
+                                f"the free map data ({exc.reason}); the businesses already "
+                                "found were kept, and the rest of the area wasn't searched.")
         except osm.PartialResult as exc:
             # Some parts of the area answered: keep what they found; the search is incomplete.
             got.add("osm", exc.leads, exc.warnings)
@@ -344,7 +380,15 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
             got.fail("osm", exc, partly=True)
         except SourceError as exc:
             got.fail("osm", exc)
+    # A paid source stopped partway by a switch (sources/paging.py says why).
+    why += [m.group(1) for m in (re.match(r"Stopped early: (the administrator [^:;]+)", w)
+                                 for w in got.warnings) if m]
     _check_found(got, stopped)
+    # The search as a whole was cut short only by the pause (a paid source switched
+    # off just leaves that source out).
+    paused = [w for w in why if "paused" in w]
+    if paused:
+        missing["stopped"] = paused[0]
     return got.raw, got.errors, got.failed, got.partly
 
 

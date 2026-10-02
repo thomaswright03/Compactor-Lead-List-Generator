@@ -117,7 +117,7 @@ def test_surname_brands_need_corroboration():
     assert not any("brand" in r for r in score_lead(make("Grown Ups Daycare", [])).reasons)
     assert not any("brand" in r for r in score_lead(make("The UPS Store", ["store"])).reasons)
     grocer = score_lead(make("Smith's Marketplace", ["supermarket"]))
-    assert any("brand (smith's)" in r for r in grocer.reasons)
+    assert any("brand (Smith's)" in r for r in grocer.reasons)
     tagged = score_lead(make("Smith's Fuel Center", ["brand=Smith's"], source="osm"))
     assert any("brand" in r for r in tagged.reasons)
 
@@ -433,14 +433,14 @@ def test_names_that_hold_another_business_or_a_misleading_word():
         assert not [r for r in lead.reasons if item["never_reason"].lower() in r.lower()], lead.reasons
     # The brand still counts when the business is the brand.
     base = score_lead(make("Hill Air Force Base", ["landuse=military"], "osm"))
-    assert any("hill air force base" in r for r in base.reasons)
+    assert any("(Hill Air Force Base)" in r for r in base.reasons)
     tagged = score_lead(make("Clearfield Store", ["shop=supermarket", "brand=Walmart"], "osm"))
-    assert any("(walmart)" in r for r in tagged.reasons)
+    assert any("(Walmart)" in r for r in tagged.reasons)
     near = score_lead(make("Motel near Costco", ["tourism=hotel"], "osm"))
-    assert not any("costco" in r for r in near.reasons)
+    assert not any("Costco" in r for r in near.reasons)
     other_brand = score_lead(make("Walmart Supercenter", ["shop=supermarket", "brand=Target"],
                                   "osm"))
-    assert not any("(walmart)" in r for r in other_brand.reasons)
+    assert not any("(Walmart)" in r for r in other_brand.reasons)
     plant = score_lead(make("Deseret Industries Manufacturing", ["building=industrial"], "osm"))
     assert plant.category_key == "manufacturing"
 
@@ -496,7 +496,7 @@ def test_a_retail_chain_named_freight_and_a_shop_mapped_as_a_mall():
         mall = score_lead(make(name, ["shop=mall"], "osm"))
         assert mall.category_key == "venue", name
     brand = score_lead(make("Sportsman's Warehouse", ["shop=sports"], "osm"))
-    assert brand.category_key == "specialty_retail" and any("sportsman" in r for r in brand.reasons)
+    assert brand.category_key == "specialty_retail" and any("Sportsman" in r for r in brand.reasons)
 
 
 def test_generic_names_rank_below_named_places():
@@ -522,3 +522,19 @@ def test_generic_names_rank_below_named_places():
         run = score_lead(make(f"{item['name']} (Salt Lake County)", item["raw_categories"],
                               item["source"]), config.DEFAULT_KEYWORDS)
         assert not any("no business name" in r for r in run.reasons)
+
+
+def test_brands_are_written_properly_in_the_reasons():
+    """The reasons (on the Leads page and in the downloads) name each brand as it is
+    written, never in lower case."""
+    from leadgen.export import plain_reason
+    cases = [("Harmons Grocery", ["grocery_store"], "https://harmonsgrocery.com", "Harmons"),
+             ("Intermountain Medical Center", ["hospital"], "", "Intermountain Medical Center"),
+             ("Costco Wholesale", ["warehouse_store"], "", "Costco"),
+             ("Smith's Marketplace", ["grocery_store"], "https://smithsfoodanddrug.com", "Smith's"),
+             ("Sams Club", ["warehouse_store"], "", "Sam's Club")]
+    for name, types, site, written in cases:
+        lead = score_lead(make(name, types, website=site))
+        reason = next(r for r in lead.reasons if "high-volume brand" in r)
+        assert reason.endswith(f"({written})"), (name, reason)
+        assert f"({written})" in plain_reason(reason)

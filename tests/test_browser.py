@@ -214,16 +214,21 @@ def test_find_leads_asks_before_using_the_days_search(page, monkeypatch):
     page.fill("input[name=radius]", "12")
     page.click("#go")
     dialog = page.locator("#confirm-dlg")
-    assert dialog.is_visible()
+    expect(dialog).to_be_visible()
     text = dialog.inner_text()
     assert "This uses today's only search" in text and "12 miles" in text
+    # The place the search will actually run around, and how far it is from Arco's shop.
+    assert "Arco Compactor, 876 Fortune Rd" in text and "0.0 miles" in text
+    assert page.locator("#confirm-far").is_hidden()
     page.click("#confirm-back")
     assert not dialog.is_visible() and not sent
     assert "Today's is available" in page.inner_text("#day-note")
     page.click("#go")
+    expect(dialog).to_be_visible()
     page.keyboard.press("Escape")                     # the keyboard can back out too
     assert not dialog.is_visible() and not sent
     page.click("#go")
+    expect(dialog).to_be_visible()
     page.click("#confirm-go")
     page.wait_for_selector("#done-card:not([hidden])")
     assert len(sent) == 1
@@ -1066,3 +1071,140 @@ def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, 
     expect(first).to_contain_text("530")
     assert "Incomplete" not in first.inner_text() and "Filling in" not in first.inner_text()
     context.close()
+
+
+def test_a_mark_says_saving_until_the_server_has_saved_it(page):
+    """On a slow connection the row says "Saving Yes…" (Yes / No disabled) until the server
+    answers; only then "Marked by" and "Saved. Moves to …". A failed save says so and the row
+    is as it was."""
+    held = []
+    page.route("**/mark", lambda route: held.append(route))
+    row = _row(page, "Costco")
+    row.locator(".mark button.yes").click()
+    expect(row.locator(".saving")).to_have_text("Saving Yes…")
+    assert row.locator(".mark button.yes").is_disabled() and row.locator(".mark button.no").is_disabled()
+    page.wait_for_timeout(600)                         # the request is still on its way
+    text = row.inner_text()
+    assert "Saved." not in text and "Marked by" not in text and "Saving Yes…" in text
+    assert page.get_by_role("button", name="Not checked (3)").is_visible()   # nothing moved yet
+    held.pop().continue_()
+    expect(row).to_contain_text("Saved. Moves to “Has baler or compactor”.")
+    expect(row).to_contain_text("Marked by Tester")
+    assert row.locator(".saving").count() == 0
+    # A save that fails: "Saving No…" and then the row as it was, with the reason.
+    page.unroute("**/mark")
+    page.route("**/mark", lambda route: held.append(route))
+    other = _row(page, "Hampton")
+    other.locator(".mark button.no").click()
+    expect(other.locator(".saving")).to_have_text("Saving No…")
+    held.pop().fulfill(status=503, content_type="application/json",
+                       body='{"error": "The saved data isn\'t answering."}')
+    expect(page.locator("#toast")).to_contain_text("answer not saved")
+    expect(other.locator(".saving")).to_have_count(0)
+    assert "Marked by" not in other.inner_text() and not other.locator(".mark button.on").count()
+    assert other.locator(".mark button.no").is_enabled()
+
+
+def test_a_place_outside_arcos_area_is_named_and_needs_a_second_yes(page, monkeypatch):
+    from leadgen import pipeline
+    from leadgen.pipeline import RunResult
+    monkeypatch.setattr(pipeline, "geocode", lambda location, key: (45.5152, -122.6784, "Portland, Oregon"))
+    monkeypatch.setattr(web.finding, "run", lambda params, progress: RunResult(
+        [], params.center, params.place, [], {"leads kept": 0, "seconds": 3.2}))
+    sent = _posts(page, "/search")
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    page.fill("input[name=location]", "Portland")
+    page.click("#go")
+    confirm = page.locator("#confirm-dlg")
+    expect(confirm).to_be_visible()
+    assert "Portland, Oregon" in confirm.inner_text() and "633 miles" in confirm.inner_text()
+    expect(page.locator("#confirm-far")).to_contain_text("outside Arco's area")
+    page.click("#confirm-go")                          # "Next": the second question
+    far = page.locator("#far-dlg")
+    expect(far).to_be_visible()
+    assert "“Portland, Oregon” is 633 miles from Arco's shop" in far.inner_text()
+    assert page.evaluate("document.activeElement.id") == "far-back"   # the safe choice
+    page.click("#far-back")
+    assert not far.is_visible() and not sent
+    page.click("#go")
+    expect(confirm).to_be_visible()
+    page.click("#confirm-go")
+    expect(far).to_be_visible()
+    page.click("#far-go")
+    page.wait_for_selector("#done-card:not([hidden])")
+    assert len(sent) == 1
+    where = page.locator("#history td.h-where").first
+    expect(where).to_contain_text("Searched around Portland, Oregon · 633 miles from Arco")
+
+
+def test_the_place_found_is_named_before_a_search_in_the_area(page):
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    page.fill("input[name=location]", "Murray")
+    page.click("#go")
+    expect(page.locator("#confirm-list")).to_contain_text("Murray, UT")
+    assert re.search(r"From Arco's shop\s+5\.\d miles", page.inner_text("#confirm-list"))
+    assert page.locator("#confirm-far").is_hidden() and page.inner_text("#confirm-go") == "Start search"
+    page.click("#confirm-back")
+    page.fill("input[name=location]", "Nowhereville zz")
+    page.click("#go")
+    expect(page.locator("#err-location")).to_contain_text("Could not find the place")
+    assert not page.locator("#confirm-dlg").is_visible()
+
+
+def test_show_more_fetches_the_next_page_only(browser, site, page):
+    extra = []
+    for i in range(130):
+        lead = Lead(name=f"Warehouse {i:03}", lat=40.6 + i * 0.001, lon=-111.95, source="osm",
+                    source_id=f"w{i}", raw_categories=["building=warehouse"])
+        score_lead(lead, config.DEFAULT_KEYWORDS)
+        extra.append(lead)
+    saved.save_search(extra, config.DEFAULT_KEYWORDS)
+    page.reload()
+    page.wait_for_selector("table.leads")
+    rows = page.locator("table.leads tbody tr")
+    expect(rows).to_have_count(100)
+    with page.expect_response(lambda r: "/leads?" in r.url and "offset=100" in r.url) as info:
+        page.click("#leads-more")
+    body = info.value.json()
+    left = body["total"] - 100
+    assert left > 20 and len(body["leads"]) == left       # only the rows not shown yet
+    expect(rows).to_have_count(body["total"])
+    assert page.locator("#leads-more").is_hidden()
+    names = page.locator("table.leads tbody tr td.c-name strong").all_inner_texts()
+    assert len(set(names)) == body["total"]
+
+
+def test_the_mark_column_is_only_as_wide_as_it_needs_on_a_laptop(browser, site, page):
+    _row(page, "Smith").locator(".mark button.yes").click()
+    page.get_by_role("button", name="Has baler or compactor (1)").click()
+    _row(page, "Smith").get_by_role("button", name="Just called").click()
+    page.locator("#outcomes").get_by_role("button", name="Follow Up").click()
+    page.click("#call-save")
+    page.wait_for_selector("#call-dlg:not([open])", state="attached")
+    page.set_viewport_size({"width": 1440, "height": 900})
+    widths = page.evaluate("""() => { const th = [...document.querySelectorAll('table.leads thead th')];
+        return th.map((e) => Math.round(e.getBoundingClientRect().width)); }""")
+    assert widths[0] <= 180, widths                    # Baler? / Call
+    cell = _row(page, "Smith").locator("td.c-mark")
+    box = cell.bounding_box()
+    for button in cell.locator("button").all():         # every button still fits the column
+        b = button.bounding_box()
+        assert b["x"] + b["width"] <= box["x"] + box["width"] + 1
+
+
+def test_the_tier_d_note_is_true_whatever_minimum_score_was_used(page):
+    weak = Lead(name="Acme Office", lat=40.7, lon=-111.9, source="osm", source_id="weak",
+                raw_categories=["office=company"])
+    score_lead(weak, config.DEFAULT_KEYWORDS)
+    assert weak.tier == "D"
+    _row(page, "Costco").locator(".mark button.yes").click()
+    page.wait_for_selector("#recent:not([hidden])")
+    page.click("nav a[data-page=stats]")
+    expect(page.locator("#tier-d-note")).to_contain_text("Tier D (scores below 20) is empty")
+    saved.save_search([weak], config.DEFAULT_KEYWORDS)  # a search with a lower minimum score
+    page.click("nav a[data-page=leads]")
+    page.click("nav a[data-page=stats]")
+    expect(page.locator("#tier-d-note")).to_contain_text("1 saved lead is in tier D (scores below 20)")
+    assert "usually empty" not in page.inner_text("#tier-d-note")

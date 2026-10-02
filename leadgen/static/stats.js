@@ -30,9 +30,13 @@ async function loadStats() {
   else { avg.append(String(s.average_score)); avg.append(el("small", ` / 100 · tier ${s.average_tier}`)); }
   drawChart(s.by_tier);
   const d = s.by_tier.find((t) => t.tier === "D");
+  // Why tier D has no numbers: true whatever minimum score the searches used.
   $("tier-d-note").hidden = !(d && !d.checked);
-  $("tier-d-note").textContent = `Tier D (scores below ${s.tier_floors.C}) is usually empty: searches only save ` +
-    `businesses scoring ${s.min_score} or more.`;
+  $("tier-d-note").textContent = d && d.saved
+    ? `${d.saved.toLocaleString()} saved ${d.saved === 1 ? "lead is" : "leads are"} in tier D (scores below ${s.tier_floors.C}): ` +
+      "from a search that lowered the minimum score under More options, or scored lower since. None has been checked yet."
+    : `Tier D (scores below ${s.tier_floors.C}) is empty: searches leave out businesses scoring below ` +
+      `${s.min_score} unless the minimum score is lowered under More options.`;
   const tbody = $("s-table").querySelector("tbody"); tbody.replaceChildren();
   for (const t of s.by_tier) {
     const tr = el("tr");

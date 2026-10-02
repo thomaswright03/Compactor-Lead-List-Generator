@@ -420,3 +420,11 @@ dialog::backdrop { background:var(--backdrop); }
 .admin-lock-row { display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--sp-3); }
 .admin-lock-row label { display:flex; flex-direction:column; gap:var(--sp-1); font-weight:600; }
 .admin-relock { margin:0 0 var(--sp-3); }
+/* Find leads: where a search actually ran (under what was typed), a far place, a stopped search. */
+td.h-where .sub { display:block; }
+.sub.far { color:var(--warn-ink); font-weight:600; }
+#confirm-far { margin:var(--sp-3) 0 0; }
+#progress-card.stopping #progress-msg, #done-card.stopped .big { color:var(--warn-ink); }
+/* A Yes / No on its way to the server: the row says so until it is saved. */
+.mark button.sending { outline:2px dashed var(--accent); outline-offset:1px; }
+.c-mark .saving { margin-top:var(--sp-1); font-style:italic; }

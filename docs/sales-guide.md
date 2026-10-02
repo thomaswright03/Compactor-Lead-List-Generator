@@ -32,7 +32,14 @@ step-by-step tour of every page. It only looks around and never changes anything
    **Extra search words** starts empty: the standard words (compactor, baler,
    waste, recycling) are always searched, and anything you type is searched as
    well. Extra settings are under **More options**.
-3. Press **Find leads**, check the summary, then press **Start search**.
+3. Press **Find leads** and check the summary. **Searches around** names the place
+   the search will actually run around, and **From Arco's shop** how far that is.
+   A town name on its own ("Murray", "Sandy") means the Utah one. If the place is
+   not what you meant, press **Go back and edit** (type a ZIP code, or the town with
+   its state: "Murray, UT"). Then press **Start search**. A place outside Arco's area
+   (more than 30 miles from the shop) asks once more, naming the place and its
+   distance: **Search there anyway** uses the day's search there; **Go back and edit**
+   spends nothing.
 4. The progress bar shows each step. A search takes a few minutes; you can use
    the other pages meanwhile.
 5. When it finishes, press **View leads**. New businesses join the saved list.
@@ -78,6 +85,8 @@ Good to know:
 ## Mark Yes or No
 
 - Press **Yes** if the business has a baler or compactor, **No** if it doesn't.
+  The row says "Saving Yes…" until the answer is saved, then "Saved. Moves to …";
+  if it couldn't be saved, a red note says so and the row is as it was.
 - A mark is kept for good. You can switch it between Yes and No later.
 - Pressed the wrong one? Press **Undo** on the row or in **Recent changes**
   within 5 minutes.

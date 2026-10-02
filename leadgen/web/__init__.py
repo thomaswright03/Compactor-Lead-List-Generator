@@ -128,7 +128,7 @@ def _register_pages(app: Flask) -> None:
             yelp_on=bool(yelp_key), switches=switches(), paused_text=SEARCH_PAUSED,
             undo_seconds=marks.UNDO_SECONDS, admin=auth.admin_state(),
             admin_lockable=bool(state().admin_password),
-            flagged=[*config.COMPETITORS, config.OWN_COMPANY])
+            flagged=[*config.COMPETITORS, config.OWN_COMPANY], area_miles=config.SERVICE_AREA_MILES)
 
 
 def create_app(password: str | None = None, username: str | None = None,

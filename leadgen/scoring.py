@@ -426,7 +426,7 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
     brand = None if blocked else _brand_bonus(lead)
     if brand:
         score += 20
-        reasons.append(f"+20 known high-volume brand ({brand})")
+        reasons.append(f"+20 known high-volume brand ({config.brand_name(brand)})")
 
     # Busy site: the stronger of the Google and Yelp review signals (never both).
     busy = max(((pts, count, src) for src, count in (("Google", lead.rating_count),

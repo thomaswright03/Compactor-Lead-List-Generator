@@ -10,13 +10,15 @@ const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", stats: "Sta
 // A row just marked Yes or No stays where it is (showing its answer and Undo) for this long
 // after the pointer leaves the table, so a double-click can never land on the next business.
 const PIN_MS = 5000;
+// Rows the server sends at a time (web/leads.py PAGE_SIZE); "Show more" asks for the next ones.
+const PAGE = 100;
 // Clicks this soon after rows moved up are ignored (they were aimed at the row that left).
 const SHIFT_GUARD_MS = 700;
 // The Leads page holds only the rows it shows (one tab, filtered and sorted by the server,
 // the first `limit` of them), every tab's count, and the leads that can still be undone.
-const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "",
+const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "", sending: new Map(),
             loaded: false, loadError: "", refreshError: "", viewLoading: false, seq: 0,
-            leadView: "", callView: "", callQ: "", q: "", tier: "", phone: false, sort: "score", dir: "desc", limit: 300,
+            leadView: "", callView: "", callQ: "", q: "", tier: "", phone: false, sort: "score", dir: "desc", limit: PAGE,
             job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0 };
 
 function el(tag, text, cls) {
@@ -163,7 +165,7 @@ function route() {
   const { page: asked, params } = parseHash();
   const page = ["find", "leads", "calls", "stats"].includes(asked) ? asked : (S.counts && S.counts.all ? "leads" : "find");
   if (typeof hideToast === "function") hideToast();   // a note about one page never covers the next (leads.js may not be loaded yet)
-  if (page === "leads" && params.toString() && readLeadView(params)) { S.pinned.clear(); S.limit = 300; changeView(); }
+  if (page === "leads" && params.toString() && readLeadView(params)) { S.pinned.clear(); S.limit = PAGE; changeView(); }
   if (page === "calls") {
     const tab = params.get("tab");
     S.callView = tab && OUTCOMES.includes(tab) ? tab : "";

@@ -83,7 +83,7 @@ async function loadSearches() {
 const SWITCH_SHOWN = { search_paused: () => true, google_off: () => CONFIG.google_on, yelp_off: () => CONFIG.yelp_on };
 // What turning each switch on or off does, for the confirmation: [question, effect, button].
 const SWITCH_ASK = {
-  search_paused: [["Pause all searching for everyone?", "Find leads will refuse to start, for everyone, until this is turned off. Saved leads, marks and calls keep working.", "Pause searching"],
+  search_paused: [["Pause all searching for everyone?", "Find leads will refuse to start, for everyone, until this is turned off. A search running now stops within a few seconds; what it already found is saved. Saved leads, marks and calls keep working.", "Pause searching"],
                   ["Let everyone search again?", "Find leads works again for everyone straight away.", "Turn searching back on"]],
   google_off: [["Stop using Google for everyone?", "Searches will skip Google (no paid Google lookups) until this is turned off.", "Stop using Google"],
                ["Use Google again?", "Searches will use Google (paid lookups) again straight away.", "Use Google again"]],
@@ -210,11 +210,12 @@ function renderHistory(searches) {
     const tr = el("tr", undefined, s.failed ? "failed" : "");
     const leadsCell = cell(undefined, "h-leads", "Leads");
     // An incomplete search (a source failed) saved what the others found, and gave the day back.
-    if (s.fill && s.fill.state === "filling") leadsCell.append(`${num(s.leads)} `, el("span", "Filling in", "tag info"));
+    if (s.stopped) leadsCell.append(`${num(s.leads)} `, el("span", "Stopped", "tag"));
+    else if (s.fill && s.fill.state === "filling") leadsCell.append(`${num(s.leads)} `, el("span", "Filling in", "tag info"));
     else if (s.partial) leadsCell.append(`${num(s.leads)} `, el("span", "Incomplete", "tag"));
     else if (s.failed) leadsCell.append(el("span", "Failed", "tag"));
     else leadsCell.append(num(s.leads));
-    tr.append(cell(s.when, "nowrap h-when"), cell(s.location, "h-where"),
+    tr.append(cell(s.when, "nowrap h-when"), whereCell(s),
               cell(s.radius ? `${s.radius} mi` : "", "h-radius", "Radius"),
               leadsCell, cell(s.failed && !s.partial ? "" : num(s.new), "h-new", "New"));
     const td = cell(undefined, "h-act");
@@ -225,6 +226,12 @@ function renderHistory(searches) {
       why.textContent = `${s.reason || "The search didn't finish."} It didn't use up the day's search.`;
       extra.append(why); tbody.append(extra);
       continue;
+    }
+    if (s.stopped) {
+      const extra = el("tr");
+      const why = el("td"); why.colSpan = 6; why.className = "sub h-why";
+      why.textContent = `Stopped by the administrator (${s.stopped}); the businesses found before then were saved.`;
+      extra.append(why); tbody.append(extra);
     }
     if (s.details || (s.warnings || []).length) {
       const extra = el("tr", undefined, "more-row"); extra.hidden = true;
@@ -251,6 +258,22 @@ function renderHistory(searches) {
   box.replaceChildren(wrap);
 }
 
+// What was typed, and under it the place the search actually ran around (and how far that
+// is from Arco's shop) when it says more than the typed words.
+function whereCell(s) {
+  const td = el("td", undefined, "h-where");
+  td.append(el("span", s.location || ""));
+  const place = s.place || s.found_near;
+  if (place && place.toLowerCase() !== (s.location || "").toLowerCase()) {
+    const miles = typeof s.miles === "number" ? ` · ${milesText(s.miles)} from Arco` : "";
+    td.append(el("span", `Searched around ${place}${miles}`, `sub${s.miles > CONFIG.area_miles ? " far" : ""}`));
+  } else if (typeof s.miles === "number" && s.miles > CONFIG.area_miles) {
+    td.append(el("span", `${milesText(s.miles)} from Arco`, "sub far"));
+  }
+  return td;
+}
+const milesText = (m) => `${m < 10 ? m.toFixed(1) : Math.round(m).toLocaleString()} miles`;
+
 function showProgress(job) {
   $("progress-card").hidden = false;
   const steps = $("steps"); steps.replaceChildren();
@@ -268,6 +291,7 @@ function showProgress(job) {
   $("pct").textContent = `${Math.round(job.pct)}%`;
   $("elapsed").textContent = fmtTime(job.elapsed || 0);
   $("progress-msg").textContent = job.message;
+  $("progress-card").classList.toggle("stopping", Boolean(job.stopping));
   $("slow-note").hidden = !job.slow;
 }
 // One short note (an incomplete search's summary, or the first warning); the details behind "More".
@@ -304,8 +328,9 @@ async function follow(jobId, misses = 0) {
     return;
   }
   $("done-card").hidden = false;
-  $("done-big").textContent = job.saved ? `${job.new_leads.toLocaleString()} new leads`
-                                        : `${job.found.toLocaleString()} leads found`;
+  $("done-card").classList.toggle("stopped", Boolean(job.stopped));
+  $("done-big").textContent = (job.stopped ? "Stopped by the administrator: " : "")
+    + (job.saved ? `${job.new_leads.toLocaleString()} new leads` : `${job.found.toLocaleString()} leads found`);
   $("done-sub").textContent = !job.saved ? `near ${job.location} (not saved)`
     : job.saved_count == null ? `near ${job.location}` : `${job.saved_count.toLocaleString()} saved leads in all, near ${job.location}`;
   showNotes(job.note, job.warnings);
@@ -366,29 +391,61 @@ function checkForm(form) {
   }
   return null;
 }
-$("form").addEventListener("submit", (e) => {
+// Before anything is spent the server finds the place typed (web/finding.py place): the
+// confirmation names it and how far it is from Arco's shop. A place outside Arco's area needs a
+// second, explicit yes (farDialog) that names it again.
+const farText = (p) => `“${p.label}” is ${milesText(p.miles)} from Arco's shop, outside Arco's area (about ${p.area_miles} miles around it).`;
+$("form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  if ($("go").disabled) return;
+  if ($("go").disabled || S.locating) return;
   const bad = checkForm($("form"));
   if (bad) { showError(bad[1], bad[0]); return; }
+  const note = $("day-note").textContent;
+  S.locating = true; $("go").disabled = true; $("day-note").textContent = "Finding the place...";
+  let place;
+  try { place = await api(`/place?${new URLSearchParams({ location: $("form").location.value.trim() })}`); }
+  catch (err) { showError(err.message, err.body && err.body.field); return; }
+  finally { S.locating = false; setGo(!S.job, note); }
+  S.place = place;
   const dl = $("confirm-list"); dl.replaceChildren();
-  for (const [k, v] of searchSummary($("form"))) { const row = el("div"); row.append(el("dt", k), el("dd", v)); dl.append(row); }
+  const rows = searchSummary($("form"));
+  rows.splice(1, 0, ["Searches around", place.label], ["From Arco's shop", milesText(place.miles)]);
+  for (const [k, v] of rows) { const row = el("div"); row.append(el("dt", k), el("dd", v)); dl.append(row); }
+  $("confirm-far").hidden = !place.outside;
+  if (place.outside) $("confirm-far").textContent = `${farText(place)} You'll be asked once more before it starts.`;
+  $("confirm-go").textContent = place.outside ? "Next" : "Start search";
   $("confirm-dlg").showModal();
   $("confirm-go").focus();
 });
-$("confirm-back").addEventListener("click", () => { $("confirm-dlg").close(); $("form").querySelector("input[name=location]").focus(); });
-$("confirm-form").addEventListener("submit", (e) => { e.preventDefault(); $("confirm-dlg").close(); startSearch(); });
-async function startSearch() {
+const backToPlace = () => $("form").querySelector("input[name=location]").focus();
+$("confirm-back").addEventListener("click", () => { $("confirm-dlg").close(); backToPlace(); });
+$("confirm-form").addEventListener("submit", (e) => {
+  e.preventDefault(); $("confirm-dlg").close();
+  if (S.place && S.place.outside) farDialog(S.place); else startSearch();
+});
+function farDialog(place) {
+  S.place = place;
+  $("far-why").textContent = farText(place);
+  $("far-dlg").showModal();
+  $("far-back").focus();                 // the safe choice is the one already in focus
+}
+$("far-back").addEventListener("click", () => { $("far-dlg").close(); backToPlace(); });
+$("far-form").addEventListener("submit", (e) => { e.preventDefault(); $("far-dlg").close(); startSearch(S.place.confirm); });
+async function startSearch(confirmPlace) {
   setGo(false, "Starting...");
   clearErrors(); $("search-failed").hidden = true;
+  const form = new FormData($("form"));
+  if (confirmPlace) form.set("confirm_place", confirmPlace);
   try {
-    const body = await api("/search", { method: "POST", body: new FormData($("form")) });
+    const body = await api("/search", { method: "POST", body: form });
     follow(body.job_id);
   } catch (err) {
     if (err.status === 429 && err.body && err.body.job_id) return follow(err.body.job_id);
-    showError(err.message, err.status === 400 && err.body ? err.body.field : "");
     setGo(false, "");
     loadSearches();
+    // The place turned out to be outside Arco's area: ask, naming it (nothing was spent).
+    if (err.body && err.body.confirm_far) { farDialog(err.body.place); return; }
+    showError(err.message, err.status === 400 && err.body ? err.body.field : "");
   }
 }
 

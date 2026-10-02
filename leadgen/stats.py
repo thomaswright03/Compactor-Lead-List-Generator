@@ -29,7 +29,9 @@ def summarize(leads: list[Lead]) -> dict[str, Any]:
         asked = [l for l in checked if l.tier == tier]
         have = sum(l.has_baler == "yes" for l in asked)
         by_tier.append({"tier": tier, "checked": len(asked), "yes": have,
-                        "pct": round(100 * have / len(asked)) if asked else None})
+                        "pct": round(100 * have / len(asked)) if asked else None,
+                        # Saved in this tier, checked or not (the page's note on tier D).
+                        "saved": sum(l.tier == tier for l in leads)})
     return {
         "with_equipment": len(yes),
         "checked": len(checked),

@@ -4,6 +4,7 @@
     python -m leadgen web
     python -m leadgen reference      # copy the site's Yes / No marks into the scoring tests
     python -m leadgen merge-sites    # merge saved leads that are buildings of one site
+    python -m leadgen out-of-area    # list saved leads far outside Arco's area (--remove, --restore)
 """
 
 import argparse
@@ -13,7 +14,7 @@ from pathlib import Path
 from . import config, store
 from .envfile import load_dotenv
 from .export import to_csv_bytes, to_xlsx_bytes
-from .geo import GeocodeError
+from .geo import GeocodeError, miles_from_arco
 from .pipeline import SOURCES, PipelineError, SearchParams, run
 from .scoring import TIER_LABELS
 
@@ -74,6 +75,17 @@ def build_parser() -> argparse.ArgumentParser:
                    "numbered buildings of one complex) into one lead, keeping every mark and "
                    "call; searches never do this on their own")
 
+    far = sub.add_parser("out-of-area", help="List the saved leads far outside Arco's area (from a "
+                         "search around the wrong place); --remove takes them out of the list, "
+                         "--restore puts them back. Leads marked Yes / No or called are never removed")
+    far.add_argument("--miles", type=float, default=None,
+                     help="Farther than this from Arco's shop (default: twice Arco's area, "
+                          f"{2 * config.SERVICE_AREA_MILES:g} miles)")
+    act = far.add_mutually_exclusive_group()
+    act.add_argument("--remove", action="store_true",
+                     help="Take them out of the saved list (each is kept aside, so --restore can bring it back)")
+    act.add_argument("--restore", action="store_true", help="Put every removed lead back in the saved list")
+
     w = sub.add_parser("web", help="Start the web page")
     w.add_argument("--host", default="127.0.0.1")
     w.add_argument("--port", type=int, default=5000)
@@ -114,6 +126,10 @@ def cmd_run(args: argparse.Namespace) -> int:
             print(f"Details: {getattr(exc, 'detail', '')}", file=sys.stderr)
         return 2
 
+    away = miles_from_arco(*result.center)
+    if away > config.SERVICE_AREA_MILES:
+        print(f"Warning: {result.location_label} is {away:,.0f} miles from Arco's shop, outside "
+              f"Arco's area (about {config.SERVICE_AREA_MILES:g} miles around it).", file=sys.stderr)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     if out.suffix.lower() == ".csv":
@@ -152,6 +168,38 @@ def cmd_reference(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_out_of_area(args: argparse.Namespace) -> int:
+    from . import cleanup
+    if not store.database_url():
+        print("Note: DATABASE_URL is not set, so this is the local database, not the website's.",
+              file=sys.stderr)
+    try:
+        if args.restore:
+            n = cleanup.restore()
+            print(f"{n} removed lead{'' if n == 1 else 's'} put back in the saved list.")
+            return 0
+        miles = cleanup.DEFAULT_MILES if args.miles is None else args.miles
+        leads = cleanup.far_leads(miles)
+        if not leads:
+            print(f"No saved lead is farther than {miles:g} miles from Arco's shop.")
+            return 0
+        kept = sum(f.kept for f in leads)
+        print(f"{len(leads):,} saved lead{'' if len(leads) == 1 else 's'} farther than {miles:g} miles "
+              f"from Arco's shop ({kept:,} marked or called, never removed):")
+        print("\n".join(cleanup.summary(leads)))
+        if not args.remove:
+            print("\nNothing was changed. Add --remove to take them out of the saved list "
+                  "(--restore puts them back).")
+            return 0
+        n = cleanup.remove(leads)
+    except store.Unavailable as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    print(f"\n{n:,} lead{'' if n == 1 else 's'} taken out of the saved list (kept aside: "
+          "`python -m leadgen out-of-area --restore` puts them back).")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     args = build_parser().parse_args(argv)
@@ -161,6 +209,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "reference":
         return cmd_reference(args)
+    if args.command == "out-of-area":
+        return cmd_out_of_area(args)
     if args.command == "merge-sites":
         from . import saved
         try:

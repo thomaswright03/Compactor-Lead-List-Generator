@@ -29,7 +29,12 @@ searching** in the box that asks first ("Pause all searching for everyone?"), st
 **Stop using Google** / **Stop using Yelp** (shown when that source is set up) stop
 just that paid source. It takes effect on the next request, with no restart: Find
 leads says "Searching is paused by the administrator" and refuses to start, and a
-search already running stops at its next check (below). Each switch shows who
+search already running stops within a few seconds, wherever it is (between sources,
+before every paid Google or Yelp call, and every 2 seconds during the free map data
+step: no more map requests are sent). It keeps and saves the businesses it had already
+found; its progress card says "Stopping: the administrator paused searching", its
+result and the search history say "Stopped by the administrator", and today's search
+stays used (one a day). A search stopped before it found anything gives the day back. Each switch shows who
 turned it on (the name under **Your name**) and when. **Resume searching** / **Use
 Google again** / **Use Yelp again** undoes it. The
 switches are kept in the database (the additive `switches` table).
@@ -43,9 +48,10 @@ switches are kept in the database (the additive `switches` table).
 3. Click **Save Changes**. The service restarts in about a minute; from then
    on Find leads says "Searching is paused by the administrator" and refuses
    to start. Leads, Calls, Stats and the downloads keep working. A search that
-   is already running checks the switches between sources and before every
-   paid Google or Yelp call: it stops there, keeps (and saves) what it found,
-   and says it was stopped by the administrator.
+   is already running checks the switches between sources, before every
+   paid Google or Yelp call and every 2 seconds during the free map data: it
+   stops there, keeps (and saves) what it found, and says it was stopped by the
+   administrator.
 4. To switch it back on, delete the variable (or set it to `0`) and save. While
    the variable is set, the site's switch shows "On, set in the server's
    settings" and can't be turned off there.
@@ -272,6 +278,25 @@ contain all of it. Everything is kept, including Yelp's details, although
 Yelp's terms allow keeping its data for 24 hours (and Google's for 30 days);
 `SAVED_SOURCE_KEEP_SECONDS` in `leadgen/config.py` drops a source's details
 after a set time instead, keeping the business's id so its mark comes back.
+
+**Leads from a search around the wrong place.** Since 2026-10-02 a search only
+starts around a place more than 30 miles from Arco's shop (`SERVICE_AREA_MILES` in
+`leadgen/config.py`) after a second, explicit confirmation that names the place and
+its distance, and a bare town name ("Murray") means the Utah one. Leads saved by an
+earlier mistaken search (e.g. a search for "x" that ran around San Francisco) stay
+in the list until the owner decides; searches and the site never remove leads. With
+`DATABASE_URL` set (Render > the service > **Shell**):
+
+```bash
+python -m leadgen out-of-area                 # list leads more than 60 miles from Arco (changes nothing)
+python -m leadgen out-of-area --miles 100     # another distance
+python -m leadgen out-of-area --remove        # take them out of the saved list
+python -m leadgen out-of-area --restore       # put every removed lead back
+```
+
+`--remove` never touches a lead someone marked Yes / No or logged a call for (it
+is listed as kept). Each removed row is kept, as it was, in the additive
+`removed_leads` table, so nothing is lost and `--restore` brings it back.
 
 ## Login and the free plan
 

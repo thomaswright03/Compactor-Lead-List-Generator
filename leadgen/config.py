@@ -16,6 +16,12 @@ OWN_COORDS = (40.742060, -111.943408)
 DEFAULT_LOCATION = OWN_ADDRESS
 DEFAULT_CENTER = OWN_COORDS
 DEFAULT_RADIUS_MILES = 30.0
+# Arco's area: searches are meant for about this far around the shop (SERVICE_CENTER).
+# A search whose place is farther away is only started once the person confirms it,
+# naming the place and its distance, so a typo or a same-named town in another state
+# never uses up the day's search (web/finding.py). The command line warns instead.
+SERVICE_CENTER = OWN_COORDS
+SERVICE_AREA_MILES = 30.0
 DEFAULT_KEYWORDS = ["compactor", "baler", "waste", "recycling"]
 DEFAULT_MIN_SCORE = 20
 
@@ -486,6 +492,28 @@ HIGH_VOLUME_BRANDS = [
     "kraft heinz", "dannon", "sysco", "us foods", "northrop grumman", "l3harris", "boeing",
     "hill air force base",
 ]
+# How a brand is written in the score's reasons and downloads, where plain capitals
+# ("Sam's Club", "Hill Air Force Base") would be wrong; every other brand gets them.
+BRAND_NAMES = {
+    "walmart": "Walmart", "wal mart": "Walmart", "sams club": "Sam's Club", "winco": "WinCo",
+    "trader joe's": "Trader Joe's", "ikea": "IKEA", "tj maxx": "TJ Maxx", "t.j. maxx": "T.J. Maxx",
+    "rc willey": "RC Willey", "r.c. willey": "R.C. Willey", "petsmart": "PetSmart",
+    "jcpenney": "JCPenney", "lds hospital": "LDS Hospital", "mountainview hospital": "MountainView Hospital",
+    "st. mark's hospital": "St. Mark's Hospital", "coca cola": "Coca-Cola", "frito lay": "Frito-Lay",
+    "pepsico": "PepsiCo", "us foods": "US Foods", "l3harris": "L3Harris", "smiths": "Smith's",
+    "maceys": "Macey's", "lowes": "Lowe's", "kohls": "Kohl's", "ups": "UPS", "fedex": "FedEx",
+    "university of utah hospital": "University of Utah Hospital", "ross dress for less": "Ross Dress for Less",
+}
+
+
+def brand_name(brand: str) -> str:
+    """A matched brand as it is written: "harmons" -> "Harmons", "sam's club" -> "Sam's Club"."""
+    if brand in BRAND_NAMES:
+        return BRAND_NAMES[brand]
+    return " ".join("-".join(part[:1].upper() + part[1:] for part in word.split("-"))
+                    for word in brand.split())
+
+
 # High-volume "brands" that are also place names: a name counts for them only when it
 # starts with the brand ("Tru by Hilton Clearfield Hill Air Force Base" is a hotel near
 # the base, not the base). The map's own brand or operator tag always counts.

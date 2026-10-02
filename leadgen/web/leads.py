@@ -53,6 +53,9 @@ SORTS = {
     "called": lambda l: l.last_call_at or 0,
 }
 MAX_LIMIT = 5000
+# Rows in one answer when the page doesn't say: the list grows with every search and
+# is kept for good, so an answer is always one page of it ("Show more" asks for the next).
+PAGE_SIZE = 100
 
 
 def is_prospect(lead: Lead) -> bool:
@@ -114,12 +117,15 @@ def _recent(leads: list[Lead], undo: Undos) -> list[dict[str, Any]]:
 @bp.get("/leads")
 def saved_leads() -> ResponseReturnValue:
     """The saved list as the page shows it: one view (tab), filtered, sorted, and
-    only the first `limit` rows, plus every tab's count. The page asks for the rows
-    it shows, so opening it stays quick however long the list grows.
+    one page of its rows, plus every tab's count (exact, over the whole list). The
+    page asks for the rows it shows and "Show more" for the next page, so opening it
+    stays quick however long the list grows.
 
-    ?tab= one of VIEWS (default all), q= filter text, tier=, sort= / dir=, limit=
-    (default: every row), keep= uids shown even outside the tab (rows just marked,
-    which stay put for a few seconds; a refresh sends them in full too).
+    ?tab= one of VIEWS (default all), q= filter text, tier=, phone=1, sort= / dir=,
+    offset= (default 0) and limit= (default PAGE_SIZE, at most MAX_LIMIT): the rows
+    from offset on; keep= uids shown even outside the tab (rows just marked, which
+    stay put for a few seconds; on the first page only, and a refresh sends them in
+    full too).
 
     With ?since=<the "now" of an earlier answer> only the leads whose details, mark
     or calls changed since then come back: in full when they belong in the view
@@ -151,7 +157,7 @@ def saved_leads() -> ResponseReturnValue:
     body = {"changes": True, "total": len(shown), "counts": view_counts(leads),
             "recent": _recent(leads, undo), "now": now}
     changed = [l for l in leads if l.uid in uids]
-    limit = request.args.get("limit", type=int) or 300
+    limit = request.args.get("limit", type=int) or PAGE_SIZE
     if len(changed) > max(1, min(limit, MAX_LIMIT)):
         return jsonify({**body, "reload": True, "leads": [], "removed": []})
     kept = {lead.uid for lead in changed}
@@ -165,7 +171,8 @@ def saved_leads() -> ResponseReturnValue:
 
 def _page(leads: list[Lead], undo: Undos, view: str, q: str, tier: str,
           phone: bool = False) -> dict[str, Any]:
-    keep = set((request.args.get("keep") or "").split(",")[:50]) - {""}
+    offset = max(0, request.args.get("offset", type=int) or 0)
+    keep = set((request.args.get("keep") or "").split(",")[:50]) - {""} if not offset else set()
     rows = [l for l in leads if (in_view(l, view) or l.uid in keep) and matches(l, q, tier, phone)]
     sort = request.args.get("sort") or "score"
     if sort not in SORTS:
@@ -177,11 +184,9 @@ def _page(leads: list[Lead], undo: Undos, view: str, q: str, tier: str,
     elif view == "unchecked":
         # Among equal scores, the leads that can be phoned from the page come first.
         rows.sort(key=lambda l: (-l.score, not l.phone.strip()))
-    shown = rows                                      # no limit asked for: every row
-    if "limit" in request.args:
-        limit = request.args.get("limit", type=int) or MAX_LIMIT
-        shown = rows[:max(1, min(limit, MAX_LIMIT))]
-    return {"leads": [lead_json(l, undo) for l in shown], "total": len(rows),
+    limit = max(1, min(request.args.get("limit", type=int) or PAGE_SIZE, MAX_LIMIT))
+    shown = rows[offset:offset + limit]
+    return {"leads": [lead_json(l, undo) for l in shown], "total": len(rows), "offset": offset,
             "counts": view_counts(leads), "recent": _recent(leads, undo)}
 
 

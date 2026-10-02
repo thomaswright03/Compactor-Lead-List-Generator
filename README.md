@@ -20,7 +20,8 @@ and Arco Compactor's own listing is flagged too.
 (at the bottom, closed until opened, then unlocked with the administrator password) →
 **Pause searching** → confirm **Pause searching** (or **Stop using Google** / **Stop
 using Yelp**). It works on the next
-request, with no restart. The backup, if the site itself won't load: in Render, the
+request, with no restart, and a search already running stops within a few seconds
+(also during the free map data step), keeping and saving what it had found. The backup, if the site itself won't load: in Render, the
 service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Changes**
 (`LEADGEN_GOOGLE_OFF` / `LEADGEN_YELP_OFF` stop just one paid source). See the
 [runbook](docs/operator-runbook.md#emergency-switches-stop-searches-or-paid-calls).
@@ -37,6 +38,11 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   and the search history say "Still filling in N areas", then "Complete" or "N
   areas never answered". A search with missing areas saves what it found and still
   uses up the day, as the owner asked; the filling in is not a second search).
+  Before anything is spent, the confirmation names the place the search will
+  actually run around and how far it is from Arco's shop; a town name on its own
+  ("Murray", "Sandy") means the Utah one. A place outside Arco's area (more than 30
+  miles from the shop, `SERVICE_AREA_MILES`) needs a second, explicit yes that names
+  it again, and the search history shows where each search ran under what was typed.
   The standard words (compactor, baler, waste, recycling) are always searched;
   **Extra search words** (empty to start) are searched as well. Scores always use
   the standard words, so the minimum score, the list and Stats all use the same number.
@@ -64,6 +70,8 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   it (the name set under **Your name** in that browser, asked before the first
   mark or call and not skippable). **Has phone** on Leads shows only businesses
   that can be phoned; under Not checked, among equal scores, those come first.
+- The Leads page gets one page of rows at a time (100); **Show more** fetches the
+  next page, and the tab counts are always exact, however long the list grows.
 - Works on phones, tablets and laptops: below 1,100 px wide each lead is a card,
   so the reasons for its score are always in view without scrolling sideways.
 - A login from `APP_USERNAME` / `APP_PASSWORD` in the environment, and a separate
@@ -83,6 +91,10 @@ python -m leadgen web
 
 # Merge saved leads that are buildings of one site (only when you choose to run it)
 python -m leadgen merge-sites
+
+# List saved leads far outside Arco's area (e.g. from a search around the wrong place);
+# --remove takes them out of the list (kept aside), --restore puts them back
+python -m leadgen out-of-area [--miles 60] [--remove | --restore]
 ```
 
 It works with **no API key** (free OpenStreetMap data). For much better

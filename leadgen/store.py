@@ -79,10 +79,17 @@ SCHEMA = [
     """CREATE TABLE IF NOT EXISTS merged_leads (
         uid TEXT PRIMARY KEY, into_uid TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
         row TEXT NOT NULL)""",
+    # Saved leads taken out of the list on request because they are far outside Arco's
+    # area (cleanup.py, `python -m leadgen out-of-area --remove`): the row as it was, so
+    # `--restore` can put it back. Searches never remove leads.
+    """CREATE TABLE IF NOT EXISTS removed_leads (
+        uid TEXT PRIMARY KEY, at DOUBLE PRECISION NOT NULL, miles DOUBLE PRECISION NOT NULL,
+        row TEXT NOT NULL)""",
 ]
 # Every table, for tests that empty them.
 TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "mark_changes",
-          "search_failures", "call_undos", "problems", "made_by", "switches", "merged_leads")
+          "search_failures", "call_undos", "problems", "made_by", "switches", "merged_leads",
+          "removed_leads")
 # Up to this many ids are looked up by id (in chunks); more read the whole table.
 BY_ID_LIMIT = 1000
 _CHUNK = 500

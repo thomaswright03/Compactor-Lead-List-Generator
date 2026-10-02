@@ -303,7 +303,7 @@ def test_many_saved_leads_load_quickly():
     saved.save_search(leads, config.DEFAULT_KEYWORDS)
     client = web.create_app().test_client()
     start = time.time()
-    assert len(client.get("/leads").get_json()["leads"]) == 3000
+    assert len(client.get("/leads?limit=3000").get_json()["leads"]) == 3000
     assert time.time() - start < 5                  # ~0.3 s locally; generous for CI
 
 
