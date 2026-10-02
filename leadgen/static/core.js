@@ -28,8 +28,10 @@ const PAGE = 100;
 const SHIFT_GUARD_MS = 700;
 // The Leads page holds only the rows it shows (one tab, filtered and sorted by the server,
 // the first `limit` of them), every tab's count, and the leads that can still be undone.
+// `failed`: the Yes / No clicks that didn't reach the server, by lead, until retried or dismissed.
 const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "",
-            sending: new Map(), loaded: false, loadError: "", refreshError: "", viewLoading: false, seq: 0,
+            sending: new Map(), failed: new Map(), loaded: false, loadError: "", refreshError: "",
+            viewLoading: false, seq: 0,
             leadView: "", callView: "", callQ: "", q: "", tier: "", phone: false, sort: "score", dir: "desc",
             limit: PAGE, job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0,
             cutOffTimer: 0 };

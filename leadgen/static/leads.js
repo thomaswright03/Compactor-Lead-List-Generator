@@ -236,6 +236,7 @@ async function setMark(lead, value) {
   renderAll();
   try {
     const { undo } = await post("/mark", { key, value, by: myName() });
+    S.failed.delete(key);
     if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);   // "Saved. Moves to …" gets its moment
     updateLead({ key, saving: "", has_baler: value, marked_by: myName(), marks_disagreed: false, undo_mark: undo });
     moveCount(lead, before, value);
@@ -243,10 +244,29 @@ async function setMark(lead, value) {
     renderAll();
     toast(`${lead.name}: marked ${value === "yes" ? "Yes" : "No"}.`, () => undoMark(key));
   } catch (err) {
+    // The row itself says the answer wasn't saved, with Try again, until it is saved or dismissed
+    // (the note at the bottom of the screen goes after a few seconds and is easy to miss).
+    if (err.status !== 401) S.failed.set(key, { value, message: err.message });
     updateLead({ key, saving: "" });
     renderAll();
     toast(`${lead.name}: answer not saved. ${err.message}`, null, true);
   } finally { S.sending.delete(key); if (lead.saving) lead.saving = ""; S.busy--; }
+}
+// A Yes / No that didn't reach the server: said on the row, with Try again and Dismiss.
+function failedNote(lead) {
+  const failed = S.failed.get(lead.key);
+  const box = el("div", undefined, "mark-failed");
+  box.append(el("strong", `${failed.value === "yes" ? "Yes" : "No"} not saved.`), " ",
+             el("span", failed.message));
+  const again = ctl(button("Try again", "quiet", () => withName(() => setMark(lead, failed.value))), "retry");
+  again.setAttribute("aria-label", `Try again to save ${failed.value === "yes" ? "Yes" : "No"} for ${lead.name}`);
+  // Dismissed, the focus goes back to the row's Yes (restoreFocus).
+  const dismiss = ctl(button("Dismiss", "link", () => { S.failed.delete(lead.key); renderAll(); }), "dismiss");
+  dismiss.setAttribute("aria-label", `Dismiss: ${failed.value === "yes" ? "Yes" : "No"} not saved for ${lead.name}`);
+  const row = el("div", undefined, "mark-failed-do");
+  row.append(again, dismiss);
+  box.append(row);
+  return box;
 }
 async function undoMark(key) {
   const lead = leadByKey(key);
@@ -309,6 +329,8 @@ function markCell(lead, withCall) {
     const note = el("div", `Saving ${lead.saving === "yes" ? "Yes" : "No"}…`, "sub saving");
     note.setAttribute("role", "status");
     td.append(note);
+  } else if (S.failed.has(lead.key)) {
+    td.append(failedNote(lead));
   }
   if (lead.has_baler && lead.marked_by && !lead.saving) td.append(el("div", `Marked by ${lead.marked_by}`, "sub by"));
   // Joined from buildings marked Yes and No (python -m leadgen merge-sites keeps Yes).

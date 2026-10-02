@@ -1128,9 +1128,40 @@ def test_a_mark_says_saving_until_the_server_has_saved_it(page):
     held.pop().fulfill(status=503, content_type="application/json",
                        body='{"error": "The saved data isn\'t answering."}')
     expect(page.locator("#toast")).to_contain_text("answer not saved")
+    expect(other.locator(".mark-failed")).to_contain_text("No not saved. The saved data isn't answering.")
     expect(other.locator(".saving")).to_have_count(0)
     assert "Marked by" not in other.inner_text() and not other.locator(".mark button.on").count()
     assert other.locator(".mark button.no").is_enabled()
+
+
+def test_a_mark_that_was_not_saved_stays_on_the_row_with_try_again(page):
+    """Offline, a Yes isn't saved: the row says so with Try again (the note at the bottom
+    of the screen goes after a few seconds, the row's stays), and once the connection is
+    back Try again saves it and the business moves to its tab. Dismiss clears the note."""
+    page.context.set_offline(True)
+    row = _row(page, "Costco")
+    row.locator(".mark button.yes").click()
+    failed = row.locator(".mark-failed")
+    expect(failed).to_contain_text("Yes not saved. Can't reach the Lead Finder.")
+    page.evaluate("hideToast()")                       # as after its few seconds
+    expect(failed).to_be_visible()
+    assert not row.locator(".mark button.on").count()
+    expect(page.get_by_role("button", name="Not checked (3)")).to_be_visible()
+    page.context.set_offline(False)
+    failed.get_by_role("button", name="Try again to save Yes for Costco Wholesale").click()
+    expect(row).to_contain_text("Saved. Moves to “Has baler or compactor”.")
+    expect(row.locator(".mark-failed")).to_have_count(0)
+    expect(page.get_by_role("button", name="Has baler or compactor (1)")).to_be_visible()
+    # Dismissed instead: the note goes, nothing is saved, the focus is back on the row's Yes.
+    page.context.set_offline(True)
+    other = _row(page, "Hampton")
+    other.locator(".mark button.no").click()
+    expect(other.locator(".mark-failed")).to_contain_text("No not saved.")
+    page.context.set_offline(False)
+    other.get_by_role("button", name="Dismiss: No not saved for Hampton Inn").click()
+    expect(other.locator(".mark-failed")).to_have_count(0)
+    assert not other.locator(".mark button.on").count()
+    assert page.evaluate("document.activeElement.dataset.ctl") == "yes"
 
 
 def test_a_place_outside_arcos_area_is_named_and_needs_a_second_yes(page, monkeypatch):

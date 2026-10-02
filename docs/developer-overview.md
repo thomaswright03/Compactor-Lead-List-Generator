@@ -355,7 +355,9 @@ the sidebar to the page's list (Leads, Calls) or heading.
   **Show more** fetches only the next page (`offset` = the rows already shown) and adds
   it under them. While a Yes / No is on its way the row says "Saving Yes…" with both
   buttons disabled; the answer, "Marked by" and "Saved. Moves to …" appear only once
-  the server confirms (a failure leaves the row as it was, with a red note). A
+  the server confirms. A failure leaves the answer as it was, and the row says
+  "Yes not saved." with the reason, **Try again** and **Dismiss** until the answer is
+  saved or dismissed (`S.failed`, by lead; a toast says it too, but goes). A
   business just marked stays where it is, showing its answer ("Saved. Moves to
   …") and its Undo, until the pointer leaves the list (then a few seconds), or
   you change tab, filter or sort, so a double-click or a quick second click can

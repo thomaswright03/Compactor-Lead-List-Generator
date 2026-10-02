@@ -106,6 +106,9 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 - Keyboard use: after a Yes / No, an undo, a call saved or **Show more**, the focus
   stays on that business (or moves to the next one's Yes when it left the view). A
   click that lands just as the list moves up is not saved, and the page says so.
+- A Yes / No that couldn't be saved (offline, say) is said on the row itself, "Yes
+  not saved." with the reason and **Try again**, until it is saved or dismissed, as
+  well as in the note at the bottom of the screen.
 - The Leads page gets one page of rows at a time (100); **Show more** fetches the
   next page, and the tab counts are always exact, however long the list grows.
 - Works on phones, tablets and laptops: below 1,100 px wide each lead is a card,
