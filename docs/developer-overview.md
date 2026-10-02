@@ -460,6 +460,19 @@ until it is back. If only the Yes / No marks or calls can't be read, the pages
 say that too rather than showing every business as unchecked. Unknown
 addresses and server errors show a branded page with a link back.
 
+## How a business gets its category
+
+`scoring.classify` reads a business's facts once (`Facts`: its name, Google types,
+Yelp aliases and map tags, and the categories they match) and then asks the rules
+in `scoring.RULES` in order; the first rule that decides gives the category and the
+"Why" column says which one ("category rule (retail chain): a retail chain's name
+decides over the building it is mapped as"). `scoring.VETOES` are the narrow exceptions that hold
+a category back before any rule runs (a campus word on a place that is not the
+campus, a production word in a small shop's name...). To add a rule or a veto, add one
+entry to the table where it belongs in the order and one example business to
+`tests/test_classify_rules.py` (a test fails when a rule or veto has no example).
+The scoring tests and the scoring reference file below must still pass.
+
 ## The scoring reference file
 
 Leads are always scored with the default keywords (compactor, baler,
