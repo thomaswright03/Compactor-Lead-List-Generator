@@ -82,7 +82,7 @@ Good to know:
   number. **Clear filters** brings the whole list back. Under **Not checked**,
   among businesses with the same score, the ones with a phone number come first.
 - The buildings of one site (the numbered buildings of an apartment complex, a
-  campus's parts) are one lead, named after the site.
+  campus's parts, an air base's airfield and base) are one lead, named after the site.
 - Sort by score, name, city or distance: click a column heading, or use the
   sort list on a tablet or phone.
 - Phone numbers can be tapped to call on a phone. The **map** link shows where

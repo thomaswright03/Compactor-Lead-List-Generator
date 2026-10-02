@@ -265,6 +265,13 @@ NOT_CAMPUS_INNER = ["college of", "school of"]
 GENERIC_OSM_TAGS = {("industrial", None), ("building", "industrial"), ("landuse", "industrial"),
                     ("landuse", "residential")}
 
+# Kinds of site that spread over a mile or more (an air base, an airport, a campus): two
+# listings with the same name and one of these tags are one site within
+# dedupe.LARGE_SITE_MILES ("Hill Air Force Base" as the airfield and as the base).
+LARGE_SITE_OSM_TAGS = [("landuse", "military"), ("military", None), ("aeroway", "aerodrome"),
+                       ("amenity", "university"), ("amenity", "college")]
+LARGE_SITE_TYPES = {"airport", "university", "yelp:airports", "yelp:collegeuniv"}
+
 # A production word in a name ("dairy", "foods", "meats") alone doesn't make a plant when
 # the name also says it is a small shop or eatery ("Day Dairy Barn", "Sunrise Meats
 # Market", "Dairy Queen"): such a name gives no food & beverage production category.

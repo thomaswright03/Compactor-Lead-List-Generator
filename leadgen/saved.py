@@ -25,11 +25,11 @@ import threading
 import time
 import uuid
 from collections.abc import Iterable, Sequence
-from dataclasses import asdict, fields
+from dataclasses import asdict, dataclass, fields
 from typing import Any
 
-from . import config, store
-from .dedupe import Site, is_duplicate, merge, same_site, site_groups, site_of, snapshot
+from . import config, places, store
+from .dedupe import Site, SiteIndex, duplicate_groups, is_duplicate, merge, same_site, site_of, snapshot
 from .geo import haversine_miles
 from .models import Lead
 from .scoring import score_lead
@@ -145,14 +145,18 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
         for r in rows:
             if r.lead:
                 buckets.setdefault(_bucket(r.lead), []).append(r)
-        claimed, uids = set(), []
+        claimed: set[str] = set()
+        uids: list[str] = []
         fresh: set[str] = set()                  # rows this search added
+        sites = _SavedSites(rows)
         for lead in leads:
             parts = [{"at": now, "lead": p} for p in snapshot(lead)]
             ids = {_part_id(p) for p in parts}
             # Two leads the search kept apart never share a row, even via a listing id.
-            row = next((by_id[i] for i in sorted(ids)
-                        if i in by_id and by_id[i].uid not in claimed), None)
+            # A lead with listings of two saved rows (saved apart before the search
+            # rules joined them) joins the one saved first, the row merge-sites keeps.
+            row = min((by_id[i] for i in ids if i in by_id and by_id[i].uid not in claimed),
+                      key=lambda r: (r.first_seen, r.uid), default=None)
             if row is None:
                 bx, by = _bucket(lead)
                 near = [r for dx in (-1, 0, 1) for dy in (-1, 0, 1)
@@ -160,14 +164,10 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
                         if r.uid not in claimed and r.lead is not None and is_duplicate(lead, r.lead)]
                 row = min(near, key=lambda r: _miles_between(lead, r.lead), default=None)
             if row is None:
-                # A building of a site already saved ("Shoreline Ridge 830" beside the
-                # saved "Shoreline Ridge"): it joins that row.
-                site = site_of(lead)
-                near = [r for dx in (-1, 0, 1) for dy in (-1, 0, 1)
-                        for r in buckets.get((round(bx + dx * 0.01, 2), round(by + dy * 0.01, 2)), [])
-                        if site and r.uid not in claimed and r.lead is not None
-                        and same_site(site, _row_site(r))]
-                row = min(near, key=lambda r: _miles_between(lead, r.lead), default=None)
+                # A part of a site already saved ("Shoreline Ridge 830" beside the saved
+                # "Shoreline Ridge", the base's airfield inside the saved base's outline):
+                # it joins that row.
+                row = sites.find(lead, claimed)
             if row is None:
                 if lead.business_status == CLOSED:
                     uids.append("")             # closed before anyone saw it: not added
@@ -195,6 +195,7 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
             for i in row.ids:
                 by_id[i] = row
             buckets.setdefault(_bucket(row.lead), []).append(row)
+            sites.add(row)
         # Rows saved before sites were merged are joined only on request
         # (`python -m leadgen merge-sites`): that moves marks and calls between
         # saved rows, which the owner decides on, not an automatic save.
@@ -207,17 +208,86 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
 
 
 def _row_site(row: _Row) -> Site | None:
-    """The site a saved row is part of, placed by all its source listings."""
+    """The site a saved row is part of, placed (and outlined) by all its source listings."""
     if row.lead is None:
         return None
-    points = [(float(p["lead"]["lat"]), float(p["lead"]["lon"])) for p in row.parts
-              if p["lead"].get("lat") is not None and p["lead"].get("lon") is not None]
-    return site_of(row.lead, points)
+    return site_of(row.lead, [p["lead"] for p in row.parts])
 
 
-def _join_sites(db: store.Db, rows: list[_Row], now: float) -> tuple[dict[str, str], list[_Row]]:
-    """Merge saved rows that are parts of one site (dedupe.site_groups: the numbered
-    buildings of one complex, one name spread over a site) into the row saved first.
+class _SavedSites:
+    """The saved rows by the site they are part of, to find the row a new lead's site
+    joins (same_site) wherever its outline or a large site's spread puts it. Built on
+    first use: most leads join their row by listing id or as a duplicate."""
+
+    def __init__(self, rows: list[_Row]) -> None:
+        self._rows = rows
+        self._index: SiteIndex | None = None
+        self._site: dict[str, Site | None] = {}
+
+    def add(self, row: _Row) -> None:
+        if self._index is None:
+            return
+        site = self._site[row.uid] = _row_site(row)
+        if site is not None:
+            self._index.add(row, site)
+
+    def find(self, lead: Lead, claimed: set[str]) -> _Row | None:
+        site = site_of(lead)
+        if site is None:
+            return None
+        if self._index is None:
+            self._index = SiteIndex()
+            for row in self._rows:
+                self.add(row)
+        near = [r for r in self._index.near(site)
+                if r.uid not in claimed and r.lead is not None
+                and same_site(site, self._site.get(r.uid))]
+        return min(near, key=lambda r: _miles_between(lead, r.lead), default=None)
+
+
+def _same_business(rows: list[_Row]) -> list[tuple[_Row, list[_Row]]]:
+    """The saved rows that are one business by the rules a search merges with
+    (dedupe.duplicate_groups: duplicate listings, the parts of one site), or that share
+    a source listing: [(the row saved first, the rows that would join it)]."""
+    live = [r for r in rows if r.lead is not None and r.parts]
+    listings: list[Lead] = []
+    owner: list[int] = []
+    together = []
+    for k, r in enumerate(live):
+        start = len(listings)
+        for p in r.parts:
+            listings.append(_to_lead(copy.deepcopy(p["lead"])))
+            owner.append(k)
+        together.append(list(range(start, len(listings))))
+    parent = list(range(len(live)))
+
+    def find(k: int) -> int:
+        while parent[k] != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+
+    for group in duplicate_groups(listings, together):
+        for i in group[1:]:
+            parent[find(owner[i])] = find(owner[group[0]])
+    first: dict[str, int] = {}
+    for k, r in enumerate(live):
+        for pid in r.ids:
+            parent[find(k)] = find(first.setdefault(pid, k))
+    groups: dict[int, list[_Row]] = {}
+    for k, r in enumerate(live):
+        groups.setdefault(find(k), []).append(r)
+    plan = []
+    for members in groups.values():
+        if len(members) > 1:
+            members.sort(key=lambda r: (r.first_seen, r.uid))
+            plan.append((members[0], members[1:]))
+    return sorted(plan, key=lambda g: (g[0].first_seen, g[0].uid))
+
+
+def _join(db: store.Db, plan: list[tuple[_Row, list[_Row]]], now: float,
+          ) -> tuple[dict[str, str], list[_Row]]:
+    """Merge each plan group's rows (see _same_business) into the row saved first.
 
     Every source listing, mark and call is kept: the listings join that row (so a
     later search finds it), the calls and the Yes / No clicks move to it, and it takes
@@ -227,16 +297,10 @@ def _join_sites(db: store.Db, rows: list[_Row], now: float) -> tuple[dict[str, s
     in the table, hidden (like a lead with no listings left), and are recorded in
     merged_leads as they were. Returns ({merged uid: uid it joined}, rows changed).
     """
-    live = [r for r in rows if r.lead is not None and r.parts]
-    groups = site_groups([_row_site(r) for r in live])
-    if not groups:
+    if not plan:
         return {}, []
     moved: dict[str, str] = {}
     changed: list[_Row] = []
-    plan: list[tuple[_Row, list[_Row]]] = []
-    for group in groups:
-        members = sorted((live[i] for i in group), key=lambda r: (r.first_seen, r.uid))
-        plan.append((members[0], members[1:]))
     uids = [r.uid for keep, others in plan for r in [keep, *others]]
     with db.transaction():
         marked = {uid: (value, at) for uid, value, at in store.rows_for(
@@ -285,12 +349,48 @@ def _join_sites(db: store.Db, rows: list[_Row], now: float) -> tuple[dict[str, s
     return moved, changed
 
 
-def merge_sites() -> int:
-    """Merge the saved leads that are parts of one site (see _join_sites); returns
-    how many rows were merged into another. Only run on request, from the command
-    line (`python -m leadgen merge-sites`)."""
+@dataclass
+class PlannedRow:
+    """A saved row in a merge plan, as `python -m leadgen merge-sites` lists it."""
+
+    uid: str
+    name: str
+    city: str
+    saved_at: float
+    mark: str            # "yes", "no" or ""
+    calls: int
+
+
+def merge_plan() -> list[list[PlannedRow]]:
+    """The saved leads that are one business (see _same_business), each group's first row
+    the one the others would join. Changes nothing."""
     with store.connect() as db:
-        moved, _ = _join_sites(db, _read(db), time.time())
+        plan = _same_business(_read(db))
+        uids = [r.uid for keep, others in plan for r in [keep, *others]]
+        marked = {uid: value for uid, value in store.rows_for(
+            db, "SELECT uid, value FROM marks", "uid", uids)}
+        called: dict[str, int] = {}
+        for (uid,) in store.rows_for(db, "SELECT uid FROM calls", "uid", uids):
+            called[uid] = called.get(uid, 0) + 1
+    return [[PlannedRow(r.uid, r.lead.name, _town(r.lead), r.first_seen, marked.get(r.uid, ""),
+                        called.get(r.uid, 0))
+             for r in [keep, *others] if r.lead] for keep, others in plan]
+
+
+def _town(lead: Lead) -> str:
+    """The lead's city, or the town its pin is near ("near Layton")."""
+    if lead.city.strip():
+        return lead.city.strip()
+    found = places.near(lead.lat, lead.lon)
+    return f"near {found.town}" if found else ""
+
+
+def merge_sites() -> int:
+    """Merge the saved leads that are one business (see _same_business and _join);
+    returns how many rows were merged into another. Only run on request, from the
+    command line (`python -m leadgen merge-sites --apply`)."""
+    with store.connect() as db:
+        moved, _ = _join(db, _same_business(_read(db)), time.time())
     return len(moved)
 
 

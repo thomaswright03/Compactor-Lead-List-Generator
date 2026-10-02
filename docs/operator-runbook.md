@@ -271,11 +271,16 @@ kept). Off Render, a SQLite file in `.cache/` is used instead.
 **Saved leads.** Every search merges into one saved list: a business found again
 (the same listing, or the duplicate rules in the [developer overview](developer-overview.md)) updates its row instead of
 adding one. The buildings of one site (an apartment complex's numbered buildings,
-a campus's parts, one name spread over up to half a mile) are one lead, and a
-later search's building joins the saved site. Rows saved as separate leads before
-this rule are left alone by searches, because joining them moves calls and
-Yes / No clicks. To join them, run `python -m leadgen merge-sites` (with
-`DATABASE_URL` set) once the owner agrees: each group becomes the row saved first,
+a campus's parts, one name spread over up to half a mile, a listing inside the map
+outline of a same-named one, an air base's or airport's parts up to 1.5 miles apart,
+a name that only adds its town) are one lead, and a later search's part joins the
+saved site. Rows saved as separate leads before these rules are left alone by
+searches, because joining them moves calls and Yes / No clicks; a search that finds
+listings of two such rows updates the one saved first. To join them, run
+`python -m leadgen merge-sites` (with `DATABASE_URL` set): it lists each business
+saved as more than one row (the row each group would become first, with its town,
+the day it was saved, its mark and its calls) and changes nothing. Once the owner
+agrees with the list, run `python -m leadgen merge-sites --apply`: each group becomes the row saved first,
 keeping every source listing, moving the calls and Yes / No clicks to it and keeping
 the latest mark (the earlier ones stay in its history), except that when the group's
 marks disagree (some Yes, some No) it keeps Yes and the lead says the marks

@@ -87,7 +87,6 @@ def test_a_site_saves_as_one_lead_and_a_later_search_updates_it():
 def test_saved_duplicates_merge_once_keeping_marks_and_calls(monkeypatch):
     # Saved before sites were merged: three rows for one complex.
     with monkeypatch.context() as m:
-        m.setattr(saved, "site_groups", lambda sites: [])
         m.setattr(saved, "same_site", lambda a, b: False)
         rows = [_b(f"Benchmark Plaza {n}", 40.7200 + k * 0.0004, sid=f"way/b{n}")
                 for k, n in enumerate((820, 821, 822))]
@@ -223,7 +222,6 @@ def test_has_phone_filter_and_phone_first_among_equal_scores():
 
 def _two_buildings(monkeypatch):
     with monkeypatch.context() as m:
-        m.setattr(saved, "site_groups", lambda sites: [])
         m.setattr(saved, "same_site", lambda a, b: False)
         rows = [_b(f"Granite Yard {n}", 40.7300 + k * 0.0004, sid=f"way/g{n}")
                 for k, n in enumerate((830, 831))]
@@ -263,3 +261,163 @@ def test_merged_buildings_that_agree_are_not_flagged(monkeypatch):
     assert saved.merge_sites() == 1
     [lead] = marks.apply(saved.load([a]))
     assert lead.has_baler == "no" and not lead.marks_disagreed
+
+
+# The two shapes the round-16 review found saved twice, from the map data of a 30-mile
+# search around Arco's shop: Smith's distribution complex in Layton (a building and the
+# yard around it, the yard's name with the town written in) and Hill Air Force Base (the
+# airfield and the base, 0.88 miles apart).
+def _smiths(outlines=True):
+    return [
+        _b("Smith's Distribution Center", 41.06668, lon=-111.98468, sid="way/34196828",
+           raw_categories=["building=commercial"],
+           outline=[41.0661079, -111.9863386, 41.0672478, -111.9830183] if outlines else None),
+        _b("Smith's Layton Distribution", 41.06667, lon=-111.98311, sid="way/1488860201",
+           raw_categories=["industrial=distributor", "landuse=industrial"],
+           outline=[41.0626145, -111.9878035, 41.0707216, -111.9784123] if outlines else None),
+    ]
+
+
+def _hill(outlines=True):
+    return [
+        _b("Hill Air Force Base", 41.12380, lon=-111.97437, sid="way/1220610287",
+           raw_categories=["aeroway=aerodrome", "landuse=military", "military=airfield"],
+           outline=[41.1038713, -111.9912949, 41.1437364, -111.9574462] if outlines else None),
+        _b("Hill Air Force Base", 41.13414, lon=-111.98416, sid="relation/15541642",
+           raw_categories=["landuse=military", "military=base"],
+           outline=[41.1032595, -112.024215, 41.1650181, -111.9440702] if outlines else None),
+    ]
+
+
+def test_one_complex_named_with_and_without_its_town_is_one_lead():
+    a, b = _smiths()
+    assert 0.07 < haversine_miles(a.lat, a.lon, b.lat, b.lon) < 0.09
+    for outlines in (True, False):        # rows saved before outlines were kept have none
+        [lead] = dedupe(_smiths(outlines))
+        assert {p["source_id"] for p in lead.parts} == {"way/34196828", "way/1488860201"}
+
+
+def test_one_large_site_found_twice_is_one_lead():
+    a, b = _hill()
+    assert 0.85 < haversine_miles(a.lat, a.lon, b.lat, b.lon) < 0.9
+    for outlines in (True, False):
+        [lead] = dedupe(_hill(outlines))
+        assert lead.name == "Hill Air Force Base" and len(lead.parts) == 2
+
+
+def test_neighbours_that_are_different_businesses_stay_apart():
+    # Two stores in one strip mall, inside the mall's outline.
+    mall = [_b("Layton Crossing", 41.0800, lon=-111.9700, sid="way/mall",
+               raw_categories=["landuse=retail"], outline=[41.0790, -111.9715, 41.0810, -111.9685]),
+            _b("Smith's Marketplace", 41.0801, lon=-111.9702, sid="way/s",
+               raw_categories=["shop=supermarket"]),
+            _b("Walgreens", 41.0803, lon=-111.9699, sid="way/w", raw_categories=["shop=chemist"])]
+    assert len(dedupe(mall)) == 3
+    # Two towns' branches side by side; one word left once the town is taken out.
+    assert len(dedupe([_b("Layton Auto Parts", 41.0600, sid="n1"),
+                       _b("Kaysville Auto Parts", 41.0603, sid="n2")])) == 2
+    assert len(dedupe([_b("Daniel Construction Office", 41.0600, sid="n3"),
+                       _b("Construction Center", 41.0603, sid="n4")])) == 2
+    # The same store name 0.9 miles apart is two stores: only bases, airports and
+    # campuses stretch that far.
+    assert len(dedupe([_b("Smith's Marketplace", 41.0600, sid="n5", raw_categories=["shop=supermarket"]),
+                       _b("Smith's Marketplace", 41.0730, sid="n6",
+                          raw_categories=["shop=supermarket"])])) == 2
+    # A same-named place inside an outline, with a different phone number, stays apart.
+    base = _hill()[1]
+    base.phone = "801-777-1110"
+    other = _b("Hill Air Force Base", 41.1500, lon=-111.9800, sid="n7", phone="801-555-0100",
+               raw_categories=["landuse=military"])
+    assert len(dedupe([base, other])) == 2
+
+
+def test_a_later_search_finding_another_part_joins_the_saved_row():
+    smiths, hill = _smiths(), _hill()
+    saved.save_search([smiths[0], hill[1]])
+    first = {l.source_id: l.uid for l in (smiths[0], hill[1])}
+    # Another day the search finds only the other listing of each.
+    saved.save_search([smiths[1]])
+    saved.save_search([hill[0]])
+    assert smiths[1].uid == first["way/34196828"]
+    assert hill[0].uid == first["relation/15541642"]
+    assert len(saved.load()) == 2
+
+
+def _saved_apart(monkeypatch, leads):
+    """Save each lead on its own row, as before the search rules joined them."""
+    with monkeypatch.context() as m:
+        m.setattr(saved, "same_site", lambda a, b: False)
+        m.setattr(saved, "is_duplicate", lambda a, b: False)
+        for lead in leads:
+            saved.save_search([lead])
+            time.sleep(0.002)
+    return [lead.uid for lead in leads]
+
+
+def test_merge_sites_lists_first_and_merges_only_on_request(monkeypatch, capsys):
+    from leadgen import cli
+
+    neighbour = _b("Walgreens", 41.06670, lon=-111.98400, sid="way/w",
+                   raw_categories=["shop=chemist"])
+    dc, yard, airfield, base, store_ = _saved_apart(
+        monkeypatch, _smiths(outlines=False) + _hill(outlines=False) + [neighbour])
+    assert len(saved.load()) == 5
+    marks.set_mark(yard, "yes", by="Dana")
+    calls.log_call(dc, "Follow Up", "Call back Monday", by="Sam")
+    marks.set_mark(store_, "no", by="Sam")
+
+    plan = saved.merge_plan()
+    assert [[r.uid for r in group] for group in plan] == [[dc, yard], [airfield, base]]
+    assert plan[0][0].calls == 1 and plan[0][1].mark == "yes"
+
+    # Listing changes nothing.
+    assert cli.main(["merge-sites"]) == 0
+    out = capsys.readouterr().out
+    assert "2 businesses saved as more than one row" in out
+    assert "Smith's Distribution Center" in out and "+ Smith's Layton Distribution" in out
+    assert "marked Yes" in out and "1 call" in out and "Walgreens" not in out
+    assert "Nothing was changed. Add --apply" in out
+    assert len(saved.load()) == 5
+    assert marks.apply(saved.load([yard]))[0].has_baler == "yes"
+
+    assert cli.main(["merge-sites", "--apply"]) == 0
+    assert "2 saved leads merged" in capsys.readouterr().out
+    leads = {l.uid: l for l in calls.apply(marks.apply(saved.load()))}
+    assert set(leads) == {dc, airfield, store_}
+    assert leads[dc].has_baler == "yes" and leads[dc].call_count == 1
+    assert leads[store_].has_baler == "no" and leads[store_].name == "Walgreens"
+    assert {p for p in leads[airfield].alt_names} | {leads[airfield].name} >= {"Hill Air Force Base"}
+    with store.connect() as db:
+        assert sorted(db.all("SELECT uid, into_uid FROM merged_leads")) == sorted(
+            [(yard, dc), (base, airfield)])
+    assert cli.main(["merge-sites"]) == 0
+    assert "No saved leads to merge" in capsys.readouterr().out
+
+
+def test_a_search_with_listings_of_two_saved_rows_joins_the_first_and_merges_nothing(monkeypatch):
+    dc, yard = _saved_apart(monkeypatch, _smiths())
+    marks.set_mark(yard, "yes", by="Dana")
+    [both] = dedupe(_smiths())
+    saved.save_search([both])
+    assert both.uid == dc
+    # The other row stays as it was, with its mark, until the owner merges them.
+    leads = {l.uid: l for l in marks.apply(saved.load())}
+    assert set(leads) == {dc, yard} and leads[yard].has_baler == "yes"
+    assert [[r.uid for r in g] for g in saved.merge_plan()] == [[dc, yard]]
+
+
+def test_a_map_area_keeps_its_outline():
+    import pytest
+
+    from leadgen.sources import osm
+
+    bounds = {"minlat": 41.0626145, "minlon": -111.9878035, "maxlat": 41.0707216,
+              "maxlon": -111.9784123}
+    yard = osm.parse_element({"type": "way", "id": 1488860201, "bounds": bounds, "tags": {
+        "name": "Smith's Layton Distribution", "landuse": "industrial"}})
+    assert yard.outline == pytest.approx([41.0626145, -111.9878035, 41.0707216, -111.9784123], abs=1e-6)
+    node = osm.parse_element({"type": "node", "id": 1, "lat": 41.06, "lon": -111.98,
+                              "tags": {"name": "Smith's Marketplace", "shop": "supermarket"}})
+    assert node.outline is None
+    assert osm._outline({"minlat": 41.1, "minlon": -111.9}) is None
+    assert osm._outline(None) is None

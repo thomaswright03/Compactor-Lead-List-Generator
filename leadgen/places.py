@@ -66,6 +66,13 @@ def _closest(rows: Rows, lat: float, lon: float) -> str:
     return best
 
 
+def town_names(state: str = "UT") -> list[str]:
+    """The names of the state's towns in the table ("Layton", "West Jordan"), for telling
+    a business's name from the town written into it (dedupe.py)."""
+    towns, _ = _table()
+    return [name.split("|")[0] for name, *_ in towns if name.endswith(f"|{state}")]
+
+
 @lru_cache(maxsize=20000)
 def _near(lat: float, lon: float) -> Near | None:
     towns, zips = _table()

@@ -141,6 +141,16 @@ def _footprint_sqft(bounds: dict[str, float] | None) -> int | None:
     return int(round(area, -2)) if area > 0 else None
 
 
+def _outline(bounds: dict[str, float] | None) -> list[float] | None:
+    """A map area's bounding box as [south, west, north, east] (dedupe.py joins the
+    listings of one site that lie inside it), or None without usable bounds."""
+    try:
+        box = [round(float(bounds[k]), 6) for k in ("minlat", "minlon", "maxlat", "maxlon")]  # type: ignore[index]
+    except (KeyError, TypeError, ValueError):
+        return None
+    return box if box[0] <= box[2] and box[1] <= box[3] else None
+
+
 def _pretty(tag_value: str) -> str:
     return tag_value.replace("_", " ").replace(";", ", ").title()
 
@@ -213,6 +223,7 @@ def parse_element(el: dict[str, Any]) -> Lead | None:
         footprint = _footprint_sqft(el.get("bounds"))
         if footprint and footprint > MAX_BUILDING_SQFT:
             footprint = None
+    outline = _outline(el.get("bounds")) if etype in ("way", "relation") else None
     return Lead(
         name=name,
         lat=lat,
@@ -228,6 +239,7 @@ def parse_element(el: dict[str, Any]) -> Lead | None:
         raw_categories=raw,
         primary_category=primary,
         footprint_sqft=footprint,
+        outline=outline,
         business_status="CLOSED_PERMANENTLY" if tags.get("disused") == "yes" else "",
         map_url=f"https://www.openstreetmap.org/{etype}/{el.get('id')}",
     )

@@ -25,6 +25,9 @@ class Lead:
     rating_count: int | None = None          # Google review count
     yelp_reviews: int | None = None
     footprint_sqft: int | None = None
+    # The map outline's bounding box, [south, west, north, east] in degrees (map areas and
+    # buildings only): a listing inside another's outline can be part of the same site.
+    outline: list[float] | None = None
     business_status: str = ""
     map_url: str = ""
     search_terms: list[str] = field(default_factory=list)     # queries that found it

@@ -54,7 +54,12 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   the standard words, so the minimum score, the list and Stats all use the same number.
 - One **saved list**, one row per business, kept for good with its source details.
   The buildings of one site (an apartment complex's numbered buildings, a campus's
-  parts, one name spread over a site up to half a mile across) are one lead.
+  parts, one name spread over a site up to half a mile across) are one lead, and so
+  are a listing inside the map outline of a same-named one, the parts of an air base,
+  airport or campus up to 1.5 miles apart ("Hill Air Force Base" as the airfield and
+  as the base), and a name that only adds its town ("Smith's Distribution Center" /
+  "Smith's Layton Distribution"). Neighbours with different names or phone numbers
+  (two stores in one strip mall) stay separate.
   Police, fire, impound and trailer yards and parcel lockers are not prospects,
   nor are pumping stations, wells, substations and small (under 5,000 sq ft)
   industrial buildings known only by a map tag, nor self-storage, data centres,
@@ -65,7 +70,7 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   business is that brand (a hotel named after the air base next to it is not the base).
   A name word alone never makes a small shop a plant ("Day Dairy Barn" is not a
   dairy). When the buildings of one site marked Yes and No are joined
-  (`python -m leadgen merge-sites`), the lead keeps Yes and says the marks
+  (`python -m leadgen merge-sites --apply`), the lead keeps Yes and says the marks
   disagreed until someone presses Yes or No on it again.
 - Every Yes / No mark and call needs **Your name**: the server refuses one without it.
 - **Yes / No** "has a baler or compactor" marks (permanent; a click can be undone
@@ -104,8 +109,9 @@ python -m leadgen run
 # Web page at http://127.0.0.1:5000
 python -m leadgen web
 
-# Merge saved leads that are buildings of one site (only when you choose to run it)
-python -m leadgen merge-sites
+# List saved leads that are one business saved as two or more rows (changes nothing);
+# --apply merges each group into its first row, keeping every listing, mark and call
+python -m leadgen merge-sites [--apply]
 
 # List saved leads far outside Arco's area (e.g. from a search around the wrong place);
 # --remove takes them out of the list (kept aside), --restore puts them back

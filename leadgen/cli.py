@@ -3,7 +3,7 @@
     python -m leadgen run --location 84101 --radius 30 --out leads.xlsx
     python -m leadgen web
     python -m leadgen reference      # copy the site's Yes / No marks into the scoring tests
-    python -m leadgen merge-sites    # merge saved leads that are buildings of one site
+    python -m leadgen merge-sites    # list saved leads that are one business (--apply merges them)
     python -m leadgen out-of-area    # list saved leads far outside Arco's area (--remove, --restore)
 """
 
@@ -11,7 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import config, store
+from . import config, saved, store
 from .envfile import load_dotenv
 from .export import to_csv_bytes, to_xlsx_bytes
 from .geo import GeocodeError, miles_from_arco
@@ -71,9 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
     ref.add_argument("--out", default=None, help="Reference file (default "
                      "tests/fixtures/scoring_reference.json)")
 
-    sub.add_parser("merge-sites", help="Merge saved leads that are parts of one site (the "
-                   "numbered buildings of one complex) into one lead, keeping every mark and "
-                   "call; searches never do this on their own")
+    ms = sub.add_parser("merge-sites", help="List the saved leads that are one business (two "
+                        "rows for one site, saved before the search rules joined them); "
+                        "--apply merges each group into one lead, keeping every listing, mark "
+                        "and call. Searches never do this on their own")
+    ms.add_argument("--apply", action="store_true", help="Merge the listed groups")
 
     far = sub.add_parser("out-of-area", help="List the saved leads far outside Arco's area (from a "
                          "search around the wrong place); --remove takes them out of the list, "
@@ -200,6 +202,45 @@ def cmd_out_of_area(args: argparse.Namespace) -> int:
     return 0
 
 
+def _planned(row: saved.PlannedRow) -> str:
+    from .localtime import utah
+    said = [f"saved {utah(row.saved_at):%Y-%m-%d}"]
+    if row.mark:
+        said.append(f"marked {row.mark.capitalize()}")
+    if row.calls:
+        said.append(f"{row.calls} call{'' if row.calls == 1 else 's'}")
+    where = f", {row.city}" if row.city else ""
+    return f"{row.name[:60]}{where} ({'; '.join(said)})"
+
+
+def cmd_merge_sites(args: argparse.Namespace) -> int:
+    if not store.database_url():
+        print("Note: DATABASE_URL is not set, so this is the local database, not the website's.",
+              file=sys.stderr)
+    try:
+        plan = saved.merge_plan()
+        if not plan:
+            print("No saved leads to merge: every business has one row.")
+            return 0
+        rows = sum(len(group) - 1 for group in plan)
+        print(f"{len(plan):,} business{'' if len(plan) == 1 else 'es'} saved as more than one "
+              f"row ({rows:,} row{'' if rows == 1 else 's'} would join the first of their group):")
+        for n, group in enumerate(plan, 1):
+            print(f"  {n:>3}. {_planned(group[0])}")
+            for row in group[1:]:
+                print(f"       + {_planned(row)}")
+        if not args.apply:
+            print("\nNothing was changed. Add --apply to merge them: every listing, mark and call "
+                  "is kept, and each merged row is recorded in the merged_leads table.")
+            return 0
+        n = saved.merge_sites()
+    except store.Unavailable as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    print(f"\n{n:,} saved lead{'' if n == 1 else 's'} merged into the first row of their group.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     args = build_parser().parse_args(argv)
@@ -212,14 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "out-of-area":
         return cmd_out_of_area(args)
     if args.command == "merge-sites":
-        from . import saved
-        try:
-            n = saved.merge_sites()
-        except store.Unavailable as exc:
-            print(f"Error: {exc}", file=sys.stderr)
-            return 2
-        print(f"{n} saved lead{'' if n == 1 else 's'} merged into another of the same site.")
-        return 0
+        return cmd_merge_sites(args)
     if args.command != "run":
         build_parser().print_help()
         return 1
