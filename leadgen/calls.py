@@ -87,6 +87,19 @@ def history(uid: str) -> list[dict[str, Any]]:
              "by": by or ""} for at, outcome, notes, by in rows]
 
 
+def search_text() -> dict[str, str]:
+    """{uid: what the Calls page's filter also looks in}: every call's conversation
+    summary, outcome and caller, so "forklift", "call back in March" or a colleague's
+    name finds the business (lowercased, one string per business)."""
+    with store.connect() as db:
+        rows = db.all("SELECT calls.uid, calls.outcome, calls.notes, made_by.name FROM calls "
+                      "LEFT JOIN made_by ON made_by.id = calls.id")
+    text: dict[str, list[str]] = {}
+    for uid, outcome, notes, by in rows:
+        text.setdefault(uid, []).extend(x for x in (outcome, notes, by) if x)
+    return {uid: " ".join(parts).lower() for uid, parts in text.items()}
+
+
 def pending_undos() -> dict[str, Undo]:
     """{uid: {"id", "until"}}: each business's latest call that can still be undone."""
     now = time.time()

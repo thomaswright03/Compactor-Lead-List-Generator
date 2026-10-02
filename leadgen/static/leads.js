@@ -49,7 +49,10 @@ async function loadChanges() {
     const body = await api(`/leads?${p}`);
     if (seq !== S.seq) return;
     // More changed than this page shows (a search touched them all): fetch the page's rows again.
-    if (body.reload) { if (!$("page-calls").hidden) loadCalled(); else S.calledLoaded = false; return loadLeads(true); }
+    if (body.reload) {
+      if (!$("page-calls").hidden) loadCalled(true); else S.calledLoaded = false;
+      return loadLeads(true);
+    }
     S.since = body.now; S.refreshError = "";
     if (!body.leads.length && !body.removed.length) { renderLeads(); return; }
     let missing = false;
@@ -66,7 +69,7 @@ async function loadChanges() {
     S.leads = S.leads.filter((l) => !gone.has(l.key));
     S.called = S.called.filter((l) => !gone.has(l.key));
     S.total = body.total; S.counts = body.counts; S.recent = body.recent;
-    if (!$("page-calls").hidden) loadCalled(); else S.calledLoaded = false;
+    if (!$("page-calls").hidden) loadCalled(true); else S.calledLoaded = false;
     // A business that now belongs in this view: fetch the view again (it is one page of rows).
     if (missing) return loadLeads(true);
   } catch (err) {
@@ -486,7 +489,7 @@ function renderLeads() {
     problem(problemBox, "Can't show your leads right now", S.loadError, () => {
       problemBox.replaceChildren(el("div", "Loading...", "muted")); loadLeads();
     });
-    $("leads-body").hidden = true;
+    $("leads-body").hidden = true; loadingCue("leads-loading", false);
     return;
   }
   problemBox.replaceChildren(); $("leads-body").hidden = !S.loaded;
@@ -505,6 +508,7 @@ function renderLeads() {
   const wrap = $("leads-wrap");
   wrap.classList.toggle("stale", S.viewLoading);
   wrap.setAttribute("aria-busy", S.viewLoading);
+  loadingCue("leads-loading", S.viewLoading);
   if (!S.leads.length) {
     if (!c.all) {
       wrap.replaceChildren(emptyNote("No saved leads yet.",

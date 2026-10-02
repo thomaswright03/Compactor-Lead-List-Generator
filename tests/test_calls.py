@@ -85,3 +85,77 @@ def test_a_call_sent_twice_keeps_its_maker():
     first = calls.log_call(lead.uid, "Interested", "", "a" * 32, "Dana")
     again = calls.log_call(lead.uid, "Interested", "", "a" * 32, "Someone else")
     assert first["by"] == again["by"] == "Dana"
+
+
+# ---- the Calls page: every called business reachable, however many; its filter reads the calls
+
+def _called(n):
+    """n saved businesses, each called once (business i at time 1000 + i, so the last is the
+    latest call), the outcomes taking turns; written in one go, as thousands of calls are."""
+    leads = [_lead(f"Business {i}", f"n{i}", lat=40.3 + (i // 80) * 0.01, lon=-112.2 + (i % 80) * 0.01)
+             for i in range(n)]
+    saved.save_search(leads, config.DEFAULT_KEYWORDS)
+    with store.connect() as db:
+        db.many("INSERT INTO calls (id, uid, at, outcome, notes) VALUES (?, ?, ?, ?, ?)",
+                [(f"{i:032x}", lead.uid, 1000.0 + i, calls.OUTCOMES[i % len(calls.OUTCOMES)], f"note {i}")
+                 for i, lead in enumerate(leads)])
+    return leads
+
+
+def test_the_calls_page_reaches_every_called_business_past_five_thousand():
+    """The Calls page gets one page at a time, latest call first, with "Show more" (offset)
+    reaching the very first business ever called; its tab counts are every called business."""
+    leads = _called(5100)
+    client = web.create_app().test_client()
+    body = client.get("/leads?tab=called&sort=called&dir=desc").get_json()
+    assert len(body["leads"]) == web.leads.PAGE_SIZE and body["total"] == 5100
+    assert body["leads"][0]["key"] == leads[-1].uid               # the latest call first
+    per = 5100 // len(calls.OUTCOMES)
+    assert body["call_counts"] == {"all": 5100, "outcomes": dict.fromkeys(calls.OUTCOMES, per)}
+    last = client.get("/leads?tab=called&sort=called&dir=desc&offset=5000&limit=100").get_json()
+    assert [l["key"] for l in last["leads"]][-1] == leads[0].uid  # the very first call, reachable
+    assert len(last["leads"]) == 100 and last["total"] == 5100
+    # One outcome's tab: only the businesses whose latest call went that way, every one reachable.
+    tab = client.get("/leads?tab=called&sort=called&dir=desc&outcome=Bad+Lead&offset=800&limit=100").get_json()
+    assert tab["total"] == per and {l["call_outcome"] for l in tab["leads"]} == {"Bad Lead"}
+    assert tab["leads"][-1]["key"] == leads[5].uid                # the first Bad Lead call
+    # An unknown outcome (or one asked of another tab) filters nothing.
+    assert client.get("/leads?tab=called&outcome=Maybe").get_json()["total"] == 5100
+    assert client.get("/leads?tab=all&outcome=Bad+Lead").get_json()["total"] == 5100
+
+
+def test_the_calls_filter_finds_what_was_said_how_it_went_and_who_called():
+    forklift, quote, other = _lead("Acme Freight", "a"), _lead("Bolt Supply", "b"), _lead("Cedar Market", "c")
+    saved.save_search([forklift, quote, other])
+    calls.log_call(forklift.uid, "Follow Up", "Uses a FORKLIFT to load the dumpster", by="Dana Smith")
+    calls.log_call(forklift.uid, "Interested", "Wants a quote next week", by="Lee")
+    calls.log_call(quote.uid, "No Contact", "", by="Dana Smith")
+    calls.log_call(other.uid, "Not Interested", "Happy with their hauler", by="Lee")
+    client = web.create_app().test_client()
+
+    def names(query):
+        body = client.get(f"/leads?tab=called&{query}").get_json()
+        return sorted(l["name"] for l in body["leads"]), body["call_counts"]
+
+    # A word from an earlier call's summary, in any case, finds the business.
+    assert names("q=forklift")[0] == ["Acme Freight"]
+    # A caller's name, a word of the summary and a town, together, in any order.
+    assert names("q=dana")[0] == ["Acme Freight", "Bolt Supply"]
+    assert names("q=dumpster+dana")[0] == ["Acme Freight"]
+    # How a call went (any of them, not only the latest).
+    assert names("q=no+contact")[0] == ["Bolt Supply"]
+    # The tab counts follow the filter; the outcome's tab narrows further, by the latest call.
+    rows, counts = names("q=lee")
+    assert rows == ["Acme Freight", "Cedar Market"]
+    assert counts["all"] == 2 and counts["outcomes"]["Interested"] == 1
+    assert counts["outcomes"]["Not Interested"] == 1 and counts["outcomes"]["Follow Up"] == 0
+    assert names("q=lee&outcome=Interested")[0] == ["Acme Freight"]
+    assert names("q=lee&outcome=Follow+Up")[0] == []
+    # The Leads page's filter is unchanged: it doesn't look in the calls.
+    assert client.get("/leads?tab=all&q=forklift").get_json()["total"] == 0
+    # A refresh (?since) of the Calls view sends the same counts and filter.
+    since = client.get("/leads?tab=called&q=forklift").get_json()["now"] - 60
+    changed = client.get(f"/leads?tab=called&q=forklift&since={since}").get_json()
+    assert changed["call_counts"]["all"] == 1 and changed["total"] == 1
+    assert {l["key"]: l["in_view"] for l in changed["leads"]}[forklift.uid] is True
+    assert {l["key"]: l["in_view"] for l in changed["leads"]}[other.uid] is False

@@ -200,7 +200,11 @@
           its row, whatever its answer: the call goes on the Calls page and doesn't change Yes / No.</p>
         <div class="recent" id="recent" hidden><h2>Recent changes (can be undone for 5 minutes)</h2><ul id="recent-list"></ul>
           <button type="button" class="link" id="recent-more" aria-controls="recent-list" hidden></button></div>
-        <div class="table-wrap" id="leads-wrap"></div>
+        <!-- A tab, filter or sort that takes a moment: "Loading…" over the dimmed rows (core.js loadingCue). -->
+        <div class="list-area">
+          <div class="loading-cue" id="leads-loading" role="status"></div>
+          <div class="table-wrap" id="leads-wrap"></div>
+        </div>
         <button class="quiet more" id="leads-more" hidden></button>
       </div>
     </section>
@@ -212,12 +216,17 @@
       <div id="calls-problem"></div>
       <div id="calls-body">
         <div class="calls-tools" id="call-filter-row" hidden>
-          <input id="call-filter" type="search" placeholder="Filter by name, city, category..." aria-label="Filter calls">
+          <input id="call-filter" type="search" placeholder="Filter by name, town, call notes or caller..."
+                 aria-label="Filter calls by business name, town, category, what was said, the result or who called">
         </div>
         <div class="tabs" id="call-tabs"></div>
         <!-- Phones pick the result from this list, like the Leads page's tabs. -->
         <select id="call-pick" class="phone-only" aria-label="Show calls with the result"></select>
-        <div class="table-wrap scroll-x" id="calls-wrap"></div>
+        <div class="list-area">
+          <div class="loading-cue" id="calls-loading" role="status"></div>
+          <div class="table-wrap scroll-x" id="calls-wrap"></div>
+        </div>
+        <button class="quiet more" id="calls-more" hidden></button>
       </div>
     </section>
 

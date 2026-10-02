@@ -9,41 +9,71 @@ function emptyNote(title, text, href, label) {
   box.append(a);
   return box;
 }
-// The businesses with a call logged (all of them: calls are made by hand, so they stay few).
-async function loadCalled() {
+// The called businesses the Calls page shows: the server keeps those the words typed match (in
+// the business's details, or in what its calls said, how they went and who made them) and, on an
+// outcome's tab, those whose latest call went that way; latest call first, one page at a time
+// ("Show more" adds the next), with every tab's count however many businesses were called.
+function callQuery() {
+  const p = new URLSearchParams({ tab: "called", sort: "called", dir: "desc" });
+  if (S.callQ) p.set("q", S.callQ);
+  if (S.callView) p.set("outcome", S.callView);
+  return p;
+}
+// quiet: a refresh in the background (colleagues' calls, a call just saved), the rows not dimmed.
+async function loadCalled(quiet) {
+  const seq = ++S.callSeq;
+  const p = callQuery();
+  p.set("limit", String(Math.max(S.callLimit, PAGE)));
+  if (!quiet) {
+    S.calledLoading = true;
+    if (S.calledLoaded) renderCalls();               // the rows shown stay, dimmed, until the new ones arrive
+  }
   try {
-    const body = await api("/leads?tab=called&sort=called&dir=desc&limit=5000");
-    S.called = body.leads; S.counts = body.counts; S.calledLoaded = true; S.calledError = "";
+    const body = await api(`/leads?${p}`);
+    if (seq !== S.callSeq) return;                   // a newer tab or filter was asked for meanwhile
+    S.called = body.leads; S.calledTotal = body.total; S.callCounts = body.call_counts; S.counts = body.counts;
+    S.calledLoaded = true; S.calledError = "";
   } catch (err) {
-    if (err.status === 401) return;
+    if (seq !== S.callSeq || err.status === 401) return;
     S.calledError = err.message;
   }
+  S.calledLoading = false;
   renderCalls(); counts();
 }
-function pickCallTab(view) { S.callView = view; renderCalls(); writeHash("calls"); }
+function pickCallTab(view) { S.callView = view; S.callLimit = PAGE; writeHash("calls"); loadCalled(); }
 function renderCalls() {
   if (S.calledError && !S.calledLoaded) {
-    problem($("calls-problem"), "Can't show your calls right now", S.calledError, loadCalled);
-    $("calls-body").hidden = true; return;
+    problem($("calls-problem"), "Can't show your calls right now", S.calledError, () => loadCalled());
+    $("calls-body").hidden = true; loadingCue("calls-loading", false); return;
   }
-  $("calls-problem").replaceChildren(); $("calls-body").hidden = !S.calledLoaded;
+  // Loaded before: the rows shown stay, with a note that they couldn't be brought up to date.
+  $("calls-problem").replaceChildren(...(S.calledError
+    ? [el("div", `Couldn't update the calls just now. ${S.calledError}`, "warn")] : []));
+  $("calls-body").hidden = !S.calledLoaded;
   if (!S.calledLoaded) return;
-  // The filter box narrows the list (and the tab counts) to businesses whose name, address or city match.
-  const matching = S.callQ ? S.called.filter((l) => callMatches(l, S.callQ)) : S.called;
-  const called = matching, outcomes = S.callQ ? countOutcomes(matching) : (S.counts && S.counts.outcomes) || {};
-  $("call-filter-row").hidden = !S.called.length;
-  if ($("call-filter").value !== S.callQ) $("call-filter").value = S.callQ;
+  const c = S.callCounts || { all: S.called.length, outcomes: {} };
+  const anyCalls = (S.counts ? S.counts.called : c.all) > 0;
+  $("call-filter-row").hidden = !anyCalls && !S.callQ;
+  if ($("call-filter").value.trim() !== S.callQ) $("call-filter").value = S.callQ;
   // Every called business first (one row each, latest call first), so a call just saved is always in view.
-  const tabItems = [["", "All called businesses", called.length], ...OUTCOMES.map((o) => [o, o, outcomes[o] || 0])];
+  const tabItems = [["", "All called businesses", c.all], ...OUTCOMES.map((o) => [o, o, c.outcomes[o] || 0])];
   tabs($("call-tabs"), tabItems, S.callView, pickCallTab);
   // Phones: the same choice as one list, with the counts.
   $("call-pick").replaceChildren(...tabItems.map(([v, t, n]) => {
     const o = el("option", `${t}: ${n.toLocaleString()}`); o.value = v; return o;
   }));
   $("call-pick").value = S.callView;
-  const rows = S.callView ? called.filter((l) => l.call_outcome === S.callView) : [...called];
-  const wrap = $("calls-wrap");
-  if (!S.called.length) {
+  // A call just saved may have moved a business to another outcome's tab.
+  const rows = S.callView ? S.called.filter((l) => l.call_outcome === S.callView) : [...S.called];
+  const wrap = $("calls-wrap"), more = $("calls-more");
+  wrap.classList.toggle("stale", S.calledLoading);
+  wrap.setAttribute("aria-busy", S.calledLoading);
+  loadingCue("calls-loading", S.calledLoading);
+  const left = S.calledTotal - S.called.length;
+  more.hidden = left <= 0 || !rows.length;
+  more.disabled = S.calledLoading;
+  more.textContent = `Show more (${left.toLocaleString()} left)`;
+  if (!anyCalls) {
     wrap.replaceChildren(emptyNote("No calls logged yet.",
       "Log a call with Just called on any business on the Leads page. It doesn't change the business's " +
       "Yes / No answer.",
@@ -53,7 +83,9 @@ function renderCalls() {
   if (!rows.length && S.callQ) {
     const box = el("div", undefined, "empty");
     box.append(el("strong", `No calls match “${S.callQ}”${S.callView ? ` under ${S.callView}` : ""}.`),
-               el("p", "Check the spelling, pick another tab, or clear the filter to see every called business."),
+               el("p", "The filter looks in each business's name, town and category, in what was said on its " +
+                       "calls, how they went and who made them. Check the spelling, pick another tab, or clear " +
+                       "the filter to see every called business."),
                button("Clear filter", "quiet", clearCallFilter));
     wrap.replaceChildren(box);
     return;
@@ -78,7 +110,7 @@ function renderCalls() {
     const phone = el("td", undefined, "c-phone");
     phone.append(l.phone ? phoneLink(l.phone) : el("span", "No phone listed", "sub")); tr.append(phone);
     const when = el("td", undefined, "c-when");
-    when.append(el("span", l.call_outcome, "badge"), el("div", l.last_call));
+    when.append(el("span", l.call_outcome, "badge"), el("div", l.last_call, "when-at"));
     if (l.last_call_by) when.append(el("div", `by ${l.last_call_by}`, "sub"));
     when.append(el("div", `${l.call_count} call${l.call_count > 1 ? "s" : ""}`, "sub"));
     tr.append(when);
@@ -93,25 +125,39 @@ function renderCalls() {
   table.append(thead, tbody);
   wrap.replaceChildren(table);
 }
-
-// A called business matches the Calls filter when every word typed is somewhere in its name,
-// town, ZIP, category, address, type or flags, in any order and any case: the Leads filter's
-// rule (web/leads.py, matches).
-function callMatches(l, q) {
-  const hay = [l.name, l.address, l.city, l.near, l.zip, l.category, l.lead_type, ...(l.flags || [])]
-    .filter(Boolean).join(" ").toLowerCase();
-  return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+// The next page of called businesses, added under the ones shown.
+async function showMoreCalls() {
+  const more = $("calls-more"), seq = S.callSeq;
+  const p = callQuery();
+  p.set("offset", String(S.called.length));
+  p.set("limit", String(PAGE));
+  const hadFocus = document.activeElement === more;
+  more.disabled = true; more.textContent = "Loading more...";
+  try {
+    const body = await api(`/leads?${p}`);
+    if (seq !== S.callSeq) return;                   // the tab or filter changed meanwhile
+    const have = new Set(S.called.map((l) => l.key));
+    S.called = S.called.concat(body.leads.filter((l) => !have.has(l.key)));
+    S.callLimit = Math.max(S.callLimit, S.called.length);
+    S.calledTotal = body.total; S.callCounts = body.call_counts; S.counts = body.counts; S.calledError = "";
+  } catch (err) {
+    if (err.status === 401) return;
+    S.calledError = err.message;
+  }
+  renderCalls();
+  if (hadFocus && !more.hidden) more.focus();
 }
-function countOutcomes(leads) {
-  const n = {};
-  for (const l of leads) if (l.call_outcome) n[l.call_outcome] = (n[l.call_outcome] || 0) + 1;
-  return n;
-}
+$("calls-more").addEventListener("click", showMoreCalls);
 function clearCallFilter() {
-  S.callQ = ""; $("call-filter").value = ""; renderCalls(); writeHash("calls"); $("call-filter").focus();
+  S.callQ = ""; $("call-filter").value = ""; S.callLimit = PAGE; writeHash("calls"); loadCalled();
+  $("call-filter").focus();
 }
+// Asked once typing pauses.
+let callFilterTimer = 0;
 $("call-filter").addEventListener("input", () => {
-  S.callQ = $("call-filter").value.trim(); renderCalls(); writeHash("calls");
+  S.callQ = $("call-filter").value.trim(); S.callLimit = PAGE; writeHash("calls");
+  clearTimeout(callFilterTimer);
+  callFilterTimer = setTimeout(loadCalled, 250);
 });
 $("call-pick").addEventListener("change", () => pickCallTab($("call-pick").value));
 
@@ -239,7 +285,7 @@ $("call-form").addEventListener("submit", async (e) => {
     if (S.counts && first) S.counts.called++;
     if (callLead && callLead.key === key) { callLead = null; $("call-dlg").close(); }
     renderAll();
-    if (!$("page-calls").hidden) loadCalled(); else S.calledLoaded = false;
+    if (!$("page-calls").hidden) loadCalled(true); else S.calledLoaded = false;
     toast(`${lead.name}: saved as ${call.outcome}.`, () => undoCall(key));
   } catch (err) {
     if (callLead && callLead.key === key) {

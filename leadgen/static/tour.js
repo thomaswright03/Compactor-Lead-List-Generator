@@ -41,7 +41,8 @@ const TOUR = [
           "History shows every earlier call. A call never changes the Yes / No answer." },
   { page: "calls", target: "#call-tabs, #call-pick", title: "Calls",
     text: "Every business that has been called, latest call first. Each outcome has its own tab, " +
-          "so Follow Up shows exactly who to call back. The filter finds a business by name, address or city." },
+          "so Follow Up shows exactly who to call back. The filter finds a business by its name, town, what " +
+          "was said on its calls or who called." },
   { page: "stats", target: "#stats-body", title: "Stats",
     text: "How many businesses have a baler or compactor, their average score, and how often each tier " +
           "turned out right. It fills in as the team marks businesses Yes or No." },

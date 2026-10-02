@@ -903,6 +903,133 @@ def test_several_words_filter_the_leads_and_the_calls_alike(page):
     expect(page.locator("#calls-wrap")).to_contain_text("No calls match “costco provo”")
 
 
+def test_the_calls_filter_finds_what_was_said_how_it_went_and_who_called(page):
+    from leadgen import calls
+    leads = {l.name: l for l in saved.load()}
+    calls.log_call(leads["Costco Wholesale"].uid, "Follow Up", "They load the dumpster with a forklift",
+                   by="Dana Smith")
+    calls.log_call(leads["Hampton Inn"].uid, "Interested", "Wants a quote", by="Lee")
+    page.click("nav a[data-page=calls]")
+    rows = page.locator("#calls-wrap tbody tr")
+    expect(rows).to_have_count(2)
+    assert "call notes or caller" in page.get_attribute("#call-filter", "placeholder")
+    for query, name in (("forklift", "Costco Wholesale"), ("dana", "Costco Wholesale"),
+                        ("LEE", "Hampton Inn"), ("interested", "Hampton Inn"), ("quote lee", "Hampton Inn")):
+        page.fill("#call-filter", query)
+        expect(rows).to_have_count(1)
+        expect(page.locator("#calls-wrap tbody")).to_contain_text(name)
+    expect(page.locator("#call-tabs button.on")).to_have_text("All called businesses (1)")
+    page.fill("#call-filter", "pallets")
+    expect(page.locator("#calls-wrap")).to_contain_text("No calls match “pallets”")
+    expect(page.locator("#calls-wrap")).to_contain_text("in what was said on its calls")
+
+
+def _called(n):
+    """n more saved businesses, each called once, the first one earliest."""
+    from leadgen import calls, store
+    leads = [Lead(name=f"Called Business {i}", lat=40.6 + i * 0.001, lon=-111.95, source="osm", source_id=f"cb{i}",
+                  raw_categories=["shop=wholesale"]) for i in range(n)]
+    for lead in leads:
+        score_lead(lead, config.DEFAULT_KEYWORDS)
+    saved.save_search(leads, config.DEFAULT_KEYWORDS)
+    with store.connect() as db:
+        db.many("INSERT INTO calls (id, uid, at, outcome, notes) VALUES (?, ?, ?, ?, ?)",
+                [(f"{i:032x}", lead.uid, 1_700_000_000.0 + i * 60, calls.OUTCOMES[i % 2], f"Call {i}")
+                 for i, lead in enumerate(leads)])
+    return leads
+
+
+def test_the_calls_page_reaches_every_called_business(page):
+    """One page of called businesses at a time, "Show more" adding the next, the counts
+    always counting every one: the first business ever called is reachable."""
+    _called(130)
+    page.click("nav a[data-page=calls]")
+    rows = page.locator("#calls-wrap tbody tr")
+    expect(rows).to_have_count(100)
+    expect(page.locator("#call-tabs button.on")).to_have_text("All called businesses (130)")
+    expect(page.locator("#call-tabs")).to_contain_text("Interested (65)")
+    expect(page.locator("#call-tabs")).to_contain_text("Follow Up (65)")
+    assert "Called Business 129" in rows.first.inner_text()           # the latest call first
+    more = page.locator("#calls-more")
+    expect(more).to_have_text("Show more (30 left)")
+    more.click()
+    expect(rows).to_have_count(130)
+    assert "Called Business 0" in rows.last.inner_text()              # the first call ever
+    expect(more).to_be_hidden()
+    # An outcome's tab pages the same way, with its own count.
+    page.get_by_role("button", name="Follow Up (65)").click()
+    expect(rows).to_have_count(65)
+    expect(more).to_be_hidden()
+    assert "Called Business 1" in rows.last.inner_text()
+
+
+def _hold(page, part):
+    """Hold back the page's /leads requests whose address has `part` (a slow connection);
+    returns them, to let them through with .continue_()."""
+    held = []
+
+    def handle(route):
+        if part in route.request.url:
+            held.append(route)
+        else:
+            route.continue_()
+    page.route("**/leads?*", handle)
+    return held
+
+
+def test_a_slow_view_change_says_it_is_loading(page):
+    """A tab, filter or sort taking a while: "Loading…" over the dimmed rows within a
+    second, a plain "taking longer than usual" after about five, gone once the rows come."""
+    held = _hold(page, "tab=all")
+    page.locator("#lead-tabs button", has_text="All").click()
+    cue = page.locator("#leads-loading")
+    expect(cue).to_contain_text("Loading…", timeout=1000)
+    expect(cue).to_be_visible()
+    assert page.get_attribute("#leads-wrap", "aria-busy") == "true"
+    assert cue.get_attribute("role") == "status"
+    expect(cue).to_contain_text("This is taking longer than usual", timeout=6000)
+    for route in held:
+        route.continue_()
+    page.unroute("**/leads?*")
+    expect(page.locator("table.leads tbody tr")).to_have_count(4)
+    expect(cue).to_be_empty()
+    assert page.get_attribute("#leads-wrap", "aria-busy") == "false"
+    # The Calls page's filter says so too.
+    from leadgen import calls
+    calls.log_call(saved.load()[0].uid, "Follow Up", "Call back Monday", by="Dana")
+    page.click("nav a[data-page=calls]")
+    expect(page.locator("#calls-wrap tbody tr")).to_have_count(1)
+    held = _hold(page, "q=monday")
+    page.fill("#call-filter", "monday")
+    cue = page.locator("#calls-loading")
+    expect(cue).to_contain_text("Loading…", timeout=1500)
+    for route in held:
+        route.continue_()
+    page.unroute("**/leads?*")
+    expect(cue).to_be_empty()
+    expect(page.locator("#calls-wrap tbody tr")).to_have_count(1)
+
+
+@pytest.mark.parametrize("width", [1024, 1440, 2560])
+def test_a_calls_time_and_undo_stay_on_one_line_on_a_desktop(browser, site, page, width):
+    from leadgen import calls
+    for i, lead in enumerate(saved.load()[:3]):
+        calls.log_call(lead.uid, "Follow Up", "Spoke to the store manager about the cardboard they bale "
+                       "each week and the hauler's monthly bill; call back after the holidays. " * (i + 1),
+                       by="Dana Smith")
+    context = _context(browser, viewport={"width": width, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#calls")
+    tab.wait_for_selector("table.plain.calls button.undo")
+    lines = tab.evaluate("""(sel) => [...document.querySelectorAll(sel)].map((e) => {
+        const r = document.createRange(); r.selectNodeContents(e);
+        return new Set([...r.getClientRects()].map((x) => Math.round(x.bottom))).size; })""",
+                         "table.plain.calls .when-at, table.plain.calls button.undo")
+    assert len(lines) == 6 and set(lines) == {1}, lines
+    assert tab.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    context.close()
+
+
 def test_a_blank_radius_is_pointed_out(page):
     page.click("nav a[data-page=find]")
     page.wait_for_selector("text=Today's is available")

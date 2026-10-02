@@ -144,9 +144,16 @@ Logging a call never changes the Yes / No answer.
 - Open **Calls**. **All called businesses** lists every business called, latest
   call first. The other tabs group them by how the latest call went (on a phone,
   pick them from the list at the top, which shows each one's count).
-- Type part of a business's name, address or city in the filter box to find its
-  calls (several words work as on the Leads page: "walmart layton"); it works with
-  the tabs and stays after a reload.
+- Type in the filter box to find calls by the business's name, address or city,
+  by what was said ("forklift", "after the holidays"), by how a call went
+  ("interested") or by who made it (a colleague's name). Several words work as on
+  the Leads page ("walmart layton"); it works with the tabs and stays after a reload.
+- The list shows the latest 100 businesses called; **Show more** at the bottom
+  brings the next ones, back to the very first call. The tab counts always count
+  every business called.
+- If a tab or filter takes a moment, **Loading…** appears over the list; on a slow
+  connection it also says it is taking longer than usual. Wait for it rather than
+  clicking again.
 - **History** shows every call to a business: when, who made it, how it went and
   the notes, and below them every Yes / No the business was given.
 

@@ -3,7 +3,7 @@
    the #address; these scripts load in order and share their top-level names. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, S, el, link, phoneLink,
-   button, api, post, fmtTime, serverNow, leftOf, problem, themeChoice, applyTheme, myName,
+   button, api, post, fmtTime, serverNow, leftOf, problem, loadingCue, themeChoice, applyTheme, myName,
    withName, byWho, parseHash, readLeadView, route, writeHash */
 // An element of the page by its id: an input, a dialog, a button... (typed `any`, as the page's
 // ids name every kind; the type check still catches a misspelt function or variable).
@@ -29,7 +29,10 @@ const SHIFT_GUARD_MS = 700;
 // The Leads page holds only the rows it shows (one tab, filtered and sorted by the server,
 // the first `limit` of them), every tab's count, and the leads that can still be undone.
 // `failed`: the Yes / No clicks that didn't reach the server, by lead, until retried or dismissed.
+// The Calls page likewise holds the first `callLimit` called businesses of its tab and filter
+// (`called`, of `calledTotal`), and its tabs' counts (`callCounts`).
 const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "",
+            calledTotal: 0, callCounts: null, callLimit: PAGE, callSeq: 0, calledLoading: false,
             sending: new Map(), failed: new Map(), loaded: false, loadError: "", refreshError: "",
             viewLoading: false, seq: 0,
             leadView: "", callView: "", callQ: "", q: "", tier: "", phone: false, sort: "score", dir: "desc",
@@ -81,6 +84,25 @@ const post = (path, data) => api(path, { method: "POST", headers: { "Content-Typ
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const serverNow = () => Date.now() / 1000 + S.skew;
 const leftOf = (undo) => undo ? Math.max(0, Math.floor(undo.until - serverNow())) : 0;
+// A list whose next view (a tab, filter or sort) is on its way: its old rows stay, dimmed, and
+// after LOADING_MS it says "Loading…" over them (the cue `id`, a role="status" box), after SLOW_MS
+// also that it is taking longer than usual. on=false (the view arrived, or failed) clears it.
+const LOADING_MS = 300, SLOW_MS = 5000;
+const cueTimers = new Map();
+function loadingCue(id, on) {
+  const cue = $(id), timers = cueTimers.get(id);
+  if (on) {
+    if (timers) return;                                   // already on its way
+    cueTimers.set(id, [
+      setTimeout(() => cue.replaceChildren(el("span", undefined, "spinner"), el("span", "Loading…")), LOADING_MS),
+      setTimeout(() => cue.append(el("span", "This is taking longer than usual. The list appears as soon as it " +
+                                            "arrives.", "slow")), SLOW_MS)]);
+    return;
+  }
+  for (const t of timers || []) clearTimeout(t);
+  cueTimers.delete(id);
+  if (cue.childNodes.length) cue.replaceChildren();
+}
 function problem(box, title, message, retry) {
   const p = el("div", undefined, "problem");
   const text = el("div"); text.append(el("strong", title), el("span", message, "muted"));
@@ -196,6 +218,7 @@ function route() {
     const tab = params.get("tab");
     S.callView = tab && OUTCOMES.includes(tab) ? tab : "";
     S.callQ = params.get("q") || "";
+    S.callLimit = PAGE;
     loadCalled();
   }
   for (const p of ["find", "leads", "calls", "stats"]) $(`page-${p}`).hidden = p !== page;

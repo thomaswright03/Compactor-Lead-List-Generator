@@ -447,11 +447,22 @@ the sidebar to the page's list (Leads, Calls) or heading.
   called businesses**: one row per business, latest call first, so a call just
   saved is in view (every call is under **History**); then there is a tab per
   result, where a business sits under its latest call's result (`#calls?tab=Follow Up`
-  in the address opens that tab). A filter box above the tabs narrows the list
-  (and the tab counts) to businesses whose name, town, ZIP, category, address, type
-  or flags hold every word typed, in any order (the Leads filter's rule,
-  `web/leads.py` `matches`, so "walmart layton" works on both pages); it is kept in the address (`#calls?q=costco`), and with no match the page
-  says "No calls match ..." with **Clear filter**. The call box's **Save** is always
+  in the address opens that tab). The server pages, filters and counts the Calls
+  list like the Leads list (`GET /leads?tab=called&sort=called&dir=desc`, plus
+  `outcome=` for a result's tab): one page of `PAGE_SIZE` businesses at a time,
+  **Show more** asking for the next (`offset=`), and `call_counts` (every called
+  business the filter keeps, and each result's share) for the tabs, however many
+  businesses were called. A filter box above the tabs narrows the list (and the tab
+  counts) to businesses whose name, town, ZIP, category, address, type or flags, or
+  whose calls' summaries, results and callers (`calls.search_text`), hold every word
+  typed, in any order (the Leads filter's rule, `web/leads.py` `matches`, so
+  "walmart layton" works on both pages; only Calls looks in the calls); it is asked
+  for once typing pauses, kept in the address (`#calls?q=costco`), and with no match
+  the page says "No calls match ..." with **Clear filter**. While a tab, filter or
+  sort is on its way the old rows stay dimmed (`aria-busy`); after 300 ms
+  `core.js` `loadingCue` says "Loading…" over them in a `role="status"` box, and
+  after 5 s that it is taking longer than usual. On a desktop (1024 px and wider)
+  a call's date and time, and **Undo call (m:ss)**, each stay on one line. The call box's **Save** is always
   pressable: without a result picked, a hint beside "How did it go?" and a red line
   say to pick one, and the result buttons are ringed. The Conversation summary column shows the
   latest call's notes; when the latest call had none it says so and shows the

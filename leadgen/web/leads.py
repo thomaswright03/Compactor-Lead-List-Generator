@@ -76,17 +76,19 @@ def in_view(lead: Lead, view: str) -> bool:
     return is_prospect(lead) and (lead.has_baler or "unchecked") == view
 
 
-def matches(lead: Lead, q: str, tier: str, phone: bool = False) -> bool:
+def matches(lead: Lead, q: str, tier: str, phone: bool = False, more: str = "") -> bool:
     """The page's filter box, tier choice and "Has phone" tick. Several words typed
     ("walmart layton") match a lead when each is somewhere in its name, town, ZIP,
-    category, address, type or flags, in any order and any case (q is lowercased),
-    like the Calls page's filter (calls.js, callMatches)."""
+    category, address, type or flags (or in `more`: on the Calls page, its calls'
+    summaries, outcomes and callers), in any order and any case (q is lowercased)."""
     if tier and lead.tier != tier:
         return False
     if phone and not lead.phone.strip():
         return False
     text = " ".join([lead.name, places.town_of(lead), lead.zip, lead.category, lead.address,
                      lead.lead_type, " ".join(lead.flags)]).lower()
+    if more:
+        text += " " + more
     return all(word in text for word in q.split())
 
 
@@ -130,6 +132,11 @@ def saved_leads() -> ResponseReturnValue:
     stay put for a few seconds; on the first page only, and a refresh sends them in
     full too).
 
+    The Calls page asks for tab=called: its filter also looks in the calls'
+    summaries, outcomes and callers, outcome= keeps the businesses whose latest call
+    went that way, and "call_counts" are its tabs' counts (every called business
+    and each outcome, the filter applied), however many businesses were called.
+
     With ?since=<the "now" of an earlier answer> only the leads whose details, mark
     or calls changed since then come back: in full when they belong in the view
     asked about, as just {"key", "in_view": false} when they don't (so the page can
@@ -146,19 +153,31 @@ def saved_leads() -> ResponseReturnValue:
     q = (request.args.get("q") or "").strip().lower()[:200]
     tier = request.args.get("tier") or ""
     phone = request.args.get("phone") == "1"
+    outcome = request.args.get("outcome") or ""
+    if outcome not in calls.OUTCOMES or view != "called":
+        outcome = ""
     try:
         if since is None or not math.isfinite(since) or since <= 0:
             leads, undo = load_saved()
-            return jsonify({**_page(leads, undo, view, q, tier, phone), "now": now})
-        uids = changed_uids(since - SINCE_OVERLAP)
-        if not uids:
-            return jsonify({"leads": [], "changes": True, "removed": [], "now": now})
-        leads, undo = load_saved()
+            text = _call_text(view, q)
+        else:
+            uids = changed_uids(since - SINCE_OVERLAP)
+            if not uids:
+                return jsonify({"leads": [], "changes": True, "removed": [], "now": now})
+            leads, undo = load_saved()
+            text = _call_text(view, q)
     except LoadError as exc:
         return jsonify({"error": str(exc)}), 503
-    shown = [l for l in leads if in_view(l, view) and matches(l, q, tier, phone)]
+
+    def filtered(l: Lead) -> bool:
+        return ((not outcome or l.call_outcome == outcome)
+                and matches(l, q, tier, phone, text.get(l.uid, "")))
+    extra = {"call_counts": _call_counts(leads, q, text)} if view == "called" else {}
+    if since is None or not math.isfinite(since) or since <= 0:
+        return jsonify({**_page(leads, undo, view, filtered), **extra, "now": now})
+    shown = [l for l in leads if in_view(l, view) and filtered(l)]
     body = {"changes": True, "total": len(shown), "counts": view_counts(leads),
-            "recent": _recent(leads, undo), "now": now}
+            "recent": _recent(leads, undo), **extra, "now": now}
     changed = [l for l in leads if l.uid in uids]
     limit = request.args.get("limit", type=int) or PAGE_SIZE
     if len(changed) > max(1, min(limit, MAX_LIMIT)):
@@ -167,16 +186,37 @@ def saved_leads() -> ResponseReturnValue:
     pinned = set((request.args.get("keep") or "").split(",")[:50]) - {""}
     wanted = ({l.uid for l in shown} | pinned) & kept
     return jsonify({**body, "removed": sorted(uids - kept),
-                    "leads": [{**lead_json(l, undo), "in_view": in_view(l, view) and matches(l, q, tier, phone)}
+                    "leads": [{**lead_json(l, undo), "in_view": in_view(l, view) and filtered(l)}
                               if l.uid in wanted
                               else {"key": l.uid, "in_view": False} for l in changed]})
 
 
-def _page(leads: list[Lead], undo: Undos, view: str, q: str, tier: str,
-          phone: bool = False) -> dict[str, Any]:
+def _call_text(view: str, q: str) -> dict[str, str]:
+    """What the Calls page's filter also looks in (calls.search_text), when it is used."""
+    if view != "called" or not q:
+        return {}
+    try:
+        return calls.search_text()
+    except Exception as exc:
+        log.error("Reading the calls for the filter failed", exc_info=True)
+        raise LoadError(db_message(exc)) from exc
+
+
+def _call_counts(leads: list[Lead], q: str, text: dict[str, str]) -> dict[str, Any]:
+    """The Calls page's tab counts: every called business the filter keeps, and how
+    many of them each outcome holds (their latest call's)."""
+    outcomes = dict.fromkeys(calls.OUTCOMES, 0)
+    called = [l for l in leads if l.call_count and matches(l, q, "", False, text.get(l.uid, ""))]
+    for lead in called:
+        if lead.call_outcome in outcomes:
+            outcomes[lead.call_outcome] += 1
+    return {"all": len(called), "outcomes": outcomes}
+
+
+def _page(leads: list[Lead], undo: Undos, view: str, filtered: Callable[[Lead], bool]) -> dict[str, Any]:
     offset = max(0, request.args.get("offset", type=int) or 0)
     keep = set((request.args.get("keep") or "").split(",")[:50]) - {""} if not offset else set()
-    rows = [l for l in leads if (in_view(l, view) or l.uid in keep) and matches(l, q, tier, phone)]
+    rows = [l for l in leads if (in_view(l, view) or l.uid in keep) and filtered(l)]
     sort = request.args.get("sort") or "score"
     if sort not in SORTS:
         sort = "score"

@@ -91,12 +91,18 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 - **Yes / No** "has a baler or compactor" marks (permanent; a click can be undone
   for 5 minutes), **Just called** notes with six results and a Calls tab for each
   (with a filter box: several words, such as "walmart layton", find the rows that
-  hold every one of them, in any order, on Leads and Calls alike),
+  hold every one of them, in any order, on Leads and Calls alike; on Calls it also
+  looks in what was said on the calls, how they went and who made them, so
+  "forklift" or a colleague's name finds the business),
   a **Stats** page, and Excel / CSV downloads (named with the Utah date, in plain words; columns empty for
   every lead in the file are left out and named on the Run Info sheet). Each mark and call records who made
   it (the name set under **Your name** in that browser, asked before the first
   mark or call and not skippable). **Has phone** on Leads shows only businesses
   that can be phoned; under Not checked, among equal scores, those come first.
+  Leads and Calls show one page of rows at a time (**Show more** adds the next), with
+  every tab's count however long the list grows; a tab, filter or sort that takes
+  more than a moment says **Loading…** over the dimmed rows (and, after about five
+  seconds, that it is taking longer than usual).
 - A business the listing gives no street address or town for shows the town and ZIP
   its map position is near ("No street address · near West Jordan, UT 84088 · map"),
   worked out offline from a small table of Census towns and ZIP areas
