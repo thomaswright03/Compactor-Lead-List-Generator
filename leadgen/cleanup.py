@@ -19,6 +19,7 @@ from dataclasses import dataclass
 
 from . import config, store
 from .geo import haversine_miles
+from .places import tidy_town
 
 # The default distance: twice Arco's area, so leads from a confirmed search just
 # outside the area (and its radius) are not listed.
@@ -53,9 +54,11 @@ def far_leads(miles: float = DEFAULT_MILES) -> list[FarLead]:
         lead = json.loads(text)
         if not lead:
             continue
-        away = haversine_miles(*config.SERVICE_CENTER, float(lead["lat"]), float(lead["lon"]))
+        lat, lon = float(lead["lat"]), float(lead["lon"])
+        away = haversine_miles(*config.SERVICE_CENTER, lat, lon)
         if away > miles:
-            found.append(FarLead(uid, lead.get("name", ""), lead.get("city", ""),
+            town = tidy_town(lead.get("city", ""), lead.get("state", ""), lat, lon, lead.get("zip", ""))
+            found.append(FarLead(uid, lead.get("name", ""), town,
                                  lead.get("state", ""), round(away, 1), uid in worked))
     return sorted(found, key=lambda f: (-f.miles, f.name.lower()))
 

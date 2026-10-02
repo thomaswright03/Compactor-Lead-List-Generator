@@ -379,8 +379,9 @@ def merge_plan() -> list[list[PlannedRow]]:
 
 def _town(lead: Lead) -> str:
     """The lead's city, or the town its pin is near ("near Layton")."""
-    if lead.city.strip():
-        return lead.city.strip()
+    town = places.listed_town(lead)
+    if town:
+        return town
     found = places.near(lead.lat, lead.lon)
     return f"near {found.town}" if found else ""
 

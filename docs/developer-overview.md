@@ -561,7 +561,13 @@ search history's "When"; "First saved" / "Latest saved" for leads saved with no
 search on record). A lead with no city or ZIP gets the town / ZIP area its map
 position is near (`leadgen/places.py`, offline, from `leadgen/data/places.json`:
 the Census 2023 Gazetteer's places and ZIP areas within 200 miles of Salt Lake
-City), written "near West Jordan" / "near 84088" and explained on Run Info. To
+City), written "near West Jordan" / "near 84088" and explained on Run Info. A
+listed city is shown (pages, City sort, filter, downloads, command-line listings)
+as `places.tidy_town` reads it against the same table: case, punctuation, a state
+after it, "City" added or left off, short words ("W", "Mt", "Hts") and a plural "s"
+don't matter; a few letters only the nearby town starts with (or the initials of a
+town) become that town; unknown towns are kept, in title case when they were all
+capitals or all lower case. The saved rows are never rewritten. To
 rebuild that table (a new Gazetteer year, a missing town), run
 `python -m leadgen.build_places --download` (or give it the two Gazetteer files;
 `--check` only says whether the file would change, `--year` picks another year);

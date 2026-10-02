@@ -95,6 +95,14 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   (`leadgen/data/places.json`, see `leadgen/places.py`), so same-named stores (a
   dozen Smith's) can be told apart; the downloads write it as City "near West
   Jordan", ZIP "near 84088". It is shown, never saved: the saved rows are unchanged.
+- Town names are shown and downloaded as the town's own name from the same table,
+  however the listing typed them: "CLEARFIELD" is Clearfield, "american Fork" American
+  Fork, "West Jordan City" West Jordan, "Saratoga Spring" Saratoga Springs, "SLC" Salt
+  Lake City, and a short form like "la" the town the business is near that starts with
+  it (Layton). A town not in the table keeps its name, in title case when it was all
+  capitals or all lower case. So **City A to Z** and the filter treat one town as one
+  town. As with "near", only what is shown changes; the saved rows keep the text the
+  source gave.
 - Keyboard use: after a Yes / No, an undo, a call saved or **Show more**, the focus
   stays on that business (or moves to the next one's Yes when it left the view). A
   click that lands just as the list moves up is not saved, and the page says so.

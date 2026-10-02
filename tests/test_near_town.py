@@ -66,3 +66,59 @@ def test_every_downloaded_row_with_coordinates_has_a_town():
     book = load_workbook(io.BytesIO(client.get("/download/saved.xlsx").data))
     info = {row[0]: row[1] for row in book["Run Info"].iter_rows(values_only=True) if row[0]}
     assert "worked out from the map position" in info["City / ZIP “near …”"]
+
+
+# ---- a listed city is shown as the town's own name
+
+def test_listed_towns_are_tidied_to_the_census_name():
+    # Values from a real Salt Lake area search of the map data.
+    for given, shown in [("CLEARFIELD", "Clearfield"), ("american Fork", "American Fork"),
+                         ("West Jordan City", "West Jordan"), ("Woods Cross City", "Woods Cross"),
+                         ("South Salt Lake City", "South Salt Lake"), ("West Valley", "West Valley City"),
+                         ("Saratoga Spring", "Saratoga Springs"), ("Draper City (Sl Co)", "Draper"),
+                         ("Layton, UT", "Layton"), ("Ogden Utah", "Ogden"), ("W Jordan", "West Jordan"),
+                         ("N. Salt Lake", "North Salt Lake"), ("SLC", "Salt Lake City"),
+                         ("Marriott Slaterville", "Marriott-Slaterville"), ("Salt Lake City", "Salt Lake City")]:
+        assert places.tidy_town(given) == shown, given
+    # A short form the town it is near starts with: "la" at a Layton hotel (ZIP 84041).
+    assert places.tidy_town("la", "UT", 41.0909, -111.9763, "84041") == "Layton"
+    assert places.tidy_town("la", zip_code="84041") == "Layton"
+    assert places.tidy_town("AF", "UT", 40.38, -111.79) == "American Fork"
+    # Unknown towns stay, made readable; one or two letters that name nothing, or only a
+    # state, say no more than no city at all (the page shows the town it is near instead).
+    assert places.tidy_town("HILL AIR FORCE BASE") == "Hill Air Force Base"
+    assert places.tidy_town("Hill Airforce Base") == "Hill Airforce Base"
+    assert places.tidy_town("San Francisco", "CA") == "San Francisco"
+    assert places.tidy_town("xq", "UT", 40.38, -111.79) == "" and places.tidy_town("Utah") == ""
+    assert places.state_code("utah") == "UT" and places.state_code("ca") == "ca"
+
+
+def _town_lead(sid, city, lat, lon, zip_code="", state=""):
+    lead = Lead(name=f"Distribution {sid}", lat=lat, lon=lon, source="osm", source_id=sid, city=city,
+                zip=zip_code, state=state, address=f"{len(sid)} Main St", raw_categories=["building=warehouse"])
+    return score_lead(lead, config.DEFAULT_KEYWORDS)
+
+
+def test_the_pages_and_downloads_show_tidy_towns_and_the_saved_rows_keep_theirs():
+    saved.save_search([_town_lead("c", "CLEARFIELD", 41.1108, -112.0261, "84015", "ut"),
+                       _town_lead("l", "la", 41.0909, -111.9763, "84041"),
+                       _town_lead("a", "american Fork", 40.3769, -111.7958, "84003"),
+                       _town_lead("w", "West Jordan City", 40.6097, -111.9391, "84088")],
+                      config.DEFAULT_KEYWORDS)
+    client = web.create_app().test_client()
+    by_city = client.get("/leads?tab=all&sort=city&dir=asc").get_json()["leads"]
+    assert [r["city"] for r in by_city] == ["American Fork", "Clearfield", "Layton", "West Jordan"]
+    assert [r["near"] for r in by_city] == ["", "", "", ""]
+    # The filter finds a business by its town however the listing spelled it.
+    assert [r["city"] for r in client.get("/leads?tab=all&q=clearfield").get_json()["leads"]] == ["Clearfield"]
+    assert [r["city"] for r in client.get("/leads?tab=all&q=layton").get_json()["leads"]] == ["Layton"]
+    rows = list(csv.DictReader(io.StringIO(client.get("/download/saved.csv").data.decode("utf-8-sig"))))
+    assert sorted((r["City"], r["State"]) for r in rows) == [
+        ("American Fork", ""), ("Clearfield", "UT"), ("Layton", ""), ("West Jordan", "")]
+    for r in rows:
+        town = r["City"]
+        assert not town.isupper() and not town.islower() and len(town) > 2
+    # Only what is shown changes: the saved rows keep the text the map data gave.
+    with store.connect() as db:
+        stored = sorted(json.loads(lead)["city"] for (lead,) in db.all("SELECT lead FROM leads"))
+    assert stored == ["CLEARFIELD", "West Jordan City", "american Fork", "la"]

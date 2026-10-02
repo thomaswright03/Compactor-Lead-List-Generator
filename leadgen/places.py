@@ -12,6 +12,7 @@ nothing saved is changed.
 
 import json
 import math
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -91,6 +92,123 @@ def biggest_town(box: tuple[float, float, float, float], centre: tuple[float, fl
     return best
 
 
+# ---- a listed city, tidied: the way mappers type a town ("CLEARFIELD", "american Fork",
+# "West Jordan City", "Saratoga Spring", "la") shown as the town's own name ("Clearfield",
+# "American Fork", "West Jordan", "Saratoga Springs", "Layton"). Only what the pages and
+# downloads show changes; the saved rows keep the text exactly as the source gave it.
+
+# Words written short in addresses, and the word each stands for.
+_SHORT = {"n": "north", "no": "north", "s": "south", "so": "south", "e": "east", "w": "west",
+          "mt": "mount", "ft": "fort", "pt": "point", "hts": "heights", "hgts": "heights",
+          "spg": "springs", "spgs": "springs", "spr": "springs", "vly": "valley", "pk": "park",
+          "cyn": "canyon", "ctr": "center", "cntr": "centre", "twp": "township", "saint": "st"}
+# A state after the town ("Layton, UT", "Ogden Utah") or a county note ("Draper (Sl Co)").
+_STATE_NAMES = {"UT": "utah", "ID": "idaho", "NV": "nevada", "WY": "wyoming", "CO": "colorado"}
+_AFTER = re.compile(r"\s*\([^)]*\)\s*$|[\s,]+(?:ut|utah|id|idaho|nv|nevada|wy|wyoming|co|colorado)\.?$|,\s*$",
+                    re.I)
+
+
+def _key(text: str) -> str:
+    """The words of a town name in one comparable form: lower case, no punctuation, short
+    words written out, a plural's "s" dropped ("Saratoga Spring" = "Saratoga Springs")."""
+    words = [_SHORT.get(w, w) for w in re.sub(r"[^a-z0-9]+", " ", text.lower()).split()]
+    return " ".join(w[:-1] if len(w) > 3 and w.endswith("s") else w for w in words)
+
+
+@lru_cache(maxsize=8)
+def _towns_by_key(state: str) -> tuple[dict[str, str], dict[str, str]]:
+    """The state's towns by _key(name), and by their initials when only one town has them
+    ("slc" Salt Lake City, "wvc" West Valley City)."""
+    towns, _ = _table()
+    names = [name.split("|")[0] for name, *_ in towns if name.endswith(f"|{state}")]
+    by_key = {_key(n): n for n in names}
+    initials: dict[str, list[str]] = {}
+    for n in names:
+        if len(n.split()) > 1:
+            initials.setdefault("".join(w[0] for w in _key(n).split()), []).append(n)
+    return by_key, {k: v[0] for k, v in initials.items() if len(v) == 1}
+
+
+def _readable(text: str) -> str:
+    """A town not in the table, readable: "HILL AIR FORCE BASE" / "riverside" in title case
+    ("Hill Air Force Base", "Riverside"); mixed case ("McCammon") kept as written."""
+    letters = [c for c in text if c.isalpha()]
+    if letters and not (all(c.isupper() for c in letters) or all(c.islower() for c in letters)):
+        return text
+    return re.sub(r"[A-Za-z]+(?:'[A-Za-z]+)?", lambda m: m.group().capitalize(), text)
+
+
+@lru_cache(maxsize=4096)
+def _tidy(city: str, state: str) -> tuple[str, bool]:
+    """(the town's name, True) when the table knows it, else (the text made readable,
+    False); ("", False) for a city that is only a state."""
+    text = " ".join(city.split())
+    while (trimmed := _AFTER.sub("", text)) != text:
+        text = trimmed
+    if text.lower() in {"", *(s.lower() for s in _STATE_NAMES), *_STATE_NAMES.values()}:
+        return "", False
+    by_key, initials = _towns_by_key(state)
+    key = _key(text)
+    for k in (key, key.removesuffix(" city"), key + " city"):
+        if k in by_key:
+            return by_key[k], True
+    if " " not in key and key in initials and len(key) >= 3:
+        return initials[key], True
+    return _readable(text), False
+
+
+def tidy_town(city: str, state: str = "", lat: float | None = None, lon: float | None = None,
+              zip_code: str = "") -> str:
+    """A listed city as the town's own name from the table ("CLEARFIELD" -> "Clearfield",
+    "W Jordan" / "West Jordan City" -> "West Jordan", "SLC" -> "Salt Lake City"). A
+    short form only the town it is near starts with or is the initials of ("la", "AF")
+    becomes that town (from the coordinates, else the ZIP code's area); anything else
+    unknown stays, made readable ("HILL AIR FORCE BASE" -> "Hill Air Force Base"),
+    except one or two letters that name nothing, which say no more than no city ("")."""
+    if not city.strip():
+        return ""
+    state = state.strip().upper() if state.strip().upper() in _STATE_NAMES else "UT"
+    name, known = _tidy(city, state)
+    if known or not name:
+        return name
+    short = _key(name).replace(" ", "")
+    nearby = _near_town(lat, lon, zip_code, state)
+    if nearby and short.isalpha() and len(short) <= 4:
+        words = _key(nearby).split()
+        if "".join(words).startswith(short) or (len(words) > 1 and "".join(w[0] for w in words) == short):
+            return nearby
+    return name if len(short) > 2 else ""
+
+
+def _near_town(lat: float | None, lon: float | None, zip_code: str, state: str) -> str:
+    """The table's town nearest the coordinates, else nearest the ZIP code area's centre."""
+    found = near(lat, lon)
+    if found is None:
+        point = _zip_points().get(zip_code.strip()[:5])
+        found = near(*point) if point else None
+    return found.town if found and found.state == state else ""
+
+
+@lru_cache(maxsize=1)
+def _zip_points() -> dict[str, tuple[float, float]]:
+    _, zips = _table()
+    return {z: (lat, lon) for z, lat, lon, _ in zips}
+
+
+def state_code(state: str) -> str:
+    """'UT' for "ut", "Utah" or "UT"; any other text as it is."""
+    text = state.strip()
+    for code, name in _STATE_NAMES.items():
+        if text.lower() in (code.lower(), name):
+            return code
+    return text
+
+
+def listed_town(lead: Lead) -> str:
+    """The lead's own city, tidied (tidy_town); "" when it lists none."""
+    return tidy_town(lead.city, lead.state, lead.lat, lead.lon, lead.zip)
+
+
 @lru_cache(maxsize=20000)
 def _near(lat: float, lon: float) -> Near | None:
     towns, zips = _table()
@@ -113,14 +231,15 @@ def near(lat: float | None, lon: float | None) -> Near | None:
 
 def for_lead(lead: Lead) -> Near | None:
     """What a lead without a city (or ZIP) is near; None when the listing has both."""
-    if lead.city.strip() and lead.zip.strip():
+    if listed_town(lead) and lead.zip.strip():
         return None
     return near(lead.lat, lead.lon)
 
 
 def town_of(lead: Lead) -> str:
-    """The lead's city, else the town it is near ("" when neither is known)."""
-    if lead.city.strip():
-        return lead.city
+    """The lead's city (tidied), else the town it is near ("" when neither is known)."""
+    town = listed_town(lead)
+    if town:
+        return town
     found = for_lead(lead)
     return found.town if found else ""

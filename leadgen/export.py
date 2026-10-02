@@ -41,15 +41,16 @@ NEAR_NOTE = ("A City or ZIP starting with “near” was worked out from the map
 
 
 def _city(lead: Lead) -> str:
-    if lead.city.strip():
-        return lead.city
+    town = places.listed_town(lead)          # tidied: "CLEARFIELD" -> "Clearfield"
+    if town:
+        return town
     near = places.for_lead(lead)
     return f"near {near.town}" if near else ""
 
 
 def _state(lead: Lead) -> str:
     if lead.state.strip():
-        return lead.state
+        return places.state_code(lead.state)
     near = places.for_lead(lead)
     return near.state if near else ""
 

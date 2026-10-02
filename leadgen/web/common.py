@@ -101,14 +101,16 @@ def lead_json(lead: Lead, undo: Undos | None = None) -> dict[str, Any]:
     undo = undo or {}
     # A listing without a city: the town (and ZIP) its map position is near, shown as
     # "near West Jordan, UT 84088" (places.py), so same-named rows can be told apart.
-    near = places.for_lead(lead) if not lead.city.strip() else None
+    # The listed city is tidied ("CLEARFIELD" -> "Clearfield", places.tidy_town).
+    city = places.listed_town(lead)
+    near = places.for_lead(lead) if not city else None
     return {
         "score": lead.score, "tier": lead.tier, "tier_label": TIER_LABELS.get(lead.tier, ""),
         "lead_type": lead.lead_type, "flags": lead.flags, "name": lead.name,
         # Competitors and Arco's own listing are flagged, never asked Yes / No.
         "prospect": lead.lead_type not in EXEMPT_TYPES,
         "closed": saved.is_closed(lead),
-        "category": lead.category, "address": lead.address, "city": lead.city,
+        "category": lead.category, "address": lead.address, "city": city,
         "zip": lead.zip, "near": near.text() if near else "",
         "phone": format_phone(lead.phone), "website": lead.website,
         "distance": lead.distance_miles, "reasons": lead.reasons, "map_url": lead.map_url,
