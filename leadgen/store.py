@@ -341,7 +341,6 @@ def _close(db: Db) -> None:
         log.info("Closing a database connection failed: %s", exc.__class__.__name__)
 
 
-@atexit.register
 def close_pool() -> None:
     """Close every idle pooled connection (at exit, and in tests)."""
     with _pool_lock:
@@ -349,6 +348,9 @@ def close_pool() -> None:
         _pool.clear()
     for db in idle:
         _close(db)
+
+
+atexit.register(close_pool)
 
 
 def _create_tables(db: Db) -> None:
