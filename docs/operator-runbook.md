@@ -169,7 +169,12 @@ here with the date.
 ## Logs, and rolling back a bad deploy
 
 The site logs to Render's **Logs** tab: every failed search, database error and
-unexpected error, with the technical detail the pages leave out.
+unexpected error, with the technical detail the pages leave out. A request to
+Google, Yelp or a map server that fails is one line naming the server, the status,
+how long it took and a short reason (an error page's title, not its HTML), e.g.
+`OpenStreetMap server failed: overpass-api.de/api/interpreter returned HTTP 504
+after 30.2s: 504 Gateway Time-out`; search the Logs tab for `returned HTTP` or the
+server's name. A request that is tried again logs `...; trying again in 2 s`.
 
 To go back to the previous version:
 

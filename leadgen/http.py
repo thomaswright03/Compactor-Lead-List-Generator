@@ -5,19 +5,25 @@ and does not hammer the free OpenStreetMap servers.
 """
 
 import hashlib
+import html
 import json
+import logging
 import os
 import re
 import time
 from collections.abc import Callable, MutableMapping, Sequence
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import requests
 
 from . import config
 
 CACHE_DIR = Path(os.environ.get("LEADGEN_CACHE_DIR", ".cache"))
+log = logging.getLogger(__name__)
+# How much of a failed response's text goes into its error (and so into the log).
+REASON_CHARS = 300
 
 
 class HttpError(RuntimeError):
@@ -34,6 +40,35 @@ _SECRET_PARAM = re.compile(r"(?i)([?&](?:key|api_key)=)[^&\s)'\"]+")
 def redact(text: object) -> str:
     """Hide API keys that request libraries echo back inside URLs."""
     return _SECRET_PARAM.sub(r"\1REDACTED", str(text))
+
+
+_TITLE = re.compile(r"(?is)<(title|h1)\b[^>]*>(.*?)</\1\s*>")
+_MARKUP = re.compile(r"(?is)<!--.*?-->|<(script|style)\b.*?</\1\s*>|<[!/?a-z][^>]*>")
+
+
+def reason(text: str) -> str:
+    """A failed response's text as one short line for the log and the page: an HTML
+    error page ("<html><head><title>504 Gateway Time-out</title>...") becomes its title
+    (else its words without the markup), a JSON error stays as it is, and whitespace and
+    line breaks are collapsed. API keys are hidden."""
+    title = _TITLE.search(text)
+    if title and title.group(2).strip():
+        text = title.group(2)
+    if _MARKUP.search(text):
+        text = _MARKUP.sub(" ", text)
+    line = " ".join(html.unescape(redact(text)).split())
+    return line if len(line) <= REASON_CHARS else line[:REASON_CHARS - 3].rstrip() + "..."
+
+
+def _where(url: str) -> str:
+    """'overpass-api.de/api/interpreter': the host and path, without the scheme or query."""
+    parts = urlsplit(url)
+    return (parts.netloc + parts.path) if parts.netloc else url
+
+
+def _after(started: float) -> str:
+    """'after 12.3s': how long the attempt that began at `started` (time.monotonic()) took."""
+    return f"after {time.monotonic() - started:.1f}s"
 
 
 def _cache_path(key: str) -> Path:
@@ -82,8 +117,11 @@ def request_json(method: str, url: str, *, params: dict[str, Any] | None = None,
 
     hdrs = {"User-Agent": config.HTTP_USER_AGENT}
     hdrs.update(headers or {})
+    # Every failure is one line: where, the status, how long it took and a short reason.
+    where = _where(url)
     last_error = None
     for attempt in range(retries):
+        started = time.monotonic()
         try:
             resp = requests.request(method, url, params=params, data=data, json=json_body,
                                     headers=hdrs, timeout=timeout)
@@ -91,27 +129,30 @@ def request_json(method: str, url: str, *, params: dict[str, Any] | None = None,
                 response_headers.clear()
                 response_headers.update(resp.headers)
             if resp.status_code == 429 or resp.status_code >= 500:
-                last_error = HttpError(f"{url} returned HTTP {resp.status_code}: "
-                                       f"{redact(resp.text[:300])}", resp.status_code)
+                last_error = HttpError(f"{where} returned HTTP {resp.status_code} {_after(started)}: "
+                                       f"{reason(resp.text)}", resp.status_code)
                 if any(t in resp.text for t in no_retry):
                     raise last_error
             elif resp.status_code >= 400:
-                raise HttpError(f"{url} returned HTTP {resp.status_code}: {redact(resp.text[:300])}",
+                raise HttpError(f"{where} returned HTTP {resp.status_code} {_after(started)}: {reason(resp.text)}",
                                 resp.status_code)
             else:
                 try:
                     value = resp.json()
                 except ValueError:
                     # Overpass reports overload as an HTML page with status 200.
-                    last_error = HttpError(f"{url} returned a non-JSON response")
+                    last_error = HttpError(f"{where} returned a non-JSON response {_after(started)}: "
+                                           f"{reason(resp.text)}")
                 else:
                     if use_cache and (cacheable is None or cacheable(value)):
                         cache_put(key, value)
                     return value
         except requests.RequestException as exc:
-            last_error = HttpError(f"{url}: {redact(exc)}")
+            last_error = HttpError(f"{where} failed {_after(started)}: {reason(str(exc))}")
         if attempt < retries - 1:
             if before_retry is not None and not before_retry():
                 break
-            time.sleep(2 ** (attempt + 1))
-    raise last_error or HttpError(f"{url}: no attempt was made")
+            wait = 2 ** (attempt + 1)
+            log.info("%s; trying again in %d s", last_error, wait)
+            time.sleep(wait)
+    raise last_error or HttpError(f"{where}: no attempt was made")
