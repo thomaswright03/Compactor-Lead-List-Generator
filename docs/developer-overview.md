@@ -128,6 +128,14 @@ but never the live site; branch protection on `main` (an owner setting, see
 `main` too. Every public function in
 `leadgen/` has parameter and return annotations (`strict = true` for mypy).
 
+**Commits.** One logical change per commit, with a message that says what changed
+and why (the first line a short summary, then the details and how it was checked),
+and its tests and documentation in the same commit; so `git log` reads as a list
+of changes, `git bisect` finds the one that broke something, and any one of them can
+be reverted on its own. A review round's fixes go in as one commit per fix, never as
+a single "review round N fixes" commit. History is never rewritten (no rebasing or
+force-pushing `main`): the live site deploys from it.
+
 ## Command line options
 
 ```bash

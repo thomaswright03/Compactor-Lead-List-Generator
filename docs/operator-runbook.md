@@ -286,6 +286,21 @@ everyone's clones and the deploy link, so it is left there; it has no effect on
 the running site. `*.whl` files are now ignored so it can't happen again. Purge
 it only if the owner agrees to rewrite the history.
 
+**Old branches.** The remote branch `wip-yelp-cap-and-baler-marks` (last commit
+20eb261, 2026-09-29) is the first draft of the 50-a-day Yelp cap, the Yes / No marks
+and the Postgres database. That work reached `main` as commit 54de1e5 ("Save leads
+and baler marks permanently; cap the website at 50 Yelp calls a day") and has been
+built on ever since, so nothing on the branch is missing from `main` and nothing
+deploys from it. Checked 2026-10-02; it is safe to delete. To delete it (the owner,
+once): GitHub → the repository → **Branches** → the bin icon next to it, or
+
+```bash
+git push origin 20eb26110c8537af04bd3e68420251e18a50696d:refs/tags/archive/wip-yelp-cap-and-baler-marks  # optional: keep a tag
+git push origin --delete wip-yelp-cap-and-baler-marks
+```
+
+Then remove this paragraph. `main` is the only branch the site needs.
+
 ## The database (saved leads, marks, calls, the Yelp count)
 
 Render's disk is wiped on every redeploy, so the site keeps its data in a
