@@ -23,7 +23,13 @@ def test_render_waits_for_the_checks_and_the_docs_say_so():
         assert "every push straight away" not in text or "switch it back" in text, doc
     runbook = " ".join(_read("docs/operator-runbook.md").split())
     assert "Require status checks to pass before merging" in runbook
-    assert all(f"`{job}`" in runbook for job in ("lint", "test (sqlite)", "test (postgres)"))
+    # Protecting main is the owner's GitHub setting: the README and the runbook both give
+    # the steps with the checks' exact names, and the runbook says whether it is on yet.
+    for doc in ("README.md", "docs/operator-runbook.md"):
+        text = " ".join(_read(doc).split())
+        assert "**Require status checks to pass**" in text and "**Include default branch**" in text, doc
+        assert all(f"`{job}`" in text for job in ("lint", "test (sqlite)", "test (postgres)")), doc
+    assert re.search(r"\*\*Status \(\d{4}-\d\d-\d\d\): [^*]+\*\*", runbook)
 
 
 def test_ci_lints_and_type_checks_every_page_script():

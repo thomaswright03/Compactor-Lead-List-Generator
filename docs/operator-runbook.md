@@ -91,21 +91,45 @@ After a push:
    commit** still works as a fallback (it skips the check wait, so use it only for
    a green commit).
 
-**Protect `main`** so that a red commit can't even land on it (a one-time setting
-only the repository owner can make; the code can't set it):
+**Protect `main`** so that a red commit can't even land on it. This is a one-time
+setting on GitHub that only someone with admin access to the repository (the owner,
+Thomas) can make; the code can't set it.
 
-1. On GitHub, open the repository → **Settings** → **Branches** (or **Rules** →
-   **Rulesets** on newer pages).
-2. **Add branch protection rule** (or **New branch ruleset**) for the branch name
-   pattern `main`.
-3. Tick **Require status checks to pass before merging**, and add the checks
-   `lint`, `test (sqlite)` and `test (postgres)` (each shows up in the search box
-   once it has run on a commit). Optionally tick **Require branches to be up to
-   date before merging**.
-4. Leave **Allow force pushes** and **Allow deletions** off, and save.
+1. Sign in to GitHub as the owner and open
+   `https://github.com/thomaswright03/Compactor-Lead-List-Generator/settings/rules`
+   (the repository → **Settings** → **Rules** → **Rulesets** in the left column).
+2. Click **New ruleset** → **New branch ruleset**.
+3. **Ruleset name**: `Protect main`. **Enforcement status**: **Active**. Leave the
+   **Bypass list** empty, so nobody skips the checks.
+4. Under **Target branches**, click **Add target** → **Include default branch**
+   (that is `main`).
+5. Under **Branch rules**, keep **Restrict deletions** and **Block force pushes**
+   ticked, and tick **Require status checks to pass**. Click **Add checks** and add,
+   one at a time, `lint`, `test (sqlite)` and `test (postgres)` (type each name and
+   pick it from the list; GitHub offers a check once it has run on a commit, which
+   all three have). Leave **Require branches to be up to date before merging** off.
+6. Click **Create** at the bottom.
 
-With protection on, changes reach `main` through a pull request whose checks are
-green. **Status (2026-09-30): not set yet** (GitHub shows `main` as not
+Older GitHub pages offer the classic rule instead: **Settings** → **Branches** →
+**Add classic branch protection rule**, **Branch name pattern** `main`, tick
+**Require status checks to pass before merging** and add the same three checks, tick
+**Do not allow bypassing the above settings**, leave **Allow force pushes** and
+**Allow deletions** off, and click **Create**. Either one does the job; set only one.
+
+**Afterwards**, a commit reaches `main` only once its three checks have passed on
+another branch: push the work to a branch (`git push origin HEAD:fix-something`),
+wait for the checks on the **Actions** tab, then open a pull request and click
+**Merge**, or move `main` up to that commit with `git push origin fix-something:main`.
+A plain `git push origin main` of a commit that hasn't been checked is refused
+("Required status checks ... are expected"); a pull request whose checks fail shows
+the **Merge** button greyed out. Render's deploy rule (above) stays as it is.
+
+**To check it is on**: the repository's **Settings** → **Rules** → **Rulesets** lists
+`Protect main` as Active (or **Settings** → **Branches** lists the classic rule for
+`main`), and `https://github.com/thomaswright03/Compactor-Lead-List-Generator/branches`
+shows `main` with a shield or "protected" mark.
+
+**Status (2026-10-02): not set yet** (GitHub still reports `main` as not
 protected). Whoever sets it should change this line to say so, with the date.
 Until then a red commit can land on `main`, but Render won't deploy it.
 
