@@ -246,26 +246,24 @@ checks (`lint`, `test (sqlite)`, `test (postgres)`) pass: a commit with a failin
 test never reaches the live site (`autoDeployTrigger: checksPass` in `render.yaml`;
 see "Deploying" in the runbook, which also has the steps for protecting `main`).
 
-**Protecting `main` (a one-time GitHub setting for the owner).** So that a commit
-with a failing check can't even land on `main`, the repository owner turns on a
-rule on GitHub; the code can't do it. Open the repository's **Settings** → **Rules**
-→ **Rulesets** → **New ruleset** → **New branch ruleset**; name it `Protect main`,
-set **Enforcement status** to **Active** and leave the bypass list empty; under
-**Target branches** choose **Add target** → **Include default branch**; under
-**Branch rules** keep **Restrict deletions** and **Block force pushes**, tick
-**Require status checks to pass** and add the checks `lint`, `test (sqlite)` and
-`test (postgres)`; then click **Create**. From then on, work is pushed to a branch
-first and reaches `main` (by a pull request, or `git push origin <branch>:main`)
-only once its checks are green. The
-[runbook](docs/operator-runbook.md#deploying) has the same steps in full, the
-classic-rule alternative, how to check the rule is on and its current status (not
-set yet on 2026-10-03).
+**`main` is protected (since 2026-10-03).** The GitHub ruleset `Protect main` requires
+the checks `lint`, `test (sqlite)` and `test (postgres)` and blocks deleting `main` and
+force pushes, so a commit with a failing check can't land on `main` either: work is
+pushed to a branch first and reaches `main` (by a pull request, or `git push origin
+<branch>:main`) only once its checks are green. The
+[runbook](docs/operator-runbook.md#deploying) has how it was set up, the classic-rule
+alternative and how to check it is on.
 
 **Still open for the owner** (each a few minutes, with exact steps and a check in the
 runbook's [Owner actions still open](docs/operator-runbook.md#owner-actions-still-open)):
-protect `main` as above; set `LEADGEN_SUPPORT_CONTACT` in Render so the login page
-names a real contact (until then each start of the site logs that it is not set);
-and delete the finished branch `wip-yelp-cap-and-baler-marks` on GitHub.
+
+1. Set `LEADGEN_SUPPORT_CONTACT` in Render, so the login page names a real contact
+   (until then each start of the site logs that it is not set).
+2. Delete the old branches `wip-yelp-cap-and-baler-marks`, `runbook-owner-steps-done`
+   and `claude-staging` on GitHub (nothing on them is missing from `main`).
+3. Set up the outside keep-awake pinger (a free cron-job.org job that opens `/healthz`
+   every 5 minutes in Utah working hours).
+4. Rehearse a restore of the live data once.
 
 ---
 

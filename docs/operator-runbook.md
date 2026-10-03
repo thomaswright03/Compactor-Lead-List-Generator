@@ -35,7 +35,7 @@ All sections:
 Steps only the owner (Thomas) can take, on GitHub, on Render and with the live data;
 the code can't take them, and nothing else is waiting on them. Each takes a few minutes. When
 one is done, change its **Open** to **Done (the date)** here and in the section it
-links to.
+links to, and take it off the README's "Still open for the owner" list.
 
 1. **Protect `main`** (GitHub; **Done (2026-10-03)**: ruleset `Protect main`). So a commit with a
    failing check can't land on `main`. Steps: [Deploying → Protect `main`](#deploying)
@@ -53,11 +53,13 @@ links to.
    `curl -s https://compactor-lead-finder.onrender.com/login | grep -oE 'href="(tel|mailto):[^"]+"'`
    prints the contact's `tel:` or `mailto:` link (nothing printed: not set yet). More
    in [Login and the free plan](#login-and-the-free-plan).
-3. **Delete the old branch `wip-yelp-cap-and-baler-marks`** (GitHub; **Open**, checked
-   2026-10-03). Everything on it reached `main` long ago; it only confuses whoever reads
-   the repository next. Steps, with an optional archive tag that keeps its commit:
-   [Old branches](#the-size-of-a-clone). *Check:* `git ls-remote --heads origin` lists
-   only `refs/heads/main`.
+3. **Delete the three old branches** (GitHub; **Open**, checked 2026-10-03):
+   `wip-yelp-cap-and-baler-marks`, `runbook-owner-steps-done` and `claude-staging`.
+   Nothing on them is missing from `main` and nothing deploys from them; they only make
+   whoever reads the repository next wonder whether work is unmerged. Steps, with an
+   optional archive tag: [Old branches](#the-size-of-a-clone). *Check:*
+   `git ls-remote --heads origin` lists only `refs/heads/main` (plus a branch with an
+   open pull request, if any).
 4. **Turn on the nightly backup** (GitHub; **Done (2026-10-03)**: first run green). So a copy older
    than Neon's 6-hour history exists. On GitHub open the repository → **Settings** →
    **Secrets and variables** → **Actions** → **New repository secret**, twice:
@@ -368,22 +370,35 @@ everyone's clones and the deploy link, so it is left there; it has no effect on
 the running site. `*.whl` files are now ignored so it can't happen again. Purge
 it only if the owner agrees to rewrite the history.
 
-**Old branches.** The remote branch `wip-yelp-cap-and-baler-marks` (last commit
-20eb261, 2026-09-29) is the first draft of the 50-a-day Yelp cap, the Yes / No marks
-and the Postgres database. That work reached `main` as commit 54de1e5 ("Save leads
-and baler marks permanently; cap the website at 50 Yelp calls a day") and has been
-built on ever since, so nothing on the branch is missing from `main` and nothing
-deploys from it. Checked 2026-10-03; it is safe to delete. To delete it (the owner,
-once): GitHub → the repository → **Branches** → the bin icon next to it, or
+**Old branches** (checked 2026-10-03; all three are safe to delete, by the owner):
+
+- `wip-yelp-cap-and-baler-marks` (last commit 20eb261, 2026-09-29): the first draft of
+  the 50-a-day Yelp cap, the Yes / No marks and the Postgres database. That work
+  reached `main` as commit 54de1e5 ("Save leads and baler marks permanently; cap the
+  website at 50 Yelp calls a day") and has been built on ever since.
+- `runbook-owner-steps-done` (7692522, 2026-10-03, "Runbook: main is protected and the
+  nightly backup is on"): that commit is already part of `main`.
+- `claude-staging`: where Claude's review-round fixes are pushed so the three checks run
+  before `main` moves up to them; once a round is finished it points at a commit already
+  on `main`. Delete it only when no review round is running (Claude's next round
+  creates it again with its first push).
+
+To delete them: GitHub → the repository → **Branches** → **All branches** → the bin
+icon next to each of the three; or, on a computer with a clone:
 
 ```bash
+git fetch origin
+git merge-base --is-ancestor origin/runbook-owner-steps-done origin/main && echo on main  # prints: on main
+git merge-base --is-ancestor origin/claude-staging origin/main && echo on main            # prints: on main
 git push origin 20eb26110c8537af04bd3e68420251e18a50696d:refs/tags/archive/wip-yelp-cap-and-baler-marks  # optional: keep a tag
-git push origin --delete wip-yelp-cap-and-baler-marks
+git push origin --delete wip-yelp-cap-and-baler-marks runbook-owner-steps-done claude-staging
 git ls-remote --heads origin        # check: lists only refs/heads/main
 ```
 
-Then mark it **Done** under [Owner actions still open](#owner-actions-still-open)
-and remove this paragraph. `main` is the only branch the site needs.
+If `claude-staging` doesn't print "on main", a round is still running: leave it and
+delete it later. Then mark owner action 3 **Done** under
+[Owner actions still open](#owner-actions-still-open) and shorten this paragraph.
+`main` is the only branch the site needs.
 
 ## The database (saved leads, marks, calls, the Yelp count)
 

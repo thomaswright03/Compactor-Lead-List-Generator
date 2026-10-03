@@ -23,12 +23,16 @@ def test_render_waits_for_the_checks_and_the_docs_say_so():
         assert "every push straight away" not in text or "switch it back" in text, doc
     runbook = " ".join(_read("docs/operator-runbook.md").split())
     assert "Require status checks to pass before merging" in runbook
-    # Protecting main is the owner's GitHub setting: the README and the runbook both give
-    # the steps with the checks' exact names, and the runbook says whether it is on yet.
-    for doc in ("README.md", "docs/operator-runbook.md"):
-        text = " ".join(_read(doc).split())
-        assert "**Require status checks to pass**" in text and "**Include default branch**" in text, doc
-        assert all(f"`{job}`" in text for job in ("lint", "test (sqlite)", "test (postgres)")), doc
+    # Protecting main is the owner's GitHub setting (on since 2026-10-03): the runbook gives
+    # the steps with the checks' exact names and says it is on, and the README says the same
+    # status, names the checks and links to the steps.
+    assert "**Require status checks to pass**" in runbook and "**Include default branch**" in runbook
+    assert "**Status: on since 2026-10-03.**" in runbook
+    readme = " ".join(_read("README.md").split())
+    assert "**`main` is protected (since 2026-10-03).**" in readme and "not set yet" not in readme
+    assert "docs/operator-runbook.md#deploying" in readme
+    for text in (runbook, readme):
+        assert all(f"`{job}`" in text for job in ("lint", "test (sqlite)", "test (postgres)"))
     assert re.search(r"\*\*Status \(\d{4}-\d\d-\d\d\): [^*]+\*\*", runbook)
 
 
