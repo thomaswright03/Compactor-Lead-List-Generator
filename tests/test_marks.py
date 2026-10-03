@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from leadgen import calls, config, daily, marks, saved, web
+from leadgen import calls, daily, marks, saved, web
 from leadgen.dedupe import dedupe
 from leadgen.export import COLUMNS, to_csv_bytes
 from leadgen.models import Lead
@@ -18,8 +18,20 @@ def _lead(name="Smith's Marketplace", source="yelp", source_id="y1", **kw):
     return Lead(name=name, source=source, source_id=source_id, **base)
 
 
-def test_saved_leads_are_kept_by_default():
-    assert config.SAVED_SOURCE_KEEP_SECONDS == {}
+def test_saved_listings_are_kept_for_good(monkeypatch):
+    """Every source's details stay with the saved lead however old they are (the owner's
+    decision): a Yelp listing saved long ago still gives the lead its phone and reviews."""
+    both = dedupe([_lead(), _lead(source="osm", source_id="way/9", phone="", footprint_sqft=50000,
+                                 raw_categories=["shop=supermarket"], yelp_reviews=None)])[0]
+    saved.save_search([both])
+    marks.set_mark(both.uid, "no")
+    years_later = time.time() + 5 * 365 * 24 * 3600
+    monkeypatch.setattr(saved.time, "time", lambda: years_later)
+    saved.save_search([_lead(name="Walmart", source="osm", source_id="node/1", phone="", lat=40.6,
+                             raw_categories=["shop=supermarket"], yelp_reviews=None)])
+    lead = next(l for l in marks.apply(saved.load()) if l.uid == both.uid)
+    assert sorted(lead.sources) == ["osm", "yelp"] and lead.phone and lead.yelp_reviews == 100
+    assert lead.footprint_sqft == 50000 and lead.has_baler == "no"
 
 
 def test_searches_merge_into_one_saved_row_and_keep_the_mark():
@@ -39,36 +51,6 @@ def test_searches_merge_into_one_saved_row_and_keep_the_mark():
     assert smiths.has_baler == "yes" and sorted(smiths.sources) == ["google", "yelp"]
     assert smiths.yelp_reviews == 150
     assert smiths.distance_miles is not None
-
-
-def test_yelp_details_expire_but_the_mark_comes_back(monkeypatch):
-    monkeypatch.setattr(config, "SAVED_SOURCE_KEEP_SECONDS", {"yelp": 12 * 3600})
-    lead = _lead()
-    saved.save_search([lead])
-    marks.set_mark(lead.uid, "no")
-    osm = _lead(name="Walmart", source="osm", source_id="node/1", phone="", lat=40.6,
-                raw_categories=["shop=supermarket"], yelp_reviews=None)
-    saved.save_search([osm])
-    later = time.time() + config.SAVED_SOURCE_KEEP_SECONDS["yelp"] + 60
-    monkeypatch.setattr(saved.time, "time", lambda: later)
-    assert [l.name for l in marks.apply(saved.load())] == ["Walmart"]        # map data is kept
-    again = _lead(source_id="y1")                                 # the same Yelp listing
-    saved.save_search([again])
-    assert again.uid == lead.uid
-    assert {l.name: l.has_baler for l in marks.apply(saved.load())} == {"Walmart": "", lead.name: "no"}
-
-
-def test_merged_lead_drops_only_the_yelp_part(monkeypatch):
-    monkeypatch.setattr(config, "SAVED_SOURCE_KEEP_SECONDS", {"yelp": 12 * 3600})
-    both = dedupe([_lead(), _lead(source="osm", source_id="way/9", phone="", footprint_sqft=50000,
-                                 raw_categories=["shop=supermarket"], yelp_reviews=None)])[0]
-    assert len(both.parts) == 2
-    saved.save_search([both])
-    later = time.time() + config.SAVED_SOURCE_KEEP_SECONDS["yelp"] + 60
-    monkeypatch.setattr(saved.time, "time", lambda: later)
-    lead = marks.apply(saved.load())[0]
-    assert lead.sources == ["osm"] and lead.yelp_reviews is None and not lead.phone
-    assert lead.footprint_sqft == 50000 and lead.uid == both.uid
 
 
 def test_marks_saved_and_exported():

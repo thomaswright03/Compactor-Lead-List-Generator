@@ -624,13 +624,6 @@ YELP_DEFAULT_MAX_REQUESTS = YELP_DAILY_LIMIT
 # A Yelp search is reused (and continued deeper) for 7 days, so repeat searches
 # of an area don't spend the 50 daily calls again.
 YELP_CACHE_TTL_SECONDS = 7 * 24 * 3600
-# How long saved leads keep each source's details, by source (absent = forever).
-# Thomas chose (2026-09-29) to keep everything, although Yelp's terms allow
-# keeping its data for 24 hours and Google's for 30 days. Setting e.g.
-# {"yelp": 12 * 3600} with a 12-hour YELP_CACHE_TTL_SECONDS drops Yelp details,
-# but only when the site is next used (there is no scheduled purge).
-SAVED_SOURCE_KEEP_SECONDS: dict[str, float] = {}
-
 # The map-data step's first round (every part, every mirror) gives up after this long,
 # so a search never hangs when the free map servers are down (see OVERPASS_RETRY_*).
 OVERPASS_DEADLINE_SECONDS = 240

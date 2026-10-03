@@ -199,7 +199,6 @@ interface SearchesAnswer {
   current: SearchRow | null;
   today: string;
   used_today: boolean;
-  reruns_left?: number;
   filling?: { day: string; when: string; fill: Fill } | null;
   running: string | null;
   cut_off: boolean;

@@ -6,10 +6,8 @@ clicked, so two clicks can never both run. A search that fails before finding
 anything (e.g. an unknown location) gives the day back. One where a source failed
 (e.g. Google refused its key) while others found businesses is incomplete: what
 was found is saved and it uses up the day like a complete search, as the owner
-asked (one search per Utah calendar day). INCOMPLETE_RERUNS can allow that many
-same-day re-runs after an incomplete search, but it is 0 unless the owner asks. A
-search cut off by a server restart saves what it had found and gives the day back
-(interrupted.py).
+asked (one search per Utah calendar day, with no same-day re-run). A search cut off
+by a server restart saves what it had found and gives the day back (interrupted.py).
 """
 
 import datetime as dt
@@ -36,11 +34,6 @@ def today() -> str:
 # left no record of its run for that (it could not be written) stops holding the
 # day after this long, so the day's search can be run again.
 STALE_SECONDS = 30 * 60
-
-# After an incomplete search the day's search can be run this many more times. The owner
-# asked for one search per Utah day, full stop, so this is 0 (an incomplete search
-# uses up the day); raise it only if the owner asks for re-runs.
-INCOMPLETE_RERUNS = 0
 
 # A day's search as the page shows it: day, at, when, and what was searched and found.
 Record = dict[str, Any]
@@ -116,13 +109,6 @@ def earlier_search(place: str, day: str, since: float) -> Record | None:
     return None
 
 
-def incomplete_count(day: str) -> int:
-    """How many of the day's searches were incomplete and gave the day back."""
-    with store.connect() as db:
-        rows = db.all("SELECT info FROM search_failures WHERE day = ?", (day,))
-    return sum(1 for (info,) in rows if json.loads(info).get("partial"))
-
-
 def _abandoned(record: Record | None, now: float) -> bool:
     return record is not None and "leads" not in record and now - record["at"] > STALE_SECONDS
 
@@ -175,11 +161,9 @@ def history(limit: int = 60) -> dict[str, Any]:
     current = records[0] if records and records[0]["day"] == today() else None
     searches = sorted(records + [_as_record(r) for r in failed], key=lambda r: -r["at"])[:limit]
     day = today()
-    partial = sum(1 for r in failed if r[0] == day and json.loads(r[2]).get("partial"))
     # A search whose missed map areas are still being filled in, whatever its day (one
     # started late in the evening goes on past midnight): the page keeps showing it.
     filling = next((r for r in records if isinstance(r.get("fill"), dict)
                     and r["fill"].get("state") == "filling"), None)
     return {"today": day, "used_today": bool(current) and not _abandoned(current, time.time()),
-            "current": current, "searches": searches, "filling": filling,
-            "reruns_left": max(0, INCOMPLETE_RERUNS - partial + 1) if partial else None}
+            "current": current, "searches": searches, "filling": filling}

@@ -1,5 +1,5 @@
 """The day's one search: a search whose leads can't be saved gives the day back, an
-incomplete search uses up the day (unless re-runs are allowed), and shows one short note."""
+incomplete search uses up the day (there is no same-day re-run), and shows one short note."""
 
 import time
 
@@ -33,12 +33,11 @@ def _map_lead(name, tags, sid=None, **kw):
                 raw_categories=tags, **kw)
 
 
-# ---- an incomplete search may be run again a set number of times
+# ---- an incomplete search uses up the day: there is no same-day re-run
 
-def test_incomplete_searches_can_be_rerun_once_when_allowed(monkeypatch):
-    """INCOMPLETE_RERUNS is 0 (the owner's one-search-a-day rule); raised to 1, an
-    incomplete search may be run once more that day."""
-    monkeypatch.setattr(daily, "INCOMPLETE_RERUNS", 1)
+def test_an_incomplete_search_uses_up_the_day_with_no_rerun(monkeypatch):
+    """One search a Utah day, the owner's rule: an incomplete search (Google refused its
+    key) keeps the day, and a second search that day is refused."""
     monkeypatch.setenv("GOOGLE_PLACES_API_KEY", "AIzaFAKEKEYFORTESTS000000000000000000")
     monkeypatch.setattr(pipeline, "geocode", lambda location, key: (40.72, -111.9, "Salt Lake City"))
 
@@ -48,18 +47,13 @@ def test_incomplete_searches_can_be_rerun_once_when_allowed(monkeypatch):
     monkeypatch.setattr(pipeline.osm, "search", lambda *a, **k: ([_lead()], []))
     client = web.create_app().test_client()
     job = client.post("/search", data={"location": "84101"}).get_json()["job_id"]
-    assert "run it again once today" in " ".join(_wait(client, job)["warnings"])
+    text = " ".join(_wait(client, job)["warnings"])
+    assert "Today's search is used up all the same" in text and "run it again" not in text
     history = client.get("/searches").get_json()
-    assert not history["used_today"] and history["reruns_left"] == 1
-    # The re-run is incomplete too: it keeps the day.
-    job = client.post("/search", data={"location": "84101"}).get_json()["job_id"]
-    assert "today's search is now used up" in " ".join(_wait(client, job)["warnings"])
-    history = client.get("/searches").get_json()
-    assert history["used_today"] and history["current"]["partial"]
-    third = client.post("/search", data={"location": "84101"})
-    assert third.status_code == 409
-    assert "the next search can run tomorrow, from midnight Utah time" in third.get_json()["error"]
-    assert daily.incomplete_count(daily.today()) == 1
+    assert history["used_today"] and history["current"]["partial"] and "reruns_left" not in history
+    again = client.post("/search", data={"location": "84101"})
+    assert again.status_code == 409
+    assert "the next search can run tomorrow, from midnight Utah time" in again.get_json()["error"]
 
 
 # ---- a search whose leads can't be saved gives the day back

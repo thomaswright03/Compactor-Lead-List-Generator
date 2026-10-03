@@ -110,7 +110,7 @@ def test_a_search_whose_paid_source_failed_saves_what_it_found_and_uses_up_the_d
     assert "check the Google key" in text
     assert "the next one can run tomorrow" in body["note"]
     history = client.get("/searches").get_json()
-    assert history["used_today"] and history["reruns_left"] is None
+    assert history["used_today"] and "reruns_left" not in history
     record = history["current"]
     assert record["partial"] and record["leads"] == 1
     assert "Couldn't reach Google" in record["reason"] and "were saved" in record["reason"]

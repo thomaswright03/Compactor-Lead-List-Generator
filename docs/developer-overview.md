@@ -135,7 +135,7 @@ never answer, pausing, a restart);
 `tests/test_saved_list.py` closed businesses never being added, refreshes after a
 big search staying one page at most and the parsed saved list being reused;
 `tests/test_calls.py` calls on unmarked businesses and who made each mark and call;
-`tests/test_daily_search.py` the optional re-run after an incomplete search;
+`tests/test_daily_search.py` an incomplete search using up the day (no same-day re-run);
 `tests/test_find_page.py`, `tests/test_search_words.py`, `tests/test_campus.py`,
 `tests/test_downloads.py`, `tests/test_switches.py` and `tests/test_offline.py`
 what their names say. The browser tests also log a call on Not
@@ -325,12 +325,9 @@ the sidebar to the page's list (Leads, Calls) or heading.
   per Utah day). The page says which source is missing and that today's search is
   used up all the same (for Google or Yelp: "ask whoever looks after the site to
   check the key"), and the history shows the search's lead count marked
-  **Incomplete**, with the reason. `INCOMPLETE_RERUNS` in `leadgen/daily.py` is 0;
-  set to 1 it would give the day back once after an incomplete search (the note
-  beside the button then says "1 re-run left today", and an incomplete re-run keeps
-  the day), but the owner has not asked for that (decision recorded 2026-09-30 in
-  the runbook). A further search that day is refused with "the next search can run
-  tomorrow, from midnight Utah time". A source switched off by the
+  **Incomplete**, with the reason. There is no same-day re-run (the owner's decision,
+  recorded 2026-09-30 in the runbook): a further search that day is refused with "the
+  next search can run tomorrow, from midnight Utah time". A source switched off by the
   administrator is not a failure (the day is used as usual). At the bottom of the
   page, **For the site administrator** (a quiet section, closed until opened)
   holds **Recent problems** (failed or incomplete searches and server errors of the

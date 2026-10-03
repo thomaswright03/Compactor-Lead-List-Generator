@@ -76,7 +76,7 @@ def test_an_unreadable_database_is_never_an_all_clear(monkeypatch):
     assert body.status_code == 503
     monkeypatch.setattr("leadgen.web.finding.daily.history",
                         lambda: {"today": "2026-09-30", "used_today": False, "current": None,
-                                 "searches": [], "reruns_left": None})
+                                 "searches": []})
     body = client.get("/searches").get_json()
     assert body["problems"] is None and body["problems_unread"] is True
     assert all(s["unread"] for s in body["switches"].values())

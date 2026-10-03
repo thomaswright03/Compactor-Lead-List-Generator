@@ -248,10 +248,9 @@ itself; the person can run the day's search again. To avoid it altogether, push
 changes outside working hours or when nobody is searching.
 
 Decision record (2026-09-30): the same-day re-run after an incomplete search, which
-an earlier version allowed once, was never approved by the owner, so it was removed
-(`INCOMPLETE_RERUNS = 0` in `leadgen/daily.py`). If the owner ever wants it back,
-set it to 1 (the code and tests for it remain) and record the owner's decision
-here with the date.
+an earlier version allowed once, was never approved by the owner, so it was switched
+off; on 2026-10-03 its code was removed as well (it could not run). Bringing it back
+would be new work, after the owner's decision is recorded here with the date.
 
 ## Logs, and rolling back a bad deploy
 
@@ -418,10 +417,11 @@ the latest mark (the earlier ones stay in its history), except that when the gro
 marks disagree (some Yes, some No) it keeps Yes and the lead says the marks
 disagreed until a salesperson presses Yes or No on it again. Nothing is deleted: the
 merged rows stay in the table, hidden, and are recorded in `merged_leads`. The page shows the saved list when it opens, and the downloads
-contain all of it. Everything is kept, including Yelp's details, although
-Yelp's terms allow keeping its data for 24 hours (and Google's for 30 days);
-`SAVED_SOURCE_KEEP_SECONDS` in `leadgen/config.py` drops a source's details
-after a set time instead, keeping the business's id so its mark comes back.
+contain all of it. Everything is kept for good, including Yelp's details, although
+Yelp's terms allow keeping its data for 24 hours (and Google's for 30 days): the
+owner's decision (2026-09-29). The switched-off setting that could drop a source's
+details after a set time was removed on 2026-10-03; dropping them would now be new
+work, after the owner decides.
 
 **Leads from a search around the wrong place.** Since 2026-10-02 a search only
 starts around a place more than 30 miles from AARCO's shop (`SERVICE_AREA_MILES` in

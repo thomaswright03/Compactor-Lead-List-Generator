@@ -505,11 +505,10 @@ def _stopped(day: str, result: RunResult, job: Job, warnings: list[str]) -> None
 def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str],
                 params: SearchParams) -> None:
     """A search where a source failed (a paid one refused its key, say) while others
-    found businesses: what was found is saved, and the day is given back, so the
-    search can be run again once the source works; but only daily.INCOMPLETE_RERUNS
-    more times (0: none, the owner's rule): an incomplete search after that keeps
-    the day, like a complete one. Map areas the free map servers missed are then
-    filled in in the background (fillin.py), within this same search."""
+    found businesses: what was found is saved and the day is used up, like a complete
+    search (one search a Utah day, the owner's rule: no same-day re-run). Map areas the
+    free map servers missed are then filled in in the background (fillin.py), within
+    this same search."""
     names = _source_names(result.failed_sources)
     paid = [s for s in result.failed_sources if s in ("google", "yelp")]
     whole = [s for s in result.failed_sources if s not in result.partial_sources]
@@ -534,45 +533,24 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str],
            else "couldn't be reached" if not result.partial_sources else "didn't fully answer")
     missing = (f"Some businesses are missing: {names} {how}"
                + (f" ({coverage})." if coverage and not whole else "."))
-    try:
-        earlier = daily.incomplete_count(day)
-    except Exception:
-        log.exception("Counting today's incomplete searches failed")
-        earlier = 0
-    filling = fillin.ON and fillin.wanted(result) and earlier >= daily.INCOMPLETE_RERUNS
-    if earlier >= daily.INCOMPLETE_RERUNS:
-        # The re-run allowance is used up: this search keeps the day, like a complete one.
-        used = ("This was today's re-run, so today's search is now used up"
-                if earlier else "Today's search is used up all the same (one search a day)")
-        warnings.append(f"{reason} {used}; the next search can run tomorrow, from midnight "
-                        f"Utah time.{advice}")
+    filling = fillin.ON and fillin.wanted(result)
+    warnings.append(f"{reason} Today's search is used up all the same (one search a day); the next search "
+                    f"can run tomorrow, from midnight Utah time.{advice}")
+    job["note"] = f"{missing} Today's search is now used up; the next one can run tomorrow."
+    if filling:
+        warnings.append(fillin.NOTE)
+        job["note"] = f"{missing} {fillin.NOTE}"
+    _record(day, result, job, warnings, {"partial": True, "reason": reason})
+    if filling and not fillin.start(day, params, result):
         job["note"] = f"{missing} Today's search is now used up; the next one can run tomorrow."
-        if filling:
-            warnings.append(fillin.NOTE)
-            job["note"] = f"{missing} {fillin.NOTE}"
-        _record(day, result, job, warnings, {"partial": True, "reason": reason})
-        if filling and not fillin.start(day, params, result):
-            job["note"] = f"{missing} Today's search is now used up; the next one can run tomorrow."
-            warnings.remove(fillin.NOTE)
-            _record(day, result, job, warnings)
-            filling = False
-        if filling and not whole:
-            # Only map areas are missing, and they are being filled in: fillin.py reports
-            # a problem if some never answer.
-            return
-    else:
-        left = daily.INCOMPLETE_RERUNS - earlier
-        job["note"] = f"{missing} Run the search again today to fill them in."
-        warnings.append(f"{NOT_USED_UP} You can run it again {_times(left)} today to fill in "
-                        f"what {names} would have found.{advice}")
-        _give_back(day, reason, {"partial": True, "leads": len(result.leads),
-                                 "new": job.get("new_leads"), "details": result.stats,
-                                 "warnings": warnings})
+        warnings.remove(fillin.NOTE)
+        _record(day, result, job, warnings)
+        filling = False
+    if filling and not whole:
+        # Only map areas are missing, and they are being filled in: fillin.py reports
+        # a problem if some never answer.
+        return
     alerts.report("search", f"Today's search was incomplete: {reason}{advice}")
-
-
-def _times(n: int) -> str:
-    return "once" if n == 1 else f"{n} times"
 
 
 def _source_names(sources: list[str]) -> str:

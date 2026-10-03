@@ -93,10 +93,6 @@ async function loadSearches() {
     setGo(true, "Today's search didn't finish, so it can be run again.");
   } else if (cutToday) {
     setGo(true, cutOffText(cutToday));
-  } else if (body.reruns_left) {
-    // After an incomplete search (a source failed) it may run again, a set number of times.
-    const n = body.reruns_left;
-    setGo(true, `Today's search was incomplete, so it can be run again: ${n} re-run${n === 1 ? "" : "s"} left today.`);
   } else setGo(true, "One search a day. Today's is available.");
   renderHistory(body.searches, body);
   // A fill-in still going from an earlier day (a late search runs on past midnight) stays in view

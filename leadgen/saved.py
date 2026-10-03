@@ -1,13 +1,11 @@
 """The saved lead list: every search merges into it, one row per business.
 
-A saved lead keeps the source listings it was built from ("parts"). A new
-search's lead joins the saved one it matches (same source listing, or the
-duplicate rules in dedupe.py) and replaces that source's listings with the
+A saved lead keeps the source listings it was built from ("parts"), for good (the
+owner's decision, 2026-09-29: every source's details are kept, Yelp's and Google's
+too). A new search's lead joins the saved one it matches (same source listing, or
+the duplicate rules in dedupe.py) and replaces that source's listings with the
 fresh ones, so a business never gets a second row and keeps its id (and its
-baler mark). Listings from Yelp and Google are dropped once their terms stop
-allowing them to be kept (config.SAVED_SOURCE_KEEP_SECONDS); the lead is then
-rebuilt from what is left, and a lead with nothing left is hidden but keeps
-its listing ids, so its mark comes back if a search finds it again.
+baler mark).
 
 A business a later search reports closed for good stays in the list (with its
 mark and calls), flagged CLOSED_FLAG; it is not offered for checking any more.
@@ -62,11 +60,6 @@ def _part_id(part: Part) -> str:
     return f"{lead.get('source')}:{lead.get('source_id')}"
 
 
-def _expired(part: Part, now: float) -> bool:
-    keep = config.SAVED_SOURCE_KEEP_SECONDS.get(part["lead"].get("source"))
-    return keep is not None and now - part["at"] > keep
-
-
 def _rebuild(parts: list[Part]) -> Lead:
     lead = merge([_to_lead(copy.deepcopy(p["lead"])) for p in parts])
     score_lead(lead, config.DEFAULT_KEYWORDS)
@@ -93,12 +86,11 @@ class _Row:
                 self.first_seen, self.last_seen)
 
 
-def _read(db: store.Db, uids: list[str] | None = None) -> list[_Row]:
-    """Every saved row, or (with uids) just those rows."""
-    select = "SELECT uid, lead, parts, ids, first_seen, last_seen FROM leads"
-    found = db.all(select) if uids is None else store.rows_for(db, select, "uid", uids)
+def _read(db: store.Db) -> list[_Row]:
+    """Every saved row, with its source listings."""
     rows = []
-    for uid, lead, parts, ids, first, last in found:
+    for uid, lead, parts, ids, first, last in db.all(
+            "SELECT uid, lead, parts, ids, first_seen, last_seen FROM leads"):
         data = json.loads(lead)
         rows.append(_Row(uid, _to_lead(data) if data else None, json.loads(parts),
                          set(json.loads(ids)), first, last))
@@ -110,21 +102,6 @@ def _write(db: store.Db, rows: Iterable[_Row]) -> None:
             "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (uid) DO UPDATE SET lead = excluded.lead, "
             "parts = excluded.parts, ids = excluded.ids, last_seen = excluded.last_seen",
             [r.values() for r in rows])
-
-
-def _drop_expired(rows: list[_Row], now: float) -> list[_Row]:
-    """Remove listings that may no longer be kept; returns the rows that changed."""
-    changed = []
-    for row in rows:
-        fresh = [p for p in row.parts if not _expired(p, now)]
-        if len(fresh) == len(row.parts):
-            continue
-        row.parts = fresh
-        row.lead = _rebuild(fresh) if fresh else None
-        if row.lead:
-            row.lead.uid = row.uid
-        changed.append(row)
-    return changed
 
 
 def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tuple[int, int]:
@@ -144,7 +121,7 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
         k.lower() for k in config.DEFAULT_KEYWORDS]
     with store.connect() as db:
         rows = _read(db)
-        changed = {r.uid: r for r in _drop_expired(rows, now)}
+        changed: dict[str, _Row] = {}
         by_id = {i: r for r in rows for i in r.ids}
         buckets: dict[tuple[float, float], list[_Row]] = {}
         for r in rows:
@@ -466,22 +443,17 @@ def load(uids: Iterable[str] | None = None) -> list[Lead]:
     Raises store.Unavailable without a database, or a database error when the
     leads can't be read.
     """
-    now = time.time()
-    wanted = None if uids is None else set(uids)
-    with store.connect() as db:
-        if config.SAVED_SOURCE_KEEP_SECONDS:
-            rows = _read(db, None if wanted is None else list(wanted))
-            _write(db, _drop_expired(rows, now))
-        elif wanted is None:
+    if uids is None:
+        with store.connect() as db:
             return _whole_list(db)
-        else:
-            # Nothing expires, so the source listings (most of each row) needn't be read.
-            select = "SELECT uid, lead FROM leads"
-            rows = [_Row(uid, _to_lead(data) if (data := json.loads(lead)) else None, [],
-                         set(), 0.0, 0.0)
-                    for uid, lead in store.rows_for(db, select, "uid", list(wanted))]
-    return _best_first([l for r in rows
-                        if (wanted is None or r.uid in wanted) and (l := _ready(r))])
+    wanted = set(uids)
+    with store.connect() as db:
+        # The source listings (most of each row) needn't be read.
+        select = "SELECT uid, lead FROM leads"
+        rows = [_Row(uid, _to_lead(data) if (data := json.loads(lead)) else None, [],
+                     set(), 0.0, 0.0)
+                for uid, lead in store.rows_for(db, select, "uid", list(wanted))]
+    return _best_first([l for r in rows if r.uid in wanted and (l := _ready(r))])
 
 
 def count() -> int:
