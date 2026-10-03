@@ -24,6 +24,8 @@ const shared = Object.fromEntries(FILES.map((f) => [f, exported(f)]));
 const readonly = (names) => Object.fromEntries(names.map((n) => [n, "readonly"]));
 
 export default [
+  // Libraries copied in as they were released (vendor/*/README.md), not the site's own code.
+  { ignores: [`${DIR}/vendor/**`] },
   ...FILES.map((file) => ({
     files: [`${DIR}/${file}`],
     languageOptions: {

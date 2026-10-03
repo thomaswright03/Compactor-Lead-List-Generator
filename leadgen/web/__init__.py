@@ -68,9 +68,10 @@ def setup_logging() -> None:
 def _asset_version() -> str:
     """Changes whenever the page's script or styles change, so browsers fetch the new ones."""
     digest = hashlib.sha256()
-    for name in sorted(os.listdir(STATIC)):
-        with open(os.path.join(STATIC, name), "rb") as f:
-            digest.update(f.read())
+    for folder, _, files in sorted(os.walk(STATIC)):      # vendor/leaflet too
+        for name in sorted(files):
+            with open(os.path.join(folder, name), "rb") as f:
+                digest.update(f.read())
     return digest.hexdigest()[:10]
 
 
