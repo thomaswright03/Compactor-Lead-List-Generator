@@ -78,6 +78,8 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   industrial buildings known only by a map tag, nor self-storage, data centres,
   career centres or a city's maintenance shops. "Harbor Freight" is a tool shop,
   not a freight warehouse, and a furniture shop mapped as a mall is not a venue. A
+  resort or shopping mall is what its name says even where the map shows a shop or
+  apartments there ("Snowbird Ski & Summer Resort", "Galleria Mall"). A
   map listing named only "Recycling" or "Junkyard" gets its operator, street or
   city added to its name and ranks below named places. A brand counts only when the
   business is that brand (a hotel named after the air base next to it is not the base).

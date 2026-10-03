@@ -367,6 +367,33 @@ def _production_food(f: Facts) -> Decision | None:
     return (made[0], f.kept) if production and not service and made else None
 
 
+def _resort_named(name: str) -> bool:
+    """The name says the place is a resort, and not one of its shops ("Solitude Mountain
+    Resort Store")."""
+    words = name.split()
+    resort = (bool(words) and words[-1] in ("resort", "resorts")) or _words(name, config.RESORT_NAME_WORDS)
+    return resort and not _words(name, config.SHOP_NAME_WORDS)
+
+
+def _resort_or_mall(f: Facts) -> Decision | None:
+    """A resort's or shopping mall's name decides over the shop or the homes its building
+    is mapped as (config.RESORT_NAME_WORDS, config.MALL_OWN_NAME_WORDS), when no Google
+    or Yelp listing says what it is and the name doesn't also say apartments."""
+    if any(how != TAG for _, how in f.tagged):
+        return None
+    tagged = {cat.key for cat, _ in f.tagged}
+    shop = any(c.startswith("shop=") for c in f.lead.raw_categories)
+    if shop and tagged <= {"specialty_retail", "retail"} and _resort_named(f.name):
+        key = "hospitality"
+    elif (tagged == {"multifamily"} and _words(f.name, config.MALL_OWN_NAME_WORDS)
+          and not _words(f.name, config.CATEGORY_BY_KEY["multifamily"].name_keywords)):
+        key = "venue"
+    else:
+        return None
+    named = (config.CATEGORY_BY_KEY[key], NAME)
+    return named, f.kept if named in f.kept else f.kept + [named]
+
+
 def _specific(f: Facts) -> Decision | None:
     return (_best(f.specific), f.kept) if f.specific else None
 
@@ -427,6 +454,9 @@ RULES = (
     Rule("production listing", "a brewery's or bakery's production listing decides over its taproom or cafe "
          "label", _production_food,
          "It's listed as a brewery or bakery that makes its products there, not only a taproom or café"),
+    Rule("resort or mall name", "a resort's or shopping mall's name decides over the shop or homes its "
+         "building is mapped as", _resort_or_mall,
+         "Its name says it's a resort or a shopping mall, although the map shows a shop or homes there"),
     Rule("own category", "its own Google category, Yelp category or map tag decides", _specific),
     Rule("name beats type", "its name decides over a listing type that is usually not a prospect",
          _name_beats_type,

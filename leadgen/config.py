@@ -418,6 +418,14 @@ MALL_NAME_WORDS = ["mall", "shopping center", "shopping centre", "shopping plaza
                    "crossing", "outlets", "outlet mall", "galleria", "square", "promenade",
                    "fashion place", "gateway", "station park", "city creek", "center", "centre",
                    "village", "shops at", "the shops"]
+# A resort's or a shopping mall's own name says what it is, over the shop or the homes its
+# building is mapped as (scoring rule "resort or mall name"): "Snowbird Ski & Summer
+# Resort", an office tagged shop=sports, is the resort; "Galleria Mall", a building tagged
+# building=apartments, is the mall. A name whose last word is "resort" counts too
+# ("Deer Valley Resort"), not one that only starts with it ("Resort Sports"), nor a
+# resort's shop (SHOP_NAME_WORDS: "Solitude Mountain Resort Store").
+RESORT_NAME_WORDS = ["ski resort", "ski area", "summer resort", "mountain resort", "ski and summer resort"]
+MALL_OWN_NAME_WORDS = ["mall", "shopping mall", "shopping center", "shopping centre", "outlet mall"]
 SHOP_NAME_WORDS = ["furniture", "mattress", "mattresses", "appliance", "appliances", "store",
                    "shop", "boutique", "showroom", "hardware", "tools", "carpet", "flooring",
                    "rugs", "jewelers", "jewelry", "books", "home furnishings", "interiors",

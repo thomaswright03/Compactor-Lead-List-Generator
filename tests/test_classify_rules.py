@@ -25,6 +25,8 @@ RULE_EXAMPLES = [
     ("self-storage", make("Extra Space Storage", ["self_storage"]), None),
     ("retail chain", make("Harbor Freight Tools", ["building=industrial"], "osm"), "specialty_retail"),
     ("production listing", make("Uinta Brewing", ["brewery", "food_court"]), "food_production"),
+    ("resort or mall name", make("Snowbird Ski & Summer Resort", ["building=yes", "shop=sports"], "osm"),
+     "hospitality"),
     ("own category", make("Smith's Marketplace", ["supermarket"]), "grocery"),
     ("name beats type", make("Liberty Village Apartments", ["real_estate_agency"]), "multifamily"),
     ("not-a-prospect type", make("Animal Hospital of Murray", ["veterinary_care"]), None),
@@ -127,6 +129,50 @@ def test_a_listing_merged_from_google_and_the_map_is_classified():
     # A Google type beside a shop=mall tag used to raise while checking for a shop mapped as a mall.
     got = classify(make("Liddiard Furniture", ["store", "shop=mall"]))
     assert got.best[0].key == "retail"
+
+
+# Map listings from a real search (their map tags as the map data had them), and what
+# a salesperson would call them.
+@pytest.mark.parametrize(("name", "tags", "category"), [
+    # A shopping arcade whose building is mapped as apartments (580 Main Street, Park City).
+    ("Galleria Mall", ["building=apartments", "building:levels=4"], "venue"),
+    ("Galleria Mall", ["landuse=residential"], "venue"),
+    ("Foothill Shopping Center", ["building=apartments"], "venue"),
+    # The resort's office (Millrock Drive, Holladay), mapped as a sports shop.
+    ("Snowbird Ski & Summer Resort", ["building=yes", "shop=sports"], "hospitality"),
+    ("Deer Valley Resort", ["shop=outdoor"], "hospitality"),
+    ("Alta Ski Area", ["shop=ticket"], "hospitality"),
+    # Left as they were: apartments named after a mall, shops named after a resort, and
+    # a mall or hotel whose own tag says so.
+    ("Galleria Apartments", ["building=apartments"], "multifamily"),
+    ("Mall View Apartments", ["building=apartments"], "multifamily"),
+    ("Resort Sports", ["shop=sports"], "specialty_retail"),
+    ("Snowbird Resort Ski Shop", ["shop=sports"], "specialty_retail"),
+    ("Solitude Mountain Resort Store", ["shop=sports"], "specialty_retail"),
+    ("Fashion Place Mall", ["shop=mall"], "venue"),
+    ("Snowbird Lodge Resort", ["tourism=hotel"], "hospitality"),
+])
+def test_a_resort_or_a_mall_is_what_its_name_says(name, tags, category):
+    got = classify(make(name, tags, "osm"))
+    assert got.best[0].key == category, (got.best, got.rule.name)
+
+
+def test_a_listing_says_more_than_a_resort_or_mall_name():
+    # A Google or Yelp listing says what the business is: the name doesn't overrule it.
+    assert classify(make("Snowbird Ski & Summer Resort", ["sporting_goods_store"])).best[0].key == \
+        "specialty_retail"
+    assert classify(make("Galleria Mall", ["apartment_complex"])).best[0].key == "multifamily"
+
+
+def test_a_mall_and_a_resort_now_score_as_one():
+    """The two listings the review found: a mall scores as a mall (28, tier C, not 15 as
+    apartments), the resort's office as a resort (18, not 15 as a sports shop)."""
+    mall = score_lead(make("Galleria Mall", ["building=apartments"], "osm"))
+    resort = score_lead(make("Snowbird Ski & Summer Resort", ["building=yes", "shop=sports"], "osm"))
+    assert (mall.score, mall.tier, mall.lead_type) == (28, "C", "Prospect")
+    assert (resort.score, resort.tier) == (18, "D")
+    assert "Its name says it's a resort or a shopping mall, although the map shows a shop or homes there" \
+        in scoring.plain_reasons(resort.reasons)
 
 
 def test_every_rule_and_veto_has_an_example():
