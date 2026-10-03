@@ -507,6 +507,19 @@ the sidebar to the page's list (Leads, Calls) or heading.
   **Called By** columns. Names are kept in their own table (`made_by`, by the
   mark change's or call's id), so marks and calls from before it simply have
   no name.
+- **How `/leads` stays quick as the list grows** (`web/leads.py` `Listing`): the
+  saved list with its marks, calls and verified contacts is read once and kept, with
+  each tab's rows and counts, each sort order asked for and each lead's filter text, so
+  a request only filters and pages it (about 20 ms with 10,000 or 50,000 saved leads).
+  Each request first reads `FINGERPRINT` (counts and latest times of the tables the list
+  shows, one query). Unchanged: the kept list answers. A search, a merge or a removal
+  changed the saved rows: the list is read in full. Only Yes / No clicks, calls,
+  contacts or undos changed: just those leads are read again and moved to their places
+  in each tab and sort (`Listing.updated`, about 40 ms with 10,000). Rows that came in
+  without a click (a restore from a backup) change `_tallies`, and the list is read in
+  full. `tests/test_leads_listing.py` checks every tab, sort and filter against reading
+  the whole list each time, and the kept list after each kind of click against a full
+  read.
 - **Verified phone and contact** (`contacts.py`): **Add verified phone or contact**
   under a lead's phone (Leads and Calls) opens a box for a phone (with its area
   code: 10 digits, or 11 starting with 1, before any extension) and who to ask for,

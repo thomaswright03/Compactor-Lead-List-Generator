@@ -1,9 +1,12 @@
 """The saved list's server side: leads, Yes / No marks, calls, stats and downloads."""
 
+import bisect
+import copy
 import logging
 import math
+import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from flask import Blueprint, Response, abort, jsonify, request
@@ -26,6 +29,7 @@ from .common import (
     same_origin,
     state,
     unavailable,
+    with_marks_and_calls,
 )
 
 log = logging.getLogger("leadgen.web")
@@ -45,7 +49,7 @@ bp = Blueprint("leads", __name__)
 # flagged) but is no longer offered for checking.
 VIEWS = ("unchecked", "yes", "no", "competitors", "closed", "all", "called")
 # Column sorts: the value to sort by. Equal values keep the saved order (best first).
-SORTS = {
+SORTS: dict[str, Callable[[Lead], Any]] = {
     "score": lambda l: l.score,
     "name": lambda l: l.name.lower(),
     "city": lambda l: (places.town_of(l) or "~").lower(),
@@ -62,18 +66,24 @@ def is_prospect(lead: Lead) -> bool:
     return lead.lead_type not in EXEMPT_TYPES
 
 
-def in_view(lead: Lead, view: str) -> bool:
-    if view == "all":
-        return True
-    if view == "competitors":
-        return not is_prospect(lead)
-    if view == "called":
-        return bool(lead.call_count)
-    if view == "closed":
-        return saved.is_closed(lead)
-    if view == "unchecked" and saved.is_closed(lead):
-        return False
-    return is_prospect(lead) and (lead.has_baler or "unchecked") == view
+def views_of(lead: Lead) -> list[str]:
+    """The tabs (VIEWS) a lead is listed under: every lead under "all"; under "called"
+    once a call is logged; under "closed" when closed for good; competitors and AARCO's
+    own listing under "competitors"; a prospect under its Yes / No, or, not marked and
+    not closed, under "unchecked"."""
+    closed = saved.is_closed(lead)
+    tabs = ["all"]
+    if lead.call_count:
+        tabs.append("called")
+    if closed:
+        tabs.append("closed")
+    if not is_prospect(lead):
+        tabs.append("competitors")
+    elif lead.has_baler in ("yes", "no"):
+        tabs.append(lead.has_baler)
+    elif not closed:
+        tabs.append("unchecked")
+    return tabs
 
 
 def has_phone(lead: Lead) -> bool:
@@ -81,48 +91,273 @@ def has_phone(lead: Lead) -> bool:
     return bool(lead.phone.strip() or lead.verified_phone.strip())
 
 
-def matches(lead: Lead, q: str, tier: str, phone: bool = False, more: str = "") -> bool:
+def filter_text(lead: Lead) -> str:
+    """What the filter box looks in: the lead's name, town, ZIP, category, address, type,
+    flags and verified contact name, lowercased."""
+    return " ".join([lead.name, places.town_of(lead), lead.zip, lead.category, lead.address,
+                     lead.lead_type, " ".join(lead.flags), lead.contact_name]).lower()
+
+
+def matches(lead: Lead, q: str, tier: str, phone: bool = False, more: str = "",
+            text: str | None = None) -> bool:
     """The page's filter box, tier choice and "Has phone" tick. Several words typed
     ("walmart layton") match a lead when each is somewhere in its name, town, ZIP,
     category, address, type, flags or verified contact name (or in `more`: on the Calls
     page, its calls' summaries, outcomes and callers), in any order and any case (q is
-    lowercased)."""
+    lowercased). text: the lead's filter_text, when already known."""
     if tier and lead.tier != tier:
         return False
     if phone and not has_phone(lead):
         return False
-    text = " ".join([lead.name, places.town_of(lead), lead.zip, lead.category, lead.address,
-                     lead.lead_type, " ".join(lead.flags), lead.contact_name]).lower()
+    if not q:
+        return True
+    text = filter_text(lead) if text is None else text
     if more:
         text += " " + more
     return all(word in text for word in q.split())
 
 
-def view_counts(leads: list[Lead]) -> dict[str, Any]:
-    """How many leads each tab holds (ignoring the filter), and calls by result."""
-    counts = dict.fromkeys(VIEWS, 0)
-    outcomes = dict.fromkeys(calls.OUTCOMES, 0)
-    counts["all"] = len(leads)
-    for lead in leads:                    # one pass, the same rules as in_view
-        closed = saved.is_closed(lead)
-        counts["closed"] += closed
-        if lead.call_count:
-            counts["called"] += 1
+def order(rows: list[Lead], view: str, sort: str, desc: bool) -> list[Lead]:
+    """rows (in the saved list's order, best first) in the order the page asked for. Equal
+    values keep the saved order."""
+    if sort != "score" or not desc:
+        return sorted(rows, key=SORTS[sort], reverse=desc)      # stable: ties keep the best-first order
+    if view == "unchecked":
+        # Among equal scores, the leads that can be phoned from the page come first.
+        return sorted(rows, key=lambda l: (-l.score, not has_phone(l)))
+    return rows
+
+
+# What the saved list shows depends on these tables only: any change to them changes one
+# of these figures. The first LIST_FIGURES are the saved rows and the merges; the rest the
+# marks, calls and verified contacts, and who made them.
+FIGURES = (("leads", "COUNT(*)"), ("leads", "MAX(last_seen)"), ("leads", "SUM(last_seen)"),
+           ("merged_leads", "COUNT(*)"),
+           ("marks", "COUNT(*)"), ("mark_changes", "COUNT(*)"), ("mark_changes", "MAX(at)"),
+           ("mark_changes", "COUNT(undone_at)"), ("mark_changes", "MAX(undone_at)"),
+           ("calls", "COUNT(*)"), ("calls", "MAX(at)"), ("call_undos", "COUNT(*)"),
+           ("lead_contacts", "COUNT(*)"), ("lead_contacts", "MAX(at)"), ("made_by", "COUNT(*)"))
+LIST_FIGURES = 4
+FINGERPRINT = "SELECT " + ", ".join(f"(SELECT {what} FROM {table})" for table, what in FIGURES)
+
+
+Rank = Callable[[Lead], tuple[Any, ...]]
+
+
+def _sums(leads: Iterable[Lead]) -> tuple[int, int, int, int]:
+    """What these leads account for in the marks, calls and contacts tables: Yes / No
+    clicks not undone, marks, calls, verified-contact saves."""
+    clicks = marked = called = saves = 0
+    for l in leads:
+        clicks += l.mark_clicks
+        marked += bool(l.has_baler)
+        called += l.call_count
+        saves += l.contact_saves
+    return clicks, marked, called, saves
+
+
+def _tallies(key: tuple[Any, ...], sums: tuple[int, int, int, int]) -> tuple[int, ...]:
+    """The rows of the marks, calls and contacts tables that no lead in the list accounts
+    for (a lead taken off the list keeps its calls, say), and the people recorded beyond
+    one per click and call. A Yes / No, a call, a contact or an undo leaves these as they
+    were; rows that came in some other way (a restore from a backup) change them."""
+    figure = dict(zip(FIGURES, key, strict=False))
+
+    def count(table: str, what: str = "COUNT(*)") -> int:
+        return int(figure.get((table, what)) or 0)
+    clicks, marked, called, saves = sums
+    return (count("mark_changes") - count("mark_changes", "COUNT(undone_at)") - clicks,
+            count("marks") - marked, count("calls") - called, count("lead_contacts") - saves,
+            count("made_by") - count("mark_changes") - count("calls") - count("call_undos"))
+
+
+class Listing:
+    """The saved list as the Leads and Calls pages read it, kept between requests.
+
+    Reading every saved lead and adding its mark, latest call and verified contact
+    takes time in step with the list's length, and the list only grows (it is kept for
+    good). So it is done once (`read`), with each tab's rows and counts and, when first
+    asked for, each sort order and each lead's filter text, and reused by every request
+    until something it shows changes in the database (`FINGERPRINT`, one quick query,
+    tells), whether the site or the command line changed it. After a Yes / No, a call, a
+    verified contact or an undo only the leads they changed are read again, and put in
+    their places (`updated`). Its leads are shared by the requests: read, never changed.
+    The undo offers run out with time, so each request reads them itself.
+    """
+
+    def __init__(self, key: tuple[Any, ...], read_at: float, leads: list[Lead], place: dict[str, int],
+                 by_uid: dict[str, Lead], tabs: dict[str, list[str]], views: dict[str, list[Lead]],
+                 sums: tuple[int, int, int, int]) -> None:
+        self.key, self.read_at = key, read_at
+        self.leads = leads                  # in the saved order (best first)
+        self.place = place                  # each lead's place in it
+        self.by_uid, self.tabs, self.views, self.sums = by_uid, tabs, views, sums
+        outcomes = dict.fromkeys(calls.OUTCOMES, 0)
+        for lead in views["called"]:
             if lead.call_outcome in outcomes:
                 outcomes[lead.call_outcome] += 1
-        if not is_prospect(lead):
-            counts["competitors"] += 1
-        elif lead.has_baler in ("yes", "no"):
-            counts[lead.has_baler] += 1
-        elif not closed:
-            counts["unchecked"] += 1
-    return {**counts, "outcomes": outcomes}
+        self.counts: dict[str, Any] = {**{v: len(views[v]) for v in VIEWS}, "outcomes": outcomes}
+        self._ordered: dict[tuple[str, str, bool], list[Lead]] = {}
+        self._text: dict[str, str] | None = None
+        self._call_text: dict[str, str] | None = None
+        self._lock = threading.Lock()
+
+    @classmethod
+    def read(cls, key: tuple[Any, ...], read_at: float, leads: list[Lead]) -> "Listing":
+        """The list from every saved lead (best first, with marks, calls and contacts)."""
+        tabs = {l.uid: views_of(l) for l in leads}
+        views: dict[str, list[Lead]] = {v: [] for v in VIEWS}
+        for lead in leads:
+            for tab in tabs[lead.uid]:
+                views[tab].append(lead)
+        return cls(key, read_at, leads, {l.uid: i for i, l in enumerate(leads)}, {l.uid: l for l in leads},
+                   tabs, views, _sums(leads))
+
+    def in_view(self, uid: str, view: str) -> bool:
+        return view in self.tabs.get(uid, ())
+
+    def ordered(self, view: str, sort: str, desc: bool) -> list[Lead]:
+        """A tab's rows in the order asked for (worked out once)."""
+        with self._lock:
+            rows = self._ordered.get((view, sort, desc))
+            if rows is None:
+                rows = self._ordered[(view, sort, desc)] = order(self.views[view], view, sort, desc)
+        return rows
+
+    def rank(self, view: str, sort: str, desc: bool) -> Rank | None:
+        """A key that puts a tab's rows in the order `order` gives them (the value, then the
+        saved order), so a changed lead can be put in its place; None for a descending
+        sort by text, which has no such key."""
+        place = self.place
+        if sort == "score" and desc:
+            if view == "unchecked":
+                return lambda l: (-l.score, not has_phone(l), place[l.uid])
+            return lambda l: (place[l.uid],)
+        value = SORTS[sort]
+        if not desc:
+            return lambda l: (value(l), place[l.uid])
+        if sort in ("score", "miles", "called"):              # numbers: descending is the negated value
+            return lambda l: (-value(l), place[l.uid])
+        return None
+
+    def text(self) -> dict[str, str]:
+        """{uid: filter_text}, worked out once."""
+        with self._lock:
+            if self._text is None:
+                self._text = {l.uid: filter_text(l) for l in self.leads}
+            return self._text
+
+    def call_text(self) -> dict[str, str]:
+        """calls.search_text(), read once (raises LoadError when it can't be read)."""
+        with self._lock:
+            if self._call_text is None:
+                try:
+                    self._call_text = calls.search_text()
+                except Exception as exc:
+                    log.error("Reading the calls for the filter failed", exc_info=True)
+                    raise LoadError(db_message(exc)) from exc
+            return self._call_text
+
+    def in_order(self, uids: Iterable[str]) -> list[Lead]:
+        """These saved leads, in the saved order."""
+        return sorted((self.by_uid[u] for u in set(uids) if u in self.by_uid), key=lambda l: self.place[l.uid])
+
+    def updated(self, key: tuple[Any, ...], read_at: float) -> "Listing | None":
+        """This list with the leads whose mark, calls or verified contact changed since it
+        was read read again and put in their places; None when the saved rows themselves
+        changed (a search, a merge), when many leads changed, or when rows came in some
+        other way than a click (`_tallies`): then the whole list is read again."""
+        if key[:LIST_FIGURES] != self.key[:LIST_FIGURES]:
+            return None
+        try:
+            since = self.read_at - SINCE_OVERLAP
+            uids = marks.changed_since(since) | calls.changed_since(since) | contacts.changed_since(since)
+            fresh = [copy.copy(self.by_uid[u]) for u in uids if u in self.by_uid]
+            if len(fresh) > max(50, len(self.leads) // 10):
+                return None
+            with_marks_and_calls(fresh)
+        except Exception:
+            log.warning("Reading the changed leads failed; reading the whole list", exc_info=True)
+            return None
+        old = [self.by_uid[l.uid] for l in fresh]
+        before, after = _sums(old), _sums(fresh)
+        sums = (self.sums[0] - before[0] + after[0], self.sums[1] - before[1] + after[1],
+                self.sums[2] - before[2] + after[2], self.sums[3] - before[3] + after[3])
+        if _tallies(key, sums) != _tallies(self.key, self.sums):
+            return None
+        leads, by_uid, tabs = self.leads.copy(), self.by_uid.copy(), self.tabs.copy()
+        for lead in fresh:
+            leads[self.place[lead.uid]] = by_uid[lead.uid] = lead
+            tabs[lead.uid] = views_of(lead)
+        views = {v: self._moved(self.views[v], v, fresh, tabs, lambda l: (self.place[l.uid],)) for v in VIEWS}
+        found = Listing(key, read_at, leads, self.place, by_uid, tabs, views, sums)
+        with self._lock:                  # (other requests may be adding to them meanwhile)
+            ordered, text = list(self._ordered.items()), self._text
+        for (view, sort, desc), rows in ordered:
+            rank = self.rank(view, sort, desc)
+            if rank is not None:
+                found._ordered[(view, sort, desc)] = self._moved(rows, view, fresh, tabs, rank)
+        if text is not None:
+            found._text = {**text, **{l.uid: filter_text(l) for l in fresh}}
+        return found
+
+    def _moved(self, rows: list[Lead], view: str, fresh: list[Lead], tabs: dict[str, list[str]],
+               rank: Rank | None) -> list[Lead]:
+        """rows (a tab's, in `rank`'s order) with the changed leads (fresh) taken out where
+        they were and put where they now belong, if they are in the tab now (tabs)."""
+        touched = [l for l in fresh if view in self.tabs.get(l.uid, ()) or view in tabs[l.uid]]
+        if not touched or rank is None:
+            return rows
+        rows = rows.copy()
+        for lead in touched:
+            if view in self.tabs.get(lead.uid, ()):
+                was = self.by_uid[lead.uid]
+                del rows[bisect.bisect_left(rows, rank(was), key=rank)]
+            if view in tabs[lead.uid]:
+                bisect.insort(rows, lead, key=rank)
+        return rows
 
 
-def _recent(leads: list[Lead], undo: Undos) -> list[dict[str, Any]]:
+_listing: tuple[str, Listing] | None = None       # (the database, its list as last read)
+_listing_lock = threading.Lock()
+
+
+def listing() -> Listing:
+    """The saved list as it is now (Listing): as last read when nothing changed, with the
+    changed leads read again after a click, or read in full. Raises LoadError with a plain
+    message when it can't be read."""
+    global _listing
+    read_at = time.time()             # before the fingerprint: a change after it is read again
+    try:
+        with store.connect() as db:
+            key, fingerprint = db.key, tuple(db.one(FINGERPRINT) or ())
+    except Exception as exc:
+        log.error("Loading the saved leads failed", exc_info=True)
+        raise LoadError(db_message(exc)) from exc
+    with _listing_lock:
+        kept = _listing[1] if _listing and _listing[0] == key else None
+        if kept and kept.key == fingerprint:
+            return kept
+        found = kept.updated(fingerprint, read_at) if kept else None
+        if found is None:
+            leads, _ = load_saved()
+            found = Listing.read(fingerprint, read_at, leads)
+        _listing = (key, found)
+        return found
+
+
+def undo_offers() -> Undos:
+    """The marks and calls that can still be undone (they run out with time)."""
+    try:
+        return {"mark": marks.pending_undos(), "call": calls.pending_undos()}
+    except Exception as exc:
+        log.error("Loading the marks or calls failed", exc_info=True)
+        raise LoadError(MARKS_DOWN) from exc
+
+
+def _recent(found: Listing, undo: Undos) -> list[dict[str, Any]]:
     """The leads with a mark or call that can still be undone (Recent changes)."""
-    return [lead_json(l, undo) for l in leads
-            if l.uid in undo.get("mark", {}) or l.uid in undo.get("call", {})]
+    return [lead_json(l, undo) for l in found.in_order(set(undo.get("mark", {})) | set(undo.get("call", {})))]
 
 
 @bp.get("/leads")
@@ -165,81 +400,93 @@ def saved_leads() -> ResponseReturnValue:
         outcome = ""
     # One business only (the Map page's "Open on the Leads page" link), by its id.
     only = (request.args.get("lead") or "")[:64]
+    fresh = since is None or not math.isfinite(since) or since <= 0
     try:
-        if since is None or not math.isfinite(since) or since <= 0:
-            leads, undo = load_saved()
-            text = _call_text(view, q)
-        else:
+        uids: set[str] = set()
+        if since is not None and not fresh:
             uids = changed_uids(since - SINCE_OVERLAP)
             if not uids:
                 return jsonify({"leads": [], "changes": True, "removed": [], "now": now})
-            leads, undo = load_saved()
-            text = _call_text(view, q)
+        found = listing()
+        undo = undo_offers()
+        more = found.call_text() if view == "called" and q else {}
+        text = found.text() if q else {}
     except LoadError as exc:
         return jsonify({"error": str(exc)}), 503
 
+    words = q.split()
+
     def filtered(l: Lead) -> bool:
-        return ((not only or l.uid == only) and (not outcome or l.call_outcome == outcome)
-                and matches(l, q, tier, phone, text.get(l.uid, "")))
-    extra = {"call_counts": _call_counts(leads, q, text)} if view == "called" else {}
-    if since is None or not math.isfinite(since) or since <= 0:
-        return jsonify({**_page(leads, undo, view, filtered), **extra, "now": now})
-    shown = [l for l in leads if in_view(l, view) and filtered(l)]
-    body = {"changes": True, "total": len(shown), "counts": view_counts(leads),
-            "recent": _recent(leads, undo), **extra, "now": now}
-    changed = [l for l in leads if l.uid in uids]
+        # matches(), with each lead's filter text read once (Listing.text).
+        if (only and l.uid != only) or (outcome and l.call_outcome != outcome) or (tier and l.tier != tier):
+            return False
+        if phone and not has_phone(l):
+            return False
+        if not words:
+            return True
+        hay = text[l.uid]
+        if (said := more.get(l.uid)):
+            hay += " " + said
+        return all(word in hay for word in words)
+    narrowed = bool(only or outcome or q or tier or phone)
+    extra = {"call_counts": _call_counts(found, q, more)} if view == "called" else {}
+    if fresh:
+        return jsonify({**_page(found, undo, view, filtered, narrowed), **extra, "now": now})
+    shown = {l.uid for l in found.views[view] if filtered(l)} if narrowed else set()
+
+    def is_shown(uid: str) -> bool:
+        return uid in shown if narrowed else found.in_view(uid, view)
+    total = len(shown) if narrowed else len(found.views[view])
+    body = {"changes": True, "total": total, "counts": found.counts,
+            "recent": _recent(found, undo), **extra, "now": now}
+    kept = uids & found.by_uid.keys()
     limit = request.args.get("limit", type=int) or PAGE_SIZE
-    if len(changed) > max(1, min(limit, MAX_LIMIT)):
+    if len(kept) > max(1, min(limit, MAX_LIMIT)):
         return jsonify({**body, "reload": True, "leads": [], "removed": []})
-    kept = {lead.uid for lead in changed}
+    changed = found.in_order(kept)
     pinned = set((request.args.get("keep") or "").split(",")[:50]) - {""}
-    wanted = ({l.uid for l in shown} | pinned) & kept
+    wanted = {uid for uid in kept if is_shown(uid) or uid in pinned}
     return jsonify({**body, "removed": sorted(uids - kept),
-                    "leads": [{**lead_json(l, undo), "in_view": in_view(l, view) and filtered(l)}
+                    "leads": [{**lead_json(l, undo), "in_view": is_shown(l.uid)}
                               if l.uid in wanted
                               else {"key": l.uid, "in_view": False} for l in changed]})
 
 
-def _call_text(view: str, q: str) -> dict[str, str]:
-    """What the Calls page's filter also looks in (calls.search_text), when it is used."""
-    if view != "called" or not q:
-        return {}
-    try:
-        return calls.search_text()
-    except Exception as exc:
-        log.error("Reading the calls for the filter failed", exc_info=True)
-        raise LoadError(db_message(exc)) from exc
-
-
-def _call_counts(leads: list[Lead], q: str, text: dict[str, str]) -> dict[str, Any]:
+def _call_counts(found: Listing, q: str, more: dict[str, str]) -> dict[str, Any]:
     """The Calls page's tab counts: every called business the filter keeps, and how
     many of them each outcome holds (their latest call's)."""
     outcomes = dict.fromkeys(calls.OUTCOMES, 0)
-    called = [l for l in leads if l.call_count and matches(l, q, "", False, text.get(l.uid, ""))]
+    text = found.text() if q else {}
+    called = [l for l in found.views["called"]
+              if matches(l, q, "", False, more.get(l.uid, ""), text.get(l.uid))]
     for lead in called:
         if lead.call_outcome in outcomes:
             outcomes[lead.call_outcome] += 1
     return {"all": len(called), "outcomes": outcomes}
 
 
-def _page(leads: list[Lead], undo: Undos, view: str, filtered: Callable[[Lead], bool]) -> dict[str, Any]:
+def _page(found: Listing, undo: Undos, view: str, filtered: Callable[[Lead], bool],
+          narrowed: bool) -> dict[str, Any]:
     offset = max(0, request.args.get("offset", type=int) or 0)
     keep = set((request.args.get("keep") or "").split(",")[:50]) - {""} if not offset else set()
-    rows = [l for l in leads if (in_view(l, view) or l.uid in keep) and filtered(l)]
     sort = request.args.get("sort") or "score"
     if sort not in SORTS:
         sort = "score"
     default_desc = sort in ("score", "called")
     desc = {"asc": False, "desc": True}.get(request.args.get("dir") or "", default_desc)
-    if sort != "score" or not desc:
-        rows.sort(key=SORTS[sort], reverse=desc)      # stable: ties keep the best-first order
-    elif view == "unchecked":
-        # Among equal scores, the leads that can be phoned from the page come first.
-        rows.sort(key=lambda l: (-l.score, not has_phone(l)))
+    outside = {uid for uid in keep if uid in found.by_uid and not found.in_view(uid, view)}
+    if outside:
+        # Rows just marked that left the tab stay put for a few seconds: in their place.
+        rows = order([l for l in found.leads if (found.in_view(l.uid, view) or l.uid in outside) and filtered(l)],
+                     view, sort, desc)
+    else:
+        rows = found.ordered(view, sort, desc)
+        if narrowed:
+            rows = [l for l in rows if filtered(l)]
     limit = max(1, min(request.args.get("limit", type=int) or PAGE_SIZE, MAX_LIMIT))
     shown = rows[offset:offset + limit]
     return {"leads": [lead_json(l, undo) for l in shown], "total": len(rows), "offset": offset,
-            "counts": view_counts(leads), "recent": _recent(leads, undo)}
+            "counts": found.counts, "recent": _recent(found, undo)}
 
 
 # Every mark and call says who made it (so colleagues know whom to ask), as the page asks.
