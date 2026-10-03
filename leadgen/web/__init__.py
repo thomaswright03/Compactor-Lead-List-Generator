@@ -19,7 +19,7 @@ from werkzeug.exceptions import HTTPException
 
 from .. import alerts, calls, config, localtime, marks, store
 from ..pipeline import SearchParams
-from . import auth, finding, leads
+from . import auth, finding, leads, mapping
 from .auth import LOGIN_DAYS, LOGIN_TRIES, LOGIN_WINDOW
 from .common import (
     DB_DOWN,
@@ -160,7 +160,7 @@ def create_app(password: str | None = None, username: str | None = None,
         log.warning("LEADGEN_SUPPORT_CONTACT is not set, so the login page names no one to ask for access "
                     "or a forgotten password. Set it in Render > Environment (docs/operator-runbook.md).")
     app.extensions["leadgen"] = State(password, username, admin_password)
-    for blueprint in (auth.bp, finding.bp, leads.bp):
+    for blueprint in (auth.bp, finding.bp, leads.bp, mapping.bp):
         app.register_blueprint(blueprint)
     _register_pages(app)
     return app

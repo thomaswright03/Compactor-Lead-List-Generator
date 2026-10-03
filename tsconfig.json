@@ -23,6 +23,7 @@
     "leadgen/static/calls.js",
     "leadgen/static/find.js",
     "leadgen/static/stats.js",
+    "leadgen/static/map.js",
     "leadgen/static/start.js",
     "leadgen/static/tour.js"
   ]

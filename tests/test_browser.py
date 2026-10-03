@@ -18,11 +18,17 @@ from leadgen.scoring import score_lead
 sync_api = pytest.importorskip("playwright.sync_api")
 expect = sync_api.expect
 
+# Any address but this machine's (the site under test).
+OUTSIDE = re.compile(r"^(?!https?://(127\.0\.0\.1|localhost)[:/])[a-z]+://")
+
 
 def _context(browser, name="Tester", first_visit=False, **kw):
     """A browser window whose "Your name" is already set (so a first Yes / No doesn't ask),
     and which was offered the tutorial before (first_visit=True: it never was)."""
     context = browser.new_context(**kw)
+    # Nothing leaves this machine: the Map page's street map (OpenStreetMap's tiles) is
+    # refused, as it is offline, and the page draws the rest without it.
+    context.route(OUTSIDE, lambda route: route.abort())
     if name:
         context.add_init_script(f"try {{ localStorage.setItem('my-name', {name!r}); }} catch (e) {{}}")
     if not first_visit:
@@ -498,7 +504,7 @@ def test_calls_are_cards_and_every_page_is_in_the_bar_on_a_small_phone(browser, 
                  nav: [...document.querySelectorAll('nav a')].map(inside) }; }""")
     assert not fits["wide"] and not fits["page"]
     assert len(fits["parts"]) >= 3 and all(fits["parts"])    # notes, Just called, History, Undo
-    assert fits["nav"] == [True] * 4                         # Stats is never cut off
+    assert fits["nav"] == [True] * 5                         # Stats is never cut off
     context.close()
 
 
@@ -1219,7 +1225,7 @@ def test_the_tutorial_walks_every_page_and_stays_on_screen(browser, site, page, 
         pages.add(tab.evaluate("location.hash.slice(1).split('?')[0]"))
         tab.keyboard.press("Enter")                # Next has the focus
     expect(box).to_be_hidden()
-    assert pages == {"find", "leads", "calls", "stats"}
+    assert pages == {"find", "leads", "calls", "map", "stats"}
     # Nothing was marked, called or searched along the way.
     tab.goto(site + "#leads")
     tab.wait_for_selector("table.leads")
@@ -1574,7 +1580,7 @@ def test_phone_navigation_is_easy_to_tap(browser, site, page, width):
         .map((e) => [e.textContent.trim().slice(0, 20), e.getBoundingClientRect()])
         .map(([t, r]) => [t, Math.round(r.width), Math.round(r.height), Math.round(r.right)])""")
     context.close()
-    assert len(sizes) == 5
+    assert len(sizes) == 6                                   # the five pages and Menu
     assert all(w >= 44 and h >= 44 and right <= width for _, w, h, right in sizes), sizes
 
 
@@ -1900,3 +1906,136 @@ def test_why_this_score_and_explain_are_in_plain_words(browser, site, page):
     expect(acme).to_contain_text("Only the building type or the business name suggests what it does — "
                                  "confirm before calling.")
     expect(acme).to_contain_text("(its type is taken from the map listing).")
+
+
+# ---- the Map page
+
+def _search_of_aarcos_area(missing):
+    """The latest search of AARCO's area, as its day's record keeps it, with the map
+    data's parts `missing`."""
+    import json
+    import time
+
+    from leadgen import store
+    info = {"location": config.OWN_ADDRESS, "radius": config.SERVICE_AREA_MILES, "source": "auto",
+            "center": list(config.SERVICE_CENTER), "miles": 0.0, "leads": 4, "new": 4, "partial": bool(missing),
+            "map_areas": {"missing": missing}}
+    with store.connect() as db:
+        db.run("INSERT INTO searches (day, at, info) VALUES (?, ?, ?)", ("2026-09-30", time.time(), json.dumps(info)))
+
+
+def _on_screen(page, lat, lon):
+    """Where a point of the map is in the window."""
+    return page.evaluate("""([lat, lon]) => { const p = M.map.latLngToContainerPoint([lat, lon]);
+        const r = document.getElementById('map').getBoundingClientRect(); return [r.left + p.x, r.top + p.y]; }""",
+                         [lat, lon])
+
+
+def test_the_map_shows_aarco_its_area_the_areas_and_every_saved_business(page, site):
+    from leadgen import area_map, marks
+    marks.set_mark(_uid("Smith"), "yes")
+    marks.set_mark(_uid("Hampton"), "no")
+    layton = next(a for a in area_map.areas() if a.name == "Layton")
+    _search_of_aarcos_area([list(layton.box)])
+    page.click("nav a[data-page=map]")
+    expect(page.locator("#page-map h1")).to_have_text("Map")
+    expect(page).to_have_title(re.compile(r"^Map · "))
+    # AARCO's own pin, named.
+    aarco = page.locator("#map .aarco-mark")
+    expect(aarco).to_be_visible()
+    expect(aarco.locator(".aarco-name")).to_have_text("AARCO")
+    # The 30-mile circle and the nine areas, named, the one the search missed marked so.
+    assert page.evaluate("M.ring !== null && M.map.hasLayer(M.ring)")
+    assert page.evaluate("M.shapes.map(s => s.status)").count("missed") == 1
+    names = page.locator("#map .area-name")
+    expect(names).to_have_count(9)
+    expect(page.locator("#map .area-name", has_text="Salt Lake City")).to_be_visible()
+    expect(page.locator("#map .area-name.missed")).to_contain_text("Layton")
+    expect(page.locator("#map .area-name.missed small")).to_have_text("not searched")
+    expect(page.locator("#map-areas li")).to_have_count(9)
+    expect(page.locator("#map-areas li", has_text="Layton")).to_contain_text("Not searched")
+    expect(page.locator("#map-coverage")).to_contain_text("8 of 9 areas searched in full")
+    # Without the street map (refused here, as offline) the page says so and draws the rest.
+    expect(page.locator("#map-tiles-note")).to_be_visible()
+    # A pin for every saved business: three dots and the competitor's square, counted in the key.
+    assert page.evaluate("M.pins.map(p => p.group).sort()") == ["no", "unchecked", "yes"]
+    expect(page.locator("#map .pin-comp")).to_have_count(1)
+    for group in ("yes", "no", "unchecked", "competitor"):
+        expect(page.locator(f"#map-n-{group}")).to_have_text("(1)")
+    # Each group can be hidden and shown again, and stays as chosen after a reload.
+    yes_box = page.locator('#map-groups input[data-group="yes"]')
+    yes_box.uncheck()
+    assert not page.evaluate("M.map.hasLayer(M.groups.yes)")
+    page.locator('#map-groups input[data-group="competitor"]').uncheck()
+    expect(page.locator("#map .pin-comp")).to_have_count(0)
+    page.reload()
+    expect(aarco).to_be_visible()
+    expect(yes_box).not_to_be_checked()
+    assert not page.evaluate("M.map.hasLayer(M.groups.yes)") and page.evaluate("M.map.hasLayer(M.groups.no)")
+    expect(page.locator("#map .pin-comp")).to_have_count(0)
+    yes_box.check()
+    page.locator('#map-groups input[data-group="competitor"]').check()
+    assert page.evaluate("M.map.hasLayer(M.groups.yes)")
+    expect(page.locator("#map .pin-comp")).to_have_count(1)
+    # The areas can be hidden too.
+    page.locator("#map-show-areas").uncheck()
+    expect(names).to_have_count(0)
+    page.locator("#map-show-areas").check()
+    expect(names).to_have_count(9)
+    # A pin opens the business's details, and from there the business on the Leads page.
+    smith = next(lead for lead in saved.load() if lead.name.startswith("Smith"))
+    page.evaluate("([lat, lon]) => M.map.setView([lat, lon], 15, { animate: false })", [smith.lat, smith.lon])
+    page.mouse.click(*_on_screen(page, smith.lat, smith.lon))
+    box = page.locator("#map .pin-box")
+    expect(box).to_contain_text("Smith's Marketplace")
+    expect(box).to_contain_text("Has a baler or compactor: Yes")
+    expect(box).to_contain_text("No calls logged yet")
+    expect(box.get_by_role("link", name="(801) 555-0100")).to_be_visible()
+    box.get_by_role("link", name="Open on the Leads page").click()
+    expect(page.locator(".only-one")).to_contain_text("Showing one business, opened from the map.")
+    expect(page.locator("table.leads tbody tr")).to_have_count(1)
+    expect(_row(page, "Smith's Marketplace")).to_be_visible()
+    assert f"lead={smith.uid}" in page.url
+    page.get_by_role("button", name="Show the whole list").click()
+    expect(page.locator(".only-one")).to_have_count(0)
+    expect(page.locator("table.leads tbody tr")).to_have_count(4)
+    assert "lead=" not in page.url
+    # The competitor's square and AARCO's pin open their own details.
+    page.click("nav a[data-page=map]")
+    expect(box).to_have_count(0)                        # the map comes back with no details open
+    rival = next(lead for lead in saved.load() if lead.name == "Pro Baler")
+    page.evaluate("([lat, lon]) => M.map.setView([lat, lon], 13, { animate: false })", [rival.lat, rival.lon])
+    page.locator("#map .pin-comp").click()
+    expect(box).to_contain_text("Pro Baler")
+    expect(box).to_contain_text("Competitor")
+    page.evaluate("([lat, lon]) => M.map.setView([lat, lon], 13, { animate: false })", list(config.OWN_COORDS))
+    aarco.click()
+    expect(box).to_have_count(1)                        # the competitor's closes (it fades out)
+    expect(box).to_contain_text(config.OWN_ADDRESS)
+
+
+def test_the_map_takes_the_dark_theme_and_fits_a_phone(browser, site, page):
+    context = _context(browser, viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True,
+                       color_scheme="dark")
+    phone = context.new_page()
+    errors = []
+    phone.on("pageerror", lambda exc: errors.append(str(exc)))
+    phone.goto(site + "#map")
+    expect(phone.locator("#map .aarco-mark")).to_be_visible()
+    fits = phone.evaluate("""() => {
+        const r = document.getElementById('map').getBoundingClientRect();
+        return { page: document.documentElement.scrollWidth > window.innerWidth, left: r.left, right: r.right,
+                 height: r.height, nav: [...document.querySelectorAll('nav a')].map((a) => {
+                   const b = a.getBoundingClientRect(); return b.width > 0 && b.right <= window.innerWidth; }) }; }""")
+    assert not fits["page"] and fits["left"] >= 0 and fits["right"] <= 390 and fits["height"] >= 300
+    assert fits["nav"] == [True] * 5
+    # The map's lines and pins take the dark theme's colours (the canvas is drawn in them).
+    assert phone.evaluate("M.ring.options.color") == "#e6ebf2"
+    phone.click("#menu-btn")
+    phone.click("[data-theme-pick=light]")
+    assert phone.evaluate("M.ring.options.color") == "#1d2433"
+    # The zoom buttons are easy to tap.
+    zoom = phone.locator("#map .leaflet-control-zoom-in").bounding_box()
+    assert zoom["width"] >= 44 and zoom["height"] >= 44
+    context.close()
+    assert not errors

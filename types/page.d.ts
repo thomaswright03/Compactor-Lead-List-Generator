@@ -253,6 +253,92 @@ interface StatsAnswer {
   min_score: number;
 }
 
+/** One of the areas a search asks the free map data in, as GET /map-data sends it (area_map.py). */
+interface MapArea {
+  /** Its place in the order a search asks them (1 = the one AARCO's shop is in). */
+  n: number;
+  name: string;
+  /** Its biggest towns after the one it is named for. */
+  towns: string[];
+  /** The area cut to the circle, as [lat, lon] points, and where its name goes. */
+  outline: [number, number][];
+  label: [number, number];
+  /** "searched", "partly", "missed", "asking" or "unknown", and the same in words. */
+  status: string;
+  status_text: string;
+}
+
+/** A saved business on the map: area_map.FIELDS, in that order (one short list per business). */
+type MapPinRow = [key: string, lat: number, lon: number, group: string, name: string, tier: string, score: number,
+  phone: string, verified_phone: string, address: string, outcome: string, called: string, closed: boolean,
+  kind: string];
+
+/** GET /map-data (area_map.page). */
+interface MapData {
+  aarco: { name: string; company: string; address: string; lat: number; lon: number };
+  center: [number, number];
+  miles: number;
+  circle: [number, number][];
+  areas: MapArea[];
+  /** Which search shaded the areas, and what it covered. */
+  coverage: string;
+  fields: string[];
+  pins: MapPinRow[];
+  /** Pins per group: "unchecked", "yes", "no", "competitor". */
+  counts: Record<string, number>;
+  /** Saved businesses without a map position (not drawn). */
+  no_position: number;
+  now: number;
+}
+
+/** The parts of Leaflet (vendor/leaflet, loaded by map.js) the Map page uses. */
+declare namespace L {
+  type Point = [number, number];
+  interface PathOptions {
+    renderer?: Renderer; interactive?: boolean; radius?: number; color?: string; weight?: number; opacity?: number;
+    fill?: boolean; fillColor?: string; fillOpacity?: number; dashArray?: string | null; bubblingMouseEvents?: boolean;
+  }
+  interface Renderer { readonly _renderer?: never }
+  interface Bounds { readonly _bounds?: never }
+  interface Icon { readonly _icon?: never }
+  interface Layer {
+    addTo(target: Map | LayerGroup): this;
+    remove(): this;
+    bindPopup(content: (layer: Layer) => HTMLElement,
+              options?: { maxWidth?: number; minWidth?: number; autoPanPaddingTopLeft?: Point }): this;
+    on(type: string, fn: () => void): this;
+  }
+  interface Path extends Layer { setStyle(style: PathOptions): this }
+  interface Marker extends Layer { getElement(): HTMLElement | undefined }
+  interface LayerGroup extends Layer { addLayer(layer: Layer): this; clearLayers(): this }
+  interface TileLayer extends Layer {}
+  interface Control { readonly _control?: never }
+  interface Map {
+    fitBounds(bounds: Bounds, options?: { padding?: Point; maxZoom?: number }): this;
+    addLayer(layer: Layer): this;
+    removeLayer(layer: Layer): this;
+    hasLayer(layer: Layer): boolean;
+    invalidateSize(): this;
+    closePopup(): this;
+    getContainer(): HTMLElement;
+    on(type: string, fn: () => void): this;
+    attributionControl: { setPrefix(prefix: string): void };
+  }
+  function map(element: HTMLElement, options?: { preferCanvas?: boolean; zoomSnap?: number; zoomDelta?: number;
+                                                  minZoom?: number; maxZoom?: number; worldCopyJump?: boolean }): Map;
+  function tileLayer(url: string, options?: { attribution?: string; maxZoom?: number; crossOrigin?: boolean }): TileLayer;
+  function canvas(options?: { padding?: number; tolerance?: number }): Renderer;
+  function svg(options?: { padding?: number }): Renderer;
+  function circleMarker(at: Point, options?: PathOptions): Path;
+  function polygon(points: Point[], options?: PathOptions): Path;
+  function marker(at: Point, options?: { icon?: Icon; title?: string; keyboard?: boolean; interactive?: boolean;
+                                         zIndexOffset?: number; riseOnHover?: boolean }): Marker;
+  function divIcon(options: { html?: string | HTMLElement; className?: string; iconSize?: Point | null;
+                              iconAnchor?: Point; popupAnchor?: Point }): Icon;
+  function layerGroup(layers?: Layer[]): LayerGroup;
+  function latLngBounds(points: Point[]): Bounds;
+}
+
 /** An error from the server (core.js api): its HTTP status (0: no answer) and its body. */
 interface ApiError extends Error {
   status: number;
@@ -291,6 +377,8 @@ interface PageState {
   callView: string;
   callQ: string;
   q: string;
+  /** One business only, by its key (the Map page's link to it), or "". */
+  lead: string;
   tier: string;
   phone: boolean;
   sort: string;

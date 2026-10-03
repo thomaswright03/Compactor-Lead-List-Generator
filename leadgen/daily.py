@@ -156,6 +156,14 @@ def _as_record(row: store.Row) -> Record:
     return record
 
 
+def records(limit: int = 60) -> list[Record]:
+    """The latest days' searches (not the failed attempts that gave their day back),
+    newest first, as the history shows them (the Map page's shading, area_map.py)."""
+    with store.connect() as db:
+        rows = db.all("SELECT day, at, info FROM searches ORDER BY at DESC LIMIT ?", (limit,))
+    return [_as_record(r) for r in rows]
+
+
 def history(limit: int = 60) -> dict[str, Any]:
     """Recent days' searches (failed attempts too), newest first, and whether
     today's has been used."""

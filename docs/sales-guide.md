@@ -13,7 +13,8 @@ only looks around and never changes anything.
 2. **Leads**: work down **Not checked**, best score first, and phone each business.
 3. After each call, press **Just called** and note how it went.
 4. When you know, press **Yes** or **No** for "has a baler or compactor".
-5. Check **Calls** for follow-ups, and **Stats** to see how well the scores work.
+5. Check **Calls** for follow-ups, **Map** to see where the businesses are, and **Stats**
+   to see how well the scores work.
 
 ## Log in and set your name
 
@@ -180,6 +181,38 @@ save, with who made it. To take it off, empty both boxes and save.
   clicking again.
 - **History** shows every call to a business: when, who made it, how it went and
   the notes, and below them every Yes / No the business was given.
+
+## See the businesses on the map
+
+Open **Map** in the sidebar (in the bar at the top on a phone).
+
+- **AARCO's pin** (the dark teardrop with a star, labelled AARCO) is the shop at 876
+  Fortune Rd. The **circle** around it is AARCO's 30-mile area: the day's search is
+  meant for it.
+- The **search areas** are the nine parts a search looks through one at a time (the "3
+  of 9 areas done" while it runs), each named after its biggest town. Their edges show
+  how the latest search of AARCO's area went: a thin solid edge where it was searched,
+  a dashed, shaded edge where the map servers didn't answer for all or part of it (or it
+  is still being asked again in the background), and a dotted edge where that isn't
+  known. The line under the map says which search that was, and the list under it
+  names every area and how it stands. **Search areas, shaded by the latest search** in
+  the key hides them.
+- Each **pin** is a saved business: **green** has a baler or compactor (Yes),
+  **orange** doesn't (No), **blue** isn't checked yet, and a **hollow square** is a
+  competitor or AARCO's own listing. The key beside the map (below it on a phone) names
+  each with its count; untick one to hide those pins. This browser remembers what you
+  hid.
+- **Tap a pin** for its name, tier and score, phone, address, Yes / No answer and
+  latest call. **Open on the Leads page** shows just that business on Leads, ready to
+  mark or log a call; **Show the whole list** there brings every business back.
+- Zoom with the **+** / **−** buttons, two fingers, or the mouse wheel. Where pins are
+  close together, zoom in to tap the one you want; some area names show only once
+  zoomed in.
+- A business with no map position isn't on the map (the line under the map says how
+  many); it is on the Leads page as usual.
+- If the street map doesn't load (no internet, or the map tiles are blocked), the
+  area and the pins are still drawn on a plain background, and the page says so.
+- The map only shows: nothing on it marks, calls or changes a business.
 
 ## Read the Stats page
 

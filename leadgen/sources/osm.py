@@ -642,6 +642,18 @@ def _result(run: _Parts) -> tuple[list[Lead], list[str]]:
     return leads, run.warnings
 
 
+def area_boxes(lat: float, lon: float, radius_miles: float) -> list[Box]:
+    """The areas a search around (lat, lon) asks the map data in, nearest the centre
+    first: the "N of 9 areas" of its progress and history (the Map page draws them)."""
+    return _parts(lat, lon, radius_miles)
+
+
+def area_name(lat: float, lon: float, radius_miles: float, box: Box) -> str:
+    """An area of a search in words, as the page names it ("Salt Lake City", "the
+    area to the north-west")."""
+    return _area_name(lat, lon, radius_miles, box)
+
+
 def part_boxes(parts: Sequence[Part]) -> list[list[float] | None]:
     """The parts' boxes as the day's record keeps them ([south, west, north, east],
     rounded; None for a search asked whole): which areas a search missed, for the Map

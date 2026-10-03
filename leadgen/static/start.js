@@ -1,4 +1,4 @@
-/* Part 6: start the page once every part is loaded. */
+/* Part 7: start the page once every part is loaded. */
 applyTheme(themeChoice());
 if (PAUSED) setGo(false, "Searching is paused by the administrator.");
 (async () => {

@@ -13,6 +13,9 @@
   --toast:#e6ebf2; --toast-ink:#101826; --badge:#26324a; --hover:#1d2839;
   --chart-bar:#5aa2ea; --chart-grid:#2c384b; --chart-base:#4a586e; --chart-text:#c3ccd8;
   --shadow:rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
+  --pin-unchecked:#3987e5; --pin-yes:#199e70; --pin-no:#d95926; --pin-comp:#e6ebf2; --pin-ring:#0f1623;
+  --aarco:#f5f7fa; --aarco-ink:#15304d; --area-done:#8cc0f5; --area-miss:#f5c542; --area-unknown:#a6b0c0;
+  --map-bg:#141c2a;
 {%- endset -%}
 {#- The browser's own bar takes the sidebar's colour, light and dark: by the OS's setting,
     or by the Light / Dark choice once one is made (setThemeColor, below). -#}
@@ -36,6 +39,12 @@
     --toast:#1d2433; --toast-ink:#fff; --badge:#e7ecf2; --hover:#f6f8fb;
     --chart-bar:#2a78d6; --chart-grid:#e8eaee; --chart-base:#c9ced6; --chart-text:#4a5261;
     --shadow:rgba(16,24,40,.18); --backdrop:rgba(16,24,40,.45);
+    /* The Map page: pins by Yes / No answer (a blue / aqua / orange set that stays apart for
+       colour-blind eyes, checked with a CVD validator in both themes), competitors as hollow
+       squares, AARCO's own pin, and the search areas' edges by how the latest search went. */
+    --pin-unchecked:#2a78d6; --pin-yes:#1baf7a; --pin-no:#eb6834; --pin-comp:#1d2433; --pin-ring:#fff;
+    --aarco:#15304d; --aarco-ink:#fff; --area-done:#1f4e78; --area-miss:#b54708; --area-unknown:#4d5566;
+    --map-bg:#e9edf2;
   }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { {{ dark }} } }
   :root[data-theme="dark"] { {{ dark }} }

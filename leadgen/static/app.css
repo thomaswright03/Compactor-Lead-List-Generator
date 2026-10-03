@@ -378,6 +378,9 @@ dialog::backdrop { background:var(--backdrop); }
   .side .who { border-top:0; padding-top:0; }
   main { padding:var(--sp-4) var(--sp-4) var(--sp-6); }
 }
+/* Small phones: the first page's link says "Find" (its name is still "Find leads"), so the
+   five pages fit one row from 375 px up. */
+@media (max-width: 429px) { nav .lw { display:none; } }
 @media (max-width: 700px) {
   /* Phones: one short bar at the top (name and Menu, then the pages); the rest is in the menu. */
   .side { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:var(--sp-1) var(--sp-3);
@@ -388,7 +391,7 @@ dialog::backdrop { background:var(--backdrop); }
   /* Every page's link stays in view: they wrap to a second line on the narrowest phones. */
   nav { grid-column:1 / -1; grid-row:auto; flex-wrap:wrap; gap:var(--sp-1); }
   /* Each page's link is a full 44px tap target on a phone (touch screen or not). */
-  nav a { padding:var(--sp-1) var(--sp-2); flex:none; font-size:var(--fs-sm); flex-wrap:nowrap; min-height:44px; min-width:44px; justify-content:center; }
+  nav a { padding:var(--sp-1) 6px; flex:none; font-size:var(--fs-sm); flex-wrap:nowrap; min-height:44px; min-width:44px; justify-content:center; }
   nav .count { padding:0 var(--sp-1); }
   .tabs button { font-size:var(--fs-sm); padding:var(--sp-1) var(--sp-3); }
   .side-bottom { padding:var(--sp-2) 0; }
@@ -497,3 +500,102 @@ td.h-where .sub { display:block; }
 .mark-failed strong { color:var(--bad-ink); }
 .mark-failed-do { display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-1) var(--sp-3); margin-top:var(--sp-2); }
 .mark-failed-do button.quiet { padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); }
+/* The Leads page showing one business, opened from the Map page. */
+.only-one { display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-2) var(--sp-3); margin:var(--sp-2) 0;
+            padding:var(--sp-2) var(--sp-3); border:1px solid var(--line); border-left:4px solid var(--accent-2);
+            border-radius:var(--r-sm); background:var(--card); }
+
+/* The Map page: the map with its toggles and key beside it (below it on narrower screens), then
+   the search areas in words. Leaflet's styles load after these, so its parts are styled from
+   #map (more specific than Leaflet's own rules). The map is its own stacking context, so
+   Leaflet's layers never cover the tutorial or a dialog. */
+.map-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:var(--sp-4); margin-bottom:var(--sp-4); }
+@media (min-width: 1000px) { .map-layout { grid-template-columns:minmax(0,1fr) 300px; align-items:start; } }
+.map-box { position:relative; isolation:isolate; border:1px solid var(--line); border-radius:var(--r-md); overflow:hidden;
+           background:var(--map-bg); }
+#map { height:min(72vh, 760px); min-height:360px; background:var(--map-bg); }
+@media (max-width: 700px) { #map { height:56vh; min-height:300px; } }
+.map-loading { position:absolute; inset:0; display:grid; place-items:center; background:var(--map-bg); color:var(--muted);
+               font-weight:600; z-index:1000; }
+.map-loading:empty { display:none; }
+.map-note { color:var(--muted); margin:var(--sp-2) 0 0; }
+#map-tiles-note { margin:var(--sp-2) 0 0; }
+.map-side { display:flex; flex-direction:column; gap:var(--sp-4); min-width:0; }
+.map-side fieldset.card { margin:0; min-width:0; }
+.map-side legend { font-weight:700; font-size:var(--fs-md); padding:0 var(--sp-1); }
+.map-groups label.check { font-weight:400; font-size:var(--fs-base); align-items:center; }
+.map-groups label.check > span:last-child { min-width:0; }
+.map-groups .n { color:var(--muted); white-space:nowrap; }
+.map-legend { display:flex; flex-direction:column; gap:var(--sp-2); }
+.map-legend .key { display:flex; gap:var(--sp-2); align-items:center; }
+.map-legend label.check { font-weight:400; font-size:var(--fs-base); }
+.map-legend .sub-key { margin-left:var(--sp-5); }
+/* The key's symbols: the same shapes and colours as on the map. */
+.sym { flex:none; display:inline-block; }
+.sym.pin { width:14px; height:14px; border-radius:50%; border:2px solid var(--pin-ring); box-shadow:0 0 0 1px var(--line); }
+.sym.pin.yes { background:var(--pin-yes); }
+.sym.pin.no { background:var(--pin-no); }
+.sym.pin.unchecked { background:var(--pin-unchecked); }
+.sym.comp { width:14px; height:14px; border:3px solid var(--pin-comp); border-radius:2px; background:var(--pin-ring); }
+.sym.aarco { width:14px; height:14px; margin:0 1px 3px; border-radius:50% 50% 50% 0; transform:rotate(-45deg);
+             background:var(--aarco); box-shadow:0 0 0 1.5px var(--aarco-ink), 0 0 0 2.5px var(--line); }
+.sym.ring { width:18px; height:18px; border-radius:50%; border:2.5px solid var(--ink); }
+.sym.area { width:22px; height:14px; border-radius:3px; }
+.sym.area.searched { border:1.5px solid var(--area-done); background:color-mix(in srgb, var(--area-done) 14%, transparent); }
+.sym.area.partly { border:2.5px dashed var(--area-miss); background:color-mix(in srgb, var(--area-miss) 24%, transparent); }
+.sym.area.unknown { border:2px dotted var(--area-unknown); }
+.area-list { margin:0; padding:0; list-style:none; display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
+             gap:var(--sp-3) var(--sp-5); }
+.area-list li { display:flex; gap:var(--sp-2); align-items:flex-start; }
+.area-list li .sym { margin-top:4px; }
+.area-list .sub { color:var(--muted); font-size:var(--fs-sm); }
+/* Leaflet's parts in the site's look, light and dark. */
+#map.leaflet-container { font:inherit; font-size:var(--fs-sm); background:var(--map-bg); }
+#map .leaflet-popup-content-wrapper, #map .leaflet-popup-tip { background:var(--card); color:var(--ink);
+                                                               box-shadow:0 3px 14px var(--shadow); }
+#map .leaflet-popup-content { margin:var(--sp-3) var(--sp-5) var(--sp-3) var(--sp-4); line-height:1.45; font-size:var(--fs-sm); }
+#map a.leaflet-popup-close-button { color:var(--muted); width:32px; height:32px; font:22px/32px system-ui, sans-serif; }
+#map .leaflet-bar a { background:var(--card); color:var(--ink); border-bottom-color:var(--line); }
+#map .leaflet-bar a:hover { background:var(--hover); }
+#map .leaflet-bar { border:1px solid var(--line); box-shadow:0 1px 4px var(--shadow); }
+#map .leaflet-control-attribution { background:color-mix(in srgb, var(--card) 88%, transparent); color:var(--muted);
+                                    font-size:var(--fs-xs); }
+#map .leaflet-control-attribution a { color:var(--accent); }
+@media (pointer: coarse) {
+  #map .leaflet-bar a { width:44px; height:44px; line-height:44px; font-size:22px; }
+  #map a.leaflet-popup-close-button { width:44px; height:44px; line-height:44px; }
+  .pin-box a { display:inline-flex; align-items:center; min-height:44px; }
+}
+/* The dark theme dims and inverts the street map to match the page. */
+:root[data-theme="dark"] #map .leaflet-tile-pane { filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.5); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #map .leaflet-tile-pane { filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9)
+                                                            saturate(.5); }
+}
+/* The search areas' names, written over the map with a halo so they read on any background. */
+#map .area-label { width:0; height:0; }
+.area-name { position:absolute; transform:translate(-50%, -50%); width:max-content; max-width:9.5em; text-align:center;
+             line-height:1.2; font-weight:700; font-size:var(--fs-sm); color:var(--ink); pointer-events:none;
+             text-shadow:0 0 2px var(--card), 0 0 3px var(--card), 0 0 6px var(--card), 0 0 10px var(--card); }
+/* A name with no room at this zoom (placeLabels in map.js): the list below the map has it. */
+.area-name.crowded { visibility:hidden; }
+.area-name span, .area-name small { display:block; }
+.area-name small { font-size:var(--fs-xs); font-weight:700; color:var(--area-miss); }
+.area-name.unknown small { color:var(--muted); }
+/* A competitor: a hollow square. AARCO: a pin of its own with its name beside it. */
+#map .pin-comp { box-sizing:border-box; border:3px solid var(--pin-comp); border-radius:2px; background:var(--pin-ring);
+                 box-shadow:0 0 0 1.5px var(--pin-ring); }
+#map .aarco-pin { overflow:visible; }
+.aarco-mark { position:relative; width:32px; height:42px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+.aarco-mark svg { display:block; }
+.aarco-body { fill:var(--aarco); stroke:var(--aarco-ink); stroke-width:1.5; }
+.aarco-star { fill:var(--aarco-ink); }
+.aarco-name { position:absolute; left:31px; top:3px; padding:1px var(--sp-2); border:1.5px solid var(--aarco-ink);
+              border-radius:var(--sp-1); background:var(--aarco); color:var(--aarco-ink); font-weight:800;
+              font-size:var(--fs-sm); letter-spacing:.04em; white-space:nowrap; }
+/* A business's details, opened from its pin. */
+.pin-box { display:flex; flex-direction:column; gap:2px; min-width:200px; }
+.pin-box strong:first-child { font-size:var(--fs-md); }
+.pin-box .sub { color:var(--muted); }
+.pin-box .flag { color:var(--bad-ink); font-weight:600; }
+.pin-box .open-lead { margin-top:var(--sp-2); font-weight:600; }

@@ -78,7 +78,8 @@ The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
 (`store.py` is the database); `alerts.py` records problems and sends them to the
 webhook. The website is `leadgen/web/`: `auth.py` (login),
 `finding.py` (Find leads), `leads.py` (the saved list, marks, calls, stats,
-downloads) and `common.py`. `export.py` lays out the CSV and Excel files and
+downloads), `mapping.py` (the Map page's data, `/map-data`, from `leadgen/area_map.py`)
+and `common.py`. `export.py` lays out the CSV and Excel files and
 `xlsx.py` writes the Excel format; `reference.py` copies the site's marks into
 the scoring tests. The page's markup is `leadgen/templates/index.html`;
 its script and styles are in `leadgen/static/` (`core.js` first, then one file
@@ -110,7 +111,16 @@ why (in the browser and from the server), the phone cards and the short phone
 header, Stats, downloads and their busy state, reload keeps the
 view, the colour switch fitting from 320 px up, 44 px touch targets on a
 phone, the Calls cards and every page link in view at 320 px, a closed business
-keeping its mark, the skip link and the short Recent changes); it is skipped when Playwright's Chromium is missing.
+keeping its mark, the skip link and the short Recent changes, and the Map page: AARCO's
+pin, the circle, the nine areas and the missed one, every pin and its details, the group
+and area toggles (kept after a reload), a pin opening the business on Leads, the dark
+theme and a phone); it is skipped when Playwright's Chromium is missing. Every browser
+window the tests open refuses requests to anywhere but the test server (`OUTSIDE`), so
+the Map page runs without its street map, as it does offline.
+`tests/test_map_page.py` covers `/map-data` (on SQLite and Postgres): the login, AARCO,
+the circle and areas, every pin's fields, the shading from new records, a filling in,
+a stopped search and old records, which search counts as AARCO's area's, thousands of
+pins, and a real search around the shop with the northern areas failing.
 `tests/test_closed_and_alerts.py` covers closed businesses in every view, the
 downloads and Stats, an incomplete search saving what it found and using up the day, and problem
 reports (the webhook is mocked).
@@ -223,7 +233,7 @@ Everything adjustable is in `leadgen/config.py`:
 The [sales guide](sales-guide.md) is the short, task-based version for staff; this is
 the full behaviour, for whoever changes or supports the site.
 
-The sidebar has four pages, a Light / Dark / System colour switch (System
+The sidebar has five pages (Find leads, Leads, Calls, Map, Stats), a Light / Dark / System colour switch (System
 follows the computer's setting; the choice is remembered in each browser), and
 every page carries the Wright AI Solutions copyright. The browser tab names the
 page ("Leads · AARCO Compactor Lead Finder") and shows the Lead Finder icon. The
@@ -234,8 +244,10 @@ rewriting them, and a listing or a search that spells it "Arco" is still AARCO's
 On phones and tablets every button and link is at least 44 px each way (on a
 narrow window the "Only businesses matching the search words" tick box too). On a
 phone or tablet (up to 820 px wide) the navigation is one short bar at the top (the
-page counts show just the number; on the narrowest phones the links wrap to a second
-line, so Stats is never cut off, and the bar never takes more than two rows), with the
+page counts show just the number; below 430 px the first link says "Find", its name
+still "Find leads", so the five pages fit one row from 375 px up; on the narrowest phones
+the links wrap to a second line, so Stats is never cut off, and the bar never takes
+more than two rows), with the
 tutorial, your name, the Yelp count, the colour switch and Log out under **Menu**; the
 browser's own bar takes the sidebar's colour of the theme shown, light or dark,
 including after a Light / Dark choice (`setThemeColor` in `templates/_theme.html`).
@@ -512,6 +524,47 @@ the sidebar to the page's list (Leads, Calls) or heading.
   page: name and latest result, the tap-to-call phone, the Conversation summary,
   then **Just called**, **History** and Undo, with nothing scrolling sideways. A
   business closed for good says so under its name.
+- **Map** (`map.js`, part 6; `web/mapping.py` and `area_map.py`): one read-only request,
+  `GET /map-data`, behind the login like every page, answers everything drawn:
+  - AARCO's pin (`config.OWN_COORDS`, labelled AARCO, always on top) and the circle of
+    `SERVICE_AREA_MILES` around `SERVICE_CENTER`.
+  - The areas a search asks the free map data in (`osm.area_boxes`, the "N of 9 areas"
+    of its progress), each cut to the circle and named by `osm.area_name` like
+    elsewhere (its biggest town, else "The area to the north-west"), with up to three
+    more towns for the list under the map. An area name that would cover another, AARCO's
+    pin, or the map's edge waits until the map is zoomed in (`placeLabels`).
+  - The shading, from the latest search of AARCO's area (`area_map.latest_search`: the
+    newest day's record that found leads, ran within 0.1 mile of the shop with the
+    service area's miles, and used the map data). A search now records its centre
+    (`center`) and the boxes of the parts no server answered for (`map_areas.missing`,
+    `[]` when all did, `[null]` when none did, `{"known": false}` when stopped), and the
+    filling in keeps its own list as areas answer (`fill.boxes`). An area all of which
+    is missing is "missed" (or "asking" while being filled in), one partly missing is
+    "partly", the rest "searched". A search recorded before those keys existed is read
+    from its words: complete means all searched, "Couldn't reach ... the map data
+    service" all missed, and the towns its note or filling in named as missing mark
+    those areas, the others searched only when that list is surely whole (else "not
+    known"). Nothing rewrites the old records.
+  - A pin for every saved lead with a map position (`fields` names each pin's short
+    list: key, lat, lon, group, name, tier, score, phone, verified phone, address,
+    outcome, called, closed, kind), from the same parsed saved list as the Leads page, so
+    a few thousand stay quick (3,000 in about 0.03 s, about 400 KB); `no_position` counts
+    the rest. Groups: `yes`, `no`, `unchecked`, `competitor` (competitors and AARCO's own
+    listing, `pipeline.EXEMPT_TYPES`).
+  The map is Leaflet 1.9.4, vendored in `leadgen/static/vendor/leaflet` (with its BSD-2
+  licence and a README saying where it came from), loaded the first time the page opens.
+  Dots are drawn on one canvas (a wider tap tolerance on touch screens); competitors are
+  hollow squares and AARCO a teardrop with a star, as HTML markers that take the keyboard.
+  Colours come from `_theme.html` (`--pin-*`, `--aarco*`, `--area-*`), checked with a
+  colour-blind validator in both themes, and every colour is also named in words (the
+  key, the details box); the canvas is redrawn in the new colours when the theme
+  changes (`restyleMap`). Hidden groups are remembered under `map-hidden` in local
+  storage. The street map is OpenStreetMap's tiles (`tile.openstreetmap.org`, credited
+  in the corner); the dark theme inverts and dims them. When they fail the page says so
+  and draws everything on a plain background. A pin's **Open on the Leads page** opens
+  `#leads?tab=all&lead=<id>`: `/leads` takes `lead=` (a uid, at most 64 characters) and
+  the page says "Showing one business, opened from the map." with **Show the whole list**;
+  any other filter or tab change drops it.
 - **Stats**: how many businesses have a baler or compactor (marked Yes), their
   average score, and a chart of the share of checked businesses (marked Yes or
   No) that have one, by tier. Competitors and AARCO's own listing are left out of

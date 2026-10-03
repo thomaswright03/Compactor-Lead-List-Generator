@@ -10,7 +10,10 @@ import { readFileSync } from "node:fs";
 
 const DIR = "leadgen/static";
 // In the order the page loads them.
-const FILES = ["core.js", "leads.js", "calls.js", "find.js", "stats.js", "start.js", "tour.js"];
+const FILES = ["core.js", "leads.js", "calls.js", "find.js", "stats.js", "map.js", "start.js", "tour.js"];
+// What a script uses from a library it loads itself: the Map page's Leaflet (vendor/leaflet,
+// loaded by map.js the first time the Map page opens; its types are in types/page.d.ts).
+const LIBRARIES = { "map.js": ["L"] };
 
 // The browser's own names the scripts use (ES built-ins such as Map and Intl come with
 // ecmaVersion).
@@ -31,7 +34,8 @@ export default [
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "script",
-      globals: readonly([...BROWSER, ...FILES.filter((f) => f !== file).flatMap((f) => shared[f])]),
+      globals: readonly([...BROWSER, ...(LIBRARIES[file] || []),
+                         ...FILES.filter((f) => f !== file).flatMap((f) => shared[f])]),
     },
     linterOptions: { reportUnusedDisableDirectives: "error" },
     rules: {

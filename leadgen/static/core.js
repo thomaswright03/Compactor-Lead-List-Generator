@@ -1,5 +1,5 @@
-/* The Lead Finder page, part 1 of 6: shared helpers, the colour theme and page switching.
-   One HTML page (templates/index.html) holds Find leads, Leads, Calls and Stats, switched by
+/* The Lead Finder page, part 1 of 7: shared helpers, the colour theme and page switching.
+   One HTML page (templates/index.html) holds Find leads, Leads, Calls, Map and Stats, switched by
    the #address; these scripts load in order and share their top-level names. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, S, el, link, phoneLink,
@@ -19,7 +19,8 @@ const OUTCOMES = CONFIG.outcomes;
 const PAUSED = CONFIG.paused;
 const SITE = "AARCO Compactor Lead Finder";
 /** @type {Record<string, string>} */
-const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", stats: "Stats" };
+const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", map: "Map", stats: "Stats" };
+const PAGES = ["find", "leads", "calls", "map", "stats"];
 // A row just marked Yes or No stays where it is (showing its answer and Undo) for this long
 // after the pointer leaves the table, so a double-click can never land on the next business.
 const PIN_MS = 5000;
@@ -37,7 +38,7 @@ const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoa
             calledTotal: 0, callCounts: null, callLimit: PAGE, callSeq: 0, calledLoading: false,
             sending: new Map(), failed: new Map(), loaded: false, loadError: "", refreshError: "",
             viewLoading: false, seq: 0,
-            leadView: "", callView: "", callQ: "", q: "", tier: "", phone: false, sort: "score", dir: "desc",
+            leadView: "", callView: "", callQ: "", q: "", lead: "", tier: "", phone: false, sort: "score", dir: "desc",
             limit: PAGE, job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0,
             cutOffTimer: 0 };
 
@@ -145,12 +146,14 @@ function applyTheme(choice) {
   $all("[data-theme-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themePick === choice)));
   window.setThemeColor(choice);              // the browser's bar matches (templates/_theme.html)
   if (chartRows && !$("page-stats").hidden) drawChart(chartRows);
+  restyleMap();                               // the map's pins and areas take the theme's colours
 }
 $all("[data-theme-pick]").forEach((b) => {
   b.addEventListener("click", () => applyTheme(b.dataset.themePick || "system"));
 });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   if (chartRows) drawChart(chartRows);
+  restyleMap();
 });
 
 /* Who is using this browser: the name saved with each Yes / No and call made here, so the
@@ -231,19 +234,20 @@ function parseHash() {
 // Take the Leads view (tab, filter, tier, sort) from the address; true when it changed.
 /** @param {URLSearchParams} params */
 function readLeadView(params) {
-  const before = [S.leadView, S.q, S.tier, S.phone, S.sort, S.dir].join("|");
+  const before = [S.leadView, S.q, S.lead, S.tier, S.phone, S.sort, S.dir].join("|");
   S.leadView = params.get("tab") || "";
   if (!LEAD_TABS.some(([v]) => v === S.leadView)) S.leadView = "";
   S.q = params.get("q") || ""; S.tier = params.get("tier") || ""; S.phone = params.get("phone") === "1";
+  S.lead = (params.get("lead") || "").slice(0, 64);       // one business (the Map page's link)
   const sort = params.get("sort") || "";
   S.sort = SORTS[sort] ? sort : "score";
   S.dir = params.get("dir") === "asc" ? "asc" : params.get("dir") === "desc" ? "desc" : SORTS[S.sort].dir;
   $("filter").value = S.q; $("tier").value = S.tier; $("has-phone").checked = S.phone;
-  return before !== [S.leadView, S.q, S.tier, S.phone, S.sort, S.dir].join("|");
+  return before !== [S.leadView, S.q, S.lead, S.tier, S.phone, S.sort, S.dir].join("|");
 }
 function route() {
   const { page: asked, params } = parseHash();
-  const page = ["find", "leads", "calls", "stats"].includes(asked) ? asked
+  const page = PAGES.includes(asked) ? asked
     : (S.counts && S.counts.all ? "leads" : "find");
   // A note about one page never covers the next (leads.js may not be loaded yet).
   if (typeof hideToast === "function") hideToast();
@@ -255,7 +259,7 @@ function route() {
     S.callLimit = PAGE;
     loadCalled();
   }
-  for (const p of ["find", "leads", "calls", "stats"]) $(`page-${p}`).hidden = p !== page;
+  for (const p of PAGES) $(`page-${p}`).hidden = p !== page;
   document.title = `${TITLES[page]} · ${SITE}`;
   $all("nav a").forEach((a) => {
     a.classList.toggle("on", a.dataset.page === page);
@@ -263,6 +267,7 @@ function route() {
   });
   if (page === "leads" || page === "calls") writeHash(page);
   if (page === "stats") loadStats();
+  if (page === "map") loadMap();
   if (page === "find") loadSearches();
 }
 /** @param {string} page */
@@ -271,6 +276,7 @@ function writeHash(page) {
   if (page === "leads") {
     if (S.leadView) params.set("tab", S.leadView);
     if (S.q) params.set("q", S.q);
+    if (S.lead) params.set("lead", S.lead);
     if (S.tier) params.set("tier", S.tier);
     if (S.phone) params.set("phone", "1");
     if (S.sort !== "score" || S.dir !== "desc") { params.set("sort", S.sort); params.set("dir", S.dir); }

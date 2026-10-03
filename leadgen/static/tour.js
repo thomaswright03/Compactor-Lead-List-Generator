@@ -1,7 +1,7 @@
 /* The Lead Finder page, the tutorial: a step-by-step tour of every page, opened with the
    Tutorial button in the sidebar (in Menu on phones), and offered once on a browser's first
    visit. Each step switches to its page, highlights one part of it and explains it. The tour
-   only looks: it never clicks, marks, calls or searches. Loaded after the six parts in
+   only looks: it never clicks, marks, calls or searches. Loaded after the seven parts in
    core.js to start.js. */
 /** @type {TourStep[]} */
 const TOUR = [
@@ -9,9 +9,10 @@ const TOUR = [
     text: "This site finds businesses around Salt Lake City that are likely to run a baler or compactor. " +
           "You check each one, call them, and keep track of how it went. This tour shows every page. " +
           "It only looks around: nothing you see here is changed." },
-  { page: "find", target: "nav", title: "The four pages",
+  { page: "find", target: "nav", title: "The five pages",
     text: "Find leads runs a search. Leads is the list of businesses to check. Calls keeps every call. " +
-          "Stats sums up what you found. The numbers next to Leads and Calls show how many are waiting." },
+          "Map shows them all around AARCO. Stats sums up what you found. The numbers next to Leads and Calls " +
+          "show how many are waiting." },
   { page: "find", target: "#form .form-grid", title: "Where to search",
     text: "Type a ZIP code, city or address and how many miles around it to look. AARCO's address is filled in. " +
           "Extra search words are optional; the standard words are always searched." },
@@ -46,6 +47,14 @@ const TOUR = [
     text: "Every business that has been called, latest call first. Each outcome has its own tab, " +
           "so Follow Up shows exactly who to call back. The filter finds a business by its name, town, what " +
           "was said on its calls or who called." },
+  { page: "map", target: "#map-box", title: "Map",
+    text: `AARCO's pin, the ${CONFIG.area_miles}-mile area searches are meant for, and the parts a search looks ` +
+          "through one at a time, shaded by how the latest search went. Every saved business is a dot coloured by " +
+          "its answer: Yes, No or not checked yet; competitors are hollow squares. Tap one for its phone, its " +
+          "latest call and a link to it on the Leads page." },
+  { page: "map", target: "#map-groups", title: "Show or hide businesses",
+    text: "Untick a group to hide it from the map, tick it to show it again. The key explains every symbol, and " +
+          "the list below the map says how each search area stands, in words." },
   { page: "stats", target: "#stats-body", title: "Stats",
     text: "How many businesses have a baler or compactor, their average score, and how often each tier " +
           "turned out right. It fills in as the team marks businesses Yes or No." },

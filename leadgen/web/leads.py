@@ -132,7 +132,8 @@ def saved_leads() -> ResponseReturnValue:
     page asks for the rows it shows and "Show more" for the next page, so opening it
     stays quick however long the list grows.
 
-    ?tab= one of VIEWS (default all), q= filter text, tier=, phone=1, sort= / dir=,
+    ?tab= one of VIEWS (default all), q= filter text, tier=, phone=1, lead= one business
+    by its id (the Map page's link), sort= / dir=,
     offset= (default 0) and limit= (default PAGE_SIZE, at most MAX_LIMIT): the rows
     from offset on; keep= uids shown even outside the tab (rows just marked, which
     stay put for a few seconds; on the first page only, and a refresh sends them in
@@ -162,6 +163,8 @@ def saved_leads() -> ResponseReturnValue:
     outcome = request.args.get("outcome") or ""
     if outcome not in calls.OUTCOMES or view != "called":
         outcome = ""
+    # One business only (the Map page's "Open on the Leads page" link), by its id.
+    only = (request.args.get("lead") or "")[:64]
     try:
         if since is None or not math.isfinite(since) or since <= 0:
             leads, undo = load_saved()
@@ -176,7 +179,7 @@ def saved_leads() -> ResponseReturnValue:
         return jsonify({"error": str(exc)}), 503
 
     def filtered(l: Lead) -> bool:
-        return ((not outcome or l.call_outcome == outcome)
+        return ((not only or l.uid == only) and (not outcome or l.call_outcome == outcome)
                 and matches(l, q, tier, phone, text.get(l.uid, "")))
     extra = {"call_counts": _call_counts(leads, q, text)} if view == "called" else {}
     if since is None or not math.isfinite(since) or since <= 0:

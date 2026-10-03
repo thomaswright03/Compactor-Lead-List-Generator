@@ -15,9 +15,10 @@
     <div class="brand"><strong>AARCO Compactor</strong><span>Lead Finder</span></div>
     <button type="button" class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="side-bottom">Menu</button>
     <nav aria-label="Pages">
-      <a href="#find" data-page="find">Find leads</a>
+      <a href="#find" data-page="find" aria-label="Find leads">Find<span class="lw"> leads</span></a>
       <a href="#leads" data-page="leads" title="Saved businesses not yet marked Yes or No">Leads <span class="count" id="n-leads" hidden></span></a>
       <a href="#calls" data-page="calls" title="Businesses with at least one call logged">Calls <span class="count" id="n-calls" hidden></span></a>
+      <a href="#map" data-page="map" title="AARCO's area, its search areas and every saved business on a map">Map</a>
       <a href="#stats" data-page="stats">Stats</a>
     </nav>
     <div class="side-bottom" id="side-bottom">
@@ -230,6 +231,63 @@
       </div>
     </section>
 
+    <!-- Map: AARCO's area, the areas a search asks the free map data in, and a pin per saved
+         business (static/map.js; Leaflet is loaded the first time this page opens). -->
+    <section class="page" id="page-map" hidden>
+      <div class="page-head"><h1>Map</h1>
+        <p>AARCO's {{ area_miles|int }}-mile area, the parts a search looks through one at a time, and every saved business. Tap a pin for its details.</p></div>
+      <div id="map-problem"></div>
+      <div id="map-body">
+        <div class="map-layout">
+          <div class="map-main">
+            <div class="map-box" id="map-box" role="region" aria-label="Map of AARCO's area and the saved businesses"
+                 aria-describedby="map-coverage">
+              <div id="map" data-js="/static/vendor/leaflet/leaflet.js?v={{ asset_version }}"
+                   data-css="/static/vendor/leaflet/leaflet.css?v={{ asset_version }}"></div>
+              <div class="map-loading" id="map-loading" role="status"></div>
+            </div>
+            <p class="warn" id="map-tiles-note" hidden>The street map couldn't be loaded (no connection to
+              OpenStreetMap's map tiles), so the area and the businesses are shown on a plain background.</p>
+            <p class="map-note" id="map-coverage"></p>
+            <p class="map-note" id="map-no-position" hidden></p>
+          </div>
+          <div class="map-side">
+            <fieldset class="card map-groups" id="map-groups">
+              <legend>Businesses</legend>
+              <label class="check"><input type="checkbox" data-group="yes" checked>
+                <span class="sym pin yes" aria-hidden="true"></span><span>Has baler or compactor (Yes)
+                <span class="n" id="map-n-yes"></span></span></label>
+              <label class="check"><input type="checkbox" data-group="no" checked>
+                <span class="sym pin no" aria-hidden="true"></span><span>No baler or compactor (No)
+                <span class="n" id="map-n-no"></span></span></label>
+              <label class="check"><input type="checkbox" data-group="unchecked" checked>
+                <span class="sym pin unchecked" aria-hidden="true"></span><span>Not checked yet
+                <span class="n" id="map-n-unchecked"></span></span></label>
+              <label class="check"><input type="checkbox" data-group="competitor" checked>
+                <span class="sym comp" aria-hidden="true"></span><span>Competitors and AARCO's own listing
+                <span class="n" id="map-n-competitor"></span></span></label>
+            </fieldset>
+            <fieldset class="card map-legend">
+              <legend>Also on the map</legend>
+              <div class="key"><span class="sym aarco" aria-hidden="true"></span><span><strong>AARCO</strong><span
+                id="map-aarco-address"></span>: the default place searches are measured from</span></div>
+              <div class="key"><span class="sym ring" aria-hidden="true"></span><span>The {{ area_miles|int }}-mile area around AARCO</span></div>
+              <label class="check"><input type="checkbox" id="map-show-areas" checked> <span>Search areas, shaded by the latest search:</span></label>
+              <div class="key sub-key"><span class="sym area searched" aria-hidden="true"></span><span>Searched</span></div>
+              <div class="key sub-key"><span class="sym area partly" aria-hidden="true"></span><span>Partly searched, or not searched (dashed edge)</span></div>
+              <div class="key sub-key"><span class="sym area unknown" aria-hidden="true"></span><span>Not known (dotted edge)</span></div>
+            </fieldset>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Search areas</h2>
+          <p class="muted">A search looks through AARCO's area in these parts, nearest first (the "3 of 9 areas
+            done" while it runs). Each is named after its biggest town.</p>
+          <ol class="area-list" id="map-areas"></ol>
+        </div>
+      </div>
+    </section>
+
     <!-- Stats -->
     <section class="page" id="page-stats" hidden>
       <div class="page-head"><h1>Stats</h1>
@@ -372,6 +430,7 @@
 <script src="/static/calls.js?v={{ asset_version }}" defer></script>
 <script src="/static/find.js?v={{ asset_version }}" defer></script>
 <script src="/static/stats.js?v={{ asset_version }}" defer></script>
+<script src="/static/map.js?v={{ asset_version }}" defer></script>
 <script src="/static/start.js?v={{ asset_version }}" defer></script>
 <script src="/static/tour.js?v={{ asset_version }}" defer></script>
 </body>

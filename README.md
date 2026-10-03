@@ -12,7 +12,7 @@ and AARCO Compactor's own listing is flagged too.
 
 | You are | Read |
 | --- | --- |
-| On the sales team | [Sales guide](docs/sales-guide.md): short how-tos for the day's search, marking, logging calls, Stats, downloads and what the scores mean |
+| On the sales team | [Sales guide](docs/sales-guide.md): short how-tos for the day's search, marking, logging calls, the Map, Stats, downloads and what the scores mean |
 | Looking after the live site | [Operator runbook](docs/operator-runbook.md): **emergency switches** (pause searching), deploying, rollback, alerts, settings, the database |
 | Changing the code | [Developer overview](docs/developer-overview.md): a diagram of search → sources → merge/score → saved list → pages, tests and checks, the command line, and every page's behaviour in detail |
 
@@ -24,6 +24,7 @@ and AARCO Compactor's own listing is flagged too.
 | Run the day's search | **Find leads** → check the place and miles → **Find leads** → **Start search** | [Sales guide](docs/sales-guide.md#run-the-days-search) |
 | Mark a business, log a call | **Leads** → **Yes** / **No**; **Just called** → summary and result → **Save** | [Sales guide](docs/sales-guide.md#mark-yes-or-no) |
 | Save a verified phone or contact | **Leads** → **Add verified phone or contact** under the business's phone | [Sales guide](docs/sales-guide.md#save-a-verified-phone-or-contact) |
+| See the area and every business on a map | **Map** → tap a pin → **Open on the Leads page** | [Sales guide](docs/sales-guide.md#see-the-businesses-on-the-map) |
 | Download the list | **Leads** → **Download Excel** / **Download CSV** | [Sales guide](docs/sales-guide.md#download-the-list) |
 | Undo a bad deploy | Render → the service → **Events** → last good deploy → **Rollback** | [Runbook](docs/operator-runbook.md#logs-and-rolling-back-a-bad-deploy) |
 | Back up or restore the data | `python -m leadgen backup`; `python -m leadgen restore <copy>` lists, `--apply` adds (never overwrites) | [Runbook](docs/operator-runbook.md#backups-and-restoring) |
@@ -132,6 +133,20 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   every tab's count however long the list grows; a tab, filter or sort that takes
   more than a moment says **Loading…** over the dimmed rows (and, after about five
   seconds, that it is taking longer than usual).
+- A **Map** page: AARCO's own pin at 876 Fortune Rd, the 30-mile circle around it, the
+  nine areas a search asks the free map data in (named after their biggest town, as in
+  the search's "N of 9 areas") shaded by how the latest search of AARCO's area went
+  (searched, partly searched, not searched or being asked again, or not known), and a
+  pin for every saved business with a map position: coloured by its Yes / No answer
+  (blue not checked, green Yes, orange No, a set that stays apart for colour-blind
+  eyes and in the dark theme, each named in the key and the pin's details, never colour
+  alone), competitors and AARCO's own listing as hollow squares. Each group can be
+  hidden (remembered in that browser), and a pin's details give the name, tier and
+  score, phone, address, answer, latest call and **Open on the Leads page**. The
+  street map is OpenStreetMap's (credited on the map); without it (offline, or blocked)
+  the rest is drawn on a plain background and the page says so. The map itself is
+  Leaflet, kept in `leadgen/static/vendor/leaflet` with its licence. It only reads:
+  nothing on it changes a lead, mark or call.
 - A business the listing gives no street address or town for shows the town and ZIP
   its map position is near ("No street address · near West Jordan, UT 84088 · map"),
   worked out offline from a small table of Census towns and ZIP areas

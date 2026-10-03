@@ -1,11 +1,12 @@
 /* Part 2: the Leads page (Yes / No marks, undo, keeping up with colleagues).
    The server filters, sorts and pages the list: the page holds only the rows it shows. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
-/* exported loadLeads, changeView, updateLead, addRecent, renderAll, counts, LEAD_TABS, SORTS, tabs, toast,
-   hideToast, leadByKey, undoCall, undoButton */
+/* exported loadLeads, changeView, updateLead, addRecent, renderAll, counts, LEAD_TABS, SORTS, TIER_WORDS, tabs,
+   toast, hideToast, leadByKey, undoCall, undoButton */
 function viewQuery() {
   const p = new URLSearchParams({ tab: S.leadView || "unchecked", sort: S.sort, dir: S.dir });
   if (S.q) p.set("q", S.q);
+  if (S.lead) p.set("lead", S.lead);
   if (S.tier) p.set("tier", S.tier);
   if (S.phone) p.set("phone", "1");
   return p;
@@ -525,12 +526,15 @@ function orList(names) {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
 }
 function clearFilters() {
-  S.q = ""; S.tier = ""; S.phone = false; $("filter").value = ""; $("tier").value = ""; $("has-phone").checked = false;
+  S.q = ""; S.lead = ""; S.tier = ""; S.phone = false;
+  $("filter").value = ""; $("tier").value = ""; $("has-phone").checked = false;
   S.limit = PAGE; unpinAll(); changeView();
   $("filter").focus();
 }
 /** @param {string} v */
-function pickTab(v) { S.leadView = v; S.limit = PAGE; unpinAll(); changeView(); }
+function pickTab(v) { S.leadView = v; S.lead = ""; S.limit = PAGE; unpinAll(); changeView(); }
+// The whole list again, after the Map page opened one business here.
+function showWholeList() { S.lead = ""; S.limit = PAGE; unpinAll(); changeView(); $("filter").focus(); }
 function renderLeads() {
   const problemBox = $("leads-problem");
   if (S.loadError && !S.loaded) {
@@ -542,6 +546,14 @@ function renderLeads() {
   }
   problemBox.replaceChildren(); $("leads-body").hidden = !S.loaded;
   $("leads-note").replaceChildren(...(S.refreshError ? [el("div", S.refreshError, "warn")] : []));
+  if (S.lead) {
+    // One business, opened from the Map page; the rest of the list is a click away.
+    const only = el("div", undefined, "only-one");
+    only.setAttribute("role", "status");
+    only.append(el("span", "Showing one business, opened from the map."), button("Show the whole list", "quiet",
+                                                                                  showWholeList));
+    $("leads-note").append(only);
+  }
   const c = S.counts, all = c ? c.all : 0;
   /** @type {[string, string, number][]} */
   const tabItems = LEAD_TABS.map(([v, t]) => [v, t, tabCount(c, v)]);
@@ -563,6 +575,12 @@ function renderLeads() {
       wrap.replaceChildren(emptyNote("No saved leads yet.",
         "Run today's search on the Find leads page: the businesses it finds are saved here.", "#find",
         "Go to Find leads"));
+    } else if (S.lead) {
+      const box = el("div", undefined, "empty");
+      box.append(el("strong", "That business isn't in the saved list any more."),
+                 el("p", "It may have been joined to another row of the same business, or taken out of the list."),
+                 button("Show the whole list", "quiet", showWholeList));
+      wrap.replaceChildren(box);
     } else if (S.q || S.tier || S.phone) {
       // Say what was filtered, and offer the way back to the whole list.
       const tab = (LEAD_TABS.find(([v]) => v === S.leadView) || ["", "All"])[1];
@@ -704,7 +722,7 @@ async function showMore() {
 $("leads-more").addEventListener("click", showMore);
 let filterTimer = 0;
 $("filter").addEventListener("input", () => {
-  S.q = $("filter").value; S.limit = PAGE; unpinAll();
+  S.q = $("filter").value; S.lead = ""; S.limit = PAGE; unpinAll();
   clearTimeout(filterTimer);
   filterTimer = setTimeout(changeView, 250);       // ask once typing pauses
 });
@@ -714,9 +732,11 @@ $("sort-pick").addEventListener("change", () => {
   S.limit = PAGE; unpinAll(); changeView();
 });
 $("tab-pick").addEventListener("change", () => pickTab($("tab-pick").value));
-$("tier").addEventListener("change", () => { S.tier = $("tier").value; S.limit = PAGE; unpinAll(); changeView(); });
+$("tier").addEventListener("change", () => {
+  S.tier = $("tier").value; S.lead = ""; S.limit = PAGE; unpinAll(); changeView();
+});
 $("has-phone").addEventListener("change", () => {
-  S.phone = $("has-phone").checked; S.limit = PAGE; unpinAll(); changeView();
+  S.phone = $("has-phone").checked; S.lead = ""; S.limit = PAGE; unpinAll(); changeView();
 });
 
 /* The downloads: building a big Excel file takes a moment, so the button says so and a second

@@ -442,6 +442,26 @@ python -m leadgen out-of-area --restore       # put every removed lead back
 is listed as kept). Each removed row is kept, as it was, in the additive
 `removed_leads` table, so nothing is lost and `--restore` brings it back.
 
+**The Map page and the day's search records.** No table or column was added for the
+Map page. A search now also writes, into its day's existing record (the `info` text of
+`searches`), the point it ran around (`center`) and which parts of the free map data no
+server answered for (`map_areas`), and the background filling in keeps its own list as
+areas answer (`fill.boxes`). Records written before 2026-10-03 lack these keys and are
+read from their words instead; nothing rewrites them. The page only reads.
+
+**The Map page's outside parts.** The map itself (Leaflet 1.9.4) is part of the site,
+in `leadgen/static/vendor/leaflet` with its licence (BSD-2) and a README saying where it
+came from and how to update it, so it works without any other site. The street map
+under the pins is OpenStreetMap's public tiles (`https://tile.openstreetmap.org`),
+loaded by each person's browser and credited in the map's corner ("© OpenStreetMap
+contributors", which their licence requires: keep it). No key or account is needed,
+and the server never asks for tiles. If the tiles are blocked or OpenStreetMap is down,
+the page says "The street map couldn't be loaded" and still draws AARCO's pin, the
+area, the search areas and every business on a plain background. OpenStreetMap's tile
+policy is for light use like a small team's; if the site ever needs heavy map use,
+switch `TILES` and `TILE_CREDIT` at the top of `leadgen/static/map.js` to a paid tile
+provider.
+
 ## Backups and restoring
 
 Everything the sales team produces lives in the one Postgres database named by
