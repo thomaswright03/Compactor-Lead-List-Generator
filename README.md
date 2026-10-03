@@ -96,6 +96,13 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   (`python -m leadgen merge-sites --apply`), the lead keeps Yes and says the marks
   disagreed until someone presses Yes or No on it again.
 - Every Yes / No mark and call needs **Your name**: the server refuses one without it.
+- **Verified phone and contact**: a salesperson who finds the right number or who to
+  ask for (the facilities manager) saves it on the business with **Add verified phone
+  or contact**. It is shown under the listing's own phone on Leads and Calls, with who
+  saved it and when, and in the downloads' **Verified Phone**, **Contact Name** and
+  **Verified By** columns next to **Phone**. It is kept apart from the listing's
+  details, so a later search never changes it; every save is kept (**Earlier
+  versions**), and **Has phone** counts a verified number.
 - **Yes / No** "has a baler or compactor" marks (permanent; a click can be undone
   for 5 minutes), **Just called** notes with six results and a Calls tab for each
   (with a filter box: several words, such as "walmart layton", find the rows that

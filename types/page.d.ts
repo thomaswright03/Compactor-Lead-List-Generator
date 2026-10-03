@@ -58,6 +58,14 @@ interface Lead {
   last_call_at: number | null;
   earlier_notes: string;
   earlier_notes_when: string;
+  /** The phone and who to ask for that the team verified (contacts.py), beside the listing's own. */
+  verified_phone: string;
+  contact_name: string;
+  contact_by: string;
+  contact_when: string;
+  contact_at: number | null;
+  /** How many times it was saved: more than one, and History lists the earlier ones. */
+  contact_saves: number;
   undo_mark: Undo | null;
   undo_call: Undo | null;
   /** The page's own: the Yes / No it is saving ("yes" / "no"; "" or absent when none). */
@@ -126,7 +134,13 @@ interface SavedCall {
 interface CallHistory {
   calls: { at: number; when: string; outcome: string; notes: string; by: string }[];
   marks: { value: string; when: string; by: string }[];
+  /** Every verified contact saved on the business, newest first. */
+  contacts: { phone: string; contact: string; by: string; when: string }[];
 }
+
+/** A business's verified contact as just saved (POST /contact), in a Lead's own fields. */
+type VerifiedContact = Pick<Lead, "verified_phone" | "contact_name" | "contact_by" | "contact_when" | "contact_at" |
+  "contact_saves">;
 
 /** Notes typed in the call box and not yet saved, kept per business. */
 interface CallDraft { notes: string; outcome: string; id?: string }

@@ -340,6 +340,24 @@
   </form>
 </dialog>
 
+<!-- A verified phone and who to ask for, saved on a business for the whole team (contacts.py). -->
+<dialog id="contact-dlg" aria-labelledby="contact-title" aria-describedby="contact-listed">
+  <form class="dlg" method="dialog" id="contact-form" novalidate>
+    <h2 id="contact-title">Verified contact</h2>
+    <p class="sub" id="contact-listed"></p>
+    <label for="contact-phone">Verified phone
+      <input id="contact-phone" type="tel" maxlength="40" autocomplete="off" placeholder="For example, (801) 555-0199"></label>
+    <label for="contact-name">Who to ask for
+      <input id="contact-name" maxlength="80" autocomplete="off" placeholder="For example, Jane Doe, facilities manager"></label>
+    <p class="hint">Saved for the whole team with your name, and shown on the Leads and Calls pages and in the downloads. Searches never change it. To take it off, empty both boxes and save.</p>
+    <div class="error" id="contact-error" role="alert"></div>
+    <div class="dlg-actions">
+      <button type="button" class="quiet" id="contact-cancel">Cancel</button>
+      <button type="submit" id="contact-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="hist-dlg">
   <div class="dlg">
     <h2 id="hist-title">Call history</h2>

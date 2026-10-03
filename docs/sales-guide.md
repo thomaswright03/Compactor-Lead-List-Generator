@@ -141,6 +141,23 @@ Good to know:
 Your typed notes are kept as a draft until you save, even if you close the box.
 Logging a call never changes the Yes / No answer.
 
+## Save a verified phone or contact
+
+Found the right number, or who to ask for? Save it on the business, not only in the
+call notes, so the next caller has it:
+
+1. On the business (Leads or Calls), press **Add verified phone or contact** under
+   its phone.
+2. Type the phone with its area code and, if you have it, who to ask for ("Jane Doe,
+   facilities manager"). Either one is enough.
+3. Press **Save**. It shows under the listing's phone with a **Verified** label and
+   your name, for the whole team, and goes in the downloads' **Verified Phone** and
+   **Contact Name** columns.
+
+The listing's own phone stays as it was, and later searches never change what you
+saved. To correct it, press **Edit verified contact**; **Earlier versions** shows every
+save, with who made it. To take it off, empty both boxes and save.
+
 ## Follow up on calls
 
 - Open **Calls**. **All called businesses** lists every business called, latest
@@ -169,7 +186,8 @@ Logging a call never changes the Yes / No answer.
 ## Download the list
 
 - On **Leads**, press **Download Excel** or **Download CSV** for every saved
-  lead, with its mark, who marked it, and the latest call. The file name has
+  lead, with its mark, who marked it, the latest call, and any verified phone and
+  contact name (next to the listing's phone). The file name has
   the date (Utah time), e.g. `compactor-leads-2026-09-30.xlsx`.
 - In Excel, **Last Called** is a real date and time (Utah time), so you can sort it
   oldest to newest or use Excel's date filter on it ("called more than 30 days ago").

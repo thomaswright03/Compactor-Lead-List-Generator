@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from flask import current_app, request
 from werkzeug.exceptions import ServiceUnavailable
 
-from .. import calls, config, marks, places, saved, store, usage
+from .. import calls, config, contacts, marks, places, saved, store, usage
 from ..export import format_phone
 from ..localtime import date_time_text
 from ..models import Lead, Undo
@@ -64,12 +64,13 @@ def db_message(exc: BaseException) -> str:
 
 
 def with_marks_and_calls(leads: list[Lead]) -> Undos:
-    """Add each lead's mark and latest call, plus the undo offers; raises LoadError
-    with a plain message when they can't be read (leads shown without their marks
-    would all look unchecked)."""
+    """Add each lead's mark, latest call and verified contact, plus the undo offers;
+    raises LoadError with a plain message when they can't be read (leads shown without
+    their marks would all look unchecked)."""
     try:
         marks.apply(leads)
         calls.apply(leads)
+        contacts.apply(leads)
         return {"mark": marks.pending_undos(), "call": calls.pending_undos()}
     except Exception as exc:
         log.error("Loading the marks or calls failed", exc_info=True)
@@ -89,9 +90,10 @@ def load_saved(uids: Iterable[str] | None = None) -> tuple[list[Lead], Undos]:
 
 
 def changed_uids(since: float) -> set[str]:
-    """The saved leads whose details, mark or calls changed after `since`."""
+    """The saved leads whose details, mark, calls or verified contact changed after `since`."""
     try:
-        return saved.changed_since(since) | marks.changed_since(since) | calls.changed_since(since)
+        return (saved.changed_since(since) | marks.changed_since(since) | calls.changed_since(since)
+                | contacts.changed_since(since))
     except Exception as exc:
         log.error("Checking for changes failed", exc_info=True)
         raise LoadError(db_message(exc)) from exc
@@ -122,6 +124,10 @@ def lead_json(lead: Lead, undo: Undos | None = None) -> dict[str, Any]:
         "call_count": lead.call_count, "last_call": date_time_text(lead.last_call_at),
         "last_call_at": lead.last_call_at,
         "earlier_notes": lead.earlier_notes, "earlier_notes_when": date_time_text(lead.earlier_notes_at),
+        # The phone and contact name the team verified (contacts.py), beside the listing's.
+        "verified_phone": format_phone(lead.verified_phone), "contact_name": lead.contact_name,
+        "contact_by": lead.contact_by, "contact_when": date_time_text(lead.contact_at),
+        "contact_at": lead.contact_at, "contact_saves": lead.contact_saves,
         "undo_mark": undo.get("mark", {}).get(lead.uid),
         "undo_call": undo.get("call", {}).get(lead.uid),
     }

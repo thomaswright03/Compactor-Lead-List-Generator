@@ -76,6 +76,10 @@ COLUMNS: list[Column] = [
     ("State", _state, 7),
     ("ZIP", _zip, 11),
     ("Phone", lambda l: format_phone(l.phone), 16),
+    # Beside the listing's phone: what the team verified on the Leads page (contacts.py).
+    ("Verified Phone", lambda l: format_phone(l.verified_phone), 16),
+    ("Contact Name", lambda l: l.contact_name, 24),
+    ("Verified By", lambda l: f"{l.contact_by}, {date_time_text(l.contact_at)}" if l.contact_at else "", 22),
     ("Website", lambda l: l.website, 32),
     ("Distance (mi)", lambda l: l.distance_miles, 12),
     # In a salesperson's words, like the Leads page (scoring.plain_reasons).
@@ -107,8 +111,8 @@ COLUMNS: list[Column] = [
 
 # Columns left out of a download when every row is empty there (a free map search has
 # no reviews, search phrases or calls, say): the others are always there.
-OPTIONAL = {"Website", "Matched Keywords", "Google Reviews", "Yelp Reviews",
-            "Approx. Footprint (sq ft)", "Source Category", "Found By", "Marked By",
+OPTIONAL = {"Website", "Verified Phone", "Contact Name", "Verified By", "Matched Keywords",
+            "Google Reviews", "Yelp Reviews", "Approx. Footprint (sq ft)", "Source Category", "Found By", "Marked By",
             "Call Result", "Last Called", "Called By", "Call Notes"}
 
 

@@ -448,6 +448,21 @@ the sidebar to the page's list (Leads, Calls) or heading.
   **Called By** columns. Names are kept in their own table (`made_by`, by the
   mark change's or call's id), so marks and calls from before it simply have
   no name.
+- **Verified phone and contact** (`contacts.py`): **Add verified phone or contact**
+  under a lead's phone (Leads and Calls) opens a box for a phone (with its area
+  code: 10 digits, or 11 starting with 1, before any extension) and who to ask for,
+  saved by `POST /contact` with **Your name**. Each save is a new row of
+  `lead_contacts` (id, uid, phone, contact, by_name, at): the latest row per lead is
+  its verified contact (`contacts.apply` sets `Lead.verified_phone`, `contact_name`,
+  `contact_by`, `contact_at` and `contact_saves`; none of them is stored in the
+  `leads` row, so `saved.save_search` never touches them), both boxes empty takes it
+  off, and the same details again add nothing. The page shows it under the listing's
+  phone with who saved it; **Earlier versions** (more than one save) opens History,
+  which lists every save. The downloads put **Verified Phone**, **Contact Name** and
+  **Verified By** after **Phone** (left out when no lead has one). **Has phone** and
+  the phone-first order count a verified number, the filter looks in the contact
+  name, open pages pick up a colleague's save like a mark (`changed_uids`), and
+  `merge-sites --apply` moves a merged row's saves to the row it joins.
 - **Calls**: on any business on the Leads page, whatever its Yes / No answer,
   **Just called** opens a
   Conversation Summary box and the result of the call (Interested, Follow Up,

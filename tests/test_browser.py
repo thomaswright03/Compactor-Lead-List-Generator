@@ -98,6 +98,42 @@ def test_mark_yes_moves_the_lead_and_undo_brings_it_back(page):
     expect(page.locator("#recent")).to_be_hidden()
 
 
+def test_a_verified_phone_and_contact_show_beside_the_listings_phone(page):
+    row = _row(page, "Costco")
+    expect(row.locator("td.contact")).to_contain_text("(801) 555-0101")
+    row.get_by_role("button", name="Add verified phone or contact: Costco Wholesale").click()
+    expect(page.locator("#contact-dlg")).to_be_visible()
+    expect(page.locator("#contact-listed")).to_contain_text("(801) 555-0101")
+    # A number without its area code is refused, and the box stays open with what was typed.
+    page.fill("#contact-phone", "555-0199")
+    page.fill("#contact-name", "Jane Doe, facilities manager")
+    page.click("#contact-save")
+    expect(page.locator("#contact-error")).to_contain_text("area code")
+    page.fill("#contact-phone", "801-555-0199")
+    page.click("#contact-save")
+    expect(page.locator("#contact-dlg")).to_be_hidden()
+    box = _row(page, "Costco").locator(".verified")
+    expect(box).to_contain_text("Verified (801) 555-0199 · Ask for Jane Doe, facilities manager")
+    expect(box).to_contain_text("Saved by Tester")
+    assert box.locator('a[href="tel:8015550199"]').count() == 1
+    # The listing's own phone is still there, and the save is kept after a reload.
+    expect(_row(page, "Costco").locator("td.contact")).to_contain_text("(801) 555-0101")
+    page.reload()
+    page.wait_for_selector("table.leads")
+    expect(_row(page, "Costco").locator(".verified")).to_contain_text("Ask for Jane Doe")
+    expect(_row(page, "Costco").get_by_role("button", name="Edit verified contact: Costco Wholesale")).to_be_visible()
+    # Saved again with another number: Earlier versions lists both, with who saved them.
+    _row(page, "Costco").get_by_role("button", name="Edit verified contact: Costco Wholesale").click()
+    expect(page.locator("#contact-phone")).to_have_value("(801) 555-0199")
+    page.fill("#contact-phone", "801-555-0123")
+    page.click("#contact-save")
+    expect(_row(page, "Costco").locator(".verified")).to_contain_text("(801) 555-0123")
+    _row(page, "Costco").get_by_role("button", name="Earlier verified contacts: Costco Wholesale").click()
+    expect(page.locator("#hist-list")).to_contain_text("Verified phone and contact")
+    expect(page.locator("#hist-list .item", has_text="(801) 555-0199 · ask for Jane Doe")).to_contain_text("by Tester")
+    expect(page.locator("#hist-list .item", has_text="(801) 555-0123")).to_have_count(1)
+
+
 def test_just_called_lands_in_the_calls_tab(page):
     _row(page, "Smith").locator(".mark button.yes").click()
     page.get_by_role("button", name="Has baler or compactor (1)").click()

@@ -1,6 +1,6 @@
 /* Part 3: the Calls page, the "Just called" box and call history. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
-/* exported emptyNote, loadCalled, renderCalls, openCall, openHistory */
+/* exported emptyNote, loadCalled, renderCalls, openCall, openHistory, verifiedBox */
 // An empty page that says how it fills up, with a link to where that happens.
 /** @param {string} title @param {string} text @param {string} href @param {string} label */
 function emptyNote(title, text, href, label) {
@@ -116,7 +116,8 @@ function renderCalls() {
     if (l.closed) name.append(el("div", "Closed for good", "flag"));
     tr.append(name);
     const phone = el("td", undefined, "c-phone");
-    phone.append(l.phone ? phoneLink(l.phone) : el("span", "No phone listed", "sub")); tr.append(phone);
+    phone.append(l.phone ? phoneLink(l.phone) : el("span", "No phone listed", "sub"), verifiedBox(l));
+    tr.append(phone);
     const when = el("td", undefined, "c-when");
     when.append(el("span", l.call_outcome, "badge"), el("div", l.last_call, "when-at"));
     if (l.last_call_by) when.append(el("div", `by ${l.last_call_by}`, "sub"));
@@ -315,6 +316,77 @@ $("call-form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) =
   } finally { S.busy--; }
 });
 
+/* A business's verified phone and who to ask for (contacts.py): found while checking it and
+   saved for the whole team, beside the listing's own phone (which stays as it was). Searches
+   never change them. */
+/** @param {Lead} l @returns {HTMLElement} */
+function verifiedBox(l) {
+  const box = el("div", undefined, "verified");
+  if (l.verified_phone || l.contact_name) {
+    const line = el("div", undefined, "v-line");
+    line.append(el("span", "Verified", "badge v-tag"), " ");
+    if (l.verified_phone) line.append(phoneLink(l.verified_phone));
+    if (l.verified_phone && l.contact_name) line.append(" · ");
+    if (l.contact_name) line.append(el("span", `Ask for ${l.contact_name}`, "v-name"));
+    box.append(line);
+    if (l.contact_by) box.append(el("div", `Saved by ${l.contact_by}, ${l.contact_when}`, "sub"));
+  }
+  if (l.key && l.contact_saves > 1) {
+    const earlier = button("Earlier versions", "link v-earlier", () => openHistory(l));
+    earlier.setAttribute("aria-label", `Earlier verified contacts: ${l.name}`);
+    box.append(earlier, " ");
+  }
+  if (l.key) {
+    const label = l.verified_phone || l.contact_name ? "Edit verified contact" : "Add verified phone or contact";
+    const edit = button(label, "link v-edit", () => openContact(l));
+    edit.setAttribute("aria-label", `${label}: ${l.name}`);
+    box.append(edit);
+  }
+  return box;
+}
+/** @type {Lead | null} */
+let contactLead = null;
+/** @param {Lead} lead */
+function openContact(lead) { withName(() => openContactBox(lead)); }
+/** @param {Lead} lead */
+function openContactBox(lead) {
+  contactLead = lead;
+  $("contact-title").textContent = `Verified contact: ${lead.name}`;
+  $("contact-listed").textContent = lead.phone
+    ? `The listing's phone, ${lead.phone}, stays as it is; this is saved beside it.`
+    : "The listing has no phone number. What you save here is shown beside it.";
+  /** @type {HTMLInputElement} */ ($("contact-phone")).value = lead.verified_phone || "";
+  /** @type {HTMLInputElement} */ ($("contact-name")).value = lead.contact_name || "";
+  $("contact-error").textContent = "";
+  $("contact-save").disabled = false;
+  $("contact-dlg").showModal();
+  $("contact-phone").focus();
+}
+$("contact-cancel").addEventListener("click", () => $("contact-dlg").close());
+$("contact-form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
+  e.preventDefault();
+  if (!contactLead) return;
+  const target = contactLead, key = contactLead.key;
+  $("contact-save").disabled = true; S.busy++;
+  try {
+    const { contact } = /** @type {{contact: VerifiedContact}} */ (await post("/contact", {
+      key, phone: /** @type {HTMLInputElement} */ ($("contact-phone")).value,
+      contact: /** @type {HTMLInputElement} */ ($("contact-name")).value, by: myName() }));
+    updateLead({ key, ...contact });
+    if (contactLead && contactLead.key === key) { contactLead = null; $("contact-dlg").close(); }
+    renderAll();
+    if (!$("page-calls").hidden) loadCalled(true); else S.calledLoaded = false;
+    const lead = leadByKey(key) || target;
+    toast(contact.verified_phone || contact.contact_name ? `${lead.name}: verified contact saved.`
+      : `${lead.name}: verified contact taken off.`);
+  } catch (err) {
+    if (contactLead && contactLead.key === key) {
+      $("contact-error").textContent = `Not saved. ${/** @type {Error} */ (err).message}`;
+      $("contact-save").disabled = false;
+    }
+  } finally { S.busy--; }
+});
+
 /** @param {Lead} lead */
 async function openHistory(lead) {
   $("hist-title").textContent = `History of ${lead.name}`;
@@ -322,7 +394,7 @@ async function openHistory(lead) {
   list.replaceChildren(el("div", "Loading...", "muted"));
   $("hist-dlg").showModal();
   try {
-    const { calls, marks } = /** @type {CallHistory} */ (await api(`/calls/${encodeURIComponent(lead.key)}`));
+    const { calls, marks, contacts } = /** @type {CallHistory} */ (await api(`/calls/${encodeURIComponent(lead.key)}`));
     list.replaceChildren(el("h3", "Calls", "hist-head"));
     for (const c of calls) {
       const item = el("div", undefined, "item");
@@ -340,6 +412,16 @@ async function openHistory(lead) {
         const item = el("div", undefined, "item");
         item.append(el("span", m.value === "yes" ? "Yes" : "No", "badge"),
                     el("span", `  ${m.when}${byWho(m.by)}`, "sub"));
+        list.append(item);
+      }
+    }
+    // Every verified phone and contact name saved on it (newest first), with who saved them.
+    if ((contacts || []).length) {
+      list.append(el("h3", "Verified phone and contact", "hist-head"));
+      for (const c of contacts) {
+        const item = el("div", undefined, "item");
+        const what = [c.phone, c.contact && `ask for ${c.contact}`].filter(Boolean).join(" · ") || "Taken off";
+        item.append(el("span", what), el("span", `  ${c.when}${byWho(c.by)}`, "sub"));
         list.append(item);
       }
     }

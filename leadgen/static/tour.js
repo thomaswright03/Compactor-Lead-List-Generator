@@ -33,7 +33,8 @@ const TOUR = [
           "and download the whole list as Excel or CSV." },
   { page: "leads", target: "#leads-wrap", title: "Each business",
     text: "Every business has a score from 0 to 100 and a tier: A strong, B likely, C possible, D weak. " +
-          "Why this score lists the reasons. The phone, address and map link are there to call or look it up." },
+          "Why this score lists the reasons. The phone, address and map link are there to call or look it up. " +
+          "Found a better number or who to ask for? Save it with Add verified phone or contact." },
   { page: "leads", target: "#leads-wrap .c-mark .mark, #leads-wrap", title: "Has baler or compactor? Yes or No",
     text: "Once you know, press Yes or No. The mark is kept for good and shows who made it. " +
           "Pressed the wrong one? Undo is offered for 5 minutes. The first time, the site asks your name." },

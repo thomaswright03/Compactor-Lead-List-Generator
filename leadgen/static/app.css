@@ -308,6 +308,13 @@ dialog::backdrop { background:var(--backdrop); }
 .history { max-height:60vh; overflow:auto; display:flex; flex-direction:column; gap:var(--sp-3); }
 .history .item { border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); }
 .history .hist-head { font-size:var(--fs-sm); margin:var(--sp-2) 0 0; color:var(--muted); }
+#contact-form p { margin:0; }
+#contact-form .hint { font-size:var(--fs-sm); color:var(--muted); }
+/* A verified phone and who to ask for (contacts.py), under the listing's own phone. */
+.verified { margin-top:var(--sp-1); }
+.verified .v-tag { background:var(--pts); color:var(--good-ink); }
+.verified .v-name { font-weight:600; }
+.verified button.v-edit { text-align:left; }
 
 /* Stats */
 .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:var(--sp-4); margin-bottom:var(--sp-4); }

@@ -99,11 +99,19 @@ SCHEMA = [
         id TEXT PRIMARY KEY, run TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
         leads TEXT NOT NULL)""",
     "CREATE INDEX IF NOT EXISTS search_found_by_run ON search_found (run)",
+    # Verified phone numbers and contact names the sales team saved on leads (contacts.py):
+    # each save a row of its own, with who saved it and when; a lead's latest row is its
+    # current one. Apart from the leads table, so a search never changes them.
+    """CREATE TABLE IF NOT EXISTS lead_contacts (
+        id TEXT PRIMARY KEY, uid TEXT NOT NULL, phone TEXT NOT NULL, contact TEXT NOT NULL,
+        by_name TEXT NOT NULL, at DOUBLE PRECISION NOT NULL)""",
+    "CREATE INDEX IF NOT EXISTS lead_contacts_by_uid ON lead_contacts (uid, at)",
+    "CREATE INDEX IF NOT EXISTS lead_contacts_by_time ON lead_contacts (at)",
 ]
 # Every table, for tests that empty them.
 TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "mark_changes",
           "search_failures", "call_undos", "problems", "made_by", "switches", "merged_leads",
-          "removed_leads", "search_runs", "search_found")
+          "removed_leads", "search_runs", "search_found", "lead_contacts")
 # Up to this many ids are looked up by id (in chunks); more read the whole table.
 BY_ID_LIMIT = 1000
 _CHUNK = 500

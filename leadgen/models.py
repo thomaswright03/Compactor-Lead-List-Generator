@@ -58,4 +58,11 @@ class Lead:
     # When the latest call has no notes: the most recent notes an earlier call has, and when.
     earlier_notes: str = ""
     earlier_notes_at: float | None = None
+    # A phone number and who to ask for, verified by the sales team (contacts.py), apart
+    # from the listing's own phone; who saved them and when.
+    verified_phone: str = ""
+    contact_name: str = ""
+    contact_by: str = ""
+    contact_at: float | None = None
+    contact_saves: int = 0           # how many times it was saved (taken off included)
     parts: list[dict[str, Any]] = field(default_factory=list)   # the source listings merged into this one

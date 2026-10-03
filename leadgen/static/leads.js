@@ -460,6 +460,7 @@ function leadRow(l, withCall) {
   }
   contact.append(addr);
   const p = el("div"); p.append(l.phone ? phoneLink(l.phone) : el("span", "No phone listed", "sub")); contact.append(p);
+  contact.append(verifiedBox(l));
   if (l.website) {
     const a = link(l.website, l.website.replace(/^https?:\/\/(www\.)?/i, "").split("/")[0]);
     a.classList.add("site"); a.title = l.website; contact.append(a);

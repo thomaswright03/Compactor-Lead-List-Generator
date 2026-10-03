@@ -369,7 +369,9 @@ the next start (never by changing or dropping an existing table): for example
 `made_by`, which holds the name set under "Your name" for each Yes / No click
 and call, `switches`, which holds the emergency switches flipped on the site, and
 `merged_leads`, which records each saved lead merged into another of the same site
-(its id, the lead it joined, when, and the row as it was, with its mark). Without `DATABASE_URL` on Render, searches
+(its id, the lead it joined, when, and the row as it was, with its mark), and
+`lead_contacts`, which holds every verified phone and contact name the team saved
+on a lead (who saved it and when; a later save adds a row, nothing is overwritten). Without `DATABASE_URL` on Render, searches
 still run, but nothing is saved and Yelp is paused (its daily limit could not be
 kept). Off Render, a SQLite file in `.cache/` is used instead.
 

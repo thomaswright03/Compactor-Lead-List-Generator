@@ -46,10 +46,15 @@ def _to_lead(data: dict[str, Any]) -> Lead:
     return Lead(**{k: v for k, v in data.items() if k in _FIELDS})
 
 
+# What a lead holds that isn't the listing's: its mark, calls and verified contact are
+# read from their own tables each time (marks.py, calls.py, contacts.py), never stored here.
+_NOT_STORED = ("parts", "has_baler", "mark_clicks", "last_call_at", "call_outcome", "call_notes", "call_count",
+               "earlier_notes", "earlier_notes_at", "verified_phone", "contact_name", "contact_by", "contact_at",
+               "contact_saves")
+
+
 def _lead_json(lead: Lead) -> str:
-    return json.dumps({k: v for k, v in asdict(lead).items()
-                       if k not in ("parts", "has_baler", "mark_clicks", "last_call_at", "call_outcome", "call_notes",
-                                    "call_count", "earlier_notes", "earlier_notes_at")}, separators=(",", ":"))
+    return json.dumps({k: v for k, v in asdict(lead).items() if k not in _NOT_STORED}, separators=(",", ":"))
 
 
 def _part_id(part: Part) -> str:
@@ -290,7 +295,8 @@ def _join(db: store.Db, plan: list[tuple[_Row, list[_Row]]], now: float,
     """Merge each plan group's rows (see _same_business) into the row saved first.
 
     Every source listing, mark and call is kept: the listings join that row (so a
-    later search finds it), the calls and the Yes / No clicks move to it, and it takes
+    later search finds it), the calls, the Yes / No clicks and the verified contacts
+    move to it (the latest verified contact of the group shows), and it takes
     the latest mark (the older marks stay in its mark history), except that when some
     rows were marked Yes and others No it takes the latest Yes, and shows that its
     marks disagreed (marks.apply) until someone marks it again. The merged rows stay
@@ -336,7 +342,7 @@ def _join(db: store.Db, plan: list[tuple[_Row, list[_Row]]], now: float,
                        "ON CONFLICT (uid) DO UPDATE SET value = excluded.value, "
                        "updated_at = excluded.updated_at", (keep.uid, latest[1], latest[0]))
             for r in others:
-                for table in ("calls", "call_undos", "mark_changes"):
+                for table in ("calls", "call_undos", "mark_changes", "lead_contacts"):
                     db.run(f"UPDATE {table} SET uid = ? WHERE uid = ?", (keep.uid, r.uid))
                 db.run("INSERT INTO merged_leads (uid, into_uid, at, row) VALUES (?, ?, ?, ?) "
                        "ON CONFLICT (uid) DO NOTHING",

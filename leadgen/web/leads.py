@@ -9,7 +9,7 @@ from typing import Any
 from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from .. import calls, config, daily, marks, places, reference, saved, stats, store
+from .. import calls, config, contacts, daily, marks, places, reference, saved, stats, store
 from ..export import saved_list_info, to_csv_bytes, to_xlsx_bytes
 from ..localtime import date_time_text
 from ..models import Lead
@@ -76,17 +76,23 @@ def in_view(lead: Lead, view: str) -> bool:
     return is_prospect(lead) and (lead.has_baler or "unchecked") == view
 
 
+def has_phone(lead: Lead) -> bool:
+    """A number to call: the listing's own, or one the team verified."""
+    return bool(lead.phone.strip() or lead.verified_phone.strip())
+
+
 def matches(lead: Lead, q: str, tier: str, phone: bool = False, more: str = "") -> bool:
     """The page's filter box, tier choice and "Has phone" tick. Several words typed
     ("walmart layton") match a lead when each is somewhere in its name, town, ZIP,
-    category, address, type or flags (or in `more`: on the Calls page, its calls'
-    summaries, outcomes and callers), in any order and any case (q is lowercased)."""
+    category, address, type, flags or verified contact name (or in `more`: on the Calls
+    page, its calls' summaries, outcomes and callers), in any order and any case (q is
+    lowercased)."""
     if tier and lead.tier != tier:
         return False
-    if phone and not lead.phone.strip():
+    if phone and not has_phone(lead):
         return False
     text = " ".join([lead.name, places.town_of(lead), lead.zip, lead.category, lead.address,
-                     lead.lead_type, " ".join(lead.flags)]).lower()
+                     lead.lead_type, " ".join(lead.flags), lead.contact_name]).lower()
     if more:
         text += " " + more
     return all(word in text for word in q.split())
@@ -226,7 +232,7 @@ def _page(leads: list[Lead], undo: Undos, view: str, filtered: Callable[[Lead], 
         rows.sort(key=SORTS[sort], reverse=desc)      # stable: ties keep the best-first order
     elif view == "unchecked":
         # Among equal scores, the leads that can be phoned from the page come first.
-        rows.sort(key=lambda l: (-l.score, not l.phone.strip()))
+        rows.sort(key=lambda l: (-l.score, not has_phone(l)))
     limit = max(1, min(request.args.get("limit", type=int) or PAGE_SIZE, MAX_LIMIT))
     shown = rows[offset:offset + limit]
     return {"leads": [lead_json(l, undo) for l in shown], "total": len(rows), "offset": offset,
@@ -264,10 +270,35 @@ def log_call() -> ResponseReturnValue:
                                       "until": call["at"] + calls.UNDO_SECONDS}}})
 
 
+@bp.post("/contact")
+def save_contact() -> ResponseReturnValue:
+    """Save a verified phone number and who to ask for on a lead, with who saved them
+    (contacts.py). Kept apart from the listing's own phone, which stays as it was, and
+    never changed by a search."""
+    if not same_origin():
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    uid = str(data.get("key") or "")
+    if not uid or len(uid) > 64:
+        return jsonify({"error": "Unknown lead"}), 400
+    if not store.person(data.get("by")):
+        return jsonify({"error": NO_NAME}), 400
+    try:
+        contact = contacts.save(uid, str(data.get("phone") or ""), str(data.get("contact") or ""),
+                                str(data.get("by") or ""))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        log.error("Saving a verified contact failed", exc_info=True)
+        return jsonify({"error": db_message(exc)}), 503
+    return jsonify({"ok": True, "now": time.time(), "contact": contact.as_json(contacts.saves(uid))})
+
+
 @bp.get("/calls/<uid>")
 def call_history(uid: str) -> ResponseReturnValue:
     try:
-        return jsonify({"calls": calls.history(uid[:64]), "marks": marks.history(uid[:64])})
+        return jsonify({"calls": calls.history(uid[:64]), "marks": marks.history(uid[:64]),
+                        "contacts": contacts.history(uid[:64])})
     except Exception as exc:
         log.error("Loading a call history failed", exc_info=True)
         return jsonify({"error": f"Couldn't load the calls. {db_message(exc)}"}), 503
@@ -380,7 +411,7 @@ def download(job_id: str, fmt: str) -> ResponseReturnValue:
         if not job or job["state"] != "done":
             abort(404)
         try:
-            leads = calls.apply(marks.apply(job["result"].leads))
+            leads = contacts.apply(calls.apply(marks.apply(job["result"].leads)))
         except Exception:
             log.error("Loading marks for a download failed", exc_info=True)
             unavailable(MARKS_DOWN)
