@@ -39,8 +39,9 @@ from .localtime import date_time_text, utah
 FORMAT = "leadgen-backup"
 VERSION = 1
 # Not copied: answers from the map servers, Google and Yelp (they expire within days and
-# their terms limit keeping them), and a running search's checkpoints (interrupted.py).
-SKIPPED = ("cache", "search_runs", "search_found")
+# their terms limit keeping them), a running search's checkpoints (interrupted.py) and
+# the site's own record of its starts (awake.py).
+SKIPPED = ("cache", "search_runs", "search_found", "site_starts")
 
 
 def _primary_keys() -> dict[str, tuple[str, ...]]:

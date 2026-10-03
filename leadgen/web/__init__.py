@@ -17,7 +17,8 @@ from flask import Flask, jsonify, render_template, request, session
 from flask.typing import ResponseReturnValue
 from werkzeug.exceptions import HTTPException
 
-from .. import alerts, calls, config, localtime, marks, store
+from .. import alerts, awake, calls, config, localtime, marks, store
+from ..localtime import date_time_text
 from ..pipeline import SearchParams
 from . import auth, finding, leads, mapping
 from .auth import LOGIN_DAYS, LOGIN_TRIES, LOGIN_WINDOW
@@ -117,7 +118,10 @@ def _register_pages(app: Flask) -> None:
 
     @app.get("/healthz")
     def healthz() -> ResponseReturnValue:
-        return jsonify({"ok": True, "version": os.environ.get("RENDER_GIT_COMMIT", "")[:7]})
+        # up_since: when this start of the site began (Utah time); the same time all day
+        # means it never went to sleep (awake.py, the runbook's "Keep the site awake").
+        return jsonify({"ok": True, "version": os.environ.get("RENDER_GIT_COMMIT", "")[:7],
+                        "up_since": date_time_text(awake.started_at)})
 
     @app.get("/")
     def index() -> str:

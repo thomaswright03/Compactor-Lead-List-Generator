@@ -150,7 +150,9 @@ def test_healthz_is_public_and_shows_the_deployed_commit(monkeypatch):
     monkeypatch.setenv("RENDER_GIT_COMMIT", "abcdef1234567")
     client = web.create_app(password="secret").test_client()
     res = client.get("/healthz", headers={"Host": "evil.example"})
-    assert res.status_code == 200 and res.get_json() == {"ok": True, "version": "abcdef1"}
+    body = res.get_json()
+    assert res.status_code == 200 and body["ok"] is True and body["version"] == "abcdef1"
+    assert set(body) == {"ok", "version", "up_since"}       # nothing else: it needs no login
     assert client.get("/").status_code == 302
 
 

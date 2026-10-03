@@ -280,6 +280,10 @@ need it.
 
 ## When something goes wrong
 
+- **"Starting up…" when you open the site:** nobody had used it for a while and it went
+  to sleep. Wait; your leads appear by themselves, within a minute. If nothing appears
+  within two minutes, reload the page. If you see it during the working day, tell whoever
+  looks after the site (the keep-awake pinger isn't reaching it).
 - A red or yellow box says what happened and what to do, often with a **Retry**
   button. Nothing you saved is lost.
 - If it keeps happening, tell whoever looks after the site.

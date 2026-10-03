@@ -40,6 +40,10 @@
 
   <main id="main">
    <div class="wrap">
+    <!-- Until the page's first answer: loading, and after a few seconds that the site is
+         waking up after a quiet spell (start.js). Shown only after a moment (app.css). -->
+    <div class="starting" id="starting" role="status"><span class="spinner"></span>
+      <span id="starting-text">Loading your leads…</span></div>
     <!-- Find leads -->
     <section class="page" id="page-find" hidden>
       <div class="page-head"><h1>Find leads</h1>

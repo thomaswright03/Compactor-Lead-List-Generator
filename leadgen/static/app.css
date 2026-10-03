@@ -114,6 +114,15 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color:var(--bad
 .step.now { color:var(--ink); font-weight:600; }
 .step.now .dot { border-color:var(--accent-2); border-top-color:transparent; animation:spin 1s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
+/* The page's first load (start.js): shown only after a moment, so a quick load doesn't flash it. */
+.starting { display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-2) var(--sp-3); max-width:640px;
+            margin:var(--sp-6) auto; padding:var(--sp-4) var(--sp-5); background:var(--card); color:var(--ink);
+            border:1px solid var(--line); border-radius:var(--r-md); font-weight:600;
+            animation:starting-show .2s ease .4s both; }
+.starting[hidden] { display:none; }
+.starting #starting-text { flex:1 1 0; min-width:0; }
+.starting .slow { flex-basis:100%; font-weight:400; color:var(--muted); }
+@keyframes starting-show { from { opacity:0; } to { opacity:1; } }
 .bar { height:var(--sp-3); background:var(--th); border-radius:var(--r-pill); overflow:hidden; }
 .bar > div { height:100%; width:0; border-radius:var(--r-pill); transition:width .8s ease;
              background:linear-gradient(90deg,var(--btn),var(--accent-2)); position:relative; overflow:hidden; }
@@ -201,6 +210,15 @@ dl.details div.wide dd { margin:0; text-align:left; }
 .spinner { width:16px; height:16px; flex:none; border:2px solid var(--line); border-top-color:var(--accent);
            border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
+/* The page's first load (start.js): shown only after a moment, so a quick load doesn't flash it. */
+.starting { display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-2) var(--sp-3); max-width:640px;
+            margin:var(--sp-6) auto; padding:var(--sp-4) var(--sp-5); background:var(--card); color:var(--ink);
+            border:1px solid var(--line); border-radius:var(--r-md); font-weight:600;
+            animation:starting-show .2s ease .4s both; }
+.starting[hidden] { display:none; }
+.starting #starting-text { flex:1 1 0; min-width:0; }
+.starting .slow { flex-basis:100%; font-weight:400; color:var(--muted); }
+@keyframes starting-show { from { opacity:0; } to { opacity:1; } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation:none; } }
 table.leads { border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed; }
 table.leads th, table.leads td { text-align:left; padding:var(--sp-2); border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }

@@ -15,6 +15,7 @@ staff want the [sales guide](sales-guide.md); developers the
 | Make a backup now | `python -m leadgen backup` with `DATABASE_URL` set, or GitHub → **Actions** → **Nightly backup** → **Run workflow** | [Backups](#backups-and-restoring) |
 | Get lost data back | Neon → **Branches** → **New branch** from past data (last 6 hours), or `python -m leadgen restore <copy>` (lists what it would add), then the same with `--apply` (adds only, never overwrites) | [Restoring](#restoring) |
 | Change the login password | Render → **Environment** → `APP_PASSWORD` → **Save Changes** (everyone logs in again) | [Login](#login-and-the-free-plan) |
+| Keep the site awake while the team works | cron-job.org (or UptimeRobot) opens `https://compactor-lead-finder.onrender.com/healthz` every 5 minutes, 5 AM to 9 PM Utah time; **For the site administrator** says "The site had gone to sleep" when it missed | [Keep the site awake](#keep-the-site-awake) |
 | Name the login page's help contact | Render → **Environment** → `LEADGEN_SUPPORT_CONTACT` = a name with a phone or email | [Login](#login-and-the-free-plan) |
 | Merge a business saved as two rows | `python -m leadgen merge-sites` (lists, changes nothing), then `--apply` | [The database](#the-database-saved-leads-marks-calls-the-yelp-count) |
 | Send the monthly scoring check | **For the site administrator** → **Scoring check** → download, send to the developer | [Monthly](#monthly-the-scoring-check) |
@@ -26,7 +27,7 @@ All sections:
 - [Alerts: the webhook](#problems-the-webhook)
 - [Settings](#settings-environment-variables) · [Put it online and the database](#put-it-online-render)
 - [Backups and restoring](#backups-and-restoring)
-- [Login](#login-and-the-free-plan) · [Yelp limits](#yelp-notes) · [Google costs](#cost-notes-google)
+- [Login](#login-and-the-free-plan) · [Keep the site awake](#keep-the-site-awake) · [Yelp limits](#yelp-notes) · [Google costs](#cost-notes-google)
 - [Owner actions still open](#owner-actions-still-open)
 
 ## Owner actions still open
@@ -65,7 +66,15 @@ links to.
    manager (without it the copies can't be read, by anyone). Then **Actions** →
    **Nightly backup** → **Run workflow**. *Check:* the run is green and has an artifact
    `leadgen-backup-<date>`. Details: [Backups and restoring](#backups-and-restoring).
-5. **Rehearse a restore of the live data once** (your computer; **Open**, added
+5. **Set up the outside keep-awake pinger** (cron-job.org; **Open**, added 2026-10-03).
+   So nobody waits up to a minute for the site to wake up during the working day:
+   GitHub ran the keep-awake job only every 3 to 5 hours, and Render's free plan sleeps
+   after 15 idle minutes. Steps: [Keep the site awake](#keep-the-site-awake) (a free
+   cron-job.org job that opens `/healthz` every 5 minutes from 5 AM to 9 PM Utah time).
+   *Check:* the job's **History** on cron-job.org lists a 200 answer every 5 minutes, and
+   `curl -s https://compactor-lead-finder.onrender.com/healthz` shows the same `up_since`
+   at 7 AM and at 5 PM.
+6. **Rehearse a restore of the live data once** (your computer; **Open**, added
    2026-10-03). Download a nightly copy (or make one: `python -m leadgen backup`), then
    restore it into a local SQLite file with no `DATABASE_URL` set (`python -m leadgen
    restore <file> --apply`), run `python -m leadgen web` and compare Leads, Calls and Stats
@@ -94,8 +103,8 @@ step: no more map requests are sent). It keeps and saves the businesses it had a
 found; its progress card says "Stopping: the administrator paused searching", its
 result and the search history say "Stopped by the administrator", and today's search
 stays used (one a day). The background filling in of map areas a search missed stops
-within a few seconds as well (no more map requests), and Find leads then says "Filling in
-the missing map areas stopped because searching was paused". A search stopped before it found anything gives the day back
+within a few seconds as well (no more map requests), and Find leads then says "Covered:
+… Filling in stopped because searching was paused, so these weren't searched today: …". A search stopped before it found anything gives the day back
 and is listed as "Stopped by the administrator", not as failed, and not under Recent
 problems or on the webhook (a deliberate stop is not a problem). If the switches can't
 be read while a search runs (the database stopped answering), a switch last seen on
@@ -395,7 +404,9 @@ and call, `switches`, which holds the emergency switches flipped on the site, an
 `merged_leads`, which records each saved lead merged into another of the same site
 (its id, the lead it joined, when, and the row as it was, with its mark), and
 `lead_contacts`, which holds every verified phone and contact name the team saved
-on a lead (who saved it and when; a later save adds a row, nothing is overwritten). Without `DATABASE_URL` on Render, searches
+on a lead (who saved it and when; a later save adds a row, nothing is overwritten), and
+`site_starts`, one row each time the site starts (when, and which version: see
+[Keep the site awake](#keep-the-site-awake); not in backups). Without `DATABASE_URL` on Render, searches
 still run, but nothing is saved and Yelp is paused (its daily limit could not be
 kept). Off Render, a SQLite file in `.cache/` is used instead.
 
@@ -492,7 +503,8 @@ There are three copies, each reaching further back:
 
 **What a copy holds.** `python -m leadgen backup` writes every row of every table that
 keeps the team's work or the site's records (all of `store.SCHEMA` except the cache of
-map, Google and Yelp answers and a running search's checkpoints) to one file,
+map, Google and Yelp answers, a running search's checkpoints and the list of the site's
+starts) to one file,
 `leadgen-backup-<Utah date and time>.json.gz` (gzip-compressed JSON, read in one
 transaction, so it is one moment's copy). It prints what it holds ("1,204 saved leads,
 88 marked yes, 61 marked no, 240 calls, 34 searches"); keep that line with the file.
@@ -580,7 +592,7 @@ leadgen web`, then open http://127.0.0.1:5000.
 | Date | What was restored | Result |
 |---|---|---|
 | 2026-10-03 | By the developer, on a copy with test data: a SQLite database (6 leads, 2 marks, 2 calls, 1 search) backed up, restored into an empty Postgres 16 database, and the site started on it | The same counts on Leads, Calls, Stats and the search history as the original; every row identical (also checked by `tests/test_backup.py`, Postgres → SQLite → Postgres) |
-| Open | The live data: a nightly or on-request copy restored into a new Neon branch or a SQLite file on the owner's computer (B, then C) | Owner action 5 under [Owner actions still open](#owner-actions-still-open) |
+| Open | The live data: a nightly or on-request copy restored into a new Neon branch or a SQLite file on the owner's computer (B, then C) | Owner action 6 under [Owner actions still open](#owner-actions-still-open) |
 
 ## Login and the free plan
 
@@ -600,14 +612,77 @@ A login lasts 30 days on a device; changing the username or password logs everyo
 out. After 10 wrong passwords from one address, logins from it pause for 15 minutes.
 Without a password the page only answers on `localhost` or an IP address; to use
 another hostname, list it in `LEADGEN_ALLOWED_HOSTS`.
-The free plan sleeps after 15 idle minutes, so the first visit takes 20 to 60 seconds
-to wake up, and its disk is wiped on each restart (which is why data lives in the database).
-The GitHub Actions job `.github/workflows/keep-awake.yml` opens `/healthz` every 10
-minutes from 6 AM to 9 PM Utah time so the site stays awake while the team works
-(GitHub may run it a few minutes late, and turns scheduled jobs off after 60 days
-with no commits: re-enable it under Actions if so). Render's paid Starter plan never
-sleeps and doesn't need it.
+The free plan sleeps after 15 idle minutes, so the first visit after that waits 20 to
+60 seconds, and its disk is wiped on each restart (which is why data lives in the
+database). What keeps it awake while the team works, and what the site says when it
+had to wake up anyway: [Keep the site awake](#keep-the-site-awake).
 To run the production server yourself: `gunicorn wsgi:app --workers 1 --threads 8 --timeout 0`.
+
+## Keep the site awake
+
+Render's free plan stops the site after 15 minutes with no visit; the next visit
+starts it again and waits 20 to 60 seconds. While it waits, the Leads page says
+"Starting up… The Lead Finder sleeps when nobody has used it for a while, and the first
+visit can take up to a minute to wake it. Your leads appear here by themselves." (after
+45 seconds it adds "Still starting. If nothing appears within two minutes, reload the
+page."), and the list appears by itself. Three things keep that from happening from 6 AM
+to 9 PM Utah time:
+
+1. **An outside pinger** (the one that counts; [owner action 5](#owner-actions-still-open)).
+   A free [cron-job.org](https://cron-job.org) job opens
+   `https://compactor-lead-finder.onrender.com/healthz` every 5 minutes from 5 AM to
+   9 PM Utah time (`/healthz` needs no login and holds no data). Steps:
+   1. Open https://console.cron-job.org/signup, sign up (free) with the owner's email
+      and confirm the email it sends.
+   2. Log in at https://console.cron-job.org → **Cronjobs** → **Create cronjob**.
+   3. **Title** `Lead Finder keep-awake`; **URL**
+      `https://compactor-lead-finder.onrender.com/healthz`; **Enable job** on.
+   4. **Execution schedule** → **Custom**: every day of the month, every day of the
+      week, every month; **Hours** 5 to 20 (tick 5, 6, 7 … 20); **Minutes** 0, 5, 10 …
+      55. **Time zone** (on the **Advanced** tab of the same page): `America/Denver`,
+      which follows Utah's summer and winter time.
+   5. **Notifications**: tick **execution of the cronjob fails**, so you get an email
+      when the site doesn't answer.
+   6. **Advanced** → **Timeout**: the largest offered (30 seconds on the free plan). The
+      5 AM ping may time out while the site wakes; the one 5 minutes later finds it awake.
+   7. **Create** (or **Save**). Wait 10 minutes and open the job's **History**: a line
+      every 5 minutes, each **200 OK**.
+
+   UptimeRobot works too (https://uptimerobot.com → **Register** → **New monitor** →
+   **HTTP(s)**, the same URL, **Monitoring interval** 5 minutes, your email as the alert
+   contact → **Create monitor**), but its free plan can't skip the night: the site then
+   runs all month, about 744 hours, which fits Render's 750 free hours a month only while
+   it is the only free service on the Render account. Prefer cron-job.org.
+2. **The GitHub job, as a backup** (`.github/workflows/keep-awake.yml`). GitHub starts
+   scheduled jobs late and skips many (from 2026-09-30 to 2026-10-03 it ran this one
+   every 3 to 5 hours instead of every 10 minutes), so it can't be the only pinger. It is
+   scheduled every 15 minutes from 6 AM to 9 PM Utah time, and each run that does start
+   opens `/healthz` every 5 minutes for the next 50 minutes (one run at a time; a run
+   that starts while another is pinging waits for it), retrying a ping the site didn't
+   answer. A run turns red, and GitHub emails the owner, only if the site never answered
+   during it. GitHub turns scheduled jobs off after 60 days with no commits: re-enable it
+   under **Actions** → **Keep the site awake** → **Enable workflow** if so.
+3. **The site's own check.** Each start of the site is recorded (the additive
+   `site_starts` table: when, and which version). A start between 6:20 AM and 9 PM Utah
+   time without a new version (no deploy since the start before) means the site had gone
+   to sleep, or Render restarted it, and it says so once a Utah day under **For the site
+   administrator** → **Recent problems** (and on the webhook): "The site had gone to sleep and
+   started again at … Utah time without a new version, so whoever opened it then waited
+   up to a minute. The keep-awake pinger isn't reaching the site every few minutes …".
+   When you see it, open the cron-job.org job's **History**. Each start also reaches the
+   database and reads the saved list once, in the background, so the first page doesn't
+   wait for either.
+
+**Check it is working** (any day, after 6 AM):
+
+- `curl -s https://compactor-lead-finder.onrender.com/healthz` prints `"ok": true` and
+  `"up_since"`, the Utah time this start of the site began. The same `up_since` at 7 AM
+  and at 5 PM means it never slept in between (a deploy changes it, and `"version"` too).
+- `curl -s -o /dev/null -w "%{time_total}\n" https://compactor-lead-finder.onrender.com/healthz`
+  prints well under 2 (seconds); 20 or more means it had been asleep.
+- **Recent problems** has no "The site had gone to sleep".
+
+Render's paid Starter plan never sleeps and doesn't need any of this.
 
 ## Yelp notes
 

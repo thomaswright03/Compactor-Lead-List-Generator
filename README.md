@@ -26,6 +26,7 @@ and AARCO Compactor's own listing is flagged too.
 | Save a verified phone or contact | **Leads** → **Add verified phone or contact** under the business's phone | [Sales guide](docs/sales-guide.md#save-a-verified-phone-or-contact) |
 | See the area and every business on a map | **Map** → tap a pin → **Open on the Leads page** | [Sales guide](docs/sales-guide.md#see-the-businesses-on-the-map) |
 | Download the list | **Leads** → **Download Excel** / **Download CSV** | [Sales guide](docs/sales-guide.md#download-the-list) |
+| Keep the site awake while the team works | An outside pinger (cron-job.org) opens `/healthz` every 5 minutes, 5 AM to 9 PM Utah time (an owner step); the site says under **Recent problems** when it slept anyway | [Runbook](docs/operator-runbook.md#keep-the-site-awake) |
 | Undo a bad deploy | Render → the service → **Events** → last good deploy → **Rollback** | [Runbook](docs/operator-runbook.md#logs-and-rolling-back-a-bad-deploy) |
 | Back up or restore the data | `python -m leadgen backup`; `python -m leadgen restore <copy>` lists, `--apply` adds (never overwrites) | [Runbook](docs/operator-runbook.md#backups-and-restoring) |
 | Run it on your computer | Python 3.11 or newer, then the [quick start](#quick-start) | [Developer overview](docs/developer-overview.md) |

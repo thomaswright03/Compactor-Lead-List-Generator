@@ -107,11 +107,15 @@ SCHEMA = [
         by_name TEXT NOT NULL, at DOUBLE PRECISION NOT NULL)""",
     "CREATE INDEX IF NOT EXISTS lead_contacts_by_uid ON lead_contacts (uid, at)",
     "CREATE INDEX IF NOT EXISTS lead_contacts_by_time ON lead_contacts (at)",
+    # Each start of the live site, and which version it ran (awake.py: a start during
+    # Utah working hours with no new version means the site had gone to sleep).
+    """CREATE TABLE IF NOT EXISTS site_starts (
+        id TEXT PRIMARY KEY, at DOUBLE PRECISION NOT NULL, version TEXT NOT NULL)""",
 ]
 # Every table, for tests that empty them.
 TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "mark_changes",
           "search_failures", "call_undos", "problems", "made_by", "switches", "merged_leads",
-          "removed_leads", "search_runs", "search_found", "lead_contacts")
+          "removed_leads", "search_runs", "search_found", "lead_contacts", "site_starts")
 # Up to this many ids are looked up by id (in chunks); more read the whole table.
 BY_ID_LIMIT = 1000
 _CHUNK = 500

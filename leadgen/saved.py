@@ -389,6 +389,7 @@ def is_closed(lead: Lead) -> bool:
 # check is one quick query.
 _parsed: dict[str, tuple[store.Row | None, list[Lead]]] = {}
 _parsed_lock = threading.Lock()
+_parsing = threading.Lock()
 
 
 def _ready(row: _Row) -> Lead | None:
@@ -422,12 +423,18 @@ def _whole_list(db: store.Db) -> list[Lead]:
     with _parsed_lock:
         cached = _parsed.get(db.key)
     if cached is None or cached[0] != fingerprint:
-        rows = [_Row(uid, _to_lead(data) if (data := json.loads(lead)) else None, [],
-                     set(), 0.0, 0.0)
-                for uid, lead in db.all("SELECT uid, lead FROM leads")]
-        cached = (fingerprint, _best_first([l for r in rows if (l := _ready(r))]))
-        with _parsed_lock:
-            _parsed[db.key] = cached
+        # One parse at a time: a request that comes in meanwhile (the first visitor while
+        # the site gets ready, awake.py) waits for it and takes its result.
+        with _parsing:
+            with _parsed_lock:
+                cached = _parsed.get(db.key)
+            if cached is None or cached[0] != fingerprint:
+                rows = [_Row(uid, _to_lead(data) if (data := json.loads(lead)) else None, [],
+                             set(), 0.0, 0.0)
+                        for uid, lead in db.all("SELECT uid, lead FROM leads")]
+                cached = (fingerprint, _best_first([l for r in rows if (l := _ready(r))]))
+                with _parsed_lock:
+                    _parsed[db.key] = cached
     return [_shallow(lead) for lead in cached[1]]
 
 

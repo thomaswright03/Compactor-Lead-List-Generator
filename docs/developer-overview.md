@@ -158,6 +158,26 @@ but never the live site; branch protection on `main` (an owner setting, see
 `main` too. Every public function in
 `leadgen/` has parameter and return annotations (`strict = true` for mypy).
 
+**Sleeping and waking (`leadgen/awake.py`).** Render's free plan stops the site after 15
+idle minutes. An outside pinger (cron-job.org, an owner step in the runbook's
+[Keep the site awake](operator-runbook.md#keep-the-site-awake)) opens `/healthz` every 5
+minutes in Utah working hours; `.github/workflows/keep-awake.yml` is the backup (GitHub
+starts scheduled jobs late, so each run pings every 5 minutes for 50 minutes). `wsgi.py`
+calls `awake.start(version)` once per process, in a `leadgen wake-up` thread:
+`check_start` records the start in the additive `site_starts` table (when, and the
+deployed commit, `RENDER_GIT_COMMIT`) and, for a start from 6:20 AM to 9 PM Utah time
+with the same version as the start before (no deploy), reports "The site had gone to
+sleep …" under Recent problems, at most once a Utah day (it looks for that day's text in
+`problems`); `warm_up` reads the saved list once (`saved._parsing` makes overlapping
+first requests share one parse). `/healthz` returns `up_since`, the process's start in
+Utah time. On the page, `start.js` shows `#starting` ("Loading your leads…") until the
+first list arrives, and after `TIMING.waking` (4 s) says the site is starting up and can
+take up to a minute; after `TIMING.stillWaking` (45 s) it adds to reload if nothing
+appears within two minutes. `TIMING` (in `core.js`) can be shortened in a browser test
+through `window.leadgenTiming`. `tests/test_awake.py` and the browser tests
+`test_a_slow_first_load_says_the_site_is_waking_up` / `…_quick_first_load_shows_no_starting_notice`
+cover it.
+
 **Commits.** One logical change per commit, with a message that says what changed
 and why (the first line a short summary, then the details and how it was checked),
 and its tests and documentation in the same commit; so `git log` reads as a list
@@ -181,8 +201,8 @@ python -m leadgen backup          # copy every table with the team's work to lea
 python -m leadgen restore FILE    # what a copy would add back (--apply adds it)
 ```
 
-`backup` / `restore` (`backup.py`) copy every table in `store.SCHEMA` except the cache and
-a running search's checkpoints (its tables and their keys are read from the schema, so a
+`backup` / `restore` (`backup.py`) copy every table in `store.SCHEMA` except the cache,
+a running search's checkpoints and `site_starts` (`backup.SKIPPED`; its tables and their keys are read from the schema, so a
 new table is copied too), in one transaction, to gzip-compressed JSON; a restore inserts
 only the rows whose key is missing (`ON CONFLICT DO NOTHING`), never updating or deleting.
 The nightly encrypted copy is `.github/workflows/backup.yml`; the steps are in the

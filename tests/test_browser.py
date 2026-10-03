@@ -2118,3 +2118,30 @@ def test_the_map_takes_the_dark_theme_and_fits_a_phone(browser, site, page):
     assert zoom["width"] >= 44 and zoom["height"] >= 44
     context.close()
     assert not errors
+
+
+@pytest.mark.parametrize("width", [390, 1440])
+def test_a_slow_first_load_says_the_site_is_waking_up(browser, site, page, width):
+    """The site sleeps after a quiet spell and its first answer then takes a while: the page
+    says it is loading, then that it is starting up and the leads appear by themselves,
+    then to reload if nothing comes; the notice goes once the leads are there."""
+    context = _context(browser, viewport={"width": width, "height": 800})
+    context.add_init_script("window.leadgenTiming = { waking: 300, stillWaking: 900 };")
+    tab = context.new_page()
+    held = []
+    tab.route("**/leads?*", lambda route: held.append(route))
+    tab.goto(site + "#leads")
+    starting = tab.locator("#starting")
+    expect(starting).to_contain_text("Starting up… The Lead Finder sleeps when nobody has used it for a while")
+    expect(starting).to_contain_text("Still starting. If nothing appears within two minutes, reload the page.")
+    assert tab.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    for route in held:
+        route.continue_()
+    tab.unroute("**/leads?*")
+    tab.wait_for_selector("table.leads")
+    expect(starting).to_be_hidden()
+    context.close()
+
+
+def test_a_quick_first_load_shows_no_starting_notice(page):
+    expect(page.locator("#starting")).to_be_hidden()

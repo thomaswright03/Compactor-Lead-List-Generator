@@ -2,7 +2,7 @@
    One HTML page (templates/index.html) holds Find leads, Leads, Calls, Map and Stats, switched by
    the #address; these scripts load in order and share their top-level names. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
-/* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, S, el, link, phoneLink,
+/* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, TIMING, S, el, link, phoneLink,
    button, api, post, fmtTime, serverNow, leftOf, problem, loadingCue, themeChoice, applyTheme, myName,
    withName, byWho, parseHash, readLeadView, route, writeHash */
 // An element of the page by its id: an input, a dialog, a button... (typed `any`, as the page's
@@ -28,6 +28,13 @@ const PIN_MS = 5000;
 const PAGE = 100;
 // Clicks this soon after rows moved up are ignored (they were aimed at the row that left).
 const SHIFT_GUARD_MS = 700;
+// How long the page waits, in milliseconds, before it says something is slow: the first answer
+// after the site woke up (start.js: `waking`, then `stillWaking`), and a save (core.js save():
+// "taking longer than usual" after `saveSlow`, given up as not saved after `saveLimit`). The
+// browser tests shorten them (window.leadgenTiming, set before the page's scripts run).
+/** @type {Timing} */
+const TIMING = { waking: 4000, stillWaking: 45000, saveSlow: 10000, saveLimit: 30000,
+                 ...(window.leadgenTiming || {}) };
 // The Leads page holds only the rows it shows (one tab, filtered and sorted by the server,
 // the first `limit` of them), every tab's count, and the leads that can still be undone.
 // `failed`: the Yes / No clicks that didn't reach the server, by lead, until retried or dismissed.

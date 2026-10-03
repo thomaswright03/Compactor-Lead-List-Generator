@@ -6,7 +6,12 @@
 interface Window {
   /** Point the browser's bar colour at the theme shown ("light", "dark" or "system"). */
   setThemeColor(choice: string): void;
+  /** Shorter waits for the browser tests (core.js TIMING). */
+  leadgenTiming?: Partial<Timing>;
 }
+
+/** How long the page waits before it says something is slow, in milliseconds (core.js TIMING). */
+interface Timing { waking: number; stillWaking: number; saveSlow: number; saveLimit: number }
 
 /** The page's settings, written into the page (templates/index.html, #page-config). */
 interface PageConfig {
