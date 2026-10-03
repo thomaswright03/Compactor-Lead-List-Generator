@@ -15,7 +15,7 @@ from flask.typing import ResponseReturnValue
 
 from .. import THREAD_PREFIX, alerts, config, daily, fillin, interrupted, saved, store
 from .. import switches as site_switches
-from ..geo import GeocodeError, LookupDown, haversine_miles, miles_from_arco
+from ..geo import GeocodeError, LookupDown, haversine_miles, miles_from_aarco
 from ..localtime import clock_text, date_time_text
 from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, SearchStopped, locate, run
 from ..progress import LOCATE, MAP, MERGE, ORDER, PAID, SAVE, Step
@@ -299,7 +299,7 @@ def _number(form: Mapping[str, str], name: str, default: Num | None, cast: type,
 
 
 def _location(form: Mapping[str, str]) -> str:
-    # The page always sends the field; a bare POST without it (a script) searches around Arco.
+    # The page always sends the field; a bare POST without it (a script) searches around AARCO.
     location = (form.get("location", config.DEFAULT_LOCATION) or "").strip()
     if not location:
         raise FormError("Enter where to search around: a ZIP code, city or street address.",
@@ -587,18 +587,18 @@ CONFIRM_MILES = 1.0
 
 def where(params: SearchParams) -> dict[str, Any]:
     """Where a search will actually run, for the page to show before it starts: the
-    place found for the location typed, how far it is from Arco's shop, and whether
-    that is outside Arco's area (config.SERVICE_AREA_MILES). Raises GeocodeError."""
+    place found for the location typed, how far it is from AARCO's shop, and whether
+    that is outside AARCO's area (config.SERVICE_AREA_MILES). Raises GeocodeError."""
     lat, lon, label = locate(params)
-    miles = miles_from_arco(lat, lon)
+    miles = miles_from_aarco(lat, lon)
     return {"label": label, "lat": round(lat, 5), "lon": round(lon, 5),
             "miles": round(miles, 1), "outside": miles > config.SERVICE_AREA_MILES,
             "area_miles": config.SERVICE_AREA_MILES, "confirm": f"{lat:.5f},{lon:.5f}"}
 
 
 def far_message(place: dict[str, Any]) -> str:
-    return (f"“{place['label']}” is {place['miles']:,.0f} miles from Arco's shop, outside "
-            f"Arco's area (about {place['area_miles']:g} miles around it).")
+    return (f"“{place['label']}” is {place['miles']:,.0f} miles from AARCO's shop, outside "
+            f"AARCO's area (about {place['area_miles']:g} miles around it).")
 
 
 def confirmed(answer: str | None, place: dict[str, Any]) -> bool:
@@ -629,7 +629,7 @@ def _place(params: SearchParams) -> dict[str, Any] | tuple[Response, int]:
 
 @bp.get("/place")
 def place() -> ResponseReturnValue:
-    """Where a search for ?location= would run, and how far that is from Arco (the
+    """Where a search for ?location= would run, and how far that is from AARCO (the
     page shows it in the confirmation before anything is spent)."""
     try:
         params = SearchParams(location=_location(request.args))
@@ -678,7 +678,7 @@ def search() -> ResponseReturnValue:
         # The page attaches to it (e.g. after a reload) instead of starting another.
         return jsonify({"error": "A search is already running.", "job_id": running}), 429
     # Where it will run is found first: a place that can't be found, or one outside
-    # Arco's area that the person hasn't confirmed, never uses up the day.
+    # AARCO's area that the person hasn't confirmed, never uses up the day.
     found = _place(params)
     if isinstance(found, tuple):
         return found

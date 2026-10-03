@@ -25,7 +25,7 @@ from . import THREAD_PREFIX, store
 from .localtime import date_time_text
 
 WEBHOOK_ENV = "LEADGEN_ALERT_WEBHOOK"
-SITE = "Arco Compactor Lead Finder"
+SITE = "AARCO Compactor Lead Finder"
 THROTTLE_SECONDS = 15 * 60
 # The Find leads page lists the problems of this many days.
 RECENT_SECONDS = 7 * 24 * 3600

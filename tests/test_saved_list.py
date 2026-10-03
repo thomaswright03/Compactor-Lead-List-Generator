@@ -103,3 +103,22 @@ def test_several_words_find_a_lead_when_each_is_somewhere_in_its_row():
     assert names("walmart layton") == names("Layton  WALMART") == ["Walmart Supercenter (Layton)"]
     assert names("layton") == ["Smith's Marketplace (Layton)", "Walmart Supercenter (Layton)"]
     assert names("walmart provo") == []
+
+
+# ---- the company's name, corrected by the owner (AARCO, not Arco)
+
+def test_aarcos_own_listing_saved_under_the_old_name_shows_the_new_one():
+    from leadgen import store
+    lead = _lead("AARCO Compactor", "a1")
+    saved.save_search([lead])
+    # A row saved before the name was corrected keeps its text ...
+    with store.connect() as db:
+        [(text,)] = db.all("SELECT lead FROM leads WHERE uid = ?", (lead.uid,))
+        old = text.replace("OWN COMPANY: AARCO Compactor", "OWN COMPANY: Arco Compactor")
+        assert old != text
+        db.run("UPDATE leads SET lead = ?, last_seen = last_seen + 1 WHERE uid = ?", (old, lead.uid))
+    # ... and is shown with the name the company has now; the row itself is not rewritten.
+    [row] = saved.load()
+    assert row.flags == ["OWN COMPANY: AARCO Compactor"] and row.lead_type == "Own company"
+    with store.connect() as db:
+        assert "OWN COMPANY: Arco Compactor" in db.one("SELECT lead FROM leads WHERE uid = ?", (lead.uid,))[0]

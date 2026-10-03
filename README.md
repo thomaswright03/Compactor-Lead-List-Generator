@@ -3,10 +3,10 @@
 Finds businesses around Salt Lake City (or any ZIP/city) that are likely to run
 **large commercial trash compactors or cardboard balers**, scores each one, and
 exports a ranked lead list to Excel or CSV for manual vetting. Built for
-Arco Compactor.
+AARCO Compactor.
 
 Competitors (**Pro Baler**, **Action Compaction**) are **flagged, never dropped**,
-and Arco Compactor's own listing is flagged too.
+and AARCO Compactor's own listing is flagged too.
 
 ## Where to look
 
@@ -41,7 +41,7 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 
 ## What it does
 
-- **Find leads** once a day (Utah calendar day) around Arco's shop or any ZIP or
+- **Find leads** once a day (Utah calendar day) around AARCO's shop or any ZIP or
   city, from Google Places, Yelp (at most 50 calls in any 24 hours, with the reset
   time shown, "today at ..." or "tomorrow at ...") and the free OpenStreetMap data
   (asked in parts, the area around the search's centre first and then outwards, so
@@ -71,8 +71,8 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   When the place lookups themselves are down, the page says to try again in a minute
   (nothing spent), not to check the spelling.
   Before anything is spent, the confirmation names the place the search will
-  actually run around and how far it is from Arco's shop; a town name on its own
-  ("Murray", "Sandy") means the Utah one. A place outside Arco's area (more than 30
+  actually run around and how far it is from AARCO's shop; a town name on its own
+  ("Murray", "Sandy") means the Utah one. A place outside AARCO's area (more than 30
   miles from the shop, `SERVICE_AREA_MILES`) needs a second, explicit yes that names
   it again, and the search history shows where each search ran under what was typed.
   The standard words (compactor, baler, waste, recycling) are always searched;
@@ -173,7 +173,7 @@ which older versions lack).
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Command line: 30 miles around Arco Compactor (876 Fortune Rd, SLC), saved to output/leads.xlsx
+# Command line: 30 miles around AARCO Compactor (876 Fortune Rd, SLC), saved to output/leads.xlsx
 python -m leadgen run
 
 # Web page at http://127.0.0.1:5000
@@ -183,7 +183,7 @@ python -m leadgen web
 # --apply merges each group into its first row, keeping every listing, mark and call
 python -m leadgen merge-sites [--apply]
 
-# List saved leads far outside Arco's area (e.g. from a search around the wrong place);
+# List saved leads far outside AARCO's area (e.g. from a search around the wrong place);
 # --remove takes them out of the list (kept aside), --restore puts them back
 python -m leadgen out-of-area [--miles 60] [--remove | --restore]
 

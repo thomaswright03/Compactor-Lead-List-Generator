@@ -32,8 +32,11 @@ def test_competitor_detected_by_website_only():
 
 
 def test_own_company_is_flagged():
-    lead = score_lead(make("Arco Compactor"))
+    lead = score_lead(make("AARCO Compactor"))
     assert lead.lead_type == "Own company"
+    assert "OWN COMPANY: AARCO Compactor" in lead.flags
+    # A listing that spells the name "Arco" is still AARCO's own.
+    assert score_lead(make("Arco Compactor")).lead_type == "Own company"
 
 
 def test_equipment_name_is_industry_not_prospect():
@@ -276,7 +279,7 @@ def _moved_tiers(entries):
 
 
 def test_confirmed_businesses_keep_their_tier():
-    """Businesses Arco marked Yes never drop a tier, and ones marked No never rise one,
+    """Businesses AARCO marked Yes never drop a tier, and ones marked No never rise one,
     after a scoring change ("confirmed" in scoring_reference.json, copied from the
     site by `python -m leadgen reference` or its scoring check file download)."""
     import json

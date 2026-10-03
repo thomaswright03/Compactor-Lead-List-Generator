@@ -113,7 +113,7 @@ function counts() {
   show("n-calls", S.counts.called, "called");
 }
 
-// Competitors and Arco's own listing have their own tab: they are flagged, never asked Yes / No.
+// Competitors and AARCO's own listing have their own tab: they are flagged, never asked Yes / No.
 // Businesses a later search found closed for good keep their mark (and stay under Yes or No,
 // flagged); the Closed tab lists them all, and they leave Not checked.
 /** @type {[string, string][]} */
@@ -349,7 +349,7 @@ setInterval(() => {
 function markCell(lead, withCall) {
   const td = el("td", undefined, "c-mark");
   if (!lead.prospect) {
-    td.append(el("div", lead.lead_type === "Competitor" ? "Competitor: not a prospect" : "Arco's own listing",
+    td.append(el("div", lead.lead_type === "Competitor" ? "Competitor: not a prospect" : "AARCO's own listing",
                  "sub not-asked"));
     return td;
   }
@@ -519,7 +519,7 @@ function leadTable(rows, withCall) {
   return table;
 }
 
-// "Pro Baler, Action Compaction or Arco Compactor".
+// "Pro Baler, Action Compaction or AARCO Compactor".
 /** @param {string[]} names */
 function orList(names) {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;

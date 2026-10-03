@@ -228,7 +228,7 @@ def saved_list_info(leads: list[Lead], first: float | None = None,
         "Marked Yes (has a baler or compactor)": sum(l.has_baler == "yes" for l in prospects),
         "Marked No": sum(l.has_baler == "no" for l in prospects),
         "Not checked yet": sum(l.has_baler not in ("yes", "no") for l in prospects),
-        "Competitors and Arco's own listing": len(leads) - len(prospects),
+        "Competitors and AARCO's own listing": len(leads) - len(prospects),
     }
     for tier, label in TIER_LABELS.items():
         info[f"Tier {label}"] = sum(l.tier == tier for l in leads)

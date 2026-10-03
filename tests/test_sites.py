@@ -264,7 +264,7 @@ def test_merged_buildings_that_agree_are_not_flagged(monkeypatch):
 
 
 # The two shapes the round-16 review found saved twice, from the map data of a 30-mile
-# search around Arco's shop: Smith's distribution complex in Layton (a building and the
+# search around AARCO's shop: Smith's distribution complex in Layton (a building and the
 # yard around it, the yard's name with the town written in) and Hill Air Force Base (the
 # airfield and the base, 0.88 miles apart).
 def _smiths(outlines=True):

@@ -108,3 +108,19 @@ def test_an_incomplete_search_gives_one_short_note(monkeypatch):
                             "only part of the area. Today's search is now used up; the next "
                             "one can run tomorrow.")
     assert len(body["warnings"]) >= 2                     # the details, shown behind "More"
+
+
+def test_a_search_recorded_under_the_old_name_shows_aarco():
+    """Searches run before the owner corrected the company's name (AARCO, not Arco) say
+    AARCO in the history; the stored record keeps its text."""
+    import json
+    old = "Arco Compactor, 876 Fortune Rd, Salt Lake City, UT 84104"
+    with store.connect() as db:
+        db.run("INSERT INTO searches (day, at, info) VALUES (?, ?, ?)",
+               ("2026-09-30", time.time() - 3 * 86400,
+                json.dumps({"location": "876 Fortune Rd", "place": old, "found_near": old, "leads": 3})))
+    [record] = daily.history()["searches"]
+    assert record["place"] == record["found_near"] == "AARCO Compactor, 876 Fortune Rd, Salt Lake City, UT 84104"
+    assert daily.earlier_search(record["place"], daily.today(), 0) is not None
+    with store.connect() as db:
+        assert json.loads(db.one("SELECT info FROM searches")[0])["place"] == old

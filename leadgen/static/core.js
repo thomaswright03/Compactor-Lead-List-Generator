@@ -17,7 +17,7 @@ const eventEl = (e) => /** @type {HTMLElement} */ (e.target);
 const CONFIG = /** @type {PageConfig} */ (JSON.parse($("page-config").textContent));
 const OUTCOMES = CONFIG.outcomes;
 const PAUSED = CONFIG.paused;
-const SITE = "Arco Compactor Lead Finder";
+const SITE = "AARCO Compactor Lead Finder";
 /** @type {Record<string, string>} */
 const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", stats: "Stats" };
 // A row just marked Yes or No stays where it is (showing its answer and Undo) for this long

@@ -35,10 +35,10 @@ only looks around and never changes anything.
    waste, recycling) are always searched, and anything you type is searched as
    well. Extra settings are under **More options**.
 3. Press **Find leads** and check the summary. **Searches around** names the place
-   the search will actually run around, and **From Arco's shop** how far that is.
+   the search will actually run around, and **From AARCO's shop** how far that is.
    A town name on its own ("Murray", "Sandy") means the Utah one. If the place is
    not what you meant, press **Go back and edit** (type a ZIP code, or the town with
-   its state: "Murray, UT"). Then press **Start search**. A place outside Arco's area
+   its state: "Murray, UT"). Then press **Start search**. A place outside AARCO's area
    (more than 30 miles from the shop) asks once more, naming the place and its
    distance: **Search there anyway** uses the day's search there; **Go back and edit**
    spends nothing.
@@ -117,7 +117,7 @@ Good to know:
 - A business joined from buildings that were marked differently (one Yes, one No)
   is kept as Yes and says so in red. Check with the business, then press Yes or
   No to confirm; the note goes away.
-- Competitors (Pro Baler, Action Compaction) and Arco's own listing are shown in
+- Competitors (Pro Baler, Action Compaction) and AARCO's own listing are shown in
   orange under **Competitors**. They are not prospects, so they have no Yes / No.
   When none has been found yet, the tab says so.
 - A business a later search found **closed for good** keeps its mark and calls
@@ -186,7 +186,7 @@ save, with who made it. To take it off, empty both boxes and save.
 - **Businesses with a baler or compactor**: how many are marked Yes.
 - The chart shows, for each tier, the share of checked businesses (marked Yes or
   No) that have one. A good scoring has a high share in tier A and a low one in D.
-- Competitors and Arco's own listing are left out of every number.
+- Competitors and AARCO's own listing are left out of every number.
 
 ## Download the list
 

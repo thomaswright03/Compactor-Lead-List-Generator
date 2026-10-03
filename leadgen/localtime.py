@@ -1,4 +1,4 @@
-"""Utah time, the one clock the site shows (Arco's shop is in Salt Lake City).
+"""Utah time, the one clock the site shows (AARCO's shop is in Salt Lake City).
 
 Every date and time on the pages, in the downloads and in the once-a-day rule
 comes from here, so they always agree.

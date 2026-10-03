@@ -39,7 +39,7 @@ bp = Blueprint("leads", __name__)
 
 
 # The page's views of the saved list (its tabs): prospects not yet checked, marked
-# Yes, marked No; competitors and Arco's own listing (never asked Yes / No);
+# Yes, marked No; competitors and AARCO's own listing (never asked Yes / No);
 # businesses closed for good; every lead; and the businesses with a call logged
 # (the Calls page). A closed business keeps its mark (so it stays under Yes or No,
 # flagged) but is no longer offered for checking.

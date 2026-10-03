@@ -13,7 +13,7 @@ const TOUR = [
     text: "Find leads runs a search. Leads is the list of businesses to check. Calls keeps every call. " +
           "Stats sums up what you found. The numbers next to Leads and Calls show how many are waiting." },
   { page: "find", target: "#form .form-grid", title: "Where to search",
-    text: "Type a ZIP code, city or address and how many miles around it to look. Arco's address is filled in. " +
+    text: "Type a ZIP code, city or address and how many miles around it to look. AARCO's address is filled in. " +
           "Extra search words are optional; the standard words are always searched." },
   { page: "find", target: ".go-row", title: "Find leads, once a day",
     text: "Press Find leads to start. You get one search per day (Utah time), so the site asks before it starts. " +

@@ -393,7 +393,7 @@ function renderHistory(searches, body) {
 }
 
 // What was typed, and under it the place the search actually ran around (and how far that
-// is from Arco's shop) when it says more than the typed words.
+// is from AARCO's shop) when it says more than the typed words.
 /** @param {SearchRow} s */
 function whereCell(s) {
   const td = el("td", undefined, "h-where");
@@ -401,10 +401,10 @@ function whereCell(s) {
   const place = s.place || s.found_near;
   if (place && place.toLowerCase() !== (s.location || "").toLowerCase()) {
     const far = typeof s.miles === "number" && s.miles > CONFIG.area_miles;
-    const miles = typeof s.miles === "number" ? ` · ${milesText(s.miles)} from Arco` : "";
+    const miles = typeof s.miles === "number" ? ` · ${milesText(s.miles)} from AARCO` : "";
     td.append(el("span", `Searched around ${place}${miles}`, `sub${far ? " far" : ""}`));
   } else if (typeof s.miles === "number" && s.miles > CONFIG.area_miles) {
-    td.append(el("span", `${milesText(s.miles)} from Arco`, "sub far"));
+    td.append(el("span", `${milesText(s.miles)} from AARCO`, "sub far"));
   }
   return td;
 }
@@ -563,10 +563,10 @@ function checkForm(form) {
   return null;
 }
 // Before anything is spent the server finds the place typed (web/finding.py place): the
-// confirmation names it and how far it is from Arco's shop. A place outside Arco's area needs a
+// confirmation names it and how far it is from AARCO's shop. A place outside AARCO's area needs a
 // second, explicit yes (farDialog) that names it again.
 /** @type {(p: Place) => string} */
-const farText = (p) => `“${p.label}” is ${milesText(p.miles)} from Arco's shop, outside Arco's area ` +
+const farText = (p) => `“${p.label}” is ${milesText(p.miles)} from AARCO's shop, outside AARCO's area ` +
   `(about ${p.area_miles} miles around it).`;
 $("form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
   e.preventDefault();
@@ -586,7 +586,7 @@ $("form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
   S.place = place;
   const dl = $("confirm-list"); dl.replaceChildren();
   const rows = searchSummary($("form"));
-  rows.splice(1, 0, ["Searches around", place.label], ["From Arco's shop", milesText(place.miles)]);
+  rows.splice(1, 0, ["Searches around", place.label], ["From AARCO's shop", milesText(place.miles)]);
   for (const [k, v] of rows) { const row = el("div"); row.append(el("dt", k), el("dd", v)); dl.append(row); }
   $("confirm-far").hidden = !place.outside;
   if (place.outside) $("confirm-far").textContent = `${farText(place)} You'll be asked once more before it starts.`;
@@ -611,7 +611,7 @@ $("far-back").addEventListener("click", () => { $("far-dlg").close(); backToPlac
 $("far-form").addEventListener("submit", (/** @type {SubmitEvent} */ e) => {
   e.preventDefault(); $("far-dlg").close(); startSearch(S.place && S.place.confirm);
 });
-/** @param {string} [confirmPlace] the place outside Arco's area that was confirmed */
+/** @param {string} [confirmPlace] the place outside AARCO's area that was confirmed */
 async function startSearch(confirmPlace) {
   setGo(false, "Starting...");
   clearErrors(); $("search-failed").hidden = true;
@@ -626,7 +626,7 @@ async function startSearch(confirmPlace) {
     if (err.status === 429 && err.body && err.body.job_id) return follow(err.body.job_id);
     setGo(false, "");
     loadSearches();
-    // The place turned out to be outside Arco's area: ask, naming it (nothing was spent).
+    // The place turned out to be outside AARCO's area: ask, naming it (nothing was spent).
     if (err.body && err.body.confirm_far && err.body.place) { farDialog(err.body.place); return; }
     showError(err.message, err.status === 400 && err.body ? err.body.field : "");
   }

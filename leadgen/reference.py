@@ -1,4 +1,4 @@
-"""Copy the businesses Arco's staff marked Yes / No into the scoring reference set.
+"""Copy the businesses AARCO's staff marked Yes / No into the scoring reference set.
 
     python -m leadgen reference                  # DATABASE_URL = the website's database
 

@@ -166,13 +166,13 @@ def test_stats():
 
 
 def test_competitors_and_own_listing_are_left_out_of_stats_and_checking():
-    """Competitors and Arco's own listing stay in the list, flagged, but are not
+    """Competitors and AARCO's own listing stay in the list, flagged, but are not
     prospects: marking one Yes changes no Stats figure and no "to check" count."""
     from leadgen import config
     from leadgen.scoring import score_lead
     leads = [Lead(name=n, lat=40.7 + i / 100, lon=-111.9, source="osm", source_id=f"n{i}",
                   raw_categories=["shop=supermarket"]) for i, n in
-             enumerate(["Harmons", "Smith's Marketplace", "Pro Baler", "Arco Compactor"])]
+             enumerate(["Harmons", "Smith's Marketplace", "Pro Baler", "AARCO Compactor"])]
     for lead in leads:
         score_lead(lead, config.DEFAULT_KEYWORDS)
     assert [l.lead_type for l in leads[2:]] == ["Competitor", "Own company"]
@@ -192,7 +192,7 @@ def test_competitors_and_own_listing_are_left_out_of_stats_and_checking():
     assert page["counts"] == counts and page["counts"]["unchecked"] == 0
     assert page["counts"]["competitors"] == 2 and page["counts"]["all"] == 4
     listed = client.get("/leads?tab=competitors&limit=10").get_json()["leads"]
-    assert {l["name"] for l in listed} == {"Pro Baler", "Arco Compactor"}   # still shown
+    assert {l["name"] for l in listed} == {"Pro Baler", "AARCO Compactor"}   # still shown
 
 
 def test_the_page_gets_one_view_at_a_time():

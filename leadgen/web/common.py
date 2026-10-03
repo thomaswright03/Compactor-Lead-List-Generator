@@ -109,7 +109,7 @@ def lead_json(lead: Lead, undo: Undos | None = None) -> dict[str, Any]:
     return {
         "score": lead.score, "tier": lead.tier, "tier_label": TIER_LABELS.get(lead.tier, ""),
         "lead_type": lead.lead_type, "flags": lead.flags, "name": lead.name,
-        # Competitors and Arco's own listing are flagged, never asked Yes / No.
+        # Competitors and AARCO's own listing are flagged, never asked Yes / No.
         "prospect": lead.lead_type not in EXEMPT_TYPES,
         "closed": saved.is_closed(lead),
         "category": lead.category, "address": lead.address, "city": city,

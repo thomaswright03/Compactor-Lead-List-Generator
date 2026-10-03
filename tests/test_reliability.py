@@ -413,7 +413,7 @@ def test_saved_list_run_info_says_what_the_file_holds():
     info = {row[0]: row[1] for row in book["Run Info"].iter_rows(values_only=True) if row[0]}
     assert info["List"] == "All saved leads" and info["Leads in this file"] == 3
     assert info["Marked Yes (has a baler or compactor)"] == 1 and info["Marked No"] == 0
-    assert info["Not checked yet"] == 1 and info["Competitors and Arco's own listing"] == 1
+    assert info["Not checked yet"] == 1 and info["Competitors and AARCO's own listing"] == 1
     assert sum(v for k, v in info.items() if k.startswith("Tier ") and isinstance(v, int)) == 3
     # No search on record (saved straight away): the times are when the leads were saved.
     assert info["First saved"].endswith("(Utah time)") and info["Latest saved"]

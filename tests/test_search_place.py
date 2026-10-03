@@ -1,5 +1,5 @@
 """Where a search runs: the place is found (in Utah first) and shown before anything is
-spent, a place outside Arco's area needs a second yes, the history names the place, the
+spent, a place outside AARCO's area needs a second yes, the history names the place, the
 administrator's pause stops the free map step of a running search, and leads saved from a
 search around the wrong place can be taken out of the list, only on request."""
 
@@ -45,7 +45,7 @@ def test_salt_lake_area_towns_typed_bare_are_the_utah_ones(monkeypatch, typed, l
     monkeypatch.setattr(geo, "request_json", lambda *a, **k: pytest.fail("looked up online"))
     lat, lon, found = geo.geocode(typed, "")
     assert found == label
-    assert geo.miles_from_arco(lat, lon) < 20
+    assert geo.miles_from_aarco(lat, lon) < 20
 
 
 def test_other_places_are_looked_for_in_utah_first(monkeypatch):
@@ -96,19 +96,19 @@ def test_google_lookups_prefer_utah(monkeypatch):
 
 # ---- the page sees the place (and its distance) before anything is spent
 
-def test_the_place_is_shown_with_its_distance_from_arco():
+def test_the_place_is_shown_with_its_distance_from_aarco():
     client = web.create_app().test_client()
     body = client.get("/place?location=Murray").get_json()
     assert body["label"] == "Murray, UT" and not body["outside"]
     assert 4 < body["miles"] < 7 and body["area_miles"] == config.SERVICE_AREA_MILES
-    arco = client.get("/place?location=876 Fortune Rd").get_json()
-    assert arco["miles"] == 0 and arco["label"].startswith("Arco Compactor")
+    aarco = client.get("/place?location=876 Fortune Rd").get_json()
+    assert aarco["miles"] == 0 and aarco["label"].startswith("AARCO Compactor")
     blank = client.get("/place?location=")
     assert blank.status_code == 400 and blank.get_json()["field"] == "location"
     assert not daily.history()["searches"]
 
 
-def test_a_place_outside_arcos_area_needs_a_second_yes(monkeypatch):
+def test_a_place_outside_aarcos_area_needs_a_second_yes(monkeypatch):
     """A far place is refused (nothing spent, the day not claimed) until the page confirms
     that very place; then it runs there, and the history names where it ran."""
     monkeypatch.setattr(pipeline, "geocode", lambda location, key: PORTLAND)
@@ -124,7 +124,7 @@ def test_a_place_outside_arcos_area_needs_a_second_yes(monkeypatch):
     res = client.post("/search", data={"location": "Portland"})
     body = res.get_json()
     assert res.status_code == 409 and body["confirm_far"] and body["place"]["label"] == PORTLAND[2]
-    assert "is 633 miles from Arco's shop, outside Arco's area" in body["error"]
+    assert "is 633 miles from AARCO's shop, outside AARCO's area" in body["error"]
     assert not ran and not daily.history()["searches"] and not client.get("/searches").get_json()["used_today"]
     # A confirmation for another place doesn't count.
     assert client.post("/search", data={"location": "Portland", "confirm_place": "40.7,-111.9"}).status_code == 409
@@ -317,7 +317,7 @@ def test_far_leads_are_listed_and_removed_only_on_request(capsys, monkeypatch):
     marks.set_mark(by_name["SF Market 0"].uid, "no")        # someone already worked on it
     assert cli.main(["out-of-area"]) == 0
     out = capsys.readouterr().out
-    assert "3 saved leads farther than 60 miles from Arco's shop (1 marked or called, never removed)" in out
+    assert "3 saved leads farther than 60 miles from AARCO's shop (1 marked or called, never removed)" in out
     assert "San Francisco, CA" in out and "Nothing was changed" in out
     assert saved.count() == 4                                 # listing changes nothing
     assert cli.main(["out-of-area", "--remove"]) == 0
@@ -335,7 +335,7 @@ def test_the_command_line_warns_about_a_place_outside_the_area(monkeypatch, caps
     monkeypatch.setattr(pipeline, "geocode", lambda location, key: PORTLAND)
     monkeypatch.setattr(pipeline.osm, "search", lambda *a, **k: ([], []))
     assert cli.main(["run", "--source", "osm", "-l", "Portland", "-q", "--out", str(tmp_path / "x.csv")]) == 0
-    assert re.search(r"Warning: Portland.* is 633 miles from Arco's shop, outside Arco's area",
+    assert re.search(r"Warning: Portland.* is 633 miles from AARCO's shop, outside AARCO's area",
                      capsys.readouterr().err)
 
 

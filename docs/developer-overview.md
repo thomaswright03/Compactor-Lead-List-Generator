@@ -166,7 +166,7 @@ python -m leadgen run --source yelp --max-requests 20                 # Yelp onl
 python -m leadgen run --grid 7 --max-requests 300                     # wider, but capped spend
 python -m leadgen run --min-score 40 --limit 200                      # only strong leads
 python -m leadgen reference       # copy the site's Yes / No marks into the scoring tests
-python -m leadgen out-of-area     # list saved leads more than 60 miles from Arco (--remove / --restore)
+python -m leadgen out-of-area     # list saved leads more than 60 miles from AARCO (--remove / --restore)
 python -m leadgen backup          # copy every table with the team's work to leadgen-backup-<time>.json.gz
 python -m leadgen restore FILE    # what a copy would add back (--apply adds it)
 ```
@@ -178,7 +178,7 @@ only the rows whose key is missing (`ON CONFLICT DO NOTHING`), never updating or
 The nightly encrypted copy is `.github/workflows/backup.yml`; the steps are in the
 [operator runbook](operator-runbook.md#backups-and-restoring).
 
-`run` warns when the place is outside Arco's area (`config.SERVICE_AREA_MILES`).
+`run` warns when the place is outside AARCO's area (`config.SERVICE_AREA_MILES`).
 `out-of-area` (`cleanup.py`) is the only way leads leave the saved list, and only on
 request: `--remove` moves the rows of leads nobody marked or called into the additive
 `removed_leads` table, and `--restore` puts them back.
@@ -190,7 +190,7 @@ explanation, and `--source auto` leaves Yelp out and says so.
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `--location` | Arco Compactor (876 Fortune Rd, Salt Lake City) | ZIP, city, address, or `lat,lon`. The radius and the Miles column are measured from here |
+| `--location` | AARCO Compactor (876 Fortune Rd, Salt Lake City) | ZIP, city, address, or `lat,lon`. The radius and the Miles column are measured from here |
 | `--radius` | 30 | Miles from the center; results outside are removed |
 | `--keywords` | compactor baler waste recycling | Extra search terms (they add businesses to look for; scores always use the defaults) |
 | `--source` | auto | `auto` = OpenStreetMap plus Google and/or Yelp when their key is set. Also `google`, `yelp`, `osm`, and `both` (Google + OpenStreetMap) |
@@ -226,7 +226,11 @@ the full behaviour, for whoever changes or supports the site.
 The sidebar has four pages, a Light / Dark / System colour switch (System
 follows the computer's setting; the choice is remembered in each browser), and
 every page carries the Wright AI Solutions copyright. The browser tab names the
-page ("Leads · Arco Compactor Lead Finder") and shows the Lead Finder icon.
+page ("Leads · AARCO Compactor Lead Finder") and shows the Lead Finder icon. The
+company is **AARCO** (the owner's spelling; the site said "Arco" until 2026-10-03):
+records saved before then (a search's place, the own-company flag on a saved lead) are
+shown with the name it has now, by `daily._as_record` and `saved._ready`, without
+rewriting them, and a listing or a search that spells it "Arco" is still AARCO's.
 On phones and tablets every button and link is at least 44 px each way (on a
 narrow window the "Only businesses matching the search words" tick box too). On a
 phone or tablet (up to 820 px wide) the navigation is one short bar at the top (the
@@ -251,9 +255,10 @@ the sidebar to the page's list (Leads, Calls) or heading.
   competitors among them, the leads per tier A to D, then the paid lookups and how
   long it took. Before anything is spent, the page asks the server where the search will
   run (`GET /place`, `web/finding.py`): the place found for what was typed (offline for
-  Arco and the Salt Lake area's towns in `geo.UTAH_PLACES`, typed bare or with ", UT";
+  AARCO's shop, typed as its address, "AARCO" or the old spelling "Arco", and the Salt
+  Lake area's towns in `geo.UTAH_PLACES`, typed bare or with ", UT";
   online lookups ask in Utah first unless another state is named) and its distance from
-  Arco's shop (`config.SERVICE_CENTER`). The confirmation names both. A place more than
+  AARCO's shop (`config.SERVICE_CENTER`). The confirmation names both. A place more than
   `config.SERVICE_AREA_MILES` (30) away needs a second confirmation (`#far-dlg`, its safe
   button focused); `POST /search` refuses such a place with 409 `confirm_far` unless
   `confirm_place` names that same place (within a mile), and it looks the place up before
@@ -264,7 +269,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   `stop` callable (`config.stop_reason`), looks at it every `STOP_CHECK_SECONDS`, asks no
   more mirrors once it says stop, and raises `osm.Stopped` with what it had; the result's
   `stopped` reason marks the job and the record. The form checks itself before anything runs: **Search around** must
-  not be empty (it is never quietly replaced by Arco's address), and the search
+  not be empty (it is never quietly replaced by AARCO's address), and the search
   words are limited to 20, each up to 60 characters (the hint says so). When
   a search can't start, whether the browser catches it or the server refuses
   (a bad value, today's search already run, searching paused, the database
@@ -384,7 +389,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   closed business is under the **Closed** tab. It stays on the Calls page and in
   the downloads (the flag is in the Flags column), and Stats still counts its
   mark: the mark says what it had while it was open. If a later search finds it
-  open again, the flag goes. Competitors and Arco's own listing are
+  open again, the flag goes. Competitors and AARCO's own listing are
   flagged (orange) and have their own **Competitors** tab: they aren't prospects,
   so they get no Yes / No buttons, aren't in Not checked and aren't counted in
   Stats (they still appear under All and in the downloads). The sidebar badge
@@ -509,7 +514,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   business closed for good says so under its name.
 - **Stats**: how many businesses have a baler or compactor (marked Yes), their
   average score, and a chart of the share of checked businesses (marked Yes or
-  No) that have one, by tier. Competitors and Arco's own listing are left out of
+  No) that have one, by tier. Competitors and AARCO's own listing are left out of
   every figure (the page says how many), since the numbers measure how well the
   scoring finds prospects. Businesses that have since closed for good still
   count (the page says how many of the checked ones have closed). On a wide
@@ -604,7 +609,7 @@ the name has no shop word from `config.SHOP_NAME_WORDS`, or has a mall word from
 name (`osm.parse_element`), and one still known only by the word (or the word plus
 its street) scores `config.GENERIC_NAME_PENALTY` less, so it ranks below a named
 place of the same kind. Its **confirmed** list holds real businesses
-Arco's staff marked Yes / No on the Leads page, with the tier each had:
+AARCO's staff marked Yes / No on the Leads page, with the tier each had:
 `python -m leadgen reference` (with `DATABASE_URL` set to the website's
 database) refreshes it from the site's marks, copying only the facts the
 scoring reads (no phone numbers, addresses or call notes). A test then fails

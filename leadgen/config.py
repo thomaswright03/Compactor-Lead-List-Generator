@@ -7,7 +7,7 @@ pipeline code.
 
 from dataclasses import dataclass, field
 
-# Arco Compactor's shop: the default point the radius and "Miles" are measured
+# AARCO Compactor's shop: the default point the radius and "Miles" are measured
 # from. Stored as coordinates so it never depends on an online geocoder. Utah's
 # address records have no 876 Fortune Rd; the pin is 1876 W Fortune Rd (Fortune
 # Rd is ~0.4 mi long, so any point on it gives the same distances).
@@ -16,7 +16,7 @@ OWN_COORDS = (40.742060, -111.943408)
 DEFAULT_LOCATION = OWN_ADDRESS
 DEFAULT_CENTER = OWN_COORDS
 DEFAULT_RADIUS_MILES = 30.0
-# Arco's area: searches are meant for about this far around the shop (SERVICE_CENTER).
+# AARCO's area: searches are meant for about this far around the shop (SERVICE_CENTER).
 # A search whose place is farther away is only started once the person confirms it,
 # naming the place and its distance, so a typo or a same-named town in another state
 # never uses up the day's search (web/finding.py). The command line warns instead.
@@ -25,7 +25,7 @@ SERVICE_AREA_MILES = 30.0
 DEFAULT_KEYWORDS = ["compactor", "baler", "waste", "recycling"]
 DEFAULT_MIN_SCORE = 20
 
-OWN_COMPANY = "Arco Compactor"
+OWN_COMPANY = "AARCO Compactor"
 
 # Competitors are flagged (never dropped) so the client can see who else is
 # servicing the area. Matching is done on a normalized name/website.
@@ -33,7 +33,8 @@ COMPETITORS = {
     "Pro Baler": ["probaler", "pro baler"],
     "Action Compaction": ["actioncompaction", "action compaction"],
 }
-SELF_ALIASES = ["arcocompactor", "arco compactor"]
+# AARCO's own listing, under its name or the spelling "Arco" a listing may use.
+SELF_ALIASES = ["aarcocompactor", "aarco compactor", "arcocompactor", "arco compactor"]
 
 
 @dataclass

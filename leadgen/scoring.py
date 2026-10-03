@@ -20,6 +20,10 @@ Match = tuple[config.Category, str]
 
 TIERS = [(60, "A"), (40, "B"), (20, "C"), (0, "D")]
 TIER_LABELS = {"A": "A - strong", "B": "B - likely", "C": "C - possible", "D": "D - weak"}
+# The flag on AARCO's own listing; rows saved under an earlier name show it as it is now
+# (saved.py).
+OWN_FLAG_START = "OWN COMPANY: "
+OWN_FLAG = OWN_FLAG_START + config.OWN_COMPANY
 
 
 @lru_cache(maxsize=65536)
@@ -645,7 +649,7 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
         flags.append(f"COMPETITOR: {competitor}")
     elif _is_self(lead):
         lead.lead_type = "Own company"
-        flags.append(f"OWN COMPANY: {config.OWN_COMPANY}")
+        flags.append(OWN_FLAG)
     elif lead.lead_type.startswith("Industry"):
         flags.append("Possible competitor or partner (equipment / hauler)")
 

@@ -118,7 +118,7 @@ def _searched(days_ago, place, **info):
 
 
 def test_the_result_says_when_the_area_was_searched_before():
-    place = "Arco Compactor, 876 Fortune Rd, Salt Lake City, UT 84104"
+    place = "AARCO Compactor, 876 Fortune Rd, Salt Lake City, UT 84104"
     at = _searched(3, place)
     _searched(1, "Ogden, UT")                     # another area, searched since
     params = SearchParams(location="84104", place=place)

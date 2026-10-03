@@ -1,6 +1,6 @@
 """Numbers for the stats page, from the saved leads and their Yes / No marks.
 
-They measure how well the scoring finds prospects, so competitors and Arco's own
+They measure how well the scoring finds prospects, so competitors and AARCO's own
 listing (flagged in the list, never asked Yes / No) are left out of every figure.
 A business that has since closed for good still counts: its mark says what it
 had while it was open, which is what the tiers are measured on.

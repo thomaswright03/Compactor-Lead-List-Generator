@@ -142,10 +142,11 @@ def test_dedupe_many_spread_out_copies_stay_apart():
     assert len(dedupe(far)) == 20
 
 
-def test_default_location_is_arco_offline():
+def test_default_location_is_aarco_offline():
     assert geocode(None)[:2] == config.OWN_COORDS
     assert geocode("876 Fortune Rd,  Salt Lake City, UT 84104")[:2] == config.OWN_COORDS
-    assert geocode("Arco Compactor")[:2] == config.OWN_COORDS
+    assert geocode("AARCO Compactor")[:2] == config.OWN_COORDS
+    assert geocode("aarco")[:2] == geocode("Arco Compactor")[:2] == config.OWN_COORDS
     assert geocode("salt lake city ut")[:2] == (40.7608, -111.8910)
 
 

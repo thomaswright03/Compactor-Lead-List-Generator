@@ -13,17 +13,20 @@ log = logging.getLogger(__name__)
 EARTH_RADIUS_MILES = 3958.8
 METERS_PER_MILE = 1609.344
 
-# Works offline for Arco's shop and the default area (the label is what the page shows).
+# Works offline for AARCO's shop and the default area (the label is what the page shows).
 KNOWN_PLACES = {
     config.OWN_ADDRESS.lower(): config.OWN_COORDS,
     "876 fortune rd": config.OWN_COORDS,
     "876 fortune road, salt lake city, ut 84104": config.OWN_COORDS,
     "1876 w fortune rd, salt lake city, ut 84104": config.OWN_COORDS,
+    "aarco": config.OWN_COORDS,
+    "aarco compactor": config.OWN_COORDS,
+    # The spelling the site used before the owner corrected it (AARCO), still understood.
     "arco": config.OWN_COORDS,
     "arco compactor": config.OWN_COORDS,
     "slc": (40.7608, -111.8910),
 }
-OWN_LABEL = f"Arco Compactor, {config.OWN_ADDRESS}"
+OWN_LABEL = f"AARCO Compactor, {config.OWN_ADDRESS}"
 
 # Cities and towns of the Salt Lake area (and nearby): typed bare ("Murray"), with
 # ", UT" or with ", Utah", they mean the Utah place, never a same-named one elsewhere
@@ -118,8 +121,8 @@ def names_another_state(text: str) -> bool:
     return any(words == n or words.endswith(" " + n) for n in names)
 
 
-def miles_from_arco(lat: float, lon: float) -> float:
-    """How far a point is from the centre of Arco's area (config.SERVICE_CENTER)."""
+def miles_from_aarco(lat: float, lon: float) -> float:
+    """How far a point is from the centre of AARCO's area (config.SERVICE_CENTER)."""
     return haversine_miles(config.SERVICE_CENTER[0], config.SERVICE_CENTER[1], lat, lon)
 
 

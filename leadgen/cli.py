@@ -4,7 +4,7 @@
     python -m leadgen web
     python -m leadgen reference      # copy the site's Yes / No marks into the scoring tests
     python -m leadgen merge-sites    # list saved leads that are one business (--apply merges them)
-    python -m leadgen out-of-area    # list saved leads far outside Arco's area (--remove, --restore)
+    python -m leadgen out-of-area    # list saved leads far outside AARCO's area (--remove, --restore)
     python -m leadgen backup         # copy every saved lead, mark, call and search to a file
     python -m leadgen restore FILE   # what putting a copy back would add (--apply adds it)
 """
@@ -16,7 +16,7 @@ from pathlib import Path
 from . import config, saved, store
 from .envfile import load_dotenv
 from .export import to_csv_bytes, to_xlsx_bytes
-from .geo import GeocodeError, miles_from_arco
+from .geo import GeocodeError, miles_from_aarco
 from .pipeline import SOURCES, PipelineError, SearchParams, run
 from .scoring import TIER_LABELS
 
@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     r = sub.add_parser("run", help="Generate a lead list")
     r.add_argument("--location", "-l", default=config.DEFAULT_LOCATION,
-                   help="ZIP, city, address, or 'lat,lon' (default: Arco Compactor, "
+                   help="ZIP, city, address, or 'lat,lon' (default: AARCO Compactor, "
                         f"{config.OWN_ADDRESS})")
     r.add_argument("--radius", "-r", type=float, default=config.DEFAULT_RADIUS_MILES,
                    help="Search radius in miles (default 30)")
@@ -79,11 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
                         "and call. Searches never do this on their own")
     ms.add_argument("--apply", action="store_true", help="Merge the listed groups")
 
-    far = sub.add_parser("out-of-area", help="List the saved leads far outside Arco's area (from a "
+    far = sub.add_parser("out-of-area", help="List the saved leads far outside AARCO's area (from a "
                          "search around the wrong place); --remove takes them out of the list, "
                          "--restore puts them back. Leads marked Yes / No or called are never removed")
     far.add_argument("--miles", type=float, default=None,
-                     help="Farther than this from Arco's shop (default: twice Arco's area, "
+                     help="Farther than this from AARCO's shop (default: twice AARCO's area, "
                           f"{2 * config.SERVICE_AREA_MILES:g} miles)")
     act = far.add_mutually_exclusive_group()
     act.add_argument("--remove", action="store_true",
@@ -140,10 +140,10 @@ def cmd_run(args: argparse.Namespace) -> int:
             print(f"Details: {getattr(exc, 'detail', '')}", file=sys.stderr)
         return 2
 
-    away = miles_from_arco(*result.center)
+    away = miles_from_aarco(*result.center)
     if away > config.SERVICE_AREA_MILES:
-        print(f"Warning: {result.location_label} is {away:,.0f} miles from Arco's shop, outside "
-              f"Arco's area (about {config.SERVICE_AREA_MILES:g} miles around it).", file=sys.stderr)
+        print(f"Warning: {result.location_label} is {away:,.0f} miles from AARCO's shop, outside "
+              f"AARCO's area (about {config.SERVICE_AREA_MILES:g} miles around it).", file=sys.stderr)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     if out.suffix.lower() == ".csv":
@@ -195,11 +195,11 @@ def cmd_out_of_area(args: argparse.Namespace) -> int:
         miles = cleanup.DEFAULT_MILES if args.miles is None else args.miles
         leads = cleanup.far_leads(miles)
         if not leads:
-            print(f"No saved lead is farther than {miles:g} miles from Arco's shop.")
+            print(f"No saved lead is farther than {miles:g} miles from AARCO's shop.")
             return 0
         kept = sum(f.kept for f in leads)
         print(f"{len(leads):,} saved lead{'' if len(leads) == 1 else 's'} farther than {miles:g} miles "
-              f"from Arco's shop ({kept:,} marked or called, never removed):")
+              f"from AARCO's shop ({kept:,} marked or called, never removed):")
         print("\n".join(cleanup.summary(leads)))
         if not args.remove:
             print("\nNothing was changed. Add --remove to take them out of the saved list "

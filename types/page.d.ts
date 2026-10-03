@@ -31,7 +31,7 @@ interface Lead {
   tier_label: string;
   lead_type: string;
   flags: string[];
-  /** False for competitors and Arco's own listing: flagged, never asked Yes / No. */
+  /** False for competitors and AARCO's own listing: flagged, never asked Yes / No. */
   prospect: boolean;
   closed: boolean;
   category: string;
@@ -233,7 +233,7 @@ interface Job {
   saved: boolean;
 }
 
-/** GET /place: where the search would run, and how far that is from Arco's shop. */
+/** GET /place: where the search would run, and how far that is from AARCO's shop. */
 interface Place { label: string; miles: number; area_miles: number; outside: boolean; confirm: string }
 
 /** A tier's row on the Stats page (stats.py summarize). */

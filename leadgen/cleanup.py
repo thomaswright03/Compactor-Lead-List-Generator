@@ -1,10 +1,10 @@
-"""Taking saved leads far outside Arco's area out of the list, only on request.
+"""Taking saved leads far outside AARCO's area out of the list, only on request.
 
 A search around the wrong place (a typo, or a same-named town in another state)
 used to save its businesses for good. Searches now confirm a far place first
 (web/finding.py), but leads saved before that stay. The owner decides what
 happens to them: `python -m leadgen out-of-area` lists the saved leads farther
-than --miles from Arco's shop, and only with --remove takes them out of the list.
+than --miles from AARCO's shop, and only with --remove takes them out of the list.
 
 Nothing is lost: a removed lead's row is kept as it was in the removed_leads
 table, and `--restore` puts every removed lead back. A lead someone marked Yes /
@@ -21,7 +21,7 @@ from . import config, store
 from .geo import haversine_miles
 from .places import tidy_town
 
-# The default distance: twice Arco's area, so leads from a confirmed search just
+# The default distance: twice AARCO's area, so leads from a confirmed search just
 # outside the area (and its radius) are not listed.
 DEFAULT_MILES = 2 * config.SERVICE_AREA_MILES
 
@@ -45,7 +45,7 @@ def _worked_on(db: store.Db) -> set[str]:
 
 
 def far_leads(miles: float = DEFAULT_MILES) -> list[FarLead]:
-    """The saved leads farther than `miles` from Arco's shop, farthest first."""
+    """The saved leads farther than `miles` from AARCO's shop, farthest first."""
     with store.connect() as db:
         rows = db.all("SELECT uid, lead FROM leads")
         worked = _worked_on(db)

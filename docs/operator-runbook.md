@@ -213,7 +213,7 @@ computer. If the Stats page shows tier A's Yes share not above tier C's, ask for
 weights to be looked at.
 
 Write each run down here (the Stats page's tier table gives the shares), so it is
-clear whether the ranking works for Arco's market. The first run needs about 50
+clear whether the ranking works for AARCO's market. The first run needs about 50
 businesses marked Yes or No on the live site.
 
 | Date | Marked Yes / No | Tier A Yes share | Tier C Yes share | Weights changed? |
@@ -283,7 +283,7 @@ So that nobody has to watch the Logs tab, every failed or incomplete search and
 every error the site logs is also recorded in the database (the `problems`
 table; the Find leads page lists the last 7 days under the search history) and,
 when `LEADGEN_ALERT_WEBHOOK` is set, sent as a one-line message such as
-"Arco Compactor Lead Finder: Today's search failed: Couldn't reach the map data
+"AARCO Compactor Lead Finder: Today's search failed: Couldn't reach the map data
 service (OpenStreetMap), so no leads were found. (Sep 29, 2026, 5:48 PM, Utah time)".
 To set it up:
 
@@ -424,7 +424,7 @@ Yelp's terms allow keeping its data for 24 hours (and Google's for 30 days);
 after a set time instead, keeping the business's id so its mark comes back.
 
 **Leads from a search around the wrong place.** Since 2026-10-02 a search only
-starts around a place more than 30 miles from Arco's shop (`SERVICE_AREA_MILES` in
+starts around a place more than 30 miles from AARCO's shop (`SERVICE_AREA_MILES` in
 `leadgen/config.py`) after a second, explicit confirmation that names the place and
 its distance, and a bare town name ("Murray") means the Utah one. Leads saved by an
 earlier mistaken search (e.g. a search for "x" that ran around San Francisco) stay
@@ -432,7 +432,7 @@ in the list until the owner decides; searches and the site never remove leads. W
 `DATABASE_URL` set (Render > the service > **Shell**):
 
 ```bash
-python -m leadgen out-of-area                 # list leads more than 60 miles from Arco (changes nothing)
+python -m leadgen out-of-area                 # list leads more than 60 miles from AARCO (changes nothing)
 python -m leadgen out-of-area --miles 100     # another distance
 python -m leadgen out-of-area --remove        # take them out of the saved list
 python -m leadgen out-of-area --restore       # put every removed lead back

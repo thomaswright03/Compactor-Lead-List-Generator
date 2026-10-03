@@ -14,11 +14,12 @@ search cut off by a server restart saves what it had found and gives the day bac
 
 import datetime as dt
 import json
+import re
 import time
 import uuid
 from typing import Any
 
-from . import localtime, store
+from . import config, localtime, store
 from .localtime import date_time_text
 
 
@@ -135,9 +136,18 @@ def _record(row: store.Row | None) -> Record | None:
 FILL_GRACE_SECONDS = 10 * 60
 
 
+# The place label of AARCO's shop in the records of searches run before the owner
+# corrected the company's name ("Arco Compactor, 876 Fortune Rd ...").
+_OLD_NAME = re.compile(r"^Arco Compactor\b")
+
+
 def _as_record(row: store.Row) -> Record:
     day, at, info = row
     record = {"day": day, "at": at, "when": date_time_text(at), **json.loads(info)}
+    for key in ("place", "found_near"):
+        # Shown (and compared, earlier_search) with the name it has now; the record keeps its text.
+        if isinstance(record.get(key), str):
+            record[key] = _OLD_NAME.sub(config.OWN_COMPANY, record[key])
     fill = record.get("fill")
     if isinstance(fill, dict) and fill.get("until"):
         fill["until_text"] = localtime.clock_text(fill["until"])

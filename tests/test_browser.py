@@ -256,8 +256,8 @@ def test_find_leads_asks_before_using_the_days_search(page, monkeypatch):
     expect(dialog).to_be_visible()
     text = dialog.inner_text()
     assert "This uses today's only search" in text and "12 miles" in text
-    # The place the search will actually run around, and how far it is from Arco's shop.
-    assert "Arco Compactor, 876 Fortune Rd" in text and "0.0 miles" in text
+    # The place the search will actually run around, and how far it is from AARCO's shop.
+    assert "AARCO Compactor, 876 Fortune Rd" in text and "0.0 miles" in text
     assert page.locator("#confirm-far").is_hidden()
     page.click("#confirm-back")
     assert not dialog.is_visible() and not sent
@@ -299,13 +299,13 @@ def test_typed_call_notes_survive_closing_the_box(page):
 
 
 def test_titles_hints_and_empty_pages(page):
-    assert page.title() == "Leads · Arco Compactor Lead Finder"
+    assert page.title() == "Leads · AARCO Compactor Lead Finder"
     assert "whatever its answer" in page.inner_text("#call-hint")
     page.click("nav a[data-page=calls]")
-    page.wait_for_function("document.title === 'Calls · Arco Compactor Lead Finder'")
+    page.wait_for_function("document.title === 'Calls · AARCO Compactor Lead Finder'")
     expect(page.locator("#calls-wrap")).to_contain_text("Log a call with Just called")
     page.click("nav a[data-page=stats]")
-    page.wait_for_function("document.title === 'Stats · Arco Compactor Lead Finder'")
+    page.wait_for_function("document.title === 'Stats · AARCO Compactor Lead Finder'")
     page.wait_for_selector("#stats-empty:not([hidden])")
     assert "Mark businesses Yes or No on the Leads page" in page.inner_text("#stats-empty")
     page.click("#stats-empty a")
@@ -410,7 +410,7 @@ def test_find_leads_says_why_a_search_cannot_start(page):
     # Editing the form clears it.
     page.fill("input[name=keywords]", "baler")
     expect(page.locator("#err-keywords")).to_have_count(0)
-    # An empty "Search around" is never quietly replaced by Arco's address.
+    # An empty "Search around" is never quietly replaced by AARCO's address.
     page.fill("input[name=location]", "")
     page.click("#go")
     assert not page.locator("#confirm-dlg").is_visible()
@@ -782,7 +782,7 @@ def test_no_competitors_names_them_and_has_phone_filters(browser, site):
     tab.uncheck("#has-phone")
     tab.get_by_role("button", name="Competitors (0)").click()
     expect(tab.locator("#leads-wrap .empty")).to_contain_text(
-        "No Pro Baler, Action Compaction or Arco Compactor listings found in the saved leads yet.")
+        "No Pro Baler, Action Compaction or AARCO Compactor listings found in the saved leads yet.")
     context.close()
 
 
@@ -1418,7 +1418,7 @@ def test_a_mark_that_was_not_saved_stays_on_the_row_with_try_again(page):
     assert page.evaluate("document.activeElement.dataset.ctl") == "yes"
 
 
-def test_a_place_outside_arcos_area_is_named_and_needs_a_second_yes(page, monkeypatch):
+def test_a_place_outside_aarcos_area_is_named_and_needs_a_second_yes(page, monkeypatch):
     from leadgen import pipeline
     from leadgen.pipeline import RunResult
     monkeypatch.setattr(pipeline, "geocode", lambda location, key: (45.5152, -122.6784, "Portland, Oregon"))
@@ -1432,11 +1432,11 @@ def test_a_place_outside_arcos_area_is_named_and_needs_a_second_yes(page, monkey
     confirm = page.locator("#confirm-dlg")
     expect(confirm).to_be_visible()
     assert "Portland, Oregon" in confirm.inner_text() and "633 miles" in confirm.inner_text()
-    expect(page.locator("#confirm-far")).to_contain_text("outside Arco's area")
+    expect(page.locator("#confirm-far")).to_contain_text("outside AARCO's area")
     page.click("#confirm-go")                          # "Next": the second question
     far = page.locator("#far-dlg")
     expect(far).to_be_visible()
-    assert "“Portland, Oregon” is 633 miles from Arco's shop" in far.inner_text()
+    assert "“Portland, Oregon” is 633 miles from AARCO's shop" in far.inner_text()
     assert page.evaluate("document.activeElement.id") == "far-back"   # the safe choice
     page.click("#far-back")
     assert not far.is_visible() and not sent
@@ -1448,7 +1448,7 @@ def test_a_place_outside_arcos_area_is_named_and_needs_a_second_yes(page, monkey
     page.wait_for_selector("#done-card:not([hidden])")
     assert len(sent) == 1
     where = page.locator("#history td.h-where").first
-    expect(where).to_contain_text("Searched around Portland, Oregon · 633 miles from Arco")
+    expect(where).to_contain_text("Searched around Portland, Oregon · 633 miles from AARCO")
 
 
 def test_the_place_found_is_named_before_a_search_in_the_area(page, monkeypatch):
@@ -1459,7 +1459,7 @@ def test_the_place_found_is_named_before_a_search_in_the_area(page, monkeypatch)
     page.fill("input[name=location]", "Murray")
     page.click("#go")
     expect(page.locator("#confirm-list")).to_contain_text("Murray, UT")
-    assert re.search(r"From Arco's shop\s+5\.\d miles", page.inner_text("#confirm-list"))
+    assert re.search(r"From AARCO's shop\s+5\.\d miles", page.inner_text("#confirm-list"))
     assert page.locator("#confirm-far").is_hidden() and page.inner_text("#confirm-go") == "Start search"
     page.click("#confirm-back")
     page.fill("input[name=location]", "Nowhereville zz")
@@ -1732,7 +1732,7 @@ def test_the_find_page_and_the_history_agree_after_a_restart_that_saved_nothing(
 def _history_with_searches():
     from leadgen import daily
     day, _ = daily.claim({"location": "876 Fortune Rd, Salt Lake City, UT 84104", "radius": 30,
-                          "place": "Arco Compactor, 876 Fortune Rd, Salt Lake City, UT 84104"})
+                          "place": "AARCO Compactor, 876 Fortune Rd, Salt Lake City, UT 84104"})
     daily.finish(day, {"leads": 1038, "new": 1038, "details": {"leads kept": 1038}})
 
 
@@ -1757,7 +1757,7 @@ def test_search_history_headings_and_details_are_whole_words(browser, site, page
     context.close()
 
 
-# A 30-mile search around Arco whose map data answered only partly (the numbers of a real one).
+# A 30-mile search around AARCO whose map data answered only partly (the numbers of a real one).
 REAL_DETAILS = {"osm raw results": 795, "osm areas searched": "about 2 of 9 areas",
                 "osm areas asked again": "7 (some never answered)",
                 "osm areas filled in later": "559 businesses (554 new), 6 areas still missing "

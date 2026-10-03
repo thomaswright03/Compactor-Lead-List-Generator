@@ -32,7 +32,7 @@ from . import config, places, store
 from .dedupe import Site, SiteIndex, duplicate_groups, is_duplicate, merge, same_site, site_of, snapshot
 from .geo import haversine_miles
 from .models import Lead
-from .scoring import score_lead
+from .scoring import OWN_FLAG, OWN_FLAG_START, score_lead
 
 _FIELDS = {f.name for f in fields(Lead)}
 CLOSED = "CLOSED_PERMANENTLY"
@@ -415,12 +415,16 @@ _parsed_lock = threading.Lock()
 
 
 def _ready(row: _Row) -> Lead | None:
-    """A saved row's lead as the pages show it (closed flag, uid, miles from Arco)."""
+    """A saved row's lead as the pages show it (closed flag, uid, miles from AARCO)."""
     lead = row.lead
     if lead is None:
         return None
     if is_closed(lead) and CLOSED_FLAG not in lead.flags:
         lead.flags = [CLOSED_FLAG, *lead.flags]
+    if any(f.startswith(OWN_FLAG_START) and f != OWN_FLAG for f in lead.flags):
+        # Saved before the owner corrected the company's name ("Arco"): shown with the name
+        # it has now. Only what is shown changes; the saved row keeps its text.
+        lead.flags = [OWN_FLAG if f.startswith(OWN_FLAG_START) else f for f in lead.flags]
     lead.uid = row.uid
     lead.distance_miles = round(haversine_miles(*config.DEFAULT_CENTER, lead.lat, lead.lon), 2)
     return lead
@@ -456,7 +460,7 @@ def _shallow(lead: Lead) -> Lead:
 
 def load(uids: Iterable[str] | None = None) -> list[Lead]:
     """All saved leads (best first), or with uids just those, with miles from
-    Arco's shop. Their marks and calls are added by marks.apply / calls.apply.
+    AARCO's shop. Their marks and calls are added by marks.apply / calls.apply.
     Businesses closed for good are included, flagged CLOSED_FLAG.
 
     Raises store.Unavailable without a database, or a database error when the

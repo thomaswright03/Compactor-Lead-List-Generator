@@ -81,7 +81,7 @@ SCHEMA = [
     """CREATE TABLE IF NOT EXISTS merged_leads (
         uid TEXT PRIMARY KEY, into_uid TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
         row TEXT NOT NULL)""",
-    # Saved leads taken out of the list on request because they are far outside Arco's
+    # Saved leads taken out of the list on request because they are far outside AARCO's
     # area (cleanup.py, `python -m leadgen out-of-area --remove`): the row as it was, so
     # `--restore` can put it back. Searches never remove leads.
     """CREATE TABLE IF NOT EXISTS removed_leads (

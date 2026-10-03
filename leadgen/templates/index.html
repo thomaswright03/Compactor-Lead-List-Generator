@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arco Compactor Lead Finder</title>
+<title>AARCO Compactor Lead Finder</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 {% include "_theme.html" %}
 <link rel="stylesheet" href="/static/app.css?v={{ asset_version }}">
@@ -12,7 +12,7 @@
 <button type="button" class="skip" id="skip">Skip to main content</button>
 <div class="app">
   <aside class="side">
-    <div class="brand"><strong>Arco Compactor</strong><span>Lead Finder</span></div>
+    <div class="brand"><strong>AARCO Compactor</strong><span>Lead Finder</span></div>
     <button type="button" class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="side-bottom">Menu</button>
     <nav aria-label="Pages">
       <a href="#find" data-page="find">Find leads</a>
@@ -52,7 +52,7 @@
         <div class="form-grid">
           <label>Search around
             <input name="location" value="{{ defaults.location }}" autocomplete="off" maxlength="200" required>
-            <span class="hint">A ZIP code, city or street address. A town name on its own means the Utah one. Before the search starts you'll see the place found and how far it is from Arco's shop.</span></label>
+            <span class="hint">A ZIP code, city or street address. A town name on its own means the Utah one. Before the search starts you'll see the place found and how far it is from AARCO's shop.</span></label>
           <label>How far (miles)
             <input name="radius" type="number" min="1" max="100" step="1" value="{{ defaults.radius|int }}">
             <span class="hint">Businesses farther away are left out.</span></label>
@@ -190,7 +190,7 @@
           </div>
         </div>
         <div id="leads-note"></div>
-        <p class="hint-line" id="competitor-hint" hidden>Competitors and Arco's own listing are
+        <p class="hint-line" id="competitor-hint" hidden>Competitors and AARCO's own listing are
           flagged here so you can see who else works the area. They aren't prospects, so they aren't
           asked Yes / No and aren't counted in Stats.</p>
         <p class="hint-line" id="closed-hint" hidden>A later search reported these businesses
@@ -301,10 +301,10 @@
   </form>
 </dialog>
 
-<!-- A place outside Arco's area needs a second, explicit yes (web/finding.py search). -->
+<!-- A place outside AARCO's area needs a second, explicit yes (web/finding.py search). -->
 <dialog id="far-dlg" aria-labelledby="far-title" aria-describedby="far-why">
   <form class="dlg" method="dialog" id="far-form">
-    <h2 id="far-title">Search outside Arco's area?</h2>
+    <h2 id="far-title">Search outside AARCO's area?</h2>
     <p id="far-why"></p>
     <p><strong>This uses today's only search</strong>, and the businesses it finds stay in your saved leads.
       If this isn't the place you meant, go back and type a ZIP code or the town with its state (for example, Murray, UT).</p>
