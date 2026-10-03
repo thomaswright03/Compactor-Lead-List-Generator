@@ -16,7 +16,20 @@ and Arco Compactor's own listing is flagged too.
 | Looking after the live site | [Operator runbook](docs/operator-runbook.md): **emergency switches** (pause searching), deploying, rollback, alerts, settings, the database |
 | Changing the code | [Developer overview](docs/developer-overview.md): a diagram of search → sources → merge/score → saved list → pages, tests and checks, the command line, and every page's behaviour in detail |
 
-**Emergency stop:** on the site, **Find leads** → **For the site administrator**
+## Common actions
+
+| To | Do this | Details |
+| --- | --- | --- |
+| **Stop all searching right now** | **Find leads** → **For the site administrator** → **Unlock** → **Pause searching** (or Render → **Environment** → `LEADGEN_SEARCH_PAUSED` = `1`) | [Runbook: emergency switches](docs/operator-runbook.md#emergency-switches-stop-searches-or-paid-calls) |
+| Run the day's search | **Find leads** → check the place and miles → **Find leads** → **Start search** | [Sales guide](docs/sales-guide.md#run-the-days-search) |
+| Mark a business, log a call | **Leads** → **Yes** / **No**; **Just called** → summary and result → **Save** | [Sales guide](docs/sales-guide.md#mark-yes-or-no) |
+| Save a verified phone or contact | **Leads** → **Add verified phone or contact** under the business's phone | [Sales guide](docs/sales-guide.md#save-a-verified-phone-or-contact) |
+| Download the list | **Leads** → **Download Excel** / **Download CSV** | [Sales guide](docs/sales-guide.md#download-the-list) |
+| Undo a bad deploy | Render → the service → **Events** → last good deploy → **Rollback** | [Runbook](docs/operator-runbook.md#logs-and-rolling-back-a-bad-deploy) |
+| Back up or restore the data | `python -m leadgen backup`; `python -m leadgen restore <copy>` lists, `--apply` adds (never overwrites) | [Runbook](docs/operator-runbook.md#backups-and-restoring) |
+| Run it on your computer | Python 3.11 or newer, then the [quick start](#quick-start) | [Developer overview](docs/developer-overview.md) |
+
+**Emergency stop, in full:** on the site, **Find leads** → **For the site administrator**
 (at the bottom, closed until opened, then unlocked with the administrator password) →
 **Pause searching** → confirm **Pause searching** (or **Stop using Google** / **Stop
 using Yelp**). It works on the next
@@ -153,6 +166,9 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 
 ## Quick start
 
+Needs **Python 3.11 or newer** (`python3 --version`; the code uses `datetime.UTC`,
+which older versions lack).
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
@@ -215,7 +231,7 @@ first and reaches `main` (by a pull request, or `git push origin <branch>:main`)
 only once its checks are green. The
 [runbook](docs/operator-runbook.md#deploying) has the same steps in full, the
 classic-rule alternative, how to check the rule is on and its current status (not
-set yet on 2026-10-02).
+set yet on 2026-10-03).
 
 **Still open for the owner** (each a few minutes, with exact steps and a check in the
 runbook's [Owner actions still open](docs/operator-runbook.md#owner-actions-still-open)):

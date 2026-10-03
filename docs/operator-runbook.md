@@ -4,8 +4,22 @@ For whoever looks after the live site (Render + a Postgres database). Sales
 staff want the [sales guide](sales-guide.md); developers the
 [developer overview](developer-overview.md).
 
-**In an emergency** (unexpected charges, bad data): set `LEADGEN_SEARCH_PAUSED=1`
-in Render → the service → **Environment** → **Save Changes**. Details just below.
+## Common actions
+
+| To | Do this | Details |
+| --- | --- | --- |
+| **Stop all searching right now** | Site: **Find leads** → **For the site administrator** (bottom) → **Unlock** → **Pause searching** → confirm. Site won't load: Render → the service → **Environment** → `LEADGEN_SEARCH_PAUSED` = `1` → **Save Changes** | [Emergency switches](#emergency-switches-stop-searches-or-paid-calls) |
+| Stop Google or Yelp charges only | Same place: **Stop using Google** / **Stop using Yelp** (or `LEADGEN_GOOGLE_OFF` / `LEADGEN_YELP_OFF` = `1` in Render) | [Emergency switches](#emergency-switches-stop-searches-or-paid-calls) |
+| Undo a bad deploy | Render → the service → **Events** → the last good deploy → **Rollback** | [Logs and rollback](#logs-and-rolling-back-a-bad-deploy) |
+| See what went wrong | **For the site administrator** lists the last 7 days' problems; Render → **Logs** has the detail | [Logs](#logs-and-rolling-back-a-bad-deploy) · [Alerts](#problems-the-webhook) |
+| Make a backup now | `python -m leadgen backup` with `DATABASE_URL` set, or GitHub → **Actions** → **Nightly backup** → **Run workflow** | [Backups](#backups-and-restoring) |
+| Get lost data back | Neon → **Branches** → **New branch** from past data (last 6 hours), or `python -m leadgen restore <copy>` (lists what it would add), then the same with `--apply` (adds only, never overwrites) | [Restoring](#restoring) |
+| Change the login password | Render → **Environment** → `APP_PASSWORD` → **Save Changes** (everyone logs in again) | [Login](#login-and-the-free-plan) |
+| Name the login page's help contact | Render → **Environment** → `LEADGEN_SUPPORT_CONTACT` = a name with a phone or email | [Login](#login-and-the-free-plan) |
+| Merge a business saved as two rows | `python -m leadgen merge-sites` (lists, changes nothing), then `--apply` | [The database](#the-database-saved-leads-marks-calls-the-yelp-count) |
+| Send the monthly scoring check | **For the site administrator** → **Scoring check** → download, send to the developer | [Monthly](#monthly-the-scoring-check) |
+
+All sections:
 
 - [Emergency switches](#emergency-switches-stop-searches-or-paid-calls)
 - [Deploying](#deploying) · [Logs and rollback](#logs-and-rolling-back-a-bad-deploy)
@@ -22,12 +36,12 @@ the code can't take them, and nothing else is waiting on them. Each takes a few 
 one is done, change its **Open** to **Done (the date)** here and in the section it
 links to.
 
-1. **Protect `main`** (GitHub; **Open**, checked 2026-10-02). So a commit with a
+1. **Protect `main`** (GitHub; **Open**, checked 2026-10-03). So a commit with a
    failing check can't land on `main`. Steps: [Deploying → Protect `main`](#deploying)
    (a ruleset that requires the checks `lint`, `test (sqlite)` and `test (postgres)`).
    *Check:* `gh api repos/thomaswright03/Compactor-Lead-List-Generator/branches/main --jq .protected`
    prints `true` (or the repository's **Branches** page shows `main` as protected).
-2. **Name a real contact on the login page** (Render; **Open**, checked 2026-10-02).
+2. **Name a real contact on the login page** (Render; **Open**, checked 2026-10-03).
    So a salesperson who forgot the password, or is locked out, knows whom to call. In
    Render open the **compactor-lead-finder** service → **Environment** → **Add
    Environment Variable**: key `LEADGEN_SUPPORT_CONTACT`, value a name with a phone
@@ -39,7 +53,7 @@ links to.
    prints the contact's `tel:` or `mailto:` link (nothing printed: not set yet). More
    in [Login and the free plan](#login-and-the-free-plan).
 3. **Delete the old branch `wip-yelp-cap-and-baler-marks`** (GitHub; **Open**, checked
-   2026-10-02). Everything on it reached `main` long ago; it only confuses whoever reads
+   2026-10-03). Everything on it reached `main` long ago; it only confuses whoever reads
    the repository next. Steps, with an optional archive tag that keeps its commit:
    [Old branches](#the-size-of-a-clone). *Check:* `git ls-remote --heads origin` lists
    only `refs/heads/main`.
@@ -176,7 +190,7 @@ the **Merge** button greyed out. Render's deploy rule (above) stays as it is.
 `main`), and `https://github.com/thomaswright03/Compactor-Lead-List-Generator/branches`
 shows `main` with a shield or "protected" mark.
 
-**Status (2026-10-02): not set yet** (GitHub still reports `main` as not
+**Status (2026-10-03): not set yet** (GitHub still reports `main` as not
 protected). Whoever sets it should change this line to say so, with the date.
 Until then a red commit can land on `main`, but Render won't deploy it.
 
@@ -340,7 +354,7 @@ it only if the owner agrees to rewrite the history.
 and the Postgres database. That work reached `main` as commit 54de1e5 ("Save leads
 and baler marks permanently; cap the website at 50 Yelp calls a day") and has been
 built on ever since, so nothing on the branch is missing from `main` and nothing
-deploys from it. Checked 2026-10-02; it is safe to delete. To delete it (the owner,
+deploys from it. Checked 2026-10-03; it is safe to delete. To delete it (the owner,
 once): GitHub → the repository → **Branches** → the bin icon next to it, or
 
 ```bash
@@ -543,7 +557,7 @@ Variable**, then **Save Changes**): the login page's "Need access or forgot the
 password?" line names them, and a salesperson locked out first thing in the morning
 can call or email straight from it. Without it the line says "Ask the person who
 gave you your login, or Wright AI Solutions." The contact details belong in Render
-only, never in this repository. **Status (2026-10-02): not set on the live site**
+only, never in this repository. **Status (2026-10-03): not set on the live site**
 (the owner, Thomas, chooses the contact and sets it); change this line when it is.
 Until then every start of the site logs "LEADGEN_SUPPORT_CONTACT is not set". To check
 it from anywhere: `curl -s https://compactor-lead-finder.onrender.com/login | grep -oE
