@@ -55,9 +55,9 @@ DETAIL_LABELS = {
     "google raw results": "Businesses from Google",
     "yelp raw results": "Businesses from Yelp",
     "osm raw results": "Businesses from the free map data",
-    "osm areas searched": "Free map data: areas that answered",
-    "osm areas asked again": "Free map data: areas asked again automatically",
-    "osm areas filled in later": "Free map data: filled in later, in the background",
+    # How much of the area the free map data covered: one line, in the words of the Find
+    # page's status (fillin.coverage), never the count of parts asked again.
+    "osm areas searched": "Free map data: area covered",
     "results in radius": "Listings within the radius",
     "duplicates merged": "Duplicate listings merged",
     "after dedupe": "Businesses after merging duplicates",
@@ -77,6 +77,9 @@ DETAIL_LABELS = {
 }
 # Left-out lines that are only shown when something was left out that way.
 _ONLY_IF_ANY = ("closed", "not matching keywords", "over limit", "duplicates merged")
+# What a record holds that the page never shows: internal counts (how many parts of the
+# map data were asked again), and what the coverage line already says.
+_NOT_SHOWN = ("osm areas asked again", "osm areas filled in later")
 
 
 class FormError(ValueError):
@@ -120,10 +123,14 @@ def plain_warning(text: str) -> str:
     return text
 
 
-def plain_details(details: dict[str, object] | None) -> list[list[object]]:
+def plain_details(details: dict[str, object] | None, coverage: dict[str, Any] | None = None) -> list[list[object]]:
     """A search's numbers as [label, value] pairs in funnel order (older records keep
-    their names). A list, because JSON objects lose their order on the way to the page."""
-    details = dict(details or {})
+    their names), with how much of the area it covered as one line (coverage: the
+    search's fillin.coverage). A list, because JSON objects lose their order on the way
+    to the page."""
+    details = {k: v for k, v in (details or {}).items() if k not in _NOT_SHOWN}
+    if coverage:
+        details["osm areas searched"] = coverage["short"]
     minimum = details.pop("min score", None)
     order = list(DETAIL_LABELS)
     out = []
@@ -143,8 +150,8 @@ def plain_details(details: dict[str, object] | None) -> list[list[object]]:
 # How each paid source names one of its calls, on the page as in the search's details.
 _CALLS = {"google": ("Google", "lookups"), "yelp": ("Yelp", "calls")}
 # What the map step is doing besides counting its areas (progress.Step's note).
-_MAP_NOTES = {"split": " (some areas are being asked again in smaller parts)",
-              "retry": " (asking again for the areas the busy map servers missed)"}
+_MAP_NOTES = {"split": " (some parts are being asked again in smaller pieces)",
+              "retry": " (asking again for the parts the busy servers missed)"}
 
 
 def plain_progress(msg: str) -> str:
@@ -161,7 +168,7 @@ def plain_progress(msg: str) -> str:
             return f"Searching {name}"
         return f"Searching {name} for {msg.note} ({msg.done:,} of up to {msg.total:,} {calls})"
     if msg.step == MAP:
-        count = (f": {msg.done:,} of {msg.total:,} areas done" if msg.total > 1 else "")
+        count = (f": {msg.done:,} of {msg.total:,} parts of the area done" if msg.total > 1 else "")
         if msg.note == "stopped":
             return ("Stopping: the administrator paused searching. Keeping what was already "
                     f"found{f' ({count[2:]})' if count else ''}…")
@@ -508,49 +515,52 @@ def _incomplete(day: str, result: RunResult, job: Job, warnings: list[str],
     found businesses: what was found is saved and the day is used up, like a complete
     search (one search a Utah day, the owner's rule: no same-day re-run). Map areas the
     free map servers missed are then filled in in the background (fillin.py), within
-    this same search."""
-    names = _source_names(result.failed_sources)
+    this same search.
+
+    How much of the area the free map data covered is said once, by the Find page's
+    status (fillin.coverage, from the record's numbers): the notes and the summary
+    beside the result only name a source that couldn't be reached at all."""
     paid = [s for s in result.failed_sources if s in ("google", "yelp")]
     whole = [s for s in result.failed_sources if s not in result.partial_sources]
-    parts = [f"Couldn't reach {_source_names(whole)}, so its businesses are missing"] if whole else []
-    coverage = result.stats.get("osm areas searched")
-    if coverage and result.osm_missing:
-        # Which towns the areas that didn't answer hold, nearest the centre first.
-        around = fillin.where(result.osm_missing, result, params)
-        coverage = f"{coverage} searched; not yet: {around}" if around else f"{coverage} searched"
-    elif coverage:
-        coverage = f"{coverage} searched"
-    if result.partial_sources:
-        parts.append(f"{_source_names(result.partial_sources)} answered for only part of the "
-                     f"area{f' ({coverage})' if coverage else ''}, so some of its "
-                     "businesses are missing")
-    reason = (" and ".join(parts)[:1].upper() + " and ".join(parts)[1:]
-              + f" from this search; the {len(result.leads):,} businesses found were "
-              + ("saved." if job.get("saved") else "kept."))
+    n = len(result.leads)
+    found = (f"the {n:,} business{'es' if n != 1 else ''} found {'were' if n != 1 else 'was'} "
+             + ("saved." if job.get("saved") else "kept."))
     advice = (f" If it keeps happening, ask whoever looks after the site to check the "
               f"{_source_names(paid)} key." if paid else "")
-    how = ("answered for only part of the area" if not whole
-           else "couldn't be reached" if not result.partial_sources else "didn't fully answer")
-    missing = (f"Some businesses are missing: {names} {how}"
-               + (f" ({coverage})." if coverage and not whole else "."))
-    filling = fillin.ON and fillin.wanted(result)
-    warnings.append(f"{reason} Today's search is used up all the same (one search a day); the next search "
-                    f"can run tomorrow, from midnight Utah time.{advice}")
-    job["note"] = f"{missing} Today's search is now used up; the next one can run tomorrow."
-    if filling:
-        warnings.append(fillin.NOTE)
-        job["note"] = f"{missing} {fillin.NOTE}"
+    # The record's reason, for the administrator's problem list and the webhook (the
+    # coverage words name the towns still missing, nearest the centre first).
+    parts = [f"Couldn't reach {_source_names(whole)}, so its businesses are missing"] if whole else []
+    coverage = result.stats.get("osm areas searched")
+    if result.partial_sources:
+        around = fillin.where(result.osm_missing, result, params) if coverage and result.osm_missing else ""
+        said = f"{coverage} searched; not yet: {around}" if around else f"{coverage} searched" if coverage else ""
+        parts.append(f"{_source_names(result.partial_sources)} answered for only part of the "
+                     f"area{f' ({said})' if said else ''}, so some of its businesses are missing")
+    reason = _cap(" and ".join(parts)) + f" from this search; {found}"
+    job["note"] = None
+    if whole:
+        # One note for a source that couldn't be reached (the search's own plain one is
+        # replaced by this, which also says what was saved and that the day is used up).
+        warnings[:] = [w for w in warnings if not _UNREACHED.match(w)]
+        missing = f"Couldn't reach {_source_names(whole)}, so its businesses are missing from this search"
+        warnings.append(f"{missing}; {found} Today's search is used up all the same (one search a day); the next "
+                        f"search can run tomorrow, from midnight Utah time.{advice}")
+        job["note"] = f"{missing}. Today's search is now used up; the next one can run tomorrow."
     _record(day, result, job, warnings, {"partial": True, "reason": reason})
-    if filling and not fillin.start(day, params, result):
-        job["note"] = f"{missing} Today's search is now used up; the next one can run tomorrow."
-        warnings.remove(fillin.NOTE)
-        _record(day, result, job, warnings)
-        filling = False
+    filling = fillin.ON and fillin.wanted(result) and fillin.start(day, params, result)
     if filling and not whole:
         # Only map areas are missing, and they are being filled in: fillin.py reports
         # a problem if some never answer.
         return
     alerts.report("search", f"Today's search was incomplete: {reason}{advice}")
+
+
+# The search's own note about a source it couldn't reach (pipeline._check_found).
+_UNREACHED = re.compile(r"^Couldn't reach .+ this time, so its businesses are missing from this search\.$")
+
+
+def _cap(text: str) -> str:
+    return text[:1].upper() + text[1:]
 
 
 def _source_names(sources: list[str]) -> str:
@@ -730,14 +740,15 @@ def searches() -> ResponseReturnValue:
     except Exception as exc:
         log.error("Loading the search history failed", exc_info=True)
         return jsonify({"error": db_message(exc)}), 503
-    # Once the missing map areas were asked again, every line names the same missing towns
-    # (fillin.settled: copies, so today's record, which is in both, is done once each).
-    if body.get("current"):
-        body["current"] = fillin.settled(body["current"])
-    body["searches"] = [fillin.settled(r) for r in body["searches"]]
-    for record in [body.get("current"), *body["searches"]]:
-        if record and record.get("details"):
-            record["details"] = plain_details(record["details"])
+    # How much of its area each search covered is said once, in the page's words
+    # (fillin.coverage): the Find page's status, and one line of its Details; the notes
+    # never repeat it, nor show internal counts. Copies, so today's record (in both
+    # "current" and "searches") is worded once each, and the stored records stay as they are.
+    paused = switches()["search_paused"]
+    for key in ("current", "filling"):
+        if body.get(key):
+            body[key] = _for_page(body[key], paused, earlier=key == "filling")
+    body["searches"] = [_for_page(r, paused) for r in body["searches"]]
     problems: dict[str, Any] | None = None           # only for an unlocked administrator
     unread = False
     if admin_open():
@@ -759,6 +770,19 @@ def searches() -> ResponseReturnValue:
     return jsonify({**body, "yelp": yelp_quota(), "running": running,
                     "paused": SEARCH_PAUSED if switches()["search_paused"] else None,
                     "switches": _switch_list(), "admin": admin_state()})
+
+
+def _for_page(record: dict[str, Any], paused: bool, earlier: bool = False) -> dict[str, Any]:
+    """A day's search as the history shows it (see searches)."""
+    record = dict(record)
+    details: dict[str, Any] = record["details"] if isinstance(record.get("details"), dict) else {}
+    record["coverage"] = fillin.coverage({**record, "details": details}, paused, earlier)
+    if details or record["coverage"]:
+        record["details"] = plain_details(details, record["coverage"])
+    record["warnings"] = fillin.plain_notes(record.get("warnings") or [])
+    if isinstance(record.get("reason"), str):
+        record["reason"] = fillin.plain_reason(record["reason"])
+    return record
 
 
 def _switch_list() -> dict[str, Any]:
@@ -805,7 +829,7 @@ def status(job_id: str) -> ResponseReturnValue:
         # Only what the page shows: the counts, not the leads (the Leads page loads those).
         res = job["result"]
         body.update(found=len(res.leads), new_leads=job.get("new_leads"),
-                    saved_count=job.get("saved_count"), warnings=list(res.warnings),
+                    saved_count=job.get("saved_count"), warnings=fillin.plain_notes(list(res.warnings)),
                     note=job.get("note"), stopped=job.get("stopped"),
                     location=res.location_label, yelp=yelp_quota(), saved=bool(job.get("saved")))
     return jsonify(body)

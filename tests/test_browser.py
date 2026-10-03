@@ -857,7 +857,7 @@ def test_search_history_is_stacked_cards_on_a_phone(browser, site, page):
     card = tab.locator("#history tbody").first
     text = card.inner_text()
     for part in ("Fortune Rd", "Radius", "30 mi", "Leads", "1,038", "Incomplete", "New",
-                 "about 8 of 9 areas", "didn't use up the day's search"):
+                 "about 8 of the 9 parts of the area", "didn't use up the day's search"):
         assert part in text, part
     fits = tab.evaluate("""() => {
         const out = (e) => { const r = e.getBoundingClientRect();
@@ -1322,6 +1322,25 @@ def test_the_administrators_section_says_when_it_cannot_read_the_saved_data(brow
         server.shutdown()
 
 
+# How the Find page says how much of the area a search covered: the coverage notices shown
+# (each visible notice box that speaks of it), the Details lines that do, every "N of M
+# parts" figure on the page, and any words a salesperson shouldn't meet.
+COVERAGE_SAID = """() => {
+    const shown = (e) => Boolean(e.offsetWidth || e.offsetHeight || e.getClientRects().length);
+    const about = /parts? of the|whole [0-9]+-mile area|of the area|covered|filling in|didn't come in/i;
+    const page = document.getElementById('page-find');
+    const notices = [...page.querySelectorAll('.warn, [role=status], .h-why')]
+        .filter((e) => shown(e) && about.test(e.textContent)).map((e) => e.textContent);
+    const details = [...page.querySelectorAll('dl.details > div')]
+        .filter((d) => shown(d) && about.test(d.textContent)).map((d) => d.textContent);
+    const text = page.innerText;
+    const figures = [...text.matchAll(/(\\d+) of (?:the )?(\\d+) parts/gi)].map((m) => m[1] + '/' + m[2]);
+    return { notices, details, figures,
+             banned: ['map areas', 'areas that answered', 'asked again automatically', 'asked again']
+                 .filter((w) => text.toLowerCase().includes(w)) };
+}"""
+
+
 @pytest.mark.parametrize("width", [1280, 390])
 def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, site, page, width):
     import time
@@ -1335,30 +1354,90 @@ def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, 
     context = _context(browser, viewport={"width": width, "height": 800})
     tab = context.new_page()
     tab.goto(site + "#find")
-    note = tab.locator("#fill-note")
-    # Which towns are still missing, so staff know the list isn't complete there yet.
-    expect(note).to_contain_text("Still filling in 4 areas of the free map data that didn't answer "
-                                 "(around Layton, West Point, Coalville and the area to the "
-                                 "north-west)")
+    note = tab.locator("#coverage-note")
+    # How much is covered, which towns are still filling in and until when, that calling
+    # can start now and that the rest appears on its own.
+    expect(note).to_contain_text("Covered so far: about 5 of the 9 parts of the 30-mile area. Still filling in, "
+                                 "in the background until about ")
+    expect(note).to_contain_text(": Layton, West Point, Coalville and the area to the north-west. The 512 "
+                                 "businesses already found are on the Leads page, ready to call now; new ones "
+                                 "from the rest of the area will appear there on their own.")
     expect(tab.locator("#history tbody").first).to_contain_text("Filling in")
     assert tab.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     daily.finish(day, {"leads": 530, "new": 530, "partial": False,
                        "fill": {**fill, "state": "complete", "left": 0, "found": 18, "new": 18}})
     tab.evaluate("loadSearches()")
-    expect(note).to_have_text("Complete: the map areas that didn't answer at first were filled "
-                              "in later. 18 more businesses were added (18 new).")
+    expect(note).to_have_text("Covered: the whole 30-mile area. The last parts came in later, in the background "
+                              "(18 more businesses, 18 new). Everything found is on the Leads page, ready to call.")
     first = tab.locator("#history tbody").first
     expect(first).to_contain_text("530")
     assert "Incomplete" not in first.inner_text() and "Filling in" not in first.inner_text()
-    # Stopped by Pause searching: the areas left weren't asked again (not "never answered").
+    # Stopped by Pause searching: the parts left weren't searched (not "never came in").
     daily.finish(day, {"fill": {**fill, "state": "stopped", "why": "paused", "left": 2, "found": 18, "new": 18,
                                 "where": "Coalville and the area to the north-west"}})
     tab.evaluate("loadSearches()")
-    expect(note).to_have_text("Filling in the missing map areas stopped because searching was paused, so 2 areas "
-                              "(around Coalville and the area to the north-west) were not asked again. 18 more "
-                              "businesses were added (18 new).")
-    assert "never answered" not in tab.inner_text("#history")
+    expect(note).to_have_text("Covered: about 7 of the 9 parts of the 30-mile area. Filling in stopped because "
+                              "searching was paused, so these weren't searched today: Coalville and the area to "
+                              "the north-west. The 530 businesses already found are on the Leads page, ready to "
+                              "call now.")
+    assert "never" not in tab.inner_text("#page-find")
     context.close()
+
+
+def test_a_partly_answered_search_says_its_coverage_once(page, monkeypatch):
+    """A real search whose free map data answered for only part of the area (the mirrors
+    refuse the northern third until they are let through): the Find page says how much
+    was covered in one notice, the expanded Details in one line, while the rest fills in
+    and once it is in; no figure disagrees with "N of 9", and no internal words or counts
+    are shown."""
+    import time
+
+    from test_map_data import _answer, _box_of
+
+    from leadgen import fillin
+    from leadgen.http import HttpError
+    from leadgen.sources import osm
+    let_through = threading.Event()
+
+    def servers(method, url, data, **kw):
+        box = _box_of(data["data"])
+        if box[0] > 40.8 and not let_through.is_set():
+            raise HttpError(f"{url}: ConnectionResetError(104, 'Connection reset by peer')")
+        return _answer(box)
+    monkeypatch.setattr(osm, "request_json", servers)
+    monkeypatch.setattr(fillin, "ON", True)
+    monkeypatch.setattr(config, "FILL_IN_PAUSE_SECONDS", 0.2)
+    monkeypatch.setattr(config, "OVERPASS_ENDPOINTS", config.OVERPASS_ENDPOINTS[:1])
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    page.click("#go")
+    page.click("#confirm-go")
+    page.wait_for_selector("#done-card:not([hidden])", timeout=60000)
+    note = page.locator("#coverage-note")
+    expect(note).to_contain_text("Covered so far: about 6 of the 9 parts of the 30-mile area. Still filling in")
+    expect(note).to_contain_text("ready to call now; new ones from the rest of the area will appear there on "
+                                 "their own.")
+    page.get_by_role("button", name="Details").first.click()
+    said = page.evaluate(COVERAGE_SAID)
+    assert len(said["notices"]) == 1 and said["notices"][0].startswith("Covered so far"), said
+    assert len(said["details"]) == 1 and "About 6 of 9 parts so far; filling in" in said["details"][0], said
+    assert set(said["figures"]) == {"6/9"} and not said["banned"], said
+
+    # The rest comes in: the same one notice says so, and the Leads page has the new businesses.
+    let_through.set()
+    for _ in range(400):
+        if not fillin.running:
+            break
+        time.sleep(0.05)
+    assert not fillin.running
+    page.evaluate("loadSearches()")
+    expect(note).to_contain_text("Covered: the whole 30-mile area. The last parts came in later, in the background")
+    page.get_by_role("button", name="Details").first.click()
+    said = page.evaluate(COVERAGE_SAID)
+    assert len(said["notices"]) == 1 and said["notices"][0].startswith("Covered: the whole"), said
+    assert len(said["details"]) == 1 and said["details"][0].startswith("Free map data: area covered"), said
+    assert "All 9 parts" in said["details"][0] and not said["banned"], said
+    assert not [f for f in said["figures"] if f.split("/")[1] != "9"], said
 
 
 def test_a_mark_says_saving_until_the_server_has_saved_it(page):

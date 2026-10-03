@@ -202,8 +202,8 @@ def test_the_parts_no_server_answered_for_are_shaded_missed_or_partly():
     assert set(statuses.values()) == {"searched"}
     assert data["coverage"].endswith(": 7 of 9 areas searched in full.")
     texts = {a["name"]: a["status_text"] for a in data["areas"]}
-    assert texts["Layton"] == "Partly searched: some of it didn't answer"
-    assert texts[north_west.name] == "Not searched: the map servers didn't answer for it"
+    assert texts["Layton"] == "Partly searched: some of it didn't come in"
+    assert texts[north_west.name] == "Not searched: the free map data didn't come in for it"
 
 
 def test_areas_being_asked_again_in_the_background_say_so():

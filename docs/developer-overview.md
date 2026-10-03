@@ -339,13 +339,13 @@ the sidebar to the page's list (Leads, Calls) or heading.
   30-mile search is 9 areas), two at a time, **nearest the centre first** (the area
   the search's centre is in, then outwards; a failed area's quarters take their place
   in that order, `osm._distance`), each starting at a different map server (the
-  progress text says "3 of 9 areas done": the search's areas, fixed for the whole
+  progress text says "3 of 9 parts of the area done": the search's areas, fixed for the whole
   search, an area asked in quarters counting once all four answered; the count only
   moves forward and stays in the text through the catch-up round). An area no server answers is
   asked again as four smaller ones; if one still gets no answer, the search is
   **incomplete** (the businesses from the areas that answered are saved, as
-  above), and it says how much answered ("about 8 of 9 areas searched"; the
-  search's Details show it too). Answers are kept for 12 hours whichever mirror gave
+  above), and the record keeps how much answered (`stats["osm areas searched"]`,
+  "about 8 of 9 areas"; the page words it, see `fillin.coverage` below). Answers are kept for 12 hours whichever mirror gave
   them (`OVERPASS_CACHE_TTL_SECONDS`, so tomorrow's search asks again), and an area that had to be asked in quarters is asked in quarters straight
   away on a re-run, so a re-run with the same location and radius only asks for the
   areas still missing. The first round gets four minutes (`OVERPASS_DEADLINE_SECONDS`),
@@ -354,8 +354,8 @@ the sidebar to the page's list (Leads, Calls) or heading.
   (`OVERPASS_RETRY_ROUNDS`), after a 20-second pause (`OVERPASS_RETRY_PAUSE_SECONDS`)
   with 150 seconds of its own (`OVERPASS_RETRY_SECONDS`), so the map-data step
   never takes more than about 7 minutes; the progress text says "asking again for
-  the areas the busy map servers missed", and the search's Details show how many
-  areas were asked again. Areas still missing then are **filled in in the
+  the parts the busy servers missed" (the record keeps how many were asked again,
+  `osm areas asked again`, an internal count the page never shows). Areas still missing then are **filled in in the
   background** (`leadgen/fillin.py`), within the same search: the search reports
   what it found and uses up the day as usual, and a background thread asks the
   missing parts again every 5 minutes (`FILL_IN_PAUSE_SECONDS`) for up to an hour
@@ -365,11 +365,17 @@ the sidebar to the page's list (Leads, Calls) or heading.
   filling / complete / gave_up / stopped, areas left and the towns they hold
   (`where`: each missing area's biggest town from the bundled places table, or its
   direction from the centre, nearest first: `osm.areas_text`), businesses found and
-  new), which Find leads shows above the search history ("Still filling in 4 areas
-  ... (around Kaysville, Centerville and Morgan)", polled every 30 seconds) and the
-  history row tags "Filling in"; the search's own note names them too ("about 6 of
-  9 areas searched; not yet: ..."). Complete, the
-  search is no longer marked incomplete; areas that never answered are reported
+  new). **How much of the area a search covered is said once**: `fillin.coverage(record)`
+  words it from the record's numbers each time `/searches` is read (`finding._for_page`),
+  as `coverage.text` (the Find page's one status, `#coverage-note`, polled every 30
+  seconds while filling) and `coverage.short` (the one Details line, "Free map data:
+  area covered"); the history row tags "Filling in". `fillin.plain_notes` leaves the
+  coverage out of the search's notes (and drops what earlier versions stored about it),
+  `fillin.plain_reason` rewords an earlier version's reason, and the note beside a
+  finished search only names a source that couldn't be reached at all. The stored
+  reason keeps the technical form ("about 6 of 9 areas searched; not yet: ...") for
+  the problem list and the Map page. Complete, the
+  search is no longer marked incomplete; parts that never came in are reported
   as a problem (and the webhook). Pausing searching stops it within a few seconds (between rounds it
   looks at the switch every `osm.STOP_CHECK_SECONDS`, not only at the next round; Find leads then
   polls every 2.5 seconds until it has ended), and a fill-in cut

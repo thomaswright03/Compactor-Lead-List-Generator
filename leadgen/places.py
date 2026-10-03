@@ -93,8 +93,8 @@ def biggest_town(box: tuple[float, float, float, float], centre: tuple[float, fl
                  radius_miles: float, state: str = "UT") -> str:
     """The biggest (by land area) of the state's towns whose centre is in the box
     (south, west, north, east) and within radius_miles of centre, or "" when none is:
-    how the page names a part of a search's area ("Still filling in: around Salt Lake
-    City", osm.areas_text)."""
+    how the page names a part of a search's area ("Still filling in, in the background
+    until about 1:36 PM: Salt Lake City", osm.areas_text)."""
     found = biggest_towns(box, centre, radius_miles, state)
     return found[0] if found else ""
 

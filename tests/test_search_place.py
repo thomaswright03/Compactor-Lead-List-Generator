@@ -300,8 +300,8 @@ def test_the_map_steps_percent_follows_the_areas_done(monkeypatch):
     before = progress.pct()
     progress(areas(9, "retry"))
     assert progress.pct() == before
-    assert progress.job["message"] == ("Searching the free map data: 9 of 17 areas done (asking "
-                                       "again for the areas the busy map servers missed)…")
+    assert progress.job["message"] == ("Searching the free map data: 9 of 17 parts of the area done (asking "
+                                       "again for the parts the busy servers missed)…")
     progress(areas(17))
     assert progress.pct() == pytest.approx(at(17))
 

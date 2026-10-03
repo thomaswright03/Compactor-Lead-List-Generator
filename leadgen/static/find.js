@@ -95,10 +95,10 @@ async function loadSearches() {
     setGo(true, cutOffText(cutToday));
   } else setGo(true, "One search a day. Today's is available.");
   renderHistory(body.searches, body);
-  // A fill-in still going from an earlier day (a late search runs on past midnight) stays in view
-  // until it ends; today's own fill-in otherwise.
-  const filling = body.filling && (!today || body.filling.day !== today.day) ? body.filling : null;
-  showFill(filling ? { ...filling.fill, from: filling.when } : today && today.fill, Boolean(body.paused));
+  // A search still filling in from an earlier day (a late search runs on past midnight) stays in view
+  // until it ends; today's own coverage otherwise.
+  const earlier = body.filling && (!today || body.filling.day !== today.day) ? body.filling : null;
+  showCoverage(earlier ? earlier.coverage : today && today.coverage, Boolean(body.paused));
   renderProblems(body.problems, body.problems_unread);
   if (body.admin && body.admin !== "open") showAdmin(false);   // locked again elsewhere
   if (body.switches) { S.switches = body.switches; renderSwitches(body.switches); }
@@ -128,7 +128,7 @@ const SWITCH_SHOWN = { search_paused: () => true, google_off: () => CONFIG.googl
 const SWITCH_ASK = {
   search_paused: [["Pause all searching for everyone?",
                    "Find leads will refuse to start, for everyone, until this is turned off. A search running now " +
-                   "(or still filling in missing map areas) stops within a few seconds; what it already found is " +
+                   "(or still filling in parts of its area) stops within a few seconds; what it already found is " +
                    "saved. Saved leads, marks and calls keep working.", "Pause searching"],
                   ["Let everyone search again?", "Find leads works again for everyone straight away.",
                    "Turn searching back on"]],
@@ -228,55 +228,22 @@ function renderProblems(p, unread) {
   box.replaceChildren(el("p", `${p.count.toLocaleString()} in the last 7 days (the latest first):`), list,
                       el("p", "If these keep happening, tell whoever looks after the site.", "sub"));
 }
-// Map areas today's search missed are filled in in the background (fillin.py): how that stands,
-// in words, and the page looks again every half minute while it goes on (every few seconds once
-// searching is paused: the fill-in then ends within seconds, and the page says so).
-/** @type {(n: number | undefined) => string} */
-const areasText = (n) => (n === 1 ? "1 area" : `${n} areas`);
-// Which towns the missing areas hold, nearest the search's centre first (fillin.py's "where").
-/** @type {(f: Fill) => string} */
-const aroundText = (f) => (f.where ? ` (around ${f.where})` : "");
-/** @param {Fill} f */
-function fillText(f) {
-  const more = f.found ? ` ${num(f.found)} more businesses so far (${num(f.new)} new).` : "";
-  if (f.state === "filling") {
-    return `${f.from ? `The search of ${f.from} is still filling in` : "Still filling in"} ${areasText(f.left)} ` +
-      `of the free map data that didn't answer${aroundText(f)}, in the background until about ` +
-      `${f.until_text}.${more} They join your saved leads as they arrive.` +
-      (f.from ? " It stops when today's search starts." : "");
-  }
-  const added = f.found ? ` ${num(f.found)} more businesses were added (${num(f.new)} new).` : "";
-  if (f.state === "complete") {
-    return `Complete: the map areas that didn't answer at first were filled in later.${added}`;
-  }
-  if (f.state === "stopped") {
-    // The areas left were not asked again: not the map servers' fault.
-    const because = f.why === "new_search" ? "the next day's search started" : "searching was paused";
-    return `Filling in the missing map areas stopped because ${because}` +
-      `${f.left ? `, so ${areasText(f.left)}${aroundText(f)} ${f.left === 1 ? "was" : "were"} not asked again` : ""}` +
-      `.${added}`;
-  }
-  if (f.state === "interrupted" && f.left) {
-    return `Filling in the missing map areas was cut short by a server restart; ${areasText(f.left)}` +
-      `${aroundText(f)} ${f.left === 1 ? "is" : "are"} still missing until the next search.${added}`;
-  }
-  if (!f.left) return `The missing map areas answered later.${added}`;
-  const areas = areasText(f.left);
-  return `${areas[0].toUpperCase()}${areas.slice(1)} of the free map data${aroundText(f)} never answered today; ` +
-    `their businesses are missing until the next search.${added}`;
-}
-/** @param {Fill | null | undefined} f @param {boolean} paused */
-function showFill(f, paused) {
-  const box = $("fill-note");
+// How much of its area today's search covered, said once (the server words it: fillin.py coverage):
+// which towns are still being filled in and until when, and that the businesses found can be
+// called now. While the rest is filled in the page looks again every half minute (every few
+// seconds once searching is paused: the filling in then ends within seconds, and this says so),
+// and new businesses that arrive are added to the Leads page.
+/** @param {Coverage | null | undefined} c @param {boolean} paused */
+function showCoverage(c, paused) {
+  const box = $("coverage-note");
   clearTimeout(S.fillTimer);
-  box.hidden = !f;
-  if (!f) return;
-  box.textContent = f.state === "filling" && paused
-    ? "Stopping the filling in of the missing map areas, because searching was paused…" : fillText(f);
-  box.classList.toggle("done", f.state === "complete");
-  if (S.fillFound !== undefined && f.found !== S.fillFound) loadLeads();   // new businesses arrived
-  S.fillFound = f.found;
-  if (f.state === "filling") S.fillTimer = setTimeout(loadSearches, paused ? 2500 : 30000);
+  box.hidden = !c;
+  if (!c) return;
+  box.textContent = c.text;
+  box.classList.toggle("done", c.state === "complete");
+  if (S.fillFound !== undefined && c.found !== S.fillFound) loadLeads();   // new businesses arrived
+  S.fillFound = c.found;
+  if (c.filling) S.fillTimer = setTimeout(loadSearches, paused ? 2500 : 30000);
 }
 // Every count on the page reads the same way: 1,135.
 /** @type {(v: number | string | null | undefined) => string} */
@@ -345,12 +312,6 @@ function renderHistory(searches, body) {
       why.textContent = body && body.cut_off
         ? "Cut off by a server restart (the site was updated); what it had found is being saved…"
         : "The server stopped during this search, before it finished; what it had found couldn't be kept.";
-      extra.append(why); tbody.append(extra);
-    }
-    if (s.fill && s.fill.state !== "filling") {
-      // How filling in the map areas it missed ended (complete, stopped, gave up).
-      const extra = el("tr");
-      const why = el("td", fillText(s.fill)); why.colSpan = 6; why.className = "sub h-why";
       extra.append(why); tbody.append(extra);
     }
     if (s.stopped) {

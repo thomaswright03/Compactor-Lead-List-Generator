@@ -141,7 +141,7 @@ function drawMap(data) {
     const label = el("div", undefined, `area-name ${area.status}`);
     label.append(el("span", area.name));
     if (area.status !== "searched") label.append(el("small", area.status === "unknown" ? "not known" : area.status ===
-      "partly" ? "partly searched" : area.status === "asking" ? "being asked again" : "not searched"));
+      "partly" ? "partly searched" : area.status === "asking" ? "filling in" : "not searched"));
     M.areas.addLayer(L.marker(area.label, { icon: L.divIcon({ className: "area-label", html: label, iconSize: null }),
                                              interactive: false, keyboard: false }));
   }

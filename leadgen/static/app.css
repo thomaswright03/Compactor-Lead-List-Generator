@@ -157,7 +157,7 @@ tr.more-row td { background:var(--hover); }
 tr.failed td { color:var(--muted); }
 .tag { display:inline-block; font-size:var(--fs-xs); font-weight:700; border-radius:var(--r-pill); padding:0 var(--sp-2); background:var(--pts-neg); color:var(--bad-ink); }
 .tag.info { background:var(--warn-bg); color:var(--warn-ink); }
-.fill-note.done { background:var(--pts); border-color:var(--line); color:var(--good-ink); }
+.coverage-status.done { background:var(--pts); border-color:var(--line); color:var(--good-ink); }
 /* A search's Details: each label with its value beside it, in as many columns as fit (one on a
    phone). A value is never squeezed: a number stays one figure ("795", never "7 / 9 / 5"), a
    short value goes under its label when the two don't fit side by side, and a long one (what the

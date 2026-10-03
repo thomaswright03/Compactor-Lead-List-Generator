@@ -44,7 +44,7 @@ only looks around and never changes anything.
    distance: **Search there anyway** uses the day's search there; **Go back and edit**
    spends nothing.
 4. The progress bar shows each step; during the free map data its percentage moves
-   with the areas that answered ("3 of 9 areas done"). The map data is asked for
+   with the parts of the area done ("3 of 9 parts of the area done"). The map data is asked for
    the area around the search's centre first, so the nearest businesses come in
    first. A search takes a few
    minutes; you can use the other pages meanwhile. The search history shows it as
@@ -62,24 +62,27 @@ Good to know:
   earlier search: businesses found then count as updated, not new, so "0 new"
   means nothing new since then, not that the search didn't look.
 - When the free map servers are busy, the search asks again by itself for the
-  areas they missed (the progress bar says so), so you don't need to do anything.
-  It can then take up to about 7 minutes. Areas still missing after that are asked
-  again in the background for up to an hour: Find leads says "Still filling in 4
-  areas ... (around Kaysville, Centerville and Morgan)" above the search history, so
-  you know which towns aren't in the list yet; the businesses they find appear on the Leads
-  page as they arrive, and the note then says "Complete" (or how many areas never
-  answered). It is still the day's one search. If it is still going at midnight,
-  the note stays (naming the search it belongs to) until it ends, and it stops by
-  itself when the next day's search starts.
+  parts they missed (the progress bar says so), so you don't need to do anything.
+  It can then take up to about 7 minutes. Parts still missing after that are filled
+  in in the background for up to an hour. One line above the search history says how
+  it stands, for example: "Covered so far: about 6 of the 9 parts of the 30-mile
+  area. Still filling in, in the background until about 1:36 PM: Kaysville,
+  Centerville and Morgan. The 418 businesses already found are on the Leads page,
+  ready to call now; new ones from the rest of the area will appear there on their
+  own." **You can start calling straight away**: nothing has gone wrong, and the new
+  businesses appear on the Leads page by themselves. The line then says "Covered:
+  the whole 30-mile area" (or which towns didn't come in today). It is still the
+  day's one search. If it is still going at midnight, the line stays (naming the
+  search it belongs to) until it ends, and it stops by itself when the next day's
+  search starts.
 - If the page says the place couldn't be looked up right now, the lookup services
   are down: nothing was spent and the day's search is still there. Try again in a
   minute; what you typed is fine.
 - If a search fails outright (say the place wasn't found), the page says so and
   the day is not used up: fix it and run it again. If a source was missing (the
-  page says which, e.g. "the map data service answered for only part of the area,
-  about 8 of 9 areas searched"), what the others found is saved and the day is
-  used up all the same: the next search can run tomorrow, and it fills in what
-  was missing (it asks again only for the missing map areas, so it is quicker).
+  page says which, e.g. "Couldn't reach Google"), what the others found is saved
+  and the day is used up all the same: the next search can run tomorrow, and it
+  fills in what was missing.
 - If the page says Google and Yelp aren't set up, most businesses found will
   have no phone number.
 
@@ -190,10 +193,10 @@ Open **Map** in the sidebar (in the bar at the top on a phone).
   Fortune Rd. The **circle** around it is AARCO's 30-mile area: the day's search is
   meant for it.
 - The **search areas** are the nine parts a search looks through one at a time (the "3
-  of 9 areas done" while it runs), each named after its biggest town. Their edges show
+  of 9 parts of the area done" while it runs), each named after its biggest town. Their edges show
   how the latest search of AARCO's area went: a thin solid edge where it was searched,
-  a dashed, shaded edge where the map servers didn't answer for all or part of it (or it
-  is still being asked again in the background), and a dotted edge where that isn't
+  a dashed, shaded edge where the free map data didn't come in for all or part of it (or it
+  is still filling in, in the background), and a dotted edge where that isn't
   known. The line under the map says which search that was, and the list under it
   names every area and how it stands. **Search areas, shaded by the latest search** in
   the key hides them.

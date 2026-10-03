@@ -55,7 +55,7 @@ def test_areas_that_fail_at_first_are_asked_again_and_the_search_is_complete(mon
     # The 6 southern parts at once; the 3 northern ones as 12 quarters, asked again.
     assert len(leads) == 6 + 12 and warnings == []
     assert stats == {"osm areas asked again": "12 (all answered)"}
-    assert any("asking again for the areas the busy map servers missed" in s for s in said)
+    assert any("asking again for the areas the busy map servers missed" in s for s in said)   # the command line's words
 
 
 def test_a_part_that_never_answers_still_leaves_an_honest_incomplete_result(monkeypatch):
@@ -113,8 +113,11 @@ def test_a_search_whose_map_servers_are_throttling_finishes_complete(monkeypatch
     assert not any("part of the area" in w for w in body["warnings"])
     history = client.get("/searches").get_json()
     assert history["used_today"] and not history["searches"][0].get("partial")
-    details = dict(history["searches"][0]["details"])
-    assert details["Free map data: areas asked again automatically"] == "12 (all answered)"
+    # The whole area answered in the end: no coverage line, and never the count of parts asked again.
+    record = history["searches"][0]
+    details = dict(record["details"])
+    assert record["coverage"] is None and "Free map data: area covered" not in details
+    assert not any("asked again" in f"{k} {v}" for k, v in details.items())
 
 
 def _lead(name="Costco", sid="c", **kw):
@@ -190,9 +193,12 @@ def test_a_partial_map_result_is_saved_and_the_search_marked_incomplete(monkeypa
     job = client.post("/search", data={"location": "84101"}).get_json()["job_id"]
     body = _wait(client, job)
     assert body["state"] == "done" and body["saved"] and body["found"] == 1
-    assert "answered for only part of the area" in " ".join(body["warnings"])
+    # Said once, by the Find page's coverage status, not again beside the result.
+    assert "part of the area" not in " ".join(body["warnings"]) and body["note"] is None
     record = client.get("/searches").get_json()["searches"][0]
     assert record["partial"] and "only part of the area" in record["reason"]
+    assert record["coverage"]["text"].startswith("Covered: part of the 30-mile area. The rest of the area didn't "
+                                                 "come in today")
     assert [l["name"] for l in client.get("/leads").get_json()["leads"]] == ["Costco"]
 
 
@@ -205,7 +211,7 @@ def test_progress_says_how_many_parts_of_the_map_are_done():
     job = {}
     progress = web._Progress(job)
     progress(_areas(3, 9))
-    assert job["message"] == "Searching the free map data: 3 of 9 areas done…"
+    assert job["message"] == "Searching the free map data: 3 of 9 parts of the area done…"
     # Yelp and Google made no calls: the bar is locate, the map data, merge and save.
     assert job["step"] == 2 and job["pct"] == pytest.approx(100 * (3 + 36 * 3 / 9) / 53, abs=0.1)
 
@@ -222,9 +228,9 @@ def test_map_progress_never_counts_backwards():
         seen.append(job["message"])
     done = [int(m.split(": ")[1].split(" of ")[0]) for m in seen]
     assert done == sorted(done) == [8, 8, 9, 10, 10]
-    assert seen[0] == "Searching the free map data: 8 of 17 areas done…"
-    assert seen[-1] == ("Searching the free map data: 10 of 17 areas done (some areas are being "
-                        "asked again in smaller parts)…")
+    assert seen[0] == "Searching the free map data: 8 of 17 parts of the area done…"
+    assert seen[-1] == ("Searching the free map data: 10 of 17 parts of the area done (some parts are being "
+                        "asked again in smaller pieces)…")
 
 
 def test_the_map_search_reports_parts_done(monkeypatch):
@@ -300,9 +306,9 @@ def test_the_area_count_stays_on_the_page_until_the_map_step_ends(monkeypatch):
         shown.append(job["message"])
         bar.append(progress.pct())
     osm.search(40.76, -111.89, 30, progress=follow)
-    assert all(re.search(r": \d+ of 9 areas done", m) for m in shown), shown
-    assert any("asking again for the areas the busy map servers missed" in m for m in shown)
-    assert shown[-1].startswith("Searching the free map data: 9 of 9 areas done")
+    assert all(re.search(r": \d+ of 9 parts of the area done", m) for m in shown), shown
+    assert any("asking again for the parts the busy servers missed" in m for m in shown)
+    assert shown[-1].startswith("Searching the free map data: 9 of 9 parts of the area done")
     # The bar starts in single digits and follows the count.
     assert bar[0] < 10 and bar == sorted(bar)
     done = [int(m.split(": ")[1].split(" of ")[0]) for m in shown]
@@ -331,7 +337,7 @@ def test_the_map_data_alone_starts_the_bar_near_zero(monkeypatch):
                 break
             time.sleep(0.02)
         assert body["skipped"] == [1] and body["pct"] < 10
-        assert body["message"] == "Searching the free map data: 0 of 9 areas done…"
+        assert body["message"] == "Searching the free map data: 0 of 9 parts of the area done…"
     finally:
         gate.set()
     _wait(client, job)

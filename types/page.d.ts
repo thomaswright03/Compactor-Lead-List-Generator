@@ -157,8 +157,17 @@ interface Fill {
   where?: string;
   until_text?: string;
   why?: string;
-  /** The page's own: the day of the search still filling in, when it isn't today's. */
-  from?: string;
+}
+
+/** How much of its area a search covered, in the page's words (fillin.py coverage). */
+interface Coverage {
+  state: string;
+  /** The Find page's one status. */
+  text: string;
+  /** Its line in the search's Details. */
+  short: string;
+  filling: boolean;
+  found: number;
 }
 
 /** A day's search in the history (daily.py history). */
@@ -181,6 +190,7 @@ interface SearchRow {
   details?: [string, string | number][] | Record<string, string | number>;
   warnings?: string[];
   fill?: Fill;
+  coverage?: Coverage | null;
   free_at?: string;
 }
 
@@ -199,7 +209,7 @@ interface SearchesAnswer {
   current: SearchRow | null;
   today: string;
   used_today: boolean;
-  filling?: { day: string; when: string; fill: Fill } | null;
+  filling?: { day: string; when: string; fill: Fill; coverage?: Coverage | null } | null;
   running: string | null;
   cut_off: boolean;
   paused: string | null;

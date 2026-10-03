@@ -43,12 +43,12 @@ WHOLE, SLIVER = 0.99, 0.01
 
 # How an area stands after the latest search of AARCO's area, and the page's words.
 SEARCHED, PARTLY, MISSED, ASKING, UNKNOWN = "searched", "partly", "missed", "asking", "unknown"
-STATUS_TEXT = {SEARCHED: "Searched", PARTLY: "Partly searched: some of it didn't answer",
-               MISSED: "Not searched: the map servers didn't answer for it",
-               ASKING: "Not searched yet: being asked again in the background",
+STATUS_TEXT = {SEARCHED: "Searched", PARTLY: "Partly searched: some of it didn't come in",
+               MISSED: "Not searched: the free map data didn't come in for it",
+               ASKING: "Not searched yet: still filling in, in the background",
                UNKNOWN: "Not known"}
 # PARTLY while the missing parts are still being asked.
-PARTLY_FILLING = "Partly searched: the rest is being asked again in the background"
+PARTLY_FILLING = "Partly searched: the rest is still filling in, in the background"
 
 # The pins' groups: the Yes / No answer, or a competitor (and AARCO's own listing).
 GROUPS = ("unchecked", "yes", "no", "competitor")

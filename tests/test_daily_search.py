@@ -98,10 +98,38 @@ def test_an_incomplete_search_gives_one_short_note(monkeypatch):
     client = web.create_app().test_client()
     job = client.post("/search", data={"location": "84101"}).get_json()["job_id"]
     body = _wait(client, job)
-    assert body["note"] == ("Some businesses are missing: the map data service answered for "
-                            "only part of the area. Today's search is now used up; the next "
-                            "one can run tomorrow.")
-    assert len(body["warnings"]) >= 2                     # the details, shown behind "More"
+    # Only the map data was partial: the result says nothing more, as the Find page's one
+    # coverage status says how much of the area was covered (and that calling can start).
+    assert body["note"] is None and not any("part of the area" in w for w in body["warnings"])
+    current = client.get("/searches").get_json()["current"]
+    assert current["partial"] and current["coverage"]["text"].startswith("Covered: part of the 30-mile area.")
+    assert "ready to call now" in current["coverage"]["text"]
+
+
+def test_a_source_that_failed_outright_gets_the_short_note(monkeypatch):
+    """Google refused its key and the map data answered for part of the area: the note
+    beside the result names Google only; the coverage is said by the status."""
+    monkeypatch.setenv("GOOGLE_PLACES_API_KEY", "AIzaFAKEKEYFORTESTS000000000000000000")
+    monkeypatch.setattr(pipeline, "geocode", lambda location, key: (40.72, -111.9, "Salt Lake City"))
+
+    def refused(*args, **kw):
+        raise SourceError("Google rejected the request. HTTP 403: denied")
+
+    def partial(*a, **k):
+        raise osm.PartialResult("OpenStreetMap answered for only part of the area",
+                                [_map_lead("Costco", ["shop=wholesale"])], [], "about 6 of 9 areas")
+    monkeypatch.setattr(pipeline.google_places, "search", refused)
+    monkeypatch.setattr(pipeline.osm, "search", partial)
+    client = web.create_app().test_client()
+    body = _wait(client, client.post("/search", data={"location": "84101"}).get_json()["job_id"])
+    assert body["note"] == ("Couldn't reach Google, so its businesses are missing from this search. "
+                            "Today's search is now used up; the next one can run tomorrow.")
+    assert len(body["warnings"]) == 1 and "map data" not in body["warnings"][0]
+    current = client.get("/searches").get_json()["current"]
+    assert current["coverage"]["short"] == "About 6 of 9 parts; the rest of the area didn't come in"
+    assert current["reason"].startswith("Couldn't reach Google, so its businesses are missing and the free map data "
+                                        "covered only about 6 of the 9 parts of the area")
+    assert current["reason"].endswith("the 1 business found was saved.")
 
 
 def test_a_search_recorded_under_the_old_name_shows_aarco():

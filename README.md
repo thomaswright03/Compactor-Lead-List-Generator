@@ -46,23 +46,26 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   city, from Google Places, Yelp (at most 50 calls in any 24 hours, with the reset
   time shown, "today at ..." or "tomorrow at ...") and the free OpenStreetMap data
   (asked in parts, the area around the search's centre first and then outwards, so
-  the nearest businesses come first and busy public servers still answer; areas a
+  the nearest businesses come first and busy public servers still answer; parts a
   busy server missed are asked again automatically once during the search, which so
   takes about 7 minutes at most, and then **in the background for up to an hour**,
-  within the same search: their businesses join the saved list as they arrive, and
-  Find leads and the search history say "Still filling in N areas" with the towns
-  they hold ("around Kaysville, Centerville and Morgan"), then "Complete" or "N
-  areas never answered" (or, when searching was paused, that the areas left were not
-  asked again). Every line of that search's history and Details (how many areas
-  answered, the towns still missing) follows the filling in, so they all name the same
-  missing towns. A search with missing areas saves what it found and still
+  within the same search: their businesses join the saved list as they arrive. Find
+  leads says how much of the area was covered **once**, in one plain status: "Covered
+  so far: about 6 of the 9 parts of the 30-mile area. Still filling in, in the
+  background until about 1:36 PM: Kaysville, Centerville and Morgan. The 418 businesses
+  already found are on the Leads page, ready to call now; new ones from the rest of the
+  area will appear there on their own." It then says "Covered: the whole 30-mile area",
+  or which towns didn't come in today (or, when searching was paused, which weren't
+  searched). The search history's Details say the same in one line ("Free map data:
+  area covered"); no other note repeats it, and internal counts (how many parts were
+  asked again) are never shown. A search with missing parts saves what it found and still
   uses up the day, as the owner asked; the filling in is not a second search). A
   filling in that runs past midnight stays on Find leads until it ends, and is ended
   first when the next day's search starts, so two map searches never run at once.
   Pausing searching ends it within a few seconds, and Find leads says so.
   The progress bar covers only the steps the search runs (with the free map data
-  alone it starts near 0%), its map step moves with the areas that answered, not
-  with the clock, and the "N of M areas done" count stays in view until that step
+  alone it starts near 0%), its map step moves with the parts of the area done, not
+  with the clock, and the "N of M parts of the area done" count stays in view until that step
   ends; the search history shows today's search as "Running…" from the moment it starts.
   A search cut off by a server restart (a deploy) keeps what it had found: it is
   saved, the day's search is given back at once, and the history says so
@@ -135,8 +138,8 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   seconds, that it is taking longer than usual).
 - A **Map** page: AARCO's own pin at 876 Fortune Rd, the 30-mile circle around it, the
   nine areas a search asks the free map data in (named after their biggest town, as in
-  the search's "N of 9 areas") shaded by how the latest search of AARCO's area went
-  (searched, partly searched, not searched or being asked again, or not known), and a
+  the search's "N of 9 parts") shaded by how the latest search of AARCO's area went
+  (searched, partly searched, not searched or still filling in, or not known), and a
   pin for every saved business with a map position: coloured by its Yes / No answer
   (blue not checked, green Yes, orange No, a set that stays apart for colour-blind
   eyes and in the dark theme, each named in the key and the pin's details, never colour

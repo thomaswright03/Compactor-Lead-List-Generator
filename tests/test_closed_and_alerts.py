@@ -113,7 +113,7 @@ def test_a_search_whose_paid_source_failed_saves_what_it_found_and_uses_up_the_d
     assert history["used_today"] and "reruns_left" not in history
     record = history["current"]
     assert record["partial"] and record["leads"] == 1
-    assert "Couldn't reach Google" in record["reason"] and "were saved" in record["reason"]
+    assert "Couldn't reach Google" in record["reason"] and "the 1 business found was saved" in record["reason"]
     assert [l["name"] for l in client.get("/leads").get_json()["leads"]] == ["Costco"]
     assert history["problems"]["count"] == 1
     assert "incomplete" in history["problems"]["latest"][0]["text"]

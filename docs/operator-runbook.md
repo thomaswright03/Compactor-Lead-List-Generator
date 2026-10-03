@@ -223,19 +223,30 @@ businesses marked Yes or No on the live site.
 ## The one-search-a-day rule
 
 Find leads runs once per Utah calendar day, as the owner asked. A search that
-came back incomplete (a source failed, or map areas never answered even after the
-automatic retries) saves what it found, says which source was missing, and uses up
-the day like a complete one. Map areas the free map servers missed are then asked
-again in the background for up to an hour, within that same search (not a second
-one): Find leads shows "Still filling in N areas" with the towns they hold
-("around Kaysville and Centerville"), then "Complete" or "N areas never answered" (that last one is also reported under Recent problems and to the
-webhook). The search's own lines in the history and its Details (how many areas answered,
-which towns are missing) follow the filling in, so they never name a town it has since
-covered; areas left when searching was paused read "not asked: searching was paused". Pausing searching stops the filling in too, within a few seconds, and so does the next day's search
-starting (the history then says "stopped because the next day's search started"): a
-filling in that runs past midnight stays on Find leads until it ends. A restart or deploy during
-it cuts it short (the history then says so). Only a search that failed outright (an unknown place,
-nothing found, the leads couldn't be saved) or was cut off by a restart gives the day back.
+came back incomplete (a source failed, or parts of the free map data never came in
+even after the automatic retries) saves what it found and uses up the day like a
+complete one. A source that couldn't be reached at all (Google, say) is named in the
+note beside the result.
+
+Parts of the area the free map servers missed are then filled in in the background
+for up to an hour, within that same search (not a second one). Find leads says how
+much of the area was covered in **one** status line, for example "Covered so far:
+about 6 of the 9 parts of the 30-mile area. Still filling in, in the background until
+about 1:36 PM: Kaysville and Centerville. The 418 businesses already found are on the
+Leads page, ready to call now; ...". It ends as "Covered: the whole 30-mile area", or
+names the towns that didn't come in today (that one is also reported under Recent
+problems and to the webhook). The search history's Details say it in one line ("Free
+map data: area covered"). No other note repeats it, and internal counts (how many
+parts were asked again) are not shown. The words are worked out from the record's
+numbers each time it is shown, so searches saved by earlier versions read the same
+way and no saved record is rewritten.
+
+Pausing searching stops the filling in too, within a few seconds (the line says
+"Stopping the filling in ...", then which towns weren't searched today), and so does
+the next day's search starting: a filling in that runs past midnight stays on Find
+leads until it ends. A restart or deploy during it cuts it short (the line then says
+so). Only a search that failed outright (an unknown place, nothing found, the leads
+couldn't be saved) or was cut off by a restart gives the day back.
 
 **A deploy or restart during a search.** Deploys restart the service, and a search
 running then stops with it. What it had found up to then (written to the database
