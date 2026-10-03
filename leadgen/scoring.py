@@ -214,6 +214,64 @@ def _shop_mapped_as_mall(lead: Lead, name: str) -> bool:
     return other_shop or any(_contains_term(name, w, whole=True) for w in config.SHOP_NAME_WORDS)
 
 
+def _named(lead: Lead, words: Iterable[str]) -> bool:
+    name = normalize(lead.name)
+    return any(_contains_term(name, w, whole=True) for w in words)
+
+
+def clinic(lead: Lead) -> bool:
+    """True when the name says the place is a clinic or an outpatient centre, not a
+    hospital (config.CLINIC_NAME_WORDS, and no "hospital" in the name)."""
+    return _named(lead, config.CLINIC_NAME_WORDS) and not _named(lead, ["hospital", "hospitals"])
+
+
+def service_plant(lead: Lead) -> bool:
+    """True when the name says the place is a power, heating or cooling plant, a utility
+    building, usually another organisation's ("Hospital Generation Plant";
+    config.SERVICE_PLANT_NAME_WORDS)."""
+    return _named(lead, config.SERVICE_PLANT_NAME_WORDS)
+
+
+def vehicle_wash(lead: Lead) -> bool:
+    """True for a car or truck wash, by its name or its map tag (config.VEHICLE_WASH_*)."""
+    return (_named(lead, config.VEHICLE_WASH_NAME_WORDS)
+            or any(_osm_tag_matches(lead, k, v) for k, v in config.VEHICLE_WASH_OSM_TAGS))
+
+
+def needs_name(lead: Lead) -> bool:
+    """True when the listing's name only describes a building ("Office and Warehouse,
+    West": config.BUILDING_KIND_WORDS and BUILDING_FILLER_WORDS, numbers, single
+    letters) and it gives no address, phone or website: there is no business to look up
+    or call until someone finds out who is in it."""
+    if lead.address or lead.phone or lead.website:
+        return False
+    words = normalize(lead.name).split()
+    kinds, fillers = set(config.BUILDING_KIND_WORDS), set(config.BUILDING_FILLER_WORDS)
+    return (any(w in kinds for w in words)
+            and all(w in kinds or w in fillers or w.isdigit() or len(w) == 1 for w in words))
+
+
+def tier_of(score: int) -> str:
+    return next(t for threshold, t in TIERS if score >= threshold)
+
+
+def mark_needs_name(lead: Lead) -> Lead:
+    """A building with no business name, address or phone (needs_name) is no lead to call:
+    it is held at config.NEEDS_NAME_MAX_SCORE (tier D, below the default minimum score,
+    so a search leaves it out) and flagged config.NEEDS_NAME_FLAG. score_lead does it,
+    and so does showing a row saved before (saved.py; the saved row is unchanged). Done
+    once: a lead already flagged is left as it is."""
+    if config.NEEDS_NAME_FLAG in lead.flags or not needs_name(lead):
+        return lead
+    said = f"no business name, address or phone on the map: \"{lead.name}\" only describes a building"
+    cut = max(0, lead.score - config.NEEDS_NAME_MAX_SCORE)
+    lead.reasons = [*lead.reasons, f"-{cut} {said}" if cut else said]
+    lead.score -= cut
+    lead.tier = tier_of(lead.score)
+    lead.flags = [*lead.flags, config.NEEDS_NAME_FLAG]
+    return lead
+
+
 def generic_name(name: str) -> bool:
     """True when a name is only a generic word ("Recycling", "Junkyard"), alone or made
     descriptive only by its street or city ("Recycling at 1200 W 500 S")."""
@@ -355,6 +413,18 @@ def _no_category_if(test: Callable[[Lead], bool]) -> Callable[[Facts], Decision 
     return lambda f: (None, f.matched) if test(f.lead) else None
 
 
+def _nothing_if(test: Callable[[Lead], bool]) -> Callable[[Facts], Decision | None]:
+    """No category, and nothing offered as "also looks like" (a truck wash on an
+    industrial building doesn't also look like a plant)."""
+    return lambda f: (None, []) if test(f.lead) else None
+
+
+def _clinic(f: Facts) -> Decision | None:
+    if not clinic(f.lead) or not any(cat.key == "healthcare" for cat, _ in f.matched):
+        return None
+    return None, [m for m in f.kept if m[0].key != "healthcare"]
+
+
 def _retail_chain(f: Facts) -> Decision | None:
     if not f.retail_brand or f.specific:
         return None
@@ -451,6 +521,15 @@ RULES = (
     Rule("utility structure", "a pumping station, well or substation has no waste stream to compact",
          _no_category_if(utility_structure),
          "It's a pumping station, well or substation, which has no rubbish to compact"),
+    Rule("utility plant", "a power, heating or cooling plant is a utility building, usually another "
+         "organisation's", _nothing_if(service_plant),
+         "Its name says it's a power, heating or cooling plant, a utility building with little rubbish to "
+         "compact"),
+    Rule("vehicle wash", "a car or truck wash is a service, not a plant", _nothing_if(vehicle_wash),
+         "It's a car or truck wash, which has little rubbish to compact"),
+    Rule("clinic", "a clinic or outpatient centre listed as a hospital is not one", _clinic,
+         "Its name says it's a clinic or outpatient center, not a hospital, so it has little rubbish to "
+         "compact"),
     Rule("self-storage", "self-storage: the tenants take their rubbish home", _no_category_if(self_storage),
          "It's self-storage: tenants take their own rubbish home, so there is little to compact on site"),
     Rule("retail chain", "a retail chain's name decides over the building it is mapped as", _retail_chain,
@@ -602,7 +681,8 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
     # A brand's helipad, pharmacy or parking lot is not the store.
     blocked = best is None and (_is_non_prospect(lead, set(lead.raw_categories))
                                 or non_prospect_name(lead) or utility_structure(lead)
-                                or self_storage(lead))
+                                or self_storage(lead) or service_plant(lead) or vehicle_wash(lead)
+                                or clinic(lead))
     brand = None if blocked else _brand_bonus(lead)
     if brand:
         score += 20
@@ -665,10 +745,10 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
         reasons.append("-10 temporarily closed")
 
     lead.score = max(0, min(100, score))
-    lead.tier = next(t for threshold, t in TIERS if lead.score >= threshold)
+    lead.tier = tier_of(lead.score)
     lead.reasons = reasons
     lead.flags = flags
-    return lead
+    return mark_needs_name(lead)
 
 
 # ---- the explanation as a salesperson reads it

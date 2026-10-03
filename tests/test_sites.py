@@ -494,3 +494,72 @@ def test_a_map_area_keeps_its_outline():
     assert node.outline is None
     assert osm._outline({"minlat": 41.1, "minlon": -111.9}) is None
     assert osm._outline(None) is None
+
+
+# The round-21 review's pair from a real 30-mile search around AARCO: the hospital's own
+# map listing, and its building's outline named for a part of it, 83 feet apart. The
+# outline (with the street address and the big footprint) outranked the named hospital.
+def _huntsman():
+    from leadgen.sources import osm
+
+    hospital = osm.parse_element({"type": "way", "id": 1001, "bounds": {
+        "minlat": 40.76870, "minlon": -111.83640, "maxlat": 40.77030, "maxlon": -111.83425}, "tags": {
+        "name": "Huntsman Cancer Hospital", "amenity": "hospital", "healthcare": "hospital"}})
+    building = osm.parse_element({"type": "way", "id": 1002, "bounds": {
+        "minlat": 40.76860, "minlon": -111.83620, "maxlat": 40.76994, "maxlon": -111.83445}, "tags": {
+        "name": "Cancer Hospital South", "building": "hospital", "addr:housenumber": "1950",
+        "addr:street": "East Circle of Hope Drive"}})
+    return hospital, building
+
+
+def test_a_hospitals_building_outline_is_the_hospital_under_its_own_name():
+    from leadgen import config
+    from leadgen.scoring import score_lead
+
+    hospital, building = _huntsman()
+    assert 80 < haversine_miles(hospital.lat, hospital.lon, building.lat, building.lon) * 5280 < 90
+    alone = score_lead(_huntsman()[1], config.DEFAULT_KEYWORDS)
+    assert (alone.score, alone.tier) == (43, "B")          # what the outline scored on its own
+    [lead] = dedupe([building, hospital])
+    score_lead(lead, config.DEFAULT_KEYWORDS)
+    # One row, under the hospital's name, with the building's address and footprint.
+    assert lead.name == "Huntsman Cancer Hospital" and lead.alt_names == ["Cancer Hospital South"]
+    assert lead.address == "1950 East Circle of Hope Drive"
+    assert lead.category_key == "healthcare" and (lead.score, lead.tier) == (43, "B")
+    assert {p["source_id"] for p in lead.parts} == {"way/1001", "way/1002"}
+
+
+def test_a_building_outline_joins_only_a_business_it_names_part_of():
+    hospital, building = _huntsman()
+    # A second hospital's own listing beside it stays a business of its own...
+    other = _b("Cancer Hospital South", building.lat, lon=building.lon, sid="way/o",
+               raw_categories=["amenity=hospital"])
+    assert len(dedupe([hospital, other])) == 2
+    # ...as does an outline whose name says something the business's doesn't...
+    clinic = _b("Cancer Clinic South", building.lat, lon=building.lon, sid="way/c",
+                raw_categories=["building=yes"])
+    assert len(dedupe([hospital, clinic])) == 2
+    # ...and an outline with only generic words ("Office South"), or far from the business.
+    office = _b("Office South", building.lat, lon=building.lon, sid="way/of", raw_categories=["building=yes"])
+    assert len(dedupe([hospital, office])) == 2
+    far = _b("Cancer Hospital South", building.lat - 0.004, lon=building.lon, sid="way/f",
+             raw_categories=["building=yes"])
+    assert len(dedupe([hospital, far])) == 2
+
+
+def test_a_hospital_saved_as_two_rows_is_listed_and_merged_only_on_request(monkeypatch, capsys):
+    from leadgen import cli
+
+    building, hospital = _saved_apart(monkeypatch, list(reversed(_huntsman())))
+    marks.set_mark(hospital, "yes", by="Dana")
+    calls.log_call(building, "Follow Up", "Ask for facilities", by="Sam")
+    assert [[r.uid for r in g] for g in saved.merge_plan()] == [[building, hospital]]
+    assert cli.main(["merge-sites"]) == 0
+    out = capsys.readouterr().out
+    assert "Cancer Hospital South" in out and "+ Huntsman Cancer Hospital" in out
+    assert len(saved.load()) == 2                           # listing changes nothing
+    assert cli.main(["merge-sites", "--apply"]) == 0
+    [lead] = calls.apply(marks.apply(saved.load()))
+    # The row saved first is kept, now under the hospital's name, with every mark and call.
+    assert lead.uid == building and lead.name == "Huntsman Cancer Hospital"
+    assert lead.has_baler == "yes" and lead.call_count == 1 and lead.tier == "B"

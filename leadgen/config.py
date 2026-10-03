@@ -432,6 +432,47 @@ SHOP_NAME_WORDS = ["furniture", "mattress", "mattresses", "appliance", "applianc
                    "rugs", "jewelers", "jewelry", "books", "home furnishings", "interiors",
                    "decor", "gallery", "music", "pianos", "outdoor", "sports", "clothing"]
 
+# A hospital's map listing named as a clinic or an outpatient centre is a clinic, not a
+# hospital ("Intermountain West Valley Clinic", tagged amenity=hospital): like the
+# clinics NON_PROSPECT_* leave out, it has little rubbish to compact. A name that also
+# says "hospital" stays a hospital.
+CLINIC_NAME_WORDS = ["clinic", "clinics", "instacare", "urgent care", "outpatient", "health center",
+                     "health centre", "surgery center", "surgical center", "dialysis", "imaging center",
+                     "family medicine", "family practice"]
+# A power, heating or cooling plant is a utility building, usually another organisation's
+# ("Hospital Generation Plant", a hospital's power plant): no prospect category, whatever
+# its industrial tag or the other words of its name say.
+SERVICE_PLANT_NAME_WORDS = ["generation plant", "generating plant", "generating station", "power plant",
+                            "power station", "central plant", "central utility plant", "utility plant",
+                            "heating plant", "cooling plant", "chiller plant", "chilled water plant",
+                            "steam plant", "boiler plant", "boiler house", "cogeneration", "energy plant",
+                            "thermal plant"]
+# A car or truck wash ("Salt Lake Diesel Wash" on an industrial building) is a service
+# business with little rubbish to compact, not a plant; by its name or its map tag.
+VEHICLE_WASH_NAME_WORDS = ["car wash", "carwash", "car washes", "truck wash", "truckwash", "diesel wash",
+                           "auto wash", "vehicle wash", "bus wash", "rv wash", "semi wash", "fleet wash",
+                           "wash bay", "blue beacon"]
+VEHICLE_WASH_OSM_TAGS = [("amenity", "car_wash")]
+
+# A map name that only describes a building ("Office and Warehouse, West", "Warehouse
+# Building B"): each word a kind of building (BUILDING_KIND_WORDS, at least one), a word
+# naming a part or side of a site, a joining word, a number or a single letter. With no
+# address, phone or website it is no business anyone can call: it is held at
+# NEEDS_NAME_MAX_SCORE (tier D, below the default minimum score, so a search leaves it
+# out) and flagged NEEDS_NAME_FLAG (scoring.mark_needs_name), saved rows too as they are
+# shown (the saved row is unchanged).
+BUILDING_KIND_WORDS = ["office", "offices", "warehouse", "warehouses", "building", "buildings", "bldg",
+                       "industrial", "manufacturing", "plant", "factory", "shop", "shops", "storage",
+                       "hangar", "hangars", "garage", "garages", "annex", "facility", "facilities",
+                       "complex", "center", "centre", "dock", "docks", "loading", "maintenance", "flex",
+                       "space", "suite", "suites", "unit", "units", "tower", "wing", "hall", "yard",
+                       "distribution", "retail", "commercial", "business", "park"]
+BUILDING_FILLER_WORDS = ["north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest",
+                         "upper", "lower", "main", "front", "rear", "back", "central", "new", "old", "mixed",
+                         "use", "light", "and", "the", "of", "with", "a", "no"]
+NEEDS_NAME_MAX_SCORE = DEFAULT_MIN_SCORE - 1
+NEEDS_NAME_FLAG = "Needs a name: only a building on the map, with no business name, address or phone"
+
 # A place whose map name is only a generic word ("Recycling", "Junkyard") gives a
 # salesperson nothing to look up: the map data's name is made descriptive (its
 # operator, else "at" its street, else its city; osm.parse_element), and one still

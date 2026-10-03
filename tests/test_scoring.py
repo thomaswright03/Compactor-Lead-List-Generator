@@ -566,3 +566,93 @@ def test_parcel_delivery_stations_are_warehouse_logistics():
     # A plant or warehouse without a carrier's station words is unchanged.
     assert score_lead(make("Acme Industries", ["building=industrial"], "osm")).category_key == "manufacturing"
     assert score_lead(make("FedEx Freight", ["building=industrial"], "osm")).category_key == "distribution"
+
+
+def _reference():
+    import json
+    from pathlib import Path
+
+    return json.loads((Path(__file__).parent / "fixtures" / "scoring_reference.json").read_text())
+
+
+def test_a_clinic_a_hospitals_power_plant_and_a_truck_wash_are_what_their_names_say():
+    """The round-21 review's rows (in the reference set): an outpatient clinic mapped as a
+    hospital is not a hospital (and its operator's brand earns nothing), a hospital's
+    power plant and a truck wash on industrial buildings are not plants; none is a lead.
+    A hospital, a real plant and a wash's neighbour keep their category."""
+    from leadgen import config, scoring
+
+    names = {"Intermountain West Valley Clinic", "Hospital Generation Plant", "Salt Lake Diesel Wash"}
+    cases = [item for item in _reference()["businesses"] if item["name"] in names]
+    assert {item["name"] for item in cases} == names and all(item["not_prospect"] for item in cases)
+    for item in cases:
+        lead = score_lead(make(item["name"], item["raw_categories"], item["source"],
+                               footprint_sqft=item.get("footprint_sqft")), config.DEFAULT_KEYWORDS)
+        assert lead.category_key == "" and lead.score < config.DEFAULT_MIN_SCORE, (lead.name, lead.reasons)
+        plain = " ".join(scoring.plain_reasons(lead.reasons))
+        assert "Manufacturing" not in plain and "Hospital / medical center" not in plain and "brand" not in plain
+    clinic = scoring.plain_reasons(score_lead(make("Intermountain West Valley Clinic", ["amenity=hospital"],
+                                                   "osm")).reasons)
+    assert "Its name says it's a clinic or outpatient center, not a hospital, so it has little rubbish to " \
+           "compact" in clinic
+    hospital = score_lead(make("Intermountain Riverton Hospital",
+                               ["amenity=hospital", "operator=Intermountain Healthcare"], "osm"))
+    assert hospital.category_key == "healthcare" and any("Intermountain Healthcare" in r for r in hospital.reasons)
+    both = score_lead(make("Primary Children's Hospital Outpatient Clinic", ["amenity=hospital"], "osm"))
+    assert both.category_key == "healthcare"
+    plant = score_lead(make("Acme Manufacturing Plant", ["man_made=works"], "osm"))
+    assert plant.category_key == "manufacturing"
+    tagged_wash = score_lead(make("Wasatch Shine", ["amenity=car_wash", "building=industrial"], "osm"))
+    assert tagged_wash.category_key == ""
+    ski_clinic = score_lead(make("Ski Tune Clinic", ["shop=sports"], "osm"))
+    assert ski_clinic.category_key == "specialty_retail"
+
+
+def test_a_building_with_no_business_name_address_or_phone_needs_a_name():
+    """A map name that only describes a building ("Office and Warehouse, West", B 49 in
+    the review) is no lead to call: tier D, below the default minimum (a search leaves
+    it out), flagged as needing a name. The same building with an address keeps its tier
+    ("needs_name" in the reference set), and a business's name is never taken for one."""
+    from leadgen import config, scoring
+
+    cases = _reference()["needs_name"]
+    assert any(item["name"] == "Office and Warehouse, West" for item in cases)
+    for item in cases:
+        kw = {"footprint_sqft": item.get("footprint_sqft")}
+        bare = score_lead(make(item["name"], item["raw_categories"], item["source"], **kw), config.DEFAULT_KEYWORDS)
+        assert bare.tier == "D" and bare.score == config.DEFAULT_MIN_SCORE - 1, (bare.name, bare.score)
+        assert config.NEEDS_NAME_FLAG in bare.flags
+        plain = scoring.plain_reasons(bare.reasons)
+        assert any(r.startswith("-") and f'"{item["name"]}" only describes a building' in r for r in plain), plain
+        found = score_lead(make(item["name"], item["raw_categories"], item["source"], address=item["address"],
+                                **kw), config.DEFAULT_KEYWORDS)
+        assert found.tier == item["tier"] and config.NEEDS_NAME_FLAG not in found.flags
+    for name in ("Acme Warehouse", "Warehouse Club", "Rocky Mountain Distribution", "Costco Wholesale",
+                 "Recycling", "Hospital Generation Plant"):
+        assert not scoring.needs_name(make(name, ["building=yes"], "osm")), name
+    phoned = make("Office and Warehouse, West", ["building=yes"], "osm", phone="801-555-0100")
+    assert not scoring.needs_name(phoned)
+    # A low score stays as it is; the flag and a note still say so, once.
+    small = score_lead(make("Shop Building", ["building=yes"], "osm"))
+    assert small.score == 0 and small.flags.count(config.NEEDS_NAME_FLAG) == 1
+    assert scoring.mark_needs_name(small).flags.count(config.NEEDS_NAME_FLAG) == 1
+    assert any("only describes a building" in r for r in scoring.plain_reasons(small.reasons))
+
+
+def test_a_building_saved_before_shows_as_needing_a_name_and_the_row_is_unchanged():
+    import json
+
+    from leadgen import config, saved, store
+
+    lead = make("Office and Warehouse, West", ["building=yes"], "osm", footprint_sqft=115_900)
+    lead.score, lead.tier, lead.reasons = 49, "B", ["+34 Warehouse / distribution / logistics (by name): ...",
+                                                     "+15 large footprint (~115,900 sq ft)"]
+    with saved.store.connect() as db:
+        db.run("INSERT INTO leads (uid, lead, parts, ids, first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?)",
+               ("u1", saved._lead_json(lead), "[]", "[]", 1.0, 1.0))
+    [shown] = saved.load()
+    assert (shown.score, shown.tier) == (config.DEFAULT_MIN_SCORE - 1, "D")
+    assert config.NEEDS_NAME_FLAG in shown.flags and any(r.startswith("-30 ") for r in shown.reasons)
+    with store.connect() as db:
+        stored = json.loads(db.one("SELECT lead FROM leads WHERE uid = ?", ("u1",))[0])
+    assert (stored["score"], stored["tier"]) == (49, "B") and stored["flags"] == []

@@ -50,6 +50,11 @@ _SITE_WORDS = {"campus", "center", "centre", "complex", "building", "buildings",
 # named like that inside the site's outline is part of the site (part_added).
 _PART_WORDS = {"north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest",
                "upper", "lower", "main", "annex", "pavilion"}
+# Map tags that say what business a listing is, not only what its building is: a map
+# listing with none of them (only building=*, landuse=*...) is just a building's outline
+# (building_only).
+_BUSINESS_TAG_KEYS = frozenset({"shop", "amenity", "office", "craft", "industrial", "man_made", "tourism",
+                                "leisure", "aeroway", "healthcare", "military", "brand"})
 # Sources that report whether a place is open, most trusted first. The merged
 # record is built on the first of these (best phone/website coverage).
 PAID_SOURCES = ("google", "yelp")
@@ -150,6 +155,35 @@ def site_name(name: str) -> str:
     return " ".join(tokens) if set(tokens) - _GENERIC else ""
 
 
+def building_only(lead: Lead) -> bool:
+    """True for a map listing that is only a building's outline: none of its tags says
+    what business is there (_BUSINESS_TAG_KEYS), and it has no phone or website."""
+    if lead.source != "osm" or lead.phone or lead.website:
+        return False
+    return not any(c.partition("=")[0] in _BUSINESS_TAG_KEYS for c in lead.raw_categories)
+
+
+def part_of_business(building: Lead, business: Lead) -> bool:
+    """A building's own map listing named for a part of the business it belongs to
+    ("Cancer Hospital South" beside "Huntsman Cancer Hospital"): the building's listing
+    is only an outline (building_only) and the business's is not; the building's name,
+    less words naming a part of a site (_PART_WORDS), is within the business's name, and
+    the business's name adds who it is."""
+    if not building_only(building) or building_only(business):
+        return False
+    short = {t for t in clean_name(building.name).split() if t not in _PART_WORDS}
+    longer = set(clean_name(business.name).split())
+    return bool(short - _GENERIC) and short < longer and bool(longer - short - _GENERIC - _PART_WORDS)
+
+
+def _on_or_beside(building: Lead, business: Lead, dist: float) -> bool:
+    """The building lies within SAME_PLACE_MILES of the business's pin, or inside its outline."""
+    if dist <= SAME_PLACE_MILES:
+        return True
+    box = outline_box(business.outline)
+    return box is not None and _within([(building.lat, building.lon)], [box])
+
+
 def is_duplicate(a: Lead, b: Lead) -> bool:
     if a.source == b.source and a.source_id == b.source_id:
         return True
@@ -171,6 +205,9 @@ def is_duplicate(a: Lead, b: Lead) -> bool:
     if phones_conflict:
         return False          # different phone numbers: different businesses
     if dist <= SAME_PLACE_MILES and names_match(a.name, b.name):
+        return True
+    # A building's outline named for part of the business it lies on or beside.
+    if any(part_of_business(x, y) and _on_or_beside(x, y, dist) for x, y in ((a, b), (b, a))):
         return True
     if not shared_phone:
         return False
@@ -211,9 +248,11 @@ def _site_title(parts: list[dict[str, Any]], name: str) -> str:
 
 def merge(group: list[Lead]) -> Lead:
     parts = [p for lead in group for p in snapshot(lead)]
-    # Open listings first, then Google, then Yelp records (phone/website coverage),
-    # then the richest.
-    group.sort(key=lambda l: (l.business_status == "CLOSED_PERMANENTLY", _source_rank(l),
+    # Open listings first, then Google, then Yelp records (phone/website coverage), then
+    # a business's own listing before a building's outline (the business's name is the
+    # lead's: "Huntsman Cancer Hospital", not its building "Cancer Hospital South"), then
+    # the richest.
+    group.sort(key=lambda l: (l.business_status == "CLOSED_PERMANENTLY", _source_rank(l), building_only(l),
                               -sum(bool(x) for x in (l.phone, l.website, l.address, l.zip))))
     base = group[0]
     for other in group[1:]:

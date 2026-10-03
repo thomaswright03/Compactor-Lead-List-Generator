@@ -415,8 +415,11 @@ the site starts.
 adding one. The buildings of one site (an apartment complex's numbered buildings,
 a campus's parts, one name spread over up to half a mile, a listing inside the map
 outline of a same-named one, an air base's or airport's parts up to 1.5 miles apart,
-a name that only adds its town, a named building inside its campus's outline) are one lead, and a later search's part joins the
-saved site. Rows saved as separate leads before these rules are left alone by
+a name that only adds its town, a named building inside its campus's outline, and a
+building's outline named for part of the business beside it, such as "Cancer Hospital
+South" beside "Huntsman Cancer Hospital") are one lead, and a later search's part joins the
+saved site. After a release that adds such a rule, run the dry run below once: rows
+saved before it show up there. Rows saved as separate leads before these rules are left alone by
 searches, because joining them moves calls and Yes / No clicks; a search that finds
 listings of two such rows updates the one saved first. To join them, run
 `python -m leadgen merge-sites` (with `DATABASE_URL` set): it lists each business

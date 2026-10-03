@@ -257,6 +257,12 @@ found it). When it says "Only the building type or the business name suggests wh
 it does — confirm before calling", ask what the business does early in the call.
 The Excel file's **Why This Score** column says the same. Parcel delivery stations
 (Amazon, FedEx Home Delivery, UPS hubs) count as warehouse / logistics sites.
+Clinics, a hospital's power plant and car or truck washes are not leads.
+
+A lead flagged **Needs a name** is only a building on the map, with no business
+name, address or phone ("Office and Warehouse, West"). It sits in tier D. Open its
+**map** link to see where it is and find out who is in the building before calling,
+or skip it.
 
 Words you type under **Extra search words** add businesses to look for; they
 don't change scores, so a business scores the same whichever search found it.

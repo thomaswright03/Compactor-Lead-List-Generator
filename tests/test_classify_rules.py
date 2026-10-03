@@ -22,6 +22,12 @@ RULE_EXAMPLES = [
     ("equipment name", make("Acme Compactor Service"), "equipment"),
     ("not-a-prospect name", make("Salt Lake City Police Impound Lot", ["landuse=industrial"], "osm"), None),
     ("utility structure", make("Pump Station 4", ["man_made=pumping_station"], "osm"), None),
+    # The round-21 review's real rows: a hospital's power plant and a truck wash on
+    # industrial buildings, and an outpatient clinic mapped as a hospital.
+    ("utility plant", make("Hospital Generation Plant", ["man_made=works"], "osm"), None),
+    ("vehicle wash", make("Salt Lake Diesel Wash", ["building=industrial"], "osm"), None),
+    ("clinic", make("Intermountain West Valley Clinic", ["amenity=hospital", "healthcare=hospital",
+                                                         "operator=Intermountain Healthcare"], "osm"), None),
     ("self-storage", make("Extra Space Storage", ["self_storage"]), None),
     ("retail chain", make("Harbor Freight Tools", ["building=industrial"], "osm"), "specialty_retail"),
     ("production listing", make("Uinta Brewing", ["brewery", "food_court"]), "food_production"),

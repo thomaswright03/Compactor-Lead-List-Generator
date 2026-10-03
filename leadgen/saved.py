@@ -30,7 +30,7 @@ from . import config, places, store
 from .dedupe import Site, SiteIndex, duplicate_groups, is_duplicate, merge, same_site, site_of, snapshot
 from .geo import haversine_miles
 from .models import Lead
-from .scoring import OWN_FLAG, OWN_FLAG_START, score_lead
+from .scoring import OWN_FLAG, OWN_FLAG_START, mark_needs_name, score_lead
 
 _FIELDS = {f.name for f in fields(Lead)}
 CLOSED = "CLOSED_PERMANENTLY"
@@ -402,6 +402,9 @@ def _ready(row: _Row) -> Lead | None:
         # Saved before the owner corrected the company's name ("Arco"): shown with the name
         # it has now. Only what is shown changes; the saved row keeps its text.
         lead.flags = [OWN_FLAG if f.startswith(OWN_FLAG_START) else f for f in lead.flags]
+    # A building with no business name, address or phone, saved before such rows were held
+    # back: shown in tier D and flagged, as a search now scores it (the saved row is unchanged).
+    mark_needs_name(lead)
     lead.uid = row.uid
     lead.distance_miles = round(haversine_miles(*config.DEFAULT_CENTER, lead.lat, lead.lon), 2)
     return lead

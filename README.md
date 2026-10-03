@@ -89,8 +89,10 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   airport or campus up to 1.5 miles apart ("Hill Air Force Base" as the airfield and
   as the base), a name that only adds its town ("Smith's Distribution Center" /
   "Smith's Layton Distribution"), and a named building inside its campus's outline
-  ("Intermountain Medical Center South Building"). Neighbours with different names or
-  phone numbers (two stores in one strip mall) stay separate.
+  ("Intermountain Medical Center South Building"), and a building's map outline named
+  for part of the business it lies on or beside ("Cancer Hospital South" beside
+  "Huntsman Cancer Hospital"), which takes the business's own name. Neighbours with
+  different names or phone numbers (two stores in one strip mall) stay separate.
   Police, fire, impound and trailer yards and parcel lockers are not prospects,
   nor are pumping stations, wells, substations and small (under 5,000 sq ft)
   industrial buildings known only by a map tag, nor self-storage, data centres,
@@ -106,6 +108,13 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   carrier's delivery station or home-delivery hub: "FedEx Home Delivery", "Amazon
   Delivery Station") are warehouse / logistics sites, not manufacturing; a carrier's
   shop ("The UPS Store") or lockers are not.
+  A clinic or outpatient centre mapped as a hospital ("Intermountain West Valley
+  Clinic"), a power, heating or cooling plant ("Hospital Generation Plant") and a car
+  or truck wash ("Salt Lake Diesel Wash") are what their names say, not prospects. A
+  map name that only describes a building ("Office and Warehouse, West") with no
+  address, phone or website is no business anyone can call: it is held in tier D
+  (so a search leaves it out) and flagged **Needs a name**; rows saved before show
+  the same way, and the saved row itself is unchanged.
   **Why this score** and the Excel and CSV **Why This Score** column explain each
   lead in a salesperson's words: where its kind of business comes from ("from the map
   listing", "from its name") and, when only the building type or the name suggests

@@ -1,5 +1,5 @@
 {
- "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses AARCO's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests. \"not_campus\": places named after a university or college that are not the campus (a garden, house, condo, department, press...); they must never score as a campus prospect. Businesses with \"not_prospect\": true (police, fire, impound, trailer yards, parcel lockers) must get no prospect category and score below the default minimum. \"not_production\": small shops and eateries whose name has a production word (\"Day Dairy Barn\"); a name alone must never make them a food & beverage plant. Map listings known only by a catch-all industrial tag on a small building (under 5,000 sq ft), and pumping stations, water wells, substations or a utility's or city's structures, are \"not_prospect\" too (with their footprint_sqft). \"name_traps\": listings whose name holds another business's name or a misleading word (a hotel named after the air base beside it, a thrift store called \"... Industries\"); each must get \"category\" and must never show a reason containing \"never_reason\". Self-storage places (\"Magna Safe Storage\", tagged or named so), data centres, career centres and a city's maintenance shops on a catch-all industrial tag are \"not_prospect\" too. More \"name_traps\": a retail chain whose name holds a warehouse word (\"Harbor Freight\") is retail, and a furniture shop mapped as a mall is never a venue. \"generic_names\": map listings whose only name is a generic word (\"Recycling\", \"Junkyard\"); each must score below the same place with a real name (\"named\"), and the free map data gives it a descriptive name (operator, street or city) where the map has one.",
+ "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses AARCO's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests. \"not_campus\": places named after a university or college that are not the campus (a garden, house, condo, department, press...); they must never score as a campus prospect. Businesses with \"not_prospect\": true (police, fire, impound, trailer yards, parcel lockers) must get no prospect category and score below the default minimum. \"not_production\": small shops and eateries whose name has a production word (\"Day Dairy Barn\"); a name alone must never make them a food & beverage plant. Map listings known only by a catch-all industrial tag on a small building (under 5,000 sq ft), and pumping stations, water wells, substations or a utility's or city's structures, are \"not_prospect\" too (with their footprint_sqft). \"name_traps\": listings whose name holds another business's name or a misleading word (a hotel named after the air base beside it, a thrift store called \"... Industries\"); each must get \"category\" and must never show a reason containing \"never_reason\". Self-storage places (\"Magna Safe Storage\", tagged or named so), data centres, career centres and a city's maintenance shops on a catch-all industrial tag are \"not_prospect\" too. More \"name_traps\": a retail chain whose name holds a warehouse word (\"Harbor Freight\") is retail, and a furniture shop mapped as a mall is never a venue. \"generic_names\": map listings whose only name is a generic word (\"Recycling\", \"Junkyard\"); each must score below the same place with a real name (\"named\"), and the free map data gives it a descriptive name (operator, street or city) where the map has one. Round 21 (a real 30-mile map search around AARCO): an outpatient clinic mapped as a hospital (\"Intermountain West Valley Clinic\"), a hospital's power plant (\"Hospital Generation Plant\") and a truck wash on an industrial building (\"Salt Lake Diesel Wash\") are \"not_prospect\" and \"name_traps\" (no category, never \"Hospital\" or \"Manufacturing\"). \"needs_name\": map listings whose name only describes a building (\"Office and Warehouse, West\") with no address, phone or website; each must land in tier D, below the default minimum score, flagged as needing a name, while the same building with an address (\"address\") keeps \"tier\". The same hospital as two rows (its building's outline \"Cancer Hospital South\" beside \"Huntsman Cancer Hospital\") is a dedupe case (tests/test_sites.py).",
  "businesses": [
   {
    "name": "Smith's Marketplace",
@@ -393,6 +393,45 @@
    "footprint_sqft": 45000,
    "has_equipment": false,
    "not_prospect": true
+  },
+  {
+   "name": "Intermountain West Valley Clinic",
+   "source": "osm",
+   "raw_categories": [
+    "amenity=hospital",
+    "healthcare=hospital",
+    "operator=Intermountain Healthcare"
+   ],
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Hospital Generation Plant",
+   "source": "osm",
+   "raw_categories": [
+    "man_made=works"
+   ],
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Hospital Generation Plant",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "footprint_sqft": 9000,
+   "has_equipment": false,
+   "not_prospect": true
+  },
+  {
+   "name": "Salt Lake Diesel Wash",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "has_equipment": false,
+   "not_prospect": true
   }
  ],
  "confirmed": [],
@@ -540,6 +579,45 @@
    ],
    "category": "distribution",
    "never_reason": "no business name"
+  },
+  {
+   "name": "Intermountain West Valley Clinic",
+   "source": "osm",
+   "raw_categories": [
+    "amenity=hospital",
+    "healthcare=hospital",
+    "operator=Intermountain Healthcare"
+   ],
+   "category": "",
+   "never_reason": "Hospital / medical center"
+  },
+  {
+   "name": "Hospital Generation Plant",
+   "source": "osm",
+   "raw_categories": [
+    "man_made=works"
+   ],
+   "category": "",
+   "never_reason": "Manufacturing"
+  },
+  {
+   "name": "Hospital Generation Plant",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "footprint_sqft": 9000,
+   "category": "",
+   "never_reason": "Manufacturing"
+  },
+  {
+   "name": "Salt Lake Diesel Wash",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "category": "",
+   "never_reason": "Manufacturing"
   }
  ],
  "generic_names": [
@@ -558,6 +636,38 @@
     "industrial=scrap_yard"
    ],
    "named": "Rocky Mountain Recycling"
+  }
+ ],
+ "needs_name": [
+  {
+   "name": "Office and Warehouse, West",
+   "source": "osm",
+   "raw_categories": [
+    "building=yes"
+   ],
+   "footprint_sqft": 115900,
+   "address": "2200 S 4000 W",
+   "tier": "B"
+  },
+  {
+   "name": "Warehouse Building B",
+   "source": "osm",
+   "raw_categories": [
+    "building=warehouse"
+   ],
+   "footprint_sqft": 60000,
+   "address": "1200 W 2100 S",
+   "tier": "B"
+  },
+  {
+   "name": "Industrial Building North",
+   "source": "osm",
+   "raw_categories": [
+    "building=industrial"
+   ],
+   "footprint_sqft": 45000,
+   "address": "500 N Redwood Rd",
+   "tier": "C"
   }
  ]
 }
