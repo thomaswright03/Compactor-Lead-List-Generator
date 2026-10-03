@@ -36,7 +36,7 @@ the code can't take them, and nothing else is waiting on them. Each takes a few 
 one is done, change its **Open** to **Done (the date)** here and in the section it
 links to.
 
-1. **Protect `main`** (GitHub; **Open**, checked 2026-10-03). So a commit with a
+1. **Protect `main`** (GitHub; **Done (2026-10-03)**: ruleset `Protect main`). So a commit with a
    failing check can't land on `main`. Steps: [Deploying → Protect `main`](#deploying)
    (a ruleset that requires the checks `lint`, `test (sqlite)` and `test (postgres)`).
    *Check:* `gh api repos/thomaswright03/Compactor-Lead-List-Generator/branches/main --jq .protected`
@@ -57,7 +57,7 @@ links to.
    the repository next. Steps, with an optional archive tag that keeps its commit:
    [Old branches](#the-size-of-a-clone). *Check:* `git ls-remote --heads origin` lists
    only `refs/heads/main`.
-4. **Turn on the nightly backup** (GitHub; **Open**, added 2026-10-03). So a copy older
+4. **Turn on the nightly backup** (GitHub; **Done (2026-10-03)**: first run green). So a copy older
    than Neon's 6-hour history exists. On GitHub open the repository → **Settings** →
    **Secrets and variables** → **Actions** → **New repository secret**, twice:
    `BACKUP_DATABASE_URL` = the Neon connection string (the same as Render's
@@ -190,9 +190,9 @@ the **Merge** button greyed out. Render's deploy rule (above) stays as it is.
 `main`), and `https://github.com/thomaswright03/Compactor-Lead-List-Generator/branches`
 shows `main` with a shield or "protected" mark.
 
-**Status (2026-10-03): not set yet** (GitHub still reports `main` as not
-protected). Whoever sets it should change this line to say so, with the date.
-Until then a red commit can land on `main`, but Render won't deploy it.
+**Status: on since 2026-10-03.** The ruleset `Protect main` requires `lint`,
+`test (sqlite)` and `test (postgres)`, and blocks deleting `main` and force pushes;
+GitHub reports `main` as protected.
 
 The Python packages are pinned to exact versions in `requirements.txt`, so a
 deploy never picks up a new Flask or psycopg by surprise (the Excel files are
