@@ -92,8 +92,7 @@ async function loadSearches() {
   } else if (today) {
     setGo(true, "Today's search didn't finish, so it can be run again.");
   } else if (cutToday) {
-    setGo(true, "Today's search was cut off by a server restart; what it had found was saved (see the search " +
-                "history). You can search again now.");
+    setGo(true, cutOffText(cutToday));
   } else if (body.reruns_left) {
     // After an incomplete search (a source failed) it may run again, a set number of times.
     const n = body.reruns_left;
@@ -107,6 +106,23 @@ async function loadSearches() {
   renderProblems(body.problems, body.problems_unread);
   if (body.admin && body.admin !== "open") showAdmin(false);   // locked again elsewhere
   if (body.switches) { S.switches = body.switches; renderSwitches(body.switches); }
+}
+// Today's search cut off by a server restart (interrupted.py), said as its history row says it:
+// how many businesses were saved, or that nothing had been found (or kept) yet.
+/** @param {SearchRow} s */
+function cutOffText(s) {
+  const n = s.leads || 0;
+  if (n) {
+    return `Today's search was cut off by a server restart; the ${num(n)} business${n === 1 ? "" : "es"} it had ` +
+      `found ${n === 1 ? "was" : "were"} saved (see the search history). Today's search is still available.`;
+  }
+  const pairs = Array.isArray(s.details) ? s.details : Object.entries(s.details || {});
+  const found = pairs.some(([k, v]) => /^Businesses from/.test(String(k)) && Number(v) > 0);
+  return found
+    ? "Today's search was cut off by a server restart; none of what it had found was close enough or scored " +
+      "high enough to keep, so nothing was saved. Today's search is still available."
+    : "Today's search was cut off by a server restart before it had found anything, so nothing was saved. " +
+      "Today's search is still available.";
 }
 // The emergency switches (web/finding.py flip_switch): each takes effect on the next request.
 /** @type {Record<string, () => boolean>} */

@@ -1573,7 +1573,8 @@ def test_a_search_cut_off_by_a_restart_says_what_was_saved_and_frees_the_day(bro
         expect(tab.locator("#history .h-leads")).to_contain_text("2 Interrupted", timeout=15000)
         expect(tab.locator("#history")).to_contain_text(
             "the 2 businesses it had found were saved. It didn't use up the day's search.")
-        expect(tab.locator("#day-note")).to_contain_text("cut off by a server restart")
+        expect(tab.locator("#day-note")).to_contain_text(
+            "cut off by a server restart; the 2 businesses it had found were saved")
         expect(tab.locator("#go")).to_be_enabled()
         assert sorted(l.name for l in saved.load()) == ["Costco", "Smith's Marketplace"]
     finally:
@@ -1581,6 +1582,32 @@ def test_a_search_cut_off_by_a_restart_says_what_was_saved_and_frees_the_day(bro
         context.close()
         server.shutdown()
     assert not errors
+
+
+@pytest.mark.parametrize("found", [0, 3])
+def test_the_find_page_and_the_history_agree_after_a_restart_that_saved_nothing(browser, site, page, found):
+    """A restart before the search kept anything: the Find page says nothing was saved (as
+    the history row does), never "what it had found was saved"."""
+    from leadgen import daily, interrupted
+    day, _ = daily.claim({"location": "Murray", "radius": 30})
+    daily.release(day, interrupted.reason(0, bool(found)),
+                  {"interrupted": True, "leads": 0, "new": 0,
+                   "details": {"osm raw results": found} if found else {}})
+    context = _context(browser, viewport={"width": 1280, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#find")
+    note = tab.locator("#day-note")
+    history = tab.locator("#history tbody").first
+    if found:
+        expect(note).to_contain_text("none of what it had found was close enough or scored high enough to keep")
+        expect(history).to_contain_text("none of the places it had found were within the radius")
+    else:
+        expect(note).to_contain_text("cut off by a server restart before it had found anything, so nothing "
+                                     "was saved. Today's search is still available.")
+        expect(history).to_contain_text("before it found any businesses. It didn't use up the day's search.")
+    assert "was saved (see" not in note.inner_text()
+    expect(tab.locator("#go")).to_be_enabled()
+    context.close()
 
 
 def _history_with_searches():
