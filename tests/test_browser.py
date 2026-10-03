@@ -1895,6 +1895,55 @@ def test_search_details_show_every_value_whole(browser, site, page, width):
     context.close()
 
 
+# Each visible table heading's words, and those split across two lines (a break inside a
+# word, "Chec / ked"); a heading may wrap between its words.
+WORDS_SPLIT = r"""() => {
+    const seen = [], split = [];
+    for (const th of document.querySelectorAll('th')) {
+        if (!th.offsetWidth || !th.textContent.trim()) continue;
+        seen.push(th.textContent.trim());
+        const text = document.createTreeWalker(th, NodeFilter.SHOW_TEXT);
+        for (let node = text.nextNode(); node; node = text.nextNode()) {
+            for (const word of node.data.matchAll(/\S+/g)) {
+                const tops = new Set();
+                for (let i = word.index; i < word.index + word[0].length; i++) {
+                    const r = document.createRange(); r.setStart(node, i); r.setEnd(node, i + 1);
+                    const box = r.getBoundingClientRect();
+                    if (box.width) tops.add(Math.round(box.top));
+                }
+                if (tops.size > 1) split.push(word[0]);
+            }
+        }
+    }
+    return { seen, split }; }"""
+
+
+@pytest.mark.parametrize("width", [320, 375, 390, 1100, 1440])
+def test_no_table_heading_breaks_inside_a_word(browser, site, page, width):
+    from leadgen import calls, marks
+    lead = saved.load()[0]
+    marks.set_mark(lead.uid, "yes", "Dana Smith")           # Stats shows its table once one is marked
+    calls.log_call(lead.uid, "Follow Up", "Asked for the manager; " + LONG_WORD, by="Dana Smith")
+    context = _context(browser, viewport={"width": width, "height": 900})
+    tab = context.new_page()
+    shown = {}
+    for name, ready in (("stats", "#s-table tbody tr"), ("leads", "table.leads tbody tr"),
+                        ("calls", "table.plain.calls tbody tr")):
+        tab.goto(site + "#" + name)
+        tab.wait_for_selector(ready)
+        if name == "stats":
+            tab.wait_for_function("document.querySelectorAll('#s-table tbody tr').length === 4")
+        said = tab.evaluate(WORDS_SPLIT)
+        assert said["split"] == [], (name, said)
+        shown[name] = said["seen"]
+        # Long text people typed still wraps inside its card: nothing scrolls sideways.
+        assert tab.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), name
+    assert shown["stats"] == ["Tier", "Checked", "Have one", "Share"]
+    if width >= 1100:                         # narrower windows show cards, without headings
+        assert shown["leads"] and shown["calls"]
+    context.close()
+
+
 @pytest.mark.parametrize("width", [375, 390])
 def test_calls_results_are_one_list_on_a_phone(browser, site, page, width):
     from leadgen import calls

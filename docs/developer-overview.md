@@ -271,8 +271,11 @@ more than two rows), with the
 tutorial, your name, the Yelp count, the colour switch and Log out under **Menu**; the
 browser's own bar takes the sidebar's colour of the theme shown, light or dark,
 including after a Light / Dark choice (`setThemeColor` in `templates/_theme.html`).
-The search history's headings, numbers and **Details** never break inside a word
-(only the place searched wraps). Times are written
+No table heading on any page breaks inside a word, at any width from 320 px (`th {
+overflow-wrap:normal }`; headings wrap only between words, while names, notes and pasted
+addresses in the cells still wrap anywhere; `test_no_table_heading_breaks_inside_a_word`
+checks Stats, Leads and Calls), and the search history's numbers and **Details** don't
+either (only the place searched wraps). Times are written
 one way everywhere, in Utah time: "Sep 29, 2026, 4:43 PM", or "4:43 PM".
 The first Tab stop on every page is **Skip to main content**, which jumps past
 the sidebar to the page's list (Leads, Calls) or heading.

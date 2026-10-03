@@ -15,10 +15,12 @@ textarea:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; 
    a pasted web address or email breaks inside its card or cell instead of widening the page. */
 .card, .history, dialog, .warn, .recent, .toast, table.plain td, .notes { overflow-wrap:anywhere; }
 .tag, .badge { white-space:nowrap; }                /* short labels ("Incomplete") never break */
-/* The search history's headings, numbers and Details link are whole words at every width
-   (anywhere would let the table squeeze them to "Radiu / s"); the place searched wraps
-   between words, and inside a long one only when it can't fit. */
-table.plain.hist th, table.plain.hist td.h-when, table.plain.hist td.h-radius,
+/* A table's headings are whole words at every width, on every page: they wrap only between
+   words (anywhere, inherited from the card, let a table squeeze them to "Chec / ked"). */
+th { overflow-wrap:normal; }
+/* The search history's numbers and Details link are whole words too; the place searched
+   wraps between words, and inside a long one only when it can't fit. */
+table.plain.hist td.h-when, table.plain.hist td.h-radius,
 table.plain.hist td.h-leads, table.plain.hist td.h-new, table.plain.hist td.h-act { overflow-wrap:normal; }
 table.plain.hist td.h-where { overflow-wrap:break-word; }
 input, select, textarea { font:inherit; font-weight:400; padding:var(--sp-2); border:1px solid var(--line); border-radius:var(--r-sm); color:var(--ink); background:var(--input); }
@@ -221,7 +223,8 @@ dl.details div.wide dd { margin:0; text-align:left; }
 @keyframes starting-show { from { opacity:0; } to { opacity:1; } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation:none; } }
 table.leads { border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed; }
-table.leads th, table.leads td { text-align:left; padding:var(--sp-2); border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
+table.leads th, table.leads td { text-align:left; padding:var(--sp-2); border-bottom:1px solid var(--line); vertical-align:top; }
+table.leads td { overflow-wrap:anywhere; }
 table.leads th { background:var(--th); position:sticky; top:0; font-size:var(--fs-sm); z-index:2; color:var(--ink); }
 table.leads th button.sort { background:none; border:0; padding:0; color:inherit; font:inherit; font-weight:700; display:inline-flex; gap:var(--sp-1); white-space:nowrap; }
 table.leads th button.sort .arrow { color:var(--muted); }
