@@ -11,13 +11,14 @@ in Render → the service → **Environment** → **Save Changes**. Details just
 - [Deploying](#deploying) · [Logs and rollback](#logs-and-rolling-back-a-bad-deploy)
 - [Alerts: the webhook](#problems-the-webhook)
 - [Settings](#settings-environment-variables) · [Put it online and the database](#put-it-online-render)
+- [Backups and restoring](#backups-and-restoring)
 - [Login](#login-and-the-free-plan) · [Yelp limits](#yelp-notes) · [Google costs](#cost-notes-google)
 - [Owner actions still open](#owner-actions-still-open)
 
 ## Owner actions still open
 
-Three settings only the owner (Thomas) can make, on GitHub and on Render; the code
-can't make them, and nothing else is waiting on them. Each takes a few minutes. When
+Steps only the owner (Thomas) can take, on GitHub, on Render and with the live data;
+the code can't take them, and nothing else is waiting on them. Each takes a few minutes. When
 one is done, change its **Open** to **Done (the date)** here and in the section it
 links to.
 
@@ -42,6 +43,20 @@ links to.
    the repository next. Steps, with an optional archive tag that keeps its commit:
    [Old branches](#the-size-of-a-clone). *Check:* `git ls-remote --heads origin` lists
    only `refs/heads/main`.
+4. **Turn on the nightly backup** (GitHub; **Open**, added 2026-10-03). So a copy older
+   than Neon's 6-hour history exists. On GitHub open the repository → **Settings** →
+   **Secrets and variables** → **Actions** → **New repository secret**, twice:
+   `BACKUP_DATABASE_URL` = the Neon connection string (the same as Render's
+   `DATABASE_URL`), and `BACKUP_PASSPHRASE` = a long passphrase you keep in your password
+   manager (without it the copies can't be read, by anyone). Then **Actions** →
+   **Nightly backup** → **Run workflow**. *Check:* the run is green and has an artifact
+   `leadgen-backup-<date>`. Details: [Backups and restoring](#backups-and-restoring).
+5. **Rehearse a restore of the live data once** (your computer; **Open**, added
+   2026-10-03). Download a nightly copy (or make one: `python -m leadgen backup`), then
+   restore it into a local SQLite file with no `DATABASE_URL` set (`python -m leadgen
+   restore <file> --apply`), run `python -m leadgen web` and compare Leads, Calls and Stats
+   with the live site. *Check:* the counts match; write the date in the rehearsals table
+   under [Backups and restoring](#backups-and-restoring).
 
 ## Emergency switches: stop searches or paid calls
 
@@ -408,6 +423,112 @@ python -m leadgen out-of-area --restore       # put every removed lead back
 `--remove` never touches a lead someone marked Yes / No or logged a call for (it
 is listed as kept). Each removed row is kept, as it was, in the additive
 `removed_leads` table, so nothing is lost and `--restore` brings it back.
+
+## Backups and restoring
+
+Everything the sales team produces lives in the one Postgres database named by
+`DATABASE_URL` (Neon): the saved list, every Yes / No mark and who made it, every call
+with its Conversation Summary, the corrected phones and contact names, and the search
+history. The Excel download is not a backup (it has only the latest call of each lead).
+There are three copies, each reaching further back:
+
+| Copy | How far back | Where it is | Who sets it up |
+|---|---|---|---|
+| Neon's history | The last **6 hours** on Neon's free plan (up to 7 days on Launch, 30 on Scale) | In Neon | Nothing to do; check it under **Settings** → **Postgres** → **History window** |
+| Nightly copy | Every night for the last **90 days** | GitHub → **Actions** → **Nightly backup** → a run → **Artifacts** (encrypted) | The owner, once: add two secrets ([Owner actions](#owner-actions-still-open), item 4) |
+| On-request copy | Whenever someone makes one (keep one a month for good) | A file on the owner's computer or private drive | Anyone with the code and `DATABASE_URL` |
+
+**What a copy holds.** `python -m leadgen backup` writes every row of every table that
+keeps the team's work or the site's records (all of `store.SCHEMA` except the cache of
+map, Google and Yelp answers and a running search's checkpoints) to one file,
+`leadgen-backup-<Utah date and time>.json.gz` (gzip-compressed JSON, read in one
+transaction, so it is one moment's copy). It prints what it holds ("1,204 saved leads,
+88 marked yes, 61 marked no, 240 calls, 34 searches"); keep that line with the file.
+The file holds call notes and phone numbers: keep it private and never commit it
+(`.gitignore` refuses `leadgen-backup-*`). An existing file is never replaced.
+
+**Make a copy by hand** (before a risky change, `merge-sites --apply` or
+`out-of-area --remove`, and once a month to keep): on a computer with the code
+(`pip install -r requirements.txt`), with the Neon connection string from Neon →
+**Connect** (the same as Render's `DATABASE_URL`):
+
+```bash
+DATABASE_URL='postgresql://...' python -m leadgen backup
+# Windows (PowerShell): $env:DATABASE_URL='postgresql://...'; python -m leadgen backup
+```
+
+**The nightly copy** (`.github/workflows/backup.yml`) runs at about 3 AM Utah time, makes
+the same copy, encrypts it with the owner's passphrase (AES-256, gpg; the repository is
+public, so it is never stored unencrypted) and keeps it for 90 days as the run's artifact
+`leadgen-backup-<date>`. It does nothing until the owner adds the two secrets; until then
+each run says "The nightly backup is off". To get a copy: GitHub → **Actions** →
+**Nightly backup** → the night's run → **Artifacts** → `leadgen-backup-<date>` (a zip
+holding `leadgen-backup-<date>.json.gz.gpg`), then unzip it and decrypt it (GnuPG:
+`brew install gnupg` on a Mac, Gpg4win on Windows) with the passphrase:
+
+```bash
+gpg --output leadgen-backup-2026-10-03.json.gz --decrypt leadgen-backup-2026-10-03.json.gz.gpg
+```
+
+To keep a copy older than 90 days, download one each month and keep it with the
+owner's private files.
+
+### Restoring
+
+Pick the first that fits. Each one keeps the current database as it is until the site
+is pointed at the restored one, so it can be undone by pointing it back.
+
+**A. A mistake in the last few hours (within Neon's history): a new branch from the
+past.** In the Neon console, open the project → **Branches** → **New branch**. Parent
+branch: the one the site uses (`main`, marked default). Name: `restore-<date>`. Under
+"Select what to include in the new branch" pick **Past data** and a date and time just
+before the mistake (Utah time is UTC−6 in summer, UTC−7 in winter). Click **Create**.
+Then **Connect**, pick the new branch, and copy its connection string. Check it (step C
+below) on your computer first, then in Render open the **compactor-lead-finder**
+service → **Environment** → `DATABASE_URL` → paste the new branch's string → **Save
+Changes** (the site restarts on it in about a minute). Neon can also restore the branch
+in place (**Backup & Restore** → **Restore from history**), keeping the state before
+the restore in a branch named `<branch>_old_<time>`; the new branch is the safer first
+step because nothing changes until Render is pointed at it.
+
+**B. Older than Neon's history, or the database (or the Neon account) is gone: from a
+copy.** Create a new database (Neon → a new project, or a new branch with **Current
+data**; the steps are in [The database](#the-database-saved-leads-marks-calls-the-yelp-count))
+and copy its connection string. Then, on a computer with the code and the decrypted copy:
+
+```bash
+DATABASE_URL='postgresql://<the new database>' python -m leadgen restore leadgen-backup-2026-10-03.json.gz
+DATABASE_URL='postgresql://<the new database>' python -m leadgen restore leadgen-backup-2026-10-03.json.gz --apply
+```
+
+The first command changes nothing: it lists, table by table, the rows in the copy, those
+already there and those it would add. `--apply` adds them, all in one transaction (the
+tables are created first if the database is new). Then point Render's `DATABASE_URL` at
+the new database as in A.
+
+**Rows deleted by mistake in the live database:** run B against the live database
+itself (its own `DATABASE_URL`). A restore only ever adds rows the database doesn't
+have (`INSERT ... ON CONFLICT DO NOTHING`): a row that is already there is never
+changed, nothing is deleted, and marks or calls made since the copy stay as they are.
+Run without `--apply` first and check what it would add. The site never restores
+anything by itself.
+
+**C. Check a restore.** `restore --apply` ends with "The database now holds N saved
+leads, N marked yes, N marked no, N calls, N searches": compare it with the line the
+copy printed when it was made (the restore repeats it on its first line). Then open the
+site and compare with what it showed before the problem: **Leads** (the tab counts:
+All, Has baler or compactor, No baler or compactor), **Calls** (All called
+businesses), **Stats** (saved and checked counts by tier) and the search history on
+**Find leads**. To look before pointing the live site at it, run the site on your own
+computer against the restored database: `DATABASE_URL='postgresql://...' python -m
+leadgen web`, then open http://127.0.0.1:5000.
+
+**Rehearsals** (write each one here):
+
+| Date | What was restored | Result |
+|---|---|---|
+| 2026-10-03 | By the developer, on a copy with test data: a SQLite database (6 leads, 2 marks, 2 calls, 1 search) backed up, restored into an empty Postgres 16 database, and the site started on it | The same counts on Leads, Calls, Stats and the search history as the original; every row identical (also checked by `tests/test_backup.py`, Postgres → SQLite → Postgres) |
+| Open | The live data: a nightly or on-request copy restored into a new Neon branch or a SQLite file on the owner's computer (B, then C) | Owner action 5 under [Owner actions still open](#owner-actions-still-open) |
 
 ## Login and the free plan
 

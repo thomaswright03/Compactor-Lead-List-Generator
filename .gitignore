@@ -12,3 +12,5 @@ output/
 *.whl
 .coverage
 node_modules/
+# Database backups hold call notes and phone numbers: never commit one (docs/operator-runbook.md).
+leadgen-backup-*

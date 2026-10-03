@@ -1,0 +1,67 @@
+# A copy of the live database every night, older than Neon's own history reaches (6 hours
+# on the free plan): `python -m leadgen backup` (every saved lead, Yes / No mark, call and
+# search, with who made each), encrypted with the owner's passphrase and kept as this run's
+# artifact for 90 days. The repository is public, so the copy is only ever stored
+# encrypted (AES-256, gpg); without the passphrase it can't be read.
+#
+# Off until the owner adds two repository secrets (Settings > Secrets and variables >
+# Actions): BACKUP_DATABASE_URL (the Neon connection string, the same as Render's
+# DATABASE_URL) and BACKUP_PASSPHRASE (a long passphrase kept in the owner's password
+# manager). Until then each run only says so. Restoring a copy: docs/operator-runbook.md,
+# "Backups and restoring". The job never changes the database.
+name: Nightly backup
+
+on:
+  schedule:
+    # 3:15 AM Utah time in summer (2:15 AM in winter): nobody is searching or calling.
+    - cron: "15 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Check the two secrets are set
+        id: ready
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::notice::The nightly backup is off: add the BACKUP_DATABASE_URL and BACKUP_PASSPHRASE secrets (docs/operator-runbook.md, Backups and restoring)."
+            echo "on=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "on=true" >> "$GITHUB_OUTPUT"
+            echo "day=$(TZ=America/Denver date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.ready.outputs.on == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.ready.outputs.on == 'true'
+        with:
+          python-version: "3.11"
+          cache: pip
+      - if: steps.ready.outputs.on == 'true'
+        run: pip install -r requirements.txt
+      - name: Copy the database (prints only counts)
+        if: steps.ready.outputs.on == 'true'
+        run: python -m leadgen backup --out "$RUNNER_TEMP/backup.json.gz"
+      - name: Encrypt the copy (the plain copy never leaves the runner)
+        if: steps.ready.outputs.on == 'true'
+        run: |
+          mkdir -p out
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 \
+            --output "out/leadgen-backup-${{ steps.ready.outputs.day }}.json.gz.gpg" "$RUNNER_TEMP/backup.json.gz"
+          rm -f "$RUNNER_TEMP/backup.json.gz"
+      - uses: actions/upload-artifact@v4
+        if: steps.ready.outputs.on == 'true'
+        with:
+          name: leadgen-backup-${{ steps.ready.outputs.day }}
+          path: out/*.gpg
+          retention-days: 90
+          if-no-files-found: error

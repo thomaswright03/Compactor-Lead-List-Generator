@@ -161,7 +161,16 @@ python -m leadgen run --grid 7 --max-requests 300                     # wider, b
 python -m leadgen run --min-score 40 --limit 200                      # only strong leads
 python -m leadgen reference       # copy the site's Yes / No marks into the scoring tests
 python -m leadgen out-of-area     # list saved leads more than 60 miles from Arco (--remove / --restore)
+python -m leadgen backup          # copy every table with the team's work to leadgen-backup-<time>.json.gz
+python -m leadgen restore FILE    # what a copy would add back (--apply adds it)
 ```
+
+`backup` / `restore` (`backup.py`) copy every table in `store.SCHEMA` except the cache and
+a running search's checkpoints (its tables and their keys are read from the schema, so a
+new table is copied too), in one transaction, to gzip-compressed JSON; a restore inserts
+only the rows whose key is missing (`ON CONFLICT DO NOTHING`), never updating or deleting.
+The nightly encrypted copy is `.github/workflows/backup.yml`; the steps are in the
+[operator runbook](operator-runbook.md#backups-and-restoring).
 
 `run` warns when the place is outside Arco's area (`config.SERVICE_AREA_MILES`).
 `out-of-area` (`cleanup.py`) is the only way leads leave the saved list, and only on

@@ -154,6 +154,12 @@ python -m leadgen merge-sites [--apply]
 # List saved leads far outside Arco's area (e.g. from a search around the wrong place);
 # --remove takes them out of the list (kept aside), --restore puts them back
 python -m leadgen out-of-area [--miles 60] [--remove | --restore]
+
+# Copy every saved lead, mark, call and search (with who made each) to a file, and put a
+# copy back: restore lists what it would add; --apply adds only the rows the database
+# lacks, never changing or removing one (operator runbook: "Backups and restoring")
+python -m leadgen backup [--out FILE]
+python -m leadgen restore FILE [--apply]
 ```
 
 It works with **no API key** (free OpenStreetMap data). For much better

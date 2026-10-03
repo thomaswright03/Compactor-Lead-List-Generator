@@ -5,6 +5,8 @@
     python -m leadgen reference      # copy the site's Yes / No marks into the scoring tests
     python -m leadgen merge-sites    # list saved leads that are one business (--apply merges them)
     python -m leadgen out-of-area    # list saved leads far outside Arco's area (--remove, --restore)
+    python -m leadgen backup         # copy every saved lead, mark, call and search to a file
+    python -m leadgen restore FILE   # what putting a copy back would add (--apply adds it)
 """
 
 import argparse
@@ -87,6 +89,16 @@ def build_parser() -> argparse.ArgumentParser:
     act.add_argument("--remove", action="store_true",
                      help="Take them out of the saved list (each is kept aside, so --restore can bring it back)")
     act.add_argument("--restore", action="store_true", help="Put every removed lead back in the saved list")
+
+    bk = sub.add_parser("backup", help="Write a copy of the database (saved leads, Yes / No marks, calls, "
+                        "searches, who made each) to a file; changes nothing")
+    bk.add_argument("--out", default=None, help="The file to write (default leadgen-backup-<Utah date and "
+                    "time>.json.gz in this folder; an existing file is never replaced)")
+
+    rs = sub.add_parser("restore", help="Put a backup's rows back: lists what would be added; --apply adds "
+                        "every row the database doesn't have. Never changes or removes a row")
+    rs.add_argument("file", help="The backup file (.json.gz, from `python -m leadgen backup`)")
+    rs.add_argument("--apply", action="store_true", help="Add the missing rows (one transaction)")
 
     w = sub.add_parser("web", help="Start the web page")
     w.add_argument("--host", default="127.0.0.1")
@@ -241,6 +253,70 @@ def cmd_merge_sites(args: argparse.Namespace) -> int:
     return 0
 
 
+def _which_database() -> None:
+    if not store.database_url():
+        print("Note: DATABASE_URL is not set, so this is the local database, not the website's.",
+              file=sys.stderr)
+
+
+_ONE = {"saved leads": "saved lead", "calls": "call", "searches": "search"}
+
+
+def _counts_text(counts: dict[str, int]) -> str:
+    """"3 saved leads, 2 marked yes, 1 marked no, 1 call, 2 searches"."""
+    return ", ".join(f"{n:,} {_ONE.get(what, what) if n == 1 else what}" for what, n in counts.items())
+
+
+def cmd_backup(args: argparse.Namespace) -> int:
+    from . import backup
+    _which_database()
+    try:
+        path, copy = backup.write(Path(args.out) if args.out else None)
+    except FileExistsError as exc:
+        print(f"Error: {exc.filename} already exists; nothing was written. Pick another name.", file=sys.stderr)
+        return 2
+    except store.Unavailable as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    rows = sum(len(t["rows"]) for t in copy["tables"].values())
+    print(f"Backup written: {path} ({backup.size_text(path)}, {rows:,} rows from {len(copy['tables'])} tables, "
+          f"{copy['made']}).")
+    print(f"It holds {_counts_text(copy['counts'])}.")
+    print("Keep it somewhere safe and private (it holds call notes and phone numbers); never commit it.")
+    return 0
+
+
+def cmd_restore(args: argparse.Namespace) -> int:
+    from . import backup
+    _which_database()
+    try:
+        copy = backup.read(Path(args.file))
+        counts = backup.restore(copy, apply=args.apply)
+        now = backup.counts_now() if args.apply else None
+    except backup.BackupError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    except store.Unavailable as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    print(f"Backup made {copy.get('made', '?')} from a {copy.get('database', '?')} database; "
+          f"it holds {_counts_text(copy.get('counts', {}))}.")
+    width = max(len(c.table) for c in counts) if counts else 5
+    verb = "added" if args.apply else "to add"
+    print(f"  {'table':<{width}}  {'in file':>9}  {'already here':>12}  {verb:>9}")
+    for c in counts:
+        print(f"  {c.table:<{width}}  {c.in_file:>9,}  {c.already:>12,}  {c.added:>9,}")
+    added = sum(c.added for c in counts)
+    if not args.apply:
+        print(f"\nNothing was changed. Add --apply to add these {added:,} rows (rows already here are "
+              "never changed or removed).")
+        return 0
+    print(f"\n{added:,} rows added; nothing was changed or removed.")
+    if now is not None:
+        print(f"The database now holds {_counts_text(now)}.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     args = build_parser().parse_args(argv)
@@ -254,6 +330,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_out_of_area(args)
     if args.command == "merge-sites":
         return cmd_merge_sites(args)
+    if args.command == "backup":
+        return cmd_backup(args)
+    if args.command == "restore":
+        return cmd_restore(args)
     if args.command != "run":
         build_parser().print_help()
         return 1
