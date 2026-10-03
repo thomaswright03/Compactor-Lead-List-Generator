@@ -158,9 +158,19 @@ tr.failed td { color:var(--muted); }
 .tag { display:inline-block; font-size:var(--fs-xs); font-weight:700; border-radius:var(--r-pill); padding:0 var(--sp-2); background:var(--pts-neg); color:var(--bad-ink); }
 .tag.info { background:var(--warn-bg); color:var(--warn-ink); }
 .fill-note.done { background:var(--pts); border-color:var(--line); color:var(--good-ink); }
-dl.details { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:var(--sp-2) var(--sp-4); margin:var(--sp-2) 0; }
-dl.details div { display:flex; justify-content:space-between; gap:var(--sp-2); border-bottom:1px dashed var(--line); padding:var(--sp-1) 0; }
-dl.details dt { color:var(--muted); } dl.details dd { margin:0; font-weight:600; }
+/* A search's Details: each label with its value beside it, in as many columns as fit (one on a
+   phone). A value is never squeezed: a number stays one figure ("795", never "7 / 9 / 5"), a
+   short value goes under its label when the two don't fit side by side, and a long one (what the
+   filling in added) takes the whole width under its label. Words break only between words. */
+dl.details { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr)); gap:0 var(--sp-5); margin:var(--sp-2) 0; }
+dl.details div { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:0 var(--sp-3);
+                 min-width:0; border-bottom:1px dashed var(--line); padding:var(--sp-1) 0; }
+dl.details dt, dl.details dd { overflow-wrap:break-word; min-width:0; }
+dl.details dt { color:var(--muted); flex:1 1 8em; }
+dl.details dd { margin:0 0 0 auto; font-weight:600; text-align:right; max-width:100%; }
+dl.details dd.num { white-space:nowrap; font-variant-numeric:tabular-nums; }
+dl.details div.wide { grid-column:1 / -1; display:block; }
+dl.details div.wide dd { margin:0; text-align:left; }
 
 /* Lead and call tables */
 .tabs { display:flex; gap:var(--sp-2); flex-wrap:wrap; margin-bottom:var(--sp-3); }

@@ -1603,6 +1603,59 @@ def test_search_history_headings_and_details_are_whole_words(browser, site, page
     context.close()
 
 
+# A 30-mile search around Arco whose map data answered only partly (the numbers of a real one).
+REAL_DETAILS = {"osm raw results": 795, "osm areas searched": "about 2 of 9 areas",
+                "osm areas asked again": "7 (some never answered)",
+                "osm areas filled in later": "559 businesses (554 new), 6 areas still missing "
+                                             "(around Kaysville, Farmington, Centerville and more)",
+                "results in radius": 795, "duplicates merged": 49, "after dedupe": 746,
+                "below min score": 328, "min score": 20, "leads kept": 418, "competitors flagged": 2,
+                "tier A": 31, "tier B": 102, "tier C": 285, "tier D": 0, "seconds": 412}
+
+
+@pytest.mark.parametrize("width", [320, 390, 768, 1100, 1440, 1920, 2560])
+def test_search_details_show_every_value_whole(browser, site, page, width):
+    """The search history's Details: every number reads as one figure on one line ("795",
+    never "7 / 9 / 5"), and no label or value breaks inside a word, at every width."""
+    from leadgen import daily
+    day, _ = daily.claim({"location": "876 Fortune Rd, Salt Lake City, UT 84104", "radius": 30})
+    daily.finish(day, {"leads": 418, "new": 418, "details": REAL_DETAILS,
+                       "warnings": ["The map areas that didn't answer were asked again in the background "
+                                    "(some never answered)."]})
+    context = _context(browser, viewport={"width": width, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#find")
+    tab.get_by_role("button", name="Details").first.click()
+    tab.wait_for_selector("dl.details")
+    found = tab.evaluate("""() => {
+        const tops = (range) => new Set([...range.getClientRects()].filter((r) => r.width)
+                                         .map((r) => Math.round(r.top))).size;
+        // Each word of the element's text sits on one line (a word split across lines has two tops).
+        const split = (e) => {
+          const out = [];
+          for (const node of e.childNodes) {
+            if (node.nodeType !== 3) continue;
+            for (const m of node.textContent.matchAll(/\\S+/g)) {
+              const r = document.createRange(); r.setStart(node, m.index); r.setEnd(node, m.index + m[0].length);
+              if (tops(r) > 1) out.push(m[0]);
+            }
+          }
+          return out;
+        };
+        const lines = (e) => { const r = document.createRange(); r.selectNodeContents(e); return tops(r); };
+        const items = [...document.querySelectorAll('dl.details > div')];
+        return { split: items.flatMap((d) => [...d.children].flatMap(split)),
+                 numbers: items.map((d) => d.querySelector('dd'))
+                               .filter((dd) => /^[\\d,]+$/.test(dd.textContent))
+                               .map((dd) => [dd.textContent, lines(dd)]),
+                 page: document.documentElement.scrollWidth > window.innerWidth }; }""")
+    assert not found["split"], found
+    assert ("795", 1) in [tuple(n) for n in found["numbers"]]
+    assert all(n == 1 for _, n in found["numbers"]), found["numbers"]
+    assert not found["page"]
+    context.close()
+
+
 @pytest.mark.parametrize("width", [375, 390])
 def test_calls_results_are_one_list_on_a_phone(browser, site, page, width):
     from leadgen import calls

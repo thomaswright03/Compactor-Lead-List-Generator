@@ -263,6 +263,8 @@ function showFill(f, paused) {
 // Every count on the page reads the same way: 1,135.
 /** @type {(v: number | string | null | undefined) => string} */
 const num = (v) => typeof v === "number" ? v.toLocaleString() : v ?? "-";
+// A Details value longer than this (characters) is written under its label, across the panel.
+const DETAIL_WIDE = 32;
 // Each search is its own <tbody> (its row, then its reason or details), so on a phone
 // each becomes one stacked card with every field in view (app.css, table.plain.hist).
 /** @param {SearchRow[]} searches @param {SearchesAnswer} body */
@@ -346,7 +348,11 @@ function renderHistory(searches, body) {
       // [label, value] pairs in funnel order (older answers were an object).
       const pairs = Array.isArray(s.details) ? s.details : Object.entries(s.details || {});
       for (const [k, v] of pairs) {
-        const row = el("div"); row.append(el("dt", k), el("dd", num(v))); dl.append(row);
+        const row = el("div"), dd = el("dd", num(v));
+        // A count ("795", "3 seconds") stays on one line; a long value gets the whole width (app.css).
+        if (typeof v === "number" || /^[\d,.]+( \w+)?$/.test(String(v))) dd.className = "num";
+        else if (String(v).length > DETAIL_WIDE) row.className = "wide";
+        row.append(el("dt", k), dd); dl.append(row);
       }
       more.append(dl);
       for (const w of s.warnings || []) more.append(el("div", w, "warn"));
