@@ -103,7 +103,8 @@ def test_last_called_is_a_real_date_in_excel_and_text_in_the_csv(monkeypatch):
             "Costco": dt.datetime(2026, 10, 2, 18, 39, tzinfo=dt.UTC)}     # Oct 2, 12:39 PM MDT
     for lead in leads:
         if lead.name in when:
-            monkeypatch.setattr(calls.time, "time", lambda t=when[lead.name].timestamp(): t)
+            at = when[lead.name].timestamp()
+            monkeypatch.setattr(calls.time, "time", lambda at=at: at)
             calls.log_call(lead.uid, "Follow Up", "", by="Dana")
     client = web.create_app().test_client()
     ws = load_workbook(io.BytesIO(client.get("/download/saved.xlsx").data))["Leads"]
