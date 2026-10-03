@@ -505,7 +505,7 @@ function leadTable(rows, withCall) {
   // Shown from 1100px wide (narrower windows show cards); the Why column takes the rest.
   /** @type {[string, string | null, string?][]} */
   const cols = [[withCall ? "Baler? / Call" : "Baler or compactor?", withCall ? "176px" : "118px"],
-                ["Score", "74px", "score"], ["Business", "20%", "name"], ["Contact", "20%", "city"],
+                ["Score", "90px", "score"], ["Business", "20%", "name"], ["Contact", "20%", "city"],
                 ["Miles", "72px", "miles"], ["Why this score", null]];
   const cg = el("colgroup");
   for (const [, w] of cols) { const c = el("col"); if (w) c.style.width = w; cg.append(c); }

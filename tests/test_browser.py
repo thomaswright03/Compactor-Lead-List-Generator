@@ -1054,6 +1054,28 @@ def test_the_form_reads_closed_once_the_day_is_used(page):
     assert page.locator("#go").is_disabled()
 
 
+@pytest.mark.parametrize("width", [1100, 1280, 1440, 1920])
+def test_every_tier_word_has_room_before_the_business_column(browser, site, page, width):
+    context = _context(browser, viewport={"width": width, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#leads?tab=all")
+    tab.wait_for_selector("table.leads tbody tr")
+    # Every tier's word, the longest ("C possible") included.
+    tab.evaluate("""() => document.querySelectorAll('table.leads tbody tr').forEach((tr, i) => {
+        const [tier, word] = [['A', 'strong'], ['B', 'likely'], ['C', 'possible'], ['D', 'weak']][i % 4];
+        tr.querySelector('.tier-word').textContent = ` ${tier} ${word}`; })""")
+    gaps = tab.evaluate("""() => [...document.querySelectorAll('table.leads tbody tr')].map((tr) => {
+        const r = document.createRange(); r.selectNodeContents(tr.querySelector('.tier-word'));
+        const word = r.getBoundingClientRect(), cell = tr.querySelector('td.score').getBoundingClientRect();
+        const name = tr.querySelector('td.c-name strong').getBoundingClientRect();
+        return [tr.querySelector('.tier-word').textContent.trim(), r.getClientRects().length,
+                Math.round(cell.right - word.right), Math.round(name.left - word.right)]; })""")
+    context.close()
+    assert len(gaps) >= 4
+    # On one line, inside its coloured cell, with a clear gap before the business's name.
+    assert all(lines == 1 and inside >= 4 and gap >= 12 for _, lines, inside, gap in gaps), gaps
+
+
 def test_a_first_visit_is_offered_the_tutorial_once(browser, site, page):
     context = _context(browser, first_visit=True, viewport={"width": 1280, "height": 900})
     tab = context.new_page()
