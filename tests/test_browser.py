@@ -1225,6 +1225,14 @@ def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, 
     first = tab.locator("#history tbody").first
     expect(first).to_contain_text("530")
     assert "Incomplete" not in first.inner_text() and "Filling in" not in first.inner_text()
+    # Stopped by Pause searching: the areas left weren't asked again (not "never answered").
+    daily.finish(day, {"fill": {**fill, "state": "stopped", "why": "paused", "left": 2, "found": 18, "new": 18,
+                                "where": "Coalville and the area to the north-west"}})
+    tab.evaluate("loadSearches()")
+    expect(note).to_have_text("Filling in the missing map areas stopped because searching was paused, so 2 areas "
+                              "(around Coalville and the area to the north-west) were not asked again. 18 more "
+                              "businesses were added (18 new).")
+    assert "never answered" not in tab.inner_text("#history")
     context.close()
 
 

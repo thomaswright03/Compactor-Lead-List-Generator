@@ -68,7 +68,7 @@ def test_a_part_that_never_answers_still_leaves_an_honest_incomplete_result(monk
     assert got.value.coverage == "about 6 of 9 areas"
     # Every quarter was asked once in the first round and once in each catch-up round.
     assert set(tries.values()) == {config.OVERPASS_RETRY_ROUNDS + 1} | {1}
-    assert stats["osm areas asked again"] == "12 (some never answered)"
+    assert stats["osm areas asked again"] == "12 (some didn't answer)"
 
 
 def test_the_catch_up_rounds_are_bounded_in_time(monkeypatch):

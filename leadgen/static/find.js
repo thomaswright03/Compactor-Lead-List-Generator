@@ -238,9 +238,15 @@ function fillText(f) {
     return `Complete: the map areas that didn't answer at first were filled in later.${added}`;
   }
   if (f.state === "stopped") {
+    // The areas left were not asked again: not the map servers' fault.
     const because = f.why === "new_search" ? "the next day's search started" : "searching was paused";
     return `Filling in the missing map areas stopped because ${because}` +
-      `${f.left ? `; ${areasText(f.left)}${aroundText(f)} never answered` : ""}.${added}`;
+      `${f.left ? `, so ${areasText(f.left)}${aroundText(f)} ${f.left === 1 ? "was" : "were"} not asked again` : ""}` +
+      `.${added}`;
+  }
+  if (f.state === "interrupted" && f.left) {
+    return `Filling in the missing map areas was cut short by a server restart; ${areasText(f.left)}` +
+      `${aroundText(f)} ${f.left === 1 ? "is" : "are"} still missing until the next search.${added}`;
   }
   if (!f.left) return `The missing map areas answered later.${added}`;
   const areas = areasText(f.left);

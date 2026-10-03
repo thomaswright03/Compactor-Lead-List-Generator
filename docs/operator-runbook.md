@@ -215,7 +215,9 @@ the day like a complete one. Map areas the free map servers missed are then aske
 again in the background for up to an hour, within that same search (not a second
 one): Find leads shows "Still filling in N areas" with the towns they hold
 ("around Kaysville and Centerville"), then "Complete" or "N areas never answered" (that last one is also reported under Recent problems and to the
-webhook). Pausing searching stops the filling in too, within a few seconds, and so does the next day's search
+webhook). The search's own lines in the history and its Details (how many areas answered,
+which towns are missing) follow the filling in, so they never name a town it has since
+covered; areas left when searching was paused read "not asked: searching was paused". Pausing searching stops the filling in too, within a few seconds, and so does the next day's search
 starting (the history then says "stopped because the next day's search started"): a
 filling in that runs past midnight stays on Find leads until it ends. A restart or deploy during
 it cuts it short (the history then says so). Only a search that failed outright (an unknown place,

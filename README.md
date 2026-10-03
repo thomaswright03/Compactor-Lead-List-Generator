@@ -38,7 +38,10 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   within the same search: their businesses join the saved list as they arrive, and
   Find leads and the search history say "Still filling in N areas" with the towns
   they hold ("around Kaysville, Centerville and Morgan"), then "Complete" or "N
-  areas never answered". A search with missing areas saves what it found and still
+  areas never answered" (or, when searching was paused, that the areas left were not
+  asked again). Every line of that search's history and Details (how many areas
+  answered, the towns still missing) follows the filling in, so they all name the same
+  missing towns. A search with missing areas saves what it found and still
   uses up the day, as the owner asked; the filling in is not a second search). A
   filling in that runs past midnight stays on Find leads until it ends, and is ended
   first when the next day's search starts, so two map searches never run at once.

@@ -717,6 +717,11 @@ def searches() -> ResponseReturnValue:
     except Exception as exc:
         log.error("Loading the search history failed", exc_info=True)
         return jsonify({"error": db_message(exc)}), 503
+    # Once the missing map areas were asked again, every line names the same missing towns
+    # (fillin.settled: copies, so today's record, which is in both, is done once each).
+    if body.get("current"):
+        body["current"] = fillin.settled(body["current"])
+    body["searches"] = [fillin.settled(r) for r in body["searches"]]
     for record in [body.get("current"), *body["searches"]]:
         if record and record.get("details"):
             record["details"] = plain_details(record["details"])

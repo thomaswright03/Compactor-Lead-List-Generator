@@ -616,7 +616,7 @@ def search(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] 
         run.run_round(todo, config.OVERPASS_RETRY_SECONDS)
     if stats is not None and retried:
         stats["osm areas asked again"] = (
-            f"{retried} (all answered)" if not run.missing else f"{retried} (some never answered)")
+            f"{retried} (all answered)" if not run.missing else f"{retried} (some didn't answer)")
     return _result(run)
 
 

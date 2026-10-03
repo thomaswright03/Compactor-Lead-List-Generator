@@ -18,6 +18,7 @@ once; its record then says it stopped for the new search.
 """
 
 import logging
+import re
 import threading
 import time
 from dataclasses import replace
@@ -33,6 +34,7 @@ log = logging.getLogger(__name__)
 # The day's record's "fill" states. A "filling" one past its end (the server
 # restarted mid-way) reads as INTERRUPTED (daily.history).
 FILLING, COMPLETE, GAVE_UP, STOPPED = "filling", "complete", "gave_up", "stopped"
+INTERRUPTED = "interrupted"
 # The notes the search itself left about the missing areas (dropped once they are in).
 PART_OF_AREA = "answered for only part of the area"
 # The note the page shows while the missing areas are filled in (dropped when it ends).
@@ -64,7 +66,8 @@ def start(day: str, params: SearchParams, result: RunResult) -> bool:
     when there is nothing to fill in or the thread can't start."""
     if not ON or not wanted(result):
         return False
-    fill = {"state": FILLING, "left": osm.areas_left(result.osm_missing, result.osm_areas),
+    left = osm.areas_left(result.osm_missing, result.osm_areas)
+    fill = {"state": FILLING, "left": left, "start_left": left,
             "where": where(result.osm_missing, result, params),
             "areas": result.osm_areas, "found": 0, "new": 0, "rounds": 0,
             "until": time.time() + config.FILL_IN_SECONDS}
@@ -236,8 +239,10 @@ def _finish(day: str, fill: dict[str, Any], unsaved: int) -> None:
         final = f"Complete: the map areas that didn't answer at first were filled in later.{added}"
     elif fill["state"] == STOPPED:
         because = NEW_SEARCH_TEXT if fill.get("why") == NEW_SEARCH else "searching was paused"
+        # Not the map servers' fault: the areas left were never asked again.
         final = (f"Filling in the missing map areas was stopped because {because}"
-                 + (f"; {_areas(left)}{_around(fill)} never answered." if left else ".")
+                 + (f", so {_areas(left)}{_around(fill)} {'was' if left == 1 else 'were'} not asked again."
+                    if left else ".")
                  + added + lost)
     else:
         missing = (f"{_areas(left)[:1].upper()}{_areas(left)[1:]} of the free map data"
@@ -250,3 +255,86 @@ def _finish(day: str, fill: dict[str, Any], unsaved: int) -> None:
 
 def _areas(n: int) -> str:
     return "1 area" if n == 1 else f"{n} areas"
+
+
+# ---- the day's record as the page shows it, once its missing areas were asked again
+#
+# The search writes how much of the map data answered ("about 2 of 9 areas searched; not
+# yet: Salt Lake City, ...") before the background asks the missing areas again. The
+# record keeps those words; settled() rewrites them for the page from how the filling in
+# stands (its "left", "where" and state), so every line of the history and its Details
+# names the same missing towns, and areas left because searching was paused (or the next
+# day's search started) read as not asked, never as "never answered".
+
+_COVERAGE = re.compile(r"about (\d+) of (\d+) areas searched(?:; not yet: [^)]*)?")
+_FIRST = re.compile(r"about (\d+) of (\d+) areas$")
+_ASKED_AGAIN = re.compile(r"^(\d+) \(some (?:never answered|didn't answer)\)$")
+# Stored by earlier versions when the administrator's pause stopped a fill-in.
+_STOPPED_NEVER = re.compile(r"(stopped because (?:searching was paused|the next day's search started)); "
+                            r"(\d+ areas?)( \(around [^)]*\))? never answered\.")
+# Why areas are still missing, by the fill-in's state (and, when stopped, why it stopped).
+_LEFT_WHY = {FILLING: "still being asked", COMPLETE: "", GAVE_UP: "never answered",
+             INTERRUPTED: "still missing (a server restart cut the filling in short)",
+             PAUSED: "not asked: searching was paused", NEW_SEARCH: f"not asked: {NEW_SEARCH_TEXT}"}
+
+
+def _why_left(fill: dict[str, Any]) -> str:
+    state = fill.get("state", "")
+    if state == STOPPED:
+        return _LEFT_WHY[NEW_SEARCH if fill.get("why") == NEW_SEARCH else PAUSED]
+    return _LEFT_WHY.get(state, "still missing")
+
+
+def settled(record: dict[str, Any]) -> dict[str, Any]:
+    """The day's record with its coverage words brought up to date with its filling in
+    (see above); a copy: the stored record is unchanged. A record without one is
+    returned as it is."""
+    fill = record.get("fill")
+    if not isinstance(fill, dict) or not fill.get("areas"):
+        return record
+    areas, left = int(fill["areas"]), int(fill.get("left") or 0)
+    why = _why_left(fill)
+    record = dict(record)
+    details = dict(record.get("details") or {})
+    first = _FIRST.match(str(details.get("osm areas searched", "")))
+    before = int(first.group(1)) if first else None
+    # Areas answered since the search: fewer missing than at its start ("start_left"; an
+    # older record without it counts from the search's own figure, once it was asked again).
+    if isinstance(fill.get("start_left"), int):
+        later = max(0, fill["start_left"] - left)
+    else:
+        later = max(0, areas - left - before) if before is not None and fill.get("rounds") else 0
+    answered = areas if not left else min(areas - 1, before + later) if before is not None else areas - left
+    if before is not None and areas > 1:
+        if not left:
+            details["osm areas searched"] = f"all {areas} areas (about {before} during the search, the rest later)"
+        elif later:
+            details["osm areas searched"] = (f"about {answered} of {areas} areas (about {before} during the "
+                                             f"search, {answered - before} later)")
+    asked = _ASKED_AGAIN.match(str(details.get("osm areas asked again", "")))
+    if asked and fill.get("state") != GAVE_UP:
+        details["osm areas asked again"] = (f"{asked.group(1)} (some answered only later, in the background)"
+                                            if not left else f"{asked.group(1)} (some areas {why})")
+    if "osm areas filled in later" in details:
+        so_far = " so far" if fill.get("state") == FILLING else ""
+        details["osm areas filled in later"] = (
+            f"{fill.get('found', 0):,} businesses ({fill.get('new', 0):,} new){so_far}"
+            + (f", {_areas(left)} {why}{_around(fill)}" if left else ", every area in"))
+    record["details"] = details
+    where = fill.get("where") or ""
+    if not left:
+        coverage = f"all {areas} areas searched in the end, some only later in the background"
+    else:
+        # "not asked: searching was paused" reads "not asked (searching was paused): Kaysville".
+        said = re.sub(r"^(not asked): (.*)$", r"\1 (\2)", why) if fill.get("state") != FILLING else "not yet"
+        coverage = f"about {answered} of {areas} areas searched" + (f"; {said}: {where}" if where else "")
+
+    def fixed(text: str) -> str:
+        text = _COVERAGE.sub(lambda m: coverage, text)
+        return _STOPPED_NEVER.sub(lambda m: f"{m.group(1)}, so {m.group(2)}{m.group(3) or ''} "
+                                            f"{'was' if m.group(2) == '1 area' else 'were'} not asked again.", text)
+
+    if isinstance(record.get("reason"), str):
+        record["reason"] = fixed(record["reason"])
+    record["warnings"] = [fixed(w) if isinstance(w, str) else w for w in record.get("warnings") or []]
+    return record
