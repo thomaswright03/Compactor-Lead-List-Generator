@@ -69,7 +69,8 @@ def start(day: str, params: SearchParams, result: RunResult) -> bool:
     left = osm.areas_left(result.osm_missing, result.osm_areas)
     fill = {"state": FILLING, "left": left, "start_left": left,
             "where": where(result.osm_missing, result, params),
-            "areas": result.osm_areas, "found": 0, "new": 0, "rounds": 0,
+            "areas": result.osm_areas, "boxes": osm.part_boxes(result.osm_missing),
+            "found": 0, "new": 0, "rounds": 0,
             "until": time.time() + config.FILL_IN_SECONDS}
     try:
         daily.finish(day, {"fill": fill})
@@ -154,6 +155,7 @@ def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]
             fill["rounds"] += 1
             fill["left"] = osm.areas_left(parts, result.osm_areas)
             fill["where"] = where(parts, result, params)
+            fill["boxes"] = osm.part_boxes(parts)      # which areas are still missing (the Map page)
             log.info("Search %s: filling in the map data, round %d: %d businesses, %d areas left",
                      day, fill["rounds"], len(found), fill["left"])
             unsaved += finish_leads(found, result.center, replace(params, include_closed=True),
@@ -171,6 +173,7 @@ def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]
     finally:
         fill["left"] = osm.areas_left(parts, result.osm_areas)
         fill["where"] = where(parts, result, params) if parts else ""
+        fill["boxes"] = osm.part_boxes(parts)
         _finish(day, fill, len(unsaved))
         running.pop(day, None)
         _ending.pop(day, None)

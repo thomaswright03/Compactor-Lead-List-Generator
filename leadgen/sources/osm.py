@@ -642,6 +642,13 @@ def _result(run: _Parts) -> tuple[list[Lead], list[str]]:
     return leads, run.warnings
 
 
+def part_boxes(parts: Sequence[Part]) -> list[list[float] | None]:
+    """The parts' boxes as the day's record keeps them ([south, west, north, east],
+    rounded; None for a search asked whole): which areas a search missed, for the Map
+    page."""
+    return [None if box is None else [round(x, 6) for x in box] for box, _, _ in parts]
+
+
 def areas_left(parts: Sequence[Part], areas: int) -> int:
     """How many of a search's `areas` the missing parts make up (at least 1 while any
     part is missing), for the page's "still filling in N areas"."""

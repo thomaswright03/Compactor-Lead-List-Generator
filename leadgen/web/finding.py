@@ -19,7 +19,7 @@ from ..geo import GeocodeError, LookupDown, haversine_miles, miles_from_aarco
 from ..localtime import clock_text, date_time_text
 from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, SearchStopped, locate, run
 from ..progress import LOCATE, MAP, MERGE, ORDER, PAID, SAVE, Step
-from ..sources import collecting, paging
+from ..sources import collecting, osm, paging
 from .auth import admin_open, admin_refusal, admin_state
 from .common import (
     NOT_USED_UP,
@@ -376,9 +376,10 @@ def _record(day: str, result: RunResult, job: Job, warnings: list[str],
     """The day's record is written before the job says it is done, so the page's
     search history is up to date when it reloads it."""
     try:
+        areas = {"map_areas": job["map_areas"]} if job.get("map_areas") else {}
         daily.finish(day, {"leads": len(result.leads), "new": job.get("new_leads"),
                            "found_near": result.location_label,
-                           "details": result.stats, "warnings": warnings, **(extra or {})})
+                           "details": result.stats, "warnings": warnings, **areas, **(extra or {})})
     except Exception:
         log.exception("Recording today's search failed; retrying with the count only")
         # Try once more with just the count: without it the day would look unfinished
@@ -427,6 +428,7 @@ def _search(job: Job, params: SearchParams, day: str, checkpoint: interrupted.Ru
             result.leads = [lead for lead in result.leads
                             if lead.business_status != "CLOSED_PERMANENTLY"]
         result.warnings = warnings
+        job["map_areas"] = map_areas(result, params)
         if result.stopped:
             _stopped(day, result, job, warnings)
         elif result.failed_sources:
@@ -453,6 +455,20 @@ def _search(job: Job, params: SearchParams, day: str, checkpoint: interrupted.Ru
         _fail(job, day, f"Something went wrong during the search. {NOT_USED_UP} {RETRY} If it "
                         "keeps happening, tell whoever looks after the site.",
                         "Something went wrong during the search.")
+
+
+def map_areas(result: RunResult, params: SearchParams) -> dict[str, Any] | None:
+    """What the day's record keeps about the free map data's areas (the Map page shades
+    them): the boxes of the parts no server answered for ("missing", [] when every area
+    answered; [None] when none did), or "known": False when the administrator stopped
+    the search partway. None when the search didn't ask the map data."""
+    if params.source not in ("auto", "osm", "both"):
+        return None
+    if result.stopped:
+        return {"known": False}
+    if "osm" in result.failed_sources and "osm" not in result.partial_sources:
+        return {"missing": [None]}
+    return {"missing": osm.part_boxes(result.osm_missing)}
 
 
 def _when_reused(warnings: list[str], params: SearchParams, day: str) -> list[str]:
@@ -645,7 +661,7 @@ def _claim(params: SearchParams, place: dict[str, Any]) -> str | tuple[Response,
         day, done = daily.claim({"location": params.location, "radius": params.radius_miles,
                                  "keywords": ", ".join(params.keywords),
                                  "source": params.source, "place": place["label"],
-                                 "miles": place["miles"]})
+                                 "miles": place["miles"], "center": [place["lat"], place["lon"]]})
     except Exception as exc:
         log.error("Recording the search failed", exc_info=True)
         if isinstance(exc, store.Unavailable) and "DATABASE_URL" in str(exc):

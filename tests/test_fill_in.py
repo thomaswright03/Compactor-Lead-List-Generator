@@ -60,6 +60,8 @@ def test_missing_map_areas_are_filled_in_later_and_the_search_ends_complete(fill
     record = history["searches"][0]
     assert len(history["searches"]) == 1 and history["used_today"]
     assert record["fill"]["state"] == "complete" and record["fill"]["left"] == 0
+    # The parts the search missed are kept, and the filling in's own list empties (the Map page).
+    assert len(record["map_areas"]["missing"]) >= 3 and record["fill"]["boxes"] == []
     # The 12 quarters' businesses, less the corner ones outside the 30 miles.
     found = record["fill"]["found"]
     assert 8 <= found < 12 and record["fill"]["new"] == found
@@ -85,6 +87,7 @@ def test_areas_that_never_answer_are_reported_after_the_hour(filling, monkeypatc
     assert re.search(r"\(about 6 of 9 areas searched; not yet: (Centerville|Kaysville)", body["note"])
     record = client.get("/searches").get_json()["searches"][0]
     assert record["fill"]["state"] == "gave_up" and record["fill"]["left"] == 3
+    assert record["fill"]["boxes"] and all(box[0] > 40.8 for box in record["fill"]["boxes"])   # the north
     assert record["fill"]["rounds"] >= 1 and record["partial"] and record["leads"] == 6
     # The towns the missing (northern) areas hold are named, the nearest first.
     where = record["fill"]["where"]

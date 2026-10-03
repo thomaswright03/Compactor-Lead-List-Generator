@@ -5,7 +5,7 @@ import time
 
 from leadgen import config, daily, pipeline, saved, store, web
 from leadgen.models import Lead
-from leadgen.pipeline import RunResult
+from leadgen.pipeline import RunResult, SearchParams
 from leadgen.scoring import score_lead
 from leadgen.sources import SourceError, osm
 
@@ -124,3 +124,38 @@ def test_a_search_recorded_under_the_old_name_shows_aarco():
     assert daily.earlier_search(record["place"], daily.today(), 0) is not None
     with store.connect() as db:
         assert json.loads(db.one("SELECT info FROM searches")[0])["place"] == old
+
+
+# ---- what a search's record keeps for the Map page
+
+def _params(source="auto"):
+    return SearchParams(location=config.OWN_ADDRESS, radius_miles=30, source=source)
+
+
+def test_a_search_records_the_parts_no_server_answered_for():
+    """The day's record keeps which parts of the map data no server answered for (the
+    Map page shades them): their boxes, none, all of it, or not known when stopped."""
+    from leadgen.web import finding
+    centre = config.SERVICE_CENTER
+    box = (40.9, -112.3, 41.1, -112.0)
+    done = RunResult([], centre, "AARCO", [], {})
+    assert finding.map_areas(done, _params()) == {"missing": []}
+    assert finding.map_areas(done, _params("google")) is None          # the map data wasn't asked
+    missed = RunResult([], centre, "AARCO", [], {}, osm_missing=[(box, 1.0, 0)], osm_areas=9)
+    assert finding.map_areas(missed, _params()) == {"missing": [list(box)]}
+    down = RunResult([], centre, "AARCO", [], {}, failed_sources=["osm"])
+    assert finding.map_areas(down, _params("osm")) == {"missing": [None]}
+    stopped = RunResult([], centre, "AARCO", [], {}, stopped="paused")
+    assert finding.map_areas(stopped, _params()) == {"known": False}
+    assert osm.part_boxes([(None, 1.0, 0), (box, 1.0, 1)]) == [None, list(box)]
+
+
+def test_a_search_records_where_it_ran_and_what_the_map_data_missed(monkeypatch):
+    monkeypatch.setattr(web.finding, "run", lambda params, progress: RunResult(
+        [_lead()], (40.76, -111.89), "Salt Lake City, UT", [], {},
+        partial_sources=["osm"], osm_missing=[((40.9, -112.3, 41.1, -112.0), 1.0, 0)], osm_areas=9))
+    client = web.create_app().test_client()
+    _wait(client, client.post("/search", data={"location": "84101"}).get_json()["job_id"])
+    record = daily.history()["searches"][0]
+    assert record["center"] == [40.7559, -111.8967]                    # the place looked up for 84101
+    assert record["map_areas"] == {"missing": [[40.9, -112.3, 41.1, -112.0]]}
