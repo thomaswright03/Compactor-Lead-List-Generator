@@ -406,6 +406,79 @@ def test_a_search_with_listings_of_two_saved_rows_joins_the_first_and_merges_not
     assert [[r.uid for r in g] for g in saved.merge_plan()] == [[dc, yard]]
 
 
+# The pairs the round-19 review found among 972 leads, as the map data has them: a named
+# building of the hospital's campus inside the campus's outline, 0.218 miles from its pin,
+# and two stores of one company with their own phone numbers.
+def _intermountain():
+    from leadgen.sources import osm
+
+    campus = osm.parse_element({"type": "way", "id": 297639513, "bounds": {
+        "minlat": 40.6559101, "minlon": -111.8948639, "maxlat": 40.6631611, "maxlon": -111.888498}, "tags": {
+        "name": "Intermountain Medical Center", "amenity": "hospital", "healthcare": "hospital",
+        "operator": "Intermountain Healthcare", "phone": "+1 801 507 7000", "addr:city": "Murray"}})
+    south = osm.parse_element({"type": "way", "id": 148059403, "bounds": {
+        "minlat": 40.6562238, "minlon": -111.8933742, "maxlat": 40.6566999, "maxlon": -111.8917877}, "tags": {
+        "name": "Intermountain Medical Center South Building", "building": "hospital"}})
+    return campus, south
+
+
+def _nps():
+    from leadgen.sources import osm
+
+    return [osm.parse_element({"type": "way", "id": 33870379, "bounds": {
+                "minlat": 40.7350224, "minlon": -111.94451, "maxlat": 40.7364136, "maxlon": -111.9427856},
+                "tags": {"name": "NPS Store", "shop": "supermarket", "phone": "+1 801-972-4132"}}),
+            osm.parse_element({"type": "way", "id": 33870287, "bounds": {
+                "minlat": 40.735478, "minlon": -111.9426239, "maxlat": 40.7375481, "maxlon": -111.941238},
+                "tags": {"name": "NPS Store Industrial", "shop": "hardware", "phone": "+1 801-886-8285"}})]
+
+
+def test_a_named_building_of_a_campus_joins_the_campus():
+    campus, south = _intermountain()
+    assert 0.21 < haversine_miles(campus.lat, campus.lon, south.lat, south.lon) < 0.22
+    [lead] = dedupe([campus, south])
+    assert lead.name == "Intermountain Medical Center"
+    assert lead.alt_names == ["Intermountain Medical Center South Building"]
+    assert {p["source_id"] for p in lead.parts} == {"way/297639513", "way/148059403"}
+    assert lead.phone == "+1 801 507 7000"
+
+
+def test_a_part_word_joins_only_inside_the_outline():
+    campus, south = _intermountain()
+    # Without outlines (pins only), a building 0.22 miles off stays apart...
+    campus.outline = south.outline = None
+    assert len(dedupe([campus, south])) == 2
+    # ...and so does a business that only shares words with it, inside the outline.
+    campus, _ = _intermountain()
+    clinic = _b("Intermountain Medical Center Pharmacy", 40.6626, lon=-111.8900, sid="way/ph",
+                raw_categories=["shop=chemist"])
+    assert len(dedupe([campus, clinic])) == 2
+    # Two stores of one company, with their own phone numbers, stay two leads.
+    assert len(dedupe(_nps())) == 2
+
+
+def test_a_campus_building_saved_apart_merges_only_on_request(monkeypatch):
+    campus, south = _intermountain()
+    first, second = _saved_apart(monkeypatch, [campus, south])
+    marks.set_mark(second, "yes", by="Dana")
+    # A later search finds both as one lead: it joins the row saved first, and the other
+    # row stays as it was, with its mark, until the owner merges them.
+    saved.save_search(dedupe(list(_intermountain())))
+    leads = {l.uid: l for l in marks.apply(saved.load())}
+    assert set(leads) == {first, second} and leads[second].has_baler == "yes"
+    assert [[r.uid for r in g] for g in saved.merge_plan()] == [[first, second]]
+    assert saved.merge_sites() == 1
+    [lead] = marks.apply(saved.load())
+    assert lead.uid == first and lead.has_baler == "yes"
+
+
+def test_a_later_search_adds_a_campus_building_to_the_saved_campus():
+    campus, south = _intermountain()
+    saved.save_search([campus])
+    saved.save_search([south])
+    assert south.uid == campus.uid and len(saved.load()) == 1
+
+
 def test_a_map_area_keeps_its_outline():
     import pytest
 

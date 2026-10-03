@@ -70,9 +70,10 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   parts, one name spread over a site up to half a mile across) are one lead, and so
   are a listing inside the map outline of a same-named one, the parts of an air base,
   airport or campus up to 1.5 miles apart ("Hill Air Force Base" as the airfield and
-  as the base), and a name that only adds its town ("Smith's Distribution Center" /
-  "Smith's Layton Distribution"). Neighbours with different names or phone numbers
-  (two stores in one strip mall) stay separate.
+  as the base), a name that only adds its town ("Smith's Distribution Center" /
+  "Smith's Layton Distribution"), and a named building inside its campus's outline
+  ("Intermountain Medical Center South Building"). Neighbours with different names or
+  phone numbers (two stores in one strip mall) stay separate.
   Police, fire, impound and trailer yards and parcel lockers are not prospects,
   nor are pumping stations, wells, substations and small (under 5,000 sq ft)
   industrial buildings known only by a map tag, nor self-storage, data centres,

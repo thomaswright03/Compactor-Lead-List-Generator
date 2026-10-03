@@ -45,6 +45,11 @@ LARGE_SITE_MILES = 1.5
 # Campus", "Adagio Building A"), left out of the site's name.
 _SITE_WORDS = {"campus", "center", "centre", "complex", "building", "buildings", "bldg",
                "unit", "units", "phase", "tower", "towers", "wing"}
+# Words that name one building or part of a site once its site words are left out
+# ("Intermountain Medical Center South Building" on the hospital's campus): a listing
+# named like that inside the site's outline is part of the site (part_added).
+_PART_WORDS = {"north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest",
+               "upper", "lower", "main", "annex", "pavilion"}
 # Sources that report whether a place is open, most trusted first. The merged
 # record is built on the first of these (best phone/website coverage).
 PAID_SOURCES = ("google", "yelp")
@@ -118,6 +123,19 @@ def town_added(a: str, b: str) -> bool:
     who_a = {t for t in plain_a.split() if t not in _GENERIC}
     who_b = {t for t in plain_b.split() if t not in _GENERIC}
     return len(who_a) >= 2 and who_a == who_b
+
+
+def part_added(a: str, b: str) -> bool:
+    """True when one site name is the other with only words naming a part of a site
+    added (_PART_WORDS: "intermountain medical south" / "intermountain medical"), and
+    the shorter still says who it is (not only generic words)."""
+    short, longer = sorted((a.split(), b.split()), key=len)
+    extra = list(longer)
+    for word in short:
+        if word not in extra:
+            return False
+        extra.remove(word)
+    return bool(extra) and all(w in _PART_WORDS for w in extra) and bool(set(short) - _GENERIC)
 
 
 @lru_cache(maxsize=65536)
@@ -331,12 +349,14 @@ def same_site(a: Site | None, b: Site | None) -> bool:
     (an air base, an airport, a campus) within LARGE_SITE_MILES; the same name, a
     listing of one within SAME_NAME_MILES of a listing of the other and the two together
     at most SITE_MILES across; or names that differ only by a town written into one
-    ("Smith's Distribution Center" / "Smith's Layton Distribution") and a listing of one
-    inside the outline of the other."""
+    ("Smith's Distribution Center" / "Smith's Layton Distribution") or a part of the site
+    ("Intermountain Medical Center South Building" / "Intermountain Medical Center") and
+    a listing of one inside the outline of the other."""
     if a is None or b is None or not _phones_agree(a.phones, b.phones):
         return False
     if a.name != b.name:
-        return town_added(a.name, b.name) and (_inside(a, b) or _inside(b, a))
+        return ((town_added(a.name, b.name) or part_added(a.name, b.name))
+                and (_inside(a, b) or _inside(b, a)))
     if _inside(a, b) or _inside(b, a) or (a.large and b.large and _gap(a, b) <= LARGE_SITE_MILES):
         return True
     if haversine_miles(*_box(list(a.points + b.points))) > SITE_MILES:

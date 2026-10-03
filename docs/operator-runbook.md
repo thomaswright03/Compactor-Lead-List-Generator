@@ -389,7 +389,7 @@ the site starts.
 adding one. The buildings of one site (an apartment complex's numbered buildings,
 a campus's parts, one name spread over up to half a mile, a listing inside the map
 outline of a same-named one, an air base's or airport's parts up to 1.5 miles apart,
-a name that only adds its town) are one lead, and a later search's part joins the
+a name that only adds its town, a named building inside its campus's outline) are one lead, and a later search's part joins the
 saved site. Rows saved as separate leads before these rules are left alone by
 searches, because joining them moves calls and Yes / No clicks; a search that finds
 listings of two such rows updates the one saved first. To join them, run
