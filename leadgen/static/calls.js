@@ -319,11 +319,11 @@ $("call-form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) =
     // the call keeps its id, so it is recorded once even if the first try reached the server.
     const { message } = /** @type {Error} */ (err);
     if ($("call-dlg").open && callLead && callLead.key === key) {
-      $("call-error").textContent = `Not saved. ${message} Your notes are kept: press Save to try again.`;
+      $("call-error").textContent = `Not saved. ${message} Your notes are kept.`;
       $("call-save").disabled = false;
     } else {
-      toast(`The call to ${target.name} was not saved. ${message} Your notes are kept: press Just called ` +
-            "on it to try again.", null, true);
+      toast(`The call to ${target.name} was not saved. ${message} Your notes are kept: open Just called ` +
+            "on it to save them.", null, true);
     }
   } finally { S.busy--; $("call-slow").textContent = ""; }
 });

@@ -357,6 +357,11 @@ dialog::backdrop { background:var(--backdrop); }
 /* A bar reached with the keyboard gets a clear ring (the same colour as every other focus ring). */
 .viz rect.col:focus-visible { stroke:var(--accent-2); stroke-width:3px; fill:var(--hover); fill-opacity:.35; }
 .stats-grid #s-table { margin-top:0; }
+/* The tier table's cells are the page's own words and numbers ("None checked yet"): whole
+   words, and on a small phone narrower padding, so all four columns fit without scrolling. */
+#s-table td { overflow-wrap:normal; }
+@media (max-width: 429px) { #s-table th, #s-table td { padding-inline:var(--sp-2); } }
+@media (max-width: 359px) { #s-table th, #s-table td { padding-inline:var(--sp-1); } }
 
 /* Touch screens: everything that can be tapped is at least 44px each way. */
 @media (pointer: coarse) {

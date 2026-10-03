@@ -1504,6 +1504,16 @@ def test_a_mark_that_was_not_saved_stays_on_the_row_with_try_again(page):
     assert page.evaluate("document.activeElement.dataset.ctl") == "yes"
 
 
+def _drop(page, url, routes):
+    """Let go of requests held without an answer (the page gave up on them already), then
+    stop holding: in that order, as a held request let go after page.unroute() can no
+    longer be, and Playwright would keep waiting for it."""
+    while routes:
+        with contextlib.suppress(Exception):
+            routes.pop().abort()
+    page.unroute(url)
+
+
 def test_a_save_that_gets_no_answer_says_so_and_can_be_tried_again(page):
     """A Yes / No or a call whose request never gets an answer (a weak connection): after
     TIMING.saveSlow the page says it is taking longer than usual, after TIMING.saveLimit it
@@ -1523,9 +1533,9 @@ def test_a_save_that_gets_no_answer_says_so_and_can_be_tried_again(page):
                                    "have been saved. Check your connection and try again.")
     expect(row.locator(".saving")).to_have_count(0)
     assert not row.locator(".mark button.on").count() and lost
-    for route in lost:                                # the late answer: the page stopped waiting for it
+    while lost:                                       # the late answer: the page stopped waiting for it
         with contextlib.suppress(Exception):
-            route.fulfill(status=200, content_type="application/json", body='{"ok": true, "undo": null}')
+            lost.pop().fulfill(status=200, content_type="application/json", body='{"ok": true, "undo": null}')
     page.wait_for_timeout(300)
     assert not row.locator(".mark button.on").count() and failed.is_visible()
     page.unroute("**/mark")
@@ -1546,7 +1556,7 @@ def test_a_save_that_gets_no_answer_says_so_and_can_be_tried_again(page):
     page.evaluate("loadChanges()")
     expect(other.locator(".mark-failed")).to_have_count(0)
     expect(other.locator(".mark button.yes.on")).to_have_count(1)
-    page.unroute("**/mark")
+    _drop(page, "**/mark", lost)
 
     # A call: the box says it is slow, then not saved, with the notes still in it.
     page.route("**/calls", lambda route: lost.append(route))
@@ -1556,11 +1566,11 @@ def test_a_save_that_gets_no_answer_says_so_and_can_be_tried_again(page):
     page.click("#call-save")
     expect(page.locator("#call-slow")).to_have_text("Saving… This is taking longer than usual. Still trying…")
     expect(page.locator("#call-error")).to_contain_text("Not saved. The Lead Finder didn't answer within 2 seconds")
-    expect(page.locator("#call-error")).to_contain_text("Your notes are kept: press Save to try again.")
+    expect(page.locator("#call-error")).to_contain_text("Check your connection and try again. Your notes are kept.")
     expect(page.locator("#call-slow")).to_have_text("")
     assert page.input_value("#call-notes") == "Spoke to Dana; send a quote."
     assert page.locator("#call-save").is_enabled()
-    page.unroute("**/calls")
+    _drop(page, "**/calls", lost)
     page.click("#call-save")
     page.wait_for_selector("#call-dlg:not([open])", state="attached")
     expect(page.locator("#toast")).to_contain_text("Smith's Marketplace: saved as Follow Up.")
@@ -1960,11 +1970,11 @@ def test_search_details_show_every_value_whole(browser, site, page, width):
     context.close()
 
 
-# Each visible table heading's words, and those split across two lines (a break inside a
-# word, "Chec / ked"); a heading may wrap between its words.
-WORDS_SPLIT = r"""() => {
+# The words of each visible cell the selector picks (table headings), and those split
+# across two lines (a break inside a word, "Chec / ked"); a cell may wrap between words.
+WORDS_SPLIT = r"""(selector) => {
     const seen = [], split = [];
-    for (const th of document.querySelectorAll('th')) {
+    for (const th of document.querySelectorAll(selector)) {
         if (!th.offsetWidth || !th.textContent.trim()) continue;
         seen.push(th.textContent.trim());
         const text = document.createTreeWalker(th, NodeFilter.SHOW_TEXT);
@@ -1998,9 +2008,15 @@ def test_no_table_heading_breaks_inside_a_word(browser, site, page, width):
         tab.wait_for_selector(ready)
         if name == "stats":
             tab.wait_for_function("document.querySelectorAll('#s-table tbody tr').length === 4")
-        said = tab.evaluate(WORDS_SPLIT)
+        said = tab.evaluate(WORDS_SPLIT, "th")
         assert said["split"] == [], (name, said)
         shown[name] = said["seen"]
+        if name == "stats":
+            # The tier table's own words ("None checked yet") stay whole too, and all four
+            # columns fit without scrolling sideways.
+            assert tab.evaluate(WORDS_SPLIT, "#s-table td")["split"] == []
+            assert tab.evaluate("(() => { const t = document.getElementById('s-table'); "
+                                "return t.scrollWidth <= t.parentElement.clientWidth; })()")
         # Long text people typed still wraps inside its card: nothing scrolls sideways.
         assert tab.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), name
     assert shown["stats"] == ["Tier", "Checked", "Have one", "Share"]

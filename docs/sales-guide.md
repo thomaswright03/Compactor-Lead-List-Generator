@@ -152,8 +152,8 @@ Good to know:
 
 Your typed notes are kept as a draft until you save, even if you close the box.
 On a weak connection the box says "This is taking longer than usual" after 10
-seconds, and after 30 "Not saved … Your notes are kept: press Save to try again"; the
-call is never saved twice.
+seconds, and after 30 "Not saved … Check your connection and try again. Your notes are
+kept." Press **Save** again; the call is never saved twice.
 Logging a call never changes the Yes / No answer.
 
 ## Save a verified phone or contact
