@@ -61,7 +61,9 @@ jobs:
       - name: Tests (browser tests must run, not skip)
         run: |
           python -m pytest -q -rs | tee pytest.log
-          ! grep -q "SKIPPED" pytest.log
+          # Only a Postgres-only test may skip, and only in the SQLite job.
+          if grep "SKIPPED" pytest.log | grep -v "needs LEADGEN_TEST_DATABASE_URL"; then exit 1; fi
+          if [ -n "$LEADGEN_TEST_DATABASE_URL" ] && grep -q "SKIPPED" pytest.log; then exit 1; fi
       # The tests keep their cache and database in a temporary folder (tests/conftest.py).
       - name: The tests wrote no cache into the working copy
         run: test ! -e .cache
