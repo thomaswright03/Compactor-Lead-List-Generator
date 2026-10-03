@@ -342,6 +342,9 @@ dialog::backdrop { background:var(--backdrop); }
      lines apart (an address, its map link, the phone and website read as one block). */
   table.leads td a, table.plain td a { display:inline-flex; align-items:center; min-height:44px; margin-block:-11px; }
   .contact .site { display:flex; align-items:center; min-height:44px; margin-block:-11px; }
+  /* A link in a sentence (a banner or a note: "Your saved leads are on the Leads page"): its
+     padding makes the tap area 44px tall; an inline box's padding doesn't move the lines. */
+  :where(p, li, .form-closed, .warn, .problem, .muted, .hint, .notes, .tour-offer) a:not(.btn) { padding-block:14px; }
   table.leads td a.map { min-width:44px; justify-content:center; }
   details.explain summary, details.advanced summary { display:flex; align-items:center; }
   label.check { min-height:44px; }

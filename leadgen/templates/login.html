@@ -24,6 +24,7 @@
   .help { margin:var(--sp-4) 0 0; font-size:var(--fs-sm); color:var(--muted); }
   .help a { color:var(--accent); font-weight:600; white-space:nowrap; }
   .help a:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
+  @media (pointer: coarse) { .help a { padding-block:14px; } }   /* a 44px tap area; the lines don't move */
   footer { text-align:center; color:var(--side-ink); font-size:var(--fs-sm); padding:var(--sp-4); }
 </style>
 </head>

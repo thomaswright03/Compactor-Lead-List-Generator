@@ -1054,6 +1054,28 @@ def test_the_form_reads_closed_once_the_day_is_used(page):
     assert page.locator("#go").is_disabled()
 
 
+@pytest.mark.parametrize("touch", [True, False])
+def test_a_link_in_a_banner_is_easy_to_tap_on_a_phone(browser, site, page, touch):
+    from leadgen import daily
+    day, _ = daily.claim({"location": "84101"})
+    daily.finish(day, {"leads": 3})
+    context = _context(browser, viewport={"width": 390 if touch else 1280, "height": 844},
+                       has_touch=touch, is_mobile=touch)
+    tab = context.new_page()
+    tab.goto(site + "#find")
+    link = tab.locator("#form-closed a", has_text="Leads")
+    expect(link).to_be_visible()
+    banner = tab.evaluate("document.getElementById('form-closed').getBoundingClientRect().height")
+    tap = link.bounding_box()["height"]
+    tab.add_style_tag(content="#form-closed a { padding-block: 0 !important; }")
+    plain = tab.evaluate("document.getElementById('form-closed').getBoundingClientRect().height")
+    context.close()
+    # A 44px tap area on a touch screen, a plain line of text with a mouse; the banner's
+    # lines don't spread apart either way.
+    assert tap >= 44 if touch else tap < 30, tap
+    assert banner == plain
+
+
 @pytest.mark.parametrize("width", [1100, 1280, 1440, 1920])
 def test_every_tier_word_has_room_before_the_business_column(browser, site, page, width):
     context = _context(browser, viewport={"width": width, "height": 900})
