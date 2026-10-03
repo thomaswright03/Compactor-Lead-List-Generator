@@ -3,9 +3,9 @@
 openpyxl builds a cell object per value and writes its XML one element at a
 time, so 10,000 saved leads took several seconds. This writes the same file
 straight as text, in time that grows in step with the rows (10,000 leads in
-well under a second). It covers only what the downloads use: text and number
-cells, a few cell styles (bold header, fill colours, link font, text that stays
-text), column widths, a frozen header, a filter, one dropdown list per sheet
+well under a second). It covers only what the downloads use: text, number and
+date-time cells, a few cell styles (bold header, fill colours, link font, text that
+stays text), column widths, a frozen header, a filter, one dropdown list per sheet
 and web links. The files open in Excel, LibreOffice, Google Sheets and openpyxl
 (the tests read them back with openpyxl).
 """
@@ -35,16 +35,35 @@ FONTS = {
 }
 
 
+# How a date-time cell reads ("Oct 2, 2026, 12:39 PM", like the site's own times): a
+# custom number format, the first of the ids Excel leaves to files (164 up).
+DATE_FORMAT_ID = 164
+DATE_FORMAT = "mmm d, yyyy, h:mm AM/PM"
+
+
 @dataclass
 class Cell:
     """A value with a style: fill is a hex colour ("C6EFCE"), font a FONTS name,
-    link a web address the cell opens, wrap wraps the text (centred vertically)."""
+    link a web address the cell opens, wrap wraps the text (centred vertically), and
+    date shows a number (an Excel date serial, excel_date) as a date and time, so the
+    column sorts and filters by date."""
 
     value: object = None
     fill: str | None = None
     font: str | None = None
     link: str | None = None
     wrap: bool = False
+    date: bool = False
+
+
+# Excel counts days from 1899-12-30; the Unix epoch (1970-01-01) is day 25569.
+_UNIX_DAY = 25569
+
+
+def excel_date(ts: float, utc_offset_seconds: float) -> float:
+    """Epoch seconds as an Excel date serial in a local time (the wall clock at that
+    UTC offset: Excel date-times have no time zone)."""
+    return _UNIX_DAY + (ts + utc_offset_seconds) / 86400
 
 
 @lru_cache(maxsize=1024)
@@ -148,7 +167,8 @@ class Book:
         self._texts: dict[str, int] = {}   # shared text -> its number
         self._fills: list[str] = []      # colours, in order (fills 0 and 1 are Excel's own)
         self._fonts: list[str] = []      # FONTS names, in order (font 0 is the default)
-        self._styles: dict[tuple[str | None, str | None, bool, bool], int] = {(None, None, False, False): 0}
+        self._styles: dict[tuple[str | None, str | None, bool, bool, bool], int] = {
+            (None, None, False, False, False): 0}
 
     def add_sheet(self, name: str, widths: Iterable[float] = (), freeze: str | None = None) -> Sheet:
         sheet = Sheet(self, name, list(widths), freeze)
@@ -162,10 +182,11 @@ class Book:
         return n
 
     def style(self, cell: Cell | None, quote: bool = False) -> int:
-        key = ((cell.fill, cell.font, cell.wrap) if cell else (None, None, False)) + (quote,)
+        key = ((cell.fill, cell.font, cell.wrap) if cell else (None, None, False)) + (
+            quote, bool(cell and cell.date))
         n = self._styles.get(key)
         if n is None:
-            fill, font, _, _ = key
+            fill, font, _, _, _ = key
             if fill and fill not in self._fills:
                 self._fills.append(fill)
             if font and font not in self._fonts:
@@ -180,10 +201,12 @@ class Book:
             f'<fill><patternFill patternType="solid"><fgColor rgb="FF{c}"/><bgColor indexed="64"/>'
             "</patternFill></fill>" for c in self._fills]
         xfs = []
-        for (fill, font, wrap, quote), _ in sorted(self._styles.items(), key=lambda kv: kv[1]):
+        for (fill, font, wrap, quote, date), _ in sorted(self._styles.items(), key=lambda kv: kv[1]):
             font_id = self._fonts.index(font) + 1 if font else 0
             fill_id = self._fills.index(fill) + 2 if fill else 0
-            attrs = f'numFmtId="0" fontId="{font_id}" fillId="{fill_id}" borderId="0" xfId="0"'
+            attrs = (f'numFmtId="{DATE_FORMAT_ID if date else 0}" fontId="{font_id}" fillId="{fill_id}" '
+                     'borderId="0" xfId="0"')
+            attrs += ' applyNumberFormat="1"' if date else ""
             attrs += ' applyFont="1"' if font else ""
             attrs += ' applyFill="1"' if fill else ""
             attrs += ' quotePrefix="1"' if quote else ""
@@ -193,6 +216,8 @@ class Book:
             else:
                 xfs.append(f"<xf {attrs}/>")
         return (_HEAD + f'<styleSheet xmlns="{_MAIN}">'
+                f'<numFmts count="1"><numFmt numFmtId="{DATE_FORMAT_ID}" formatCode={quoteattr(DATE_FORMAT)}/>'
+                "</numFmts>"
                 f'<fonts count="{len(fonts)}">{"".join(fonts)}</fonts>'
                 f'<fills count="{len(fills)}">{"".join(fills)}</fills>'
                 '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'

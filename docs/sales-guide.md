@@ -169,6 +169,8 @@ Logging a call never changes the Yes / No answer.
 - On **Leads**, press **Download Excel** or **Download CSV** for every saved
   lead, with its mark, who marked it, and the latest call. The file name has
   the date (Utah time), e.g. `compactor-leads-2026-09-30.xlsx`.
+- In Excel, **Last Called** is a real date and time (Utah time), so you can sort it
+  oldest to newest or use Excel's date filter on it ("called more than 30 days ago").
 - The last two columns in Excel are for your own notes on that copy only.
   Nothing typed there goes back into the site: record marks and calls on the
   Leads page.

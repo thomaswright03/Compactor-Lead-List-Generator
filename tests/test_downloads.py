@@ -79,3 +79,45 @@ def test_no_rule_names_or_map_terms_in_the_downloads_or_on_the_leads_page():
     cells = [str(c) for ws in book.worksheets for row in ws.iter_rows(values_only=True) for c in row if c]
     for found in (internal_words(text), internal_words(" | ".join(cells))):
         assert not found, found
+
+
+def test_last_called_is_a_real_date_in_excel_and_text_in_the_csv(monkeypatch):
+    """Excel can sort and filter Last Called by date: each cell is a date and time on Utah's
+    clock, shown as the site writes times; the CSV keeps the readable text."""
+    import datetime as dt
+
+    from openpyxl import load_workbook
+
+    from leadgen import calls, saved, web
+    from leadgen.localtime import date_time_text
+
+    names = ("Harmons", "Smith's", "Costco", "Walmart")
+    leads = [_map_lead(name, ["shop=supermarket"]) for name in names]
+    for lead in leads:
+        score_lead(lead, config.DEFAULT_KEYWORDS)
+    saved.save_search(leads)
+    # Called on these days (UTC): in summer (MDT) and in winter (MST), and after 6 PM Utah time,
+    # which is already the next day in UTC.
+    when = {"Harmons": dt.datetime(2026, 7, 3, 1, 5, tzinfo=dt.UTC),       # Jul 2, 7:05 PM MDT
+            "Smith's": dt.datetime(2026, 1, 15, 18, 30, tzinfo=dt.UTC),    # Jan 15, 11:30 AM MST
+            "Costco": dt.datetime(2026, 10, 2, 18, 39, tzinfo=dt.UTC)}     # Oct 2, 12:39 PM MDT
+    for lead in leads:
+        if lead.name in when:
+            monkeypatch.setattr(calls.time, "time", lambda t=when[lead.name].timestamp(): t)
+            calls.log_call(lead.uid, "Follow Up", "", by="Dana")
+    client = web.create_app().test_client()
+    ws = load_workbook(io.BytesIO(client.get("/download/saved.xlsx").data))["Leads"]
+    head = [c.value for c in ws[1]]
+    col = head.index("Last Called")
+    cells = {row[head.index("Business Name")].value: row[col] for row in ws.iter_rows(min_row=2)}
+    assert cells["Harmons"].value == dt.datetime(2026, 7, 2, 19, 5)
+    assert cells["Smith's"].value == dt.datetime(2026, 1, 15, 11, 30)
+    assert cells["Costco"].value == dt.datetime(2026, 10, 2, 12, 39)
+    assert cells["Walmart"].value is None
+    assert all(cells[n].is_date and cells[n].number_format == "mmm d, yyyy, h:mm AM/PM" for n in when)
+    # Oldest to newest, as Excel's sort would put them.
+    assert sorted(when, key=lambda n: cells[n].value) == ["Smith's", "Harmons", "Costco"]
+    rows = {r["Business Name"]: r for r in csv.DictReader(io.StringIO(
+        client.get("/download/saved.csv").data.decode("utf-8-sig")))}
+    assert rows["Costco"]["Last Called"] == "Oct 2, 2026, 12:39 PM" == date_time_text(when["Costco"].timestamp())
+    assert rows["Harmons"]["Last Called"] == "Jul 2, 2026, 7:05 PM" and rows["Walmart"]["Last Called"] == ""

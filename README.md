@@ -100,7 +100,8 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   looks in what was said on the calls, how they went and who made them, so
   "forklift" or a colleague's name finds the business),
   a **Stats** page, and Excel / CSV downloads (named with the Utah date, in plain words; columns empty for
-  every lead in the file are left out and named on the Run Info sheet). Each mark and call records who made
+  every lead in the file are left out and named on the Run Info sheet; in Excel, Last Called is a real
+  date and time in Utah time, so it sorts and filters by date, and the CSV writes it as text). Each mark and call records who made
   it (the name set under **Your name** in that browser, asked before the first
   mark or call and not skippable). **Has phone** on Leads shows only businesses
   that can be phoned; under Not checked, among equal scores, those come first.

@@ -8,11 +8,11 @@ from collections.abc import Callable
 from typing import Any
 
 from . import places
-from .localtime import date_time_text
+from .localtime import date_time_text, utah
 from .models import Lead
 from .pipeline import EXEMPT_TYPES
 from .scoring import TIER_LABELS, TIERS, plain_reasons
-from .xlsx import Book, Cell, clean
+from .xlsx import Book, Cell, clean, excel_date
 
 # A private scratch column, worded unlike the site's own "Has Baler or Compactor?"
 # answer so the two can't be mistaken for each other.
@@ -24,6 +24,16 @@ SOURCE_NAMES = {"google": "Google", "yelp": "Yelp", "osm": "OpenStreetMap map da
 
 
 Column = tuple[str, Callable[[Lead], object], float]
+
+
+class When(float):
+    """A moment (epoch seconds) in a download: a real date and time in Utah time in the
+    Excel file, so the column sorts and filters by date; readable text in the CSV."""
+
+
+def _when(ts: float | None) -> When | str:
+    return When(ts) if ts else ""
+
 
 # A listing without a city or ZIP gets the town and ZIP area its map position is near
 # (places.py), written "near West Jordan" / "near 84088" so it never passes for an address.
@@ -83,7 +93,7 @@ COLUMNS: list[Column] = [
     ("Has Baler or Compactor?", lambda l: {"yes": "Yes", "no": "No"}.get(l.has_baler, ""), 13),
     ("Marked By", lambda l: l.marked_by, 16),
     ("Call Result", lambda l: l.call_outcome, 14),
-    ("Last Called", lambda l: date_time_text(l.last_call_at), 20),
+    ("Last Called", lambda l: _when(l.last_call_at), 20),
     ("Called By", lambda l: l.last_call_by, 16),
     # The latest call's notes; when it had none, the latest notes an earlier call has.
     ("Call Notes", lambda l: l.call_notes or (
@@ -127,6 +137,8 @@ _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 def _safe(value: object) -> object:
     """CSV: neutralize text a spreadsheet would run as a formula (data comes from the public)."""
+    if isinstance(value, When):
+        return date_time_text(value)            # "Oct 2, 2026, 12:39 PM"
     if isinstance(value, str):
         value = clean(value)
     if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
@@ -135,7 +147,11 @@ def _safe(value: object) -> object:
 
 
 def _xl(value: object) -> object:
-    """Safe for Excel: no control characters a spreadsheet can't hold."""
+    """Safe for Excel: no control characters a spreadsheet can't hold; a moment as an
+    Excel date and time on Utah's clock (read the same as the site's times)."""
+    if isinstance(value, When):
+        offset = utah(value).utcoffset()
+        return Cell(excel_date(value, offset.total_seconds() if offset else 0.0), date=True)
     return clean(value) if isinstance(value, str) else value
 
 
