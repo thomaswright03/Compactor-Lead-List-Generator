@@ -37,8 +37,14 @@ never touch the saved row. Problems go to `alerts.py`.
 4. **Dedupe**: listings within ~200 m with matching names (or the same phone) are merged, keeping Google's (then Yelp's) contact details and OpenStreetMap's building size. Different phone numbers or names that only share generic words ("Inn & Suites Airport") are kept apart. Then the parts of one named site become one lead (`merge_sites`): listings with the same *site name* (the cleaned name without building numbers or letters and words like "campus", "center", "building": "Shoreline Ridge 825" → "shoreline ridge"), each within 0.2 mi of the next and the whole site at most 0.5 mi across (`SITE_MILES`), with no phone numbers that differ. Names that are only numbers and generic words ("343 Apartments", "Building 2") never merge this way. Map areas and buildings keep their outline's bounding box (`Lead.outline`, from Overpass `bounds`), and a listing inside the outline (plus 0.2 mi) of one with the same site name is part of it however far apart the pins are (outlines over 8 mi across, like a forest, say nothing); the same name on two large sites (`config.LARGE_SITE_OSM_TAGS` / `LARGE_SITE_TYPES`: an air base, an airport, a campus) is one site within 1.5 mi (`LARGE_SITE_MILES`), for rows saved before outlines were kept; and names that differ only by a Utah town written into one (`town_added`: "Smith's Distribution Center" / "Smith's Layton Distribution", at least two distinctive words left) match as duplicates and, inside an outline, as one site, as do names that differ only by words naming a part of a site (`part_added`: "Intermountain Medical Center South Building" / "Intermountain Medical Center"; north, south, upper, annex, pavilion...). Phone numbers that differ always keep listings apart. Pairs are found on a grid (`SiteIndex`) by where each site's listings are and how far its rules reach. The lead is named after the site ("Shoreline Ridge"), keeps every listing (the building names go into its other names) and the largest footprint. The saved list uses the same rules (`saved.py`): a later search's part joins the saved site, and a lead with listings of two saved rows joins the one saved first. Rows already saved as separate leads are merged only on request: `python -m leadgen merge-sites` lists the groups `dedupe.duplicate_groups` finds among the saved rows' listings (each row's listings start as one group, so two rows join only when every listing of one is a duplicate of every listing of the other, or as parts of one site) plus rows that share a listing id, and changes nothing; `--apply` merges them (calls and Yes / No clicks move to the row saved first, the latest mark wins, the merged rows stay hidden and are recorded in `merged_leads`). Searches never do this on their own. Places Google or Yelp report permanently closed are then left out of the search's results and are never added to the saved list; a business already saved that is among them is flagged "Closed for good" there (it keeps its mark and calls).
 5. **Score**, sort by score then distance, and **export**.
 
-API responses are cached for 7 days (Yelp searches in the database), so
-re-running the same search is instant and doesn't re-bill.
+Google and Yelp answers are cached for 7 days (Yelp searches in the database), so
+re-running the same search is instant and doesn't re-bill; a search that reuses them
+says so in its result (`sources/paging.py` `reused_note`: how many of its searches were
+reused), and the Find page adds the day of the earlier search of the same place
+(`web/finding.py` `_when_reused`, `daily.earlier_search`), so "0 new" reads as
+"nothing new since then". The free map data's answers are kept for 12 hours only
+(`OVERPASS_CACHE_TTL_SECONDS`): enough for the day's own retries and filling in, while
+the next day's search of the same area asks the map servers again.
 
 ## Tests and checks
 
@@ -325,8 +331,8 @@ the sidebar to the page's list (Leads, Calls) or heading.
   asked again as four smaller ones; if one still gets no answer, the search is
   **incomplete** (the businesses from the areas that answered are saved, as
   above), and it says how much answered ("about 8 of 9 areas searched"; the
-  search's Details show it too). Answers are kept for 7 days whichever mirror gave
-  them, and an area that had to be asked in quarters is asked in quarters straight
+  search's Details show it too). Answers are kept for 12 hours whichever mirror gave
+  them (`OVERPASS_CACHE_TTL_SECONDS`, so tomorrow's search asks again), and an area that had to be asked in quarters is asked in quarters straight
   away on a re-run, so a re-run with the same location and radius only asks for the
   areas still missing. The first round gets four minutes (`OVERPASS_DEADLINE_SECONDS`),
   an area 90 seconds. Areas still missing after it (the servers were busy or

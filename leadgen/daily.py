@@ -102,6 +102,19 @@ def search_times() -> tuple[float | None, float | None]:
     return (min(started), max(started)) if started else (None, None)
 
 
+def earlier_search(place: str, day: str, since: float) -> Record | None:
+    """The latest search before `day` of the same place (its looked-up label) that found
+    leads and started after `since` (epoch seconds), or None."""
+    with store.connect() as db:
+        rows = db.all("SELECT day, at, info FROM searches WHERE day < ? AND at > ? ORDER BY at DESC",
+                      (day, since))
+    for row in rows:
+        record = _as_record(row)
+        if "leads" in record and place and record.get("place") == place:
+            return record
+    return None
+
+
 def incomplete_count(day: str) -> int:
     """How many of the day's searches were incomplete and gave the day back."""
     with store.connect() as db:

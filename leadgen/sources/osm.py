@@ -316,8 +316,9 @@ def _fetch(query: str, deadline: float, first: int = 0,
     answer is not waited out: after config.OVERPASS_STAGGER_SECONDS the next one is
     asked as well (the slow one may still answer), and the first good answer wins.
     """
-    # An answer from any mirror today serves a re-run, whichever mirror it asks first.
-    known = cache_get(_answer_key(query))
+    # An answer from any mirror today serves a re-run, whichever mirror it asks first
+    # (and the day's filling in); tomorrow's search asks again (OVERPASS_CACHE_TTL_SECONDS).
+    known = cache_get(_answer_key(query), config.OVERPASS_CACHE_TTL_SECONDS)
     if known is not None:
         return known, []
     endpoints = list(config.OVERPASS_ENDPOINTS)
@@ -331,7 +332,7 @@ def _fetch(query: str, deadline: float, first: int = 0,
             # Connecting gets at most 10 s; the answer may take the rest of the time.
             data = request_json("POST", endpoint, data={"data": query},
                                 timeout=(min(10.0, left), left), retries=1,
-                                cache_key_extra="overpass",
+                                cache_key_extra="overpass", cache_ttl=config.OVERPASS_CACHE_TTL_SECONDS,
                                 cacheable=lambda d: not d.get("remark"))
         except HttpError as exc:
             answers.put((endpoint, None, exc))
@@ -490,7 +491,8 @@ class _Parts:
     def split_before(self, box: Box | None) -> bool:
         """An earlier run today had to ask this part in quarters."""
         return box is not None and any(
-            cache_get(_answer_key(self.query(q))) is not None for q in _quarters(box))
+            cache_get(_answer_key(self.query(q)), config.OVERPASS_CACHE_TTL_SECONDS) is not None
+            for q in _quarters(box))
 
     def quarters(self, part: Part) -> list[Part]:
         box, share, depth = part

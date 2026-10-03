@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
+from .. import config
 from ..http import HttpError, cache_get, cache_put
 from ..models import Lead
 from ..progress import PAID, Step
@@ -28,6 +29,20 @@ class Cache(Protocol):
 
 
 Cell = tuple[float, float, float]           # a search circle: lat, lon, radius (miles)
+
+# The note a search whose answers were partly reused carries (web/finding.py adds the
+# day of the earlier search of the area).
+REUSED = "saved by a search of this area"
+
+
+def reused_note(source: str, reused: int, total: int, ttl: float | None) -> str:
+    """The plain note for a run that reused saved answers for `reused` of its `total`
+    searches (cache_ttl: how long they are kept)."""
+    days = round((ttl or config.CACHE_TTL_SECONDS) / 86400)
+    some = "all" if reused >= total else f"{reused} of"
+    return (f"{source} reused the answers of {some} its {total} searches, {REUSED} in the last {days} days "
+            f"(no {source} calls spent on them): businesses found then count as updated, not new, and one "
+            f"{source} listed since may be missing.")
 
 
 def run_searches(source: str, queries: Sequence[str], cells: Sequence[Cell],
@@ -66,6 +81,10 @@ def run_searches(source: str, queries: Sequence[str], cells: Sequence[Cell],
                                     cache_partial, max_pages)
     report_found(leads)
     warnings: list[str] = []
+    # Searches answered (or begun) from saved answers: a whole one, or an unfinished one continued.
+    reused = len(queries) * len(cells) - sum(1 for c in chains if c["pages"] == 0)
+    if reused:
+        warnings.append(reused_note(source, reused, len(queries) * len(cells), cache_ttl))
     fresh = sum(1 for c in chains if c["pages"] == 0)
     if fresh > max_requests and not cap_reason:
         warnings.append(

@@ -101,9 +101,11 @@ def request_json(method: str, url: str, *, params: dict[str, Any] | None = None,
                  use_cache: bool = True, cache_key_extra: str = "",
                  cacheable: Callable[[Any], bool] | None = None, no_retry: Sequence[str] = (),
                  response_headers: MutableMapping[str, str] | None = None,
-                 before_retry: Callable[[], bool] | None = None) -> Any:
+                 before_retry: Callable[[], bool] | None = None,
+                 cache_ttl: float | None = None) -> Any:
     """Return parsed JSON, retrying on network errors, 429 and 5xx.
 
+    cache_ttl: how long a cached answer is reused (default config.CACHE_TTL_SECONDS).
     cacheable(value) -> bool can veto caching a response (e.g. a timeout notice).
     no_retry: error-body text that makes retrying pointless (e.g. a used-up daily quota).
     response_headers: a dict that receives the response's headers.
@@ -111,7 +113,7 @@ def request_json(method: str, url: str, *, params: dict[str, Any] | None = None,
     """
     key = json.dumps([method, url, params, data, json_body, cache_key_extra], sort_keys=True)
     if use_cache:
-        cached = cache_get(key)
+        cached = cache_get(key, cache_ttl)
         if cached is not None:
             return cached
 

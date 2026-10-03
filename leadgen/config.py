@@ -674,6 +674,13 @@ HTTP_USER_AGENT = "compactor-lead-list-generator/1.0 (+https://github.com/thomas
 
 # Cached API responses are reused for this long so repeat runs are free.
 CACHE_TTL_SECONDS = 7 * 24 * 3600
+# The free map data's answers are reused for less than a day: enough for the day's
+# search to ask a missing area again and for its background filling in, while the next
+# day's search of the same area asks the map servers again (what it finds as new is
+# then really new since yesterday). The paid sources keep CACHE_TTL_SECONDS /
+# YELP_CACHE_TTL_SECONDS (a repeat within the week costs nothing), and a search that
+# reuses them says so (sources/paging.py REUSED).
+OVERPASS_CACHE_TTL_SECONDS = 12 * 3600
 
 
 # Off switches for whoever runs the site, read on every request: flipped on the Find

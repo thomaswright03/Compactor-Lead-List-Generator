@@ -55,6 +55,11 @@ Good to know:
 
 - There is **one search a day** for the whole team (Utah time). The next one can
   run from midnight.
+- Searching an area again finds what is new there since: the free map data is
+  asked again every day. Google and Yelp answers from a search of the same area in
+  the last week are reused (no charge), and the result says so, with the day of the
+  earlier search: businesses found then count as updated, not new, so "0 new"
+  means nothing new since then, not that the search didn't look.
 - When the free map servers are busy, the search asks again by itself for the
   areas they missed (the progress bar says so), so you don't need to do anything.
   It can then take up to about 7 minutes. Areas still missing after that are asked

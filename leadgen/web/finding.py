@@ -19,7 +19,7 @@ from ..geo import GeocodeError, LookupDown, haversine_miles, miles_from_arco
 from ..localtime import clock_text, date_time_text
 from ..pipeline import GRIDS, SOURCES, PipelineError, RunResult, SearchParams, SearchStopped, locate, run
 from ..progress import LOCATE, MAP, MERGE, ORDER, PAID, SAVE, Step
-from ..sources import collecting
+from ..sources import collecting, paging
 from .auth import admin_open, admin_refusal, admin_state
 from .common import (
     NOT_USED_UP,
@@ -415,7 +415,7 @@ def _search(job: Job, params: SearchParams, day: str, checkpoint: interrupted.Ru
             result = run(replace(params, include_closed=True), job["progress"])
         for problem in result.problems:
             log.warning("Search %s: a source failed: %s", day, problem)
-        warnings = [plain_warning(w) for w in result.warnings]
+        warnings = _when_reused([plain_warning(w) for w in result.warnings], params, day)
         unsaved = _save(job, result, params)
         if unsaved is not None:
             # Leads that aren't saved are lost with the page: the search gives the day
@@ -453,6 +453,25 @@ def _search(job: Job, params: SearchParams, day: str, checkpoint: interrupted.Ru
         _fail(job, day, f"Something went wrong during the search. {NOT_USED_UP} {RETRY} If it "
                         "keeps happening, tell whoever looks after the site.",
                         "Something went wrong during the search.")
+
+
+def _when_reused(warnings: list[str], params: SearchParams, day: str) -> list[str]:
+    """A paid source that reused saved answers (sources/paging.py REUSED) says when this
+    area was searched before, so "0 new" reads as "nothing new since then"."""
+    if not any(paging.REUSED in w for w in warnings):
+        return warnings
+    try:
+        before = daily.earlier_search(params.place or params.location, day,
+                                      time.time() - config.CACHE_TTL_SECONDS)
+    except Exception:
+        log.warning("Looking up the earlier search of the area failed", exc_info=True)
+        before = None
+    if before is None:
+        return warnings
+    first = next(i for i, w in enumerate(warnings) if paging.REUSED in w)
+    when = date_time_text(before["at"])
+    return [*warnings[:first], f"This area was also searched on {when}, and the answers saved then were reused "
+            "where they could be: what was found then counts as updated, not new.", *warnings[first:]]
 
 
 def _stopped(day: str, result: RunResult, job: Job, warnings: list[str]) -> None:

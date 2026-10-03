@@ -580,7 +580,9 @@ To run the production server yourself: `gunicorn wsgi:app --workers 1 --threads 
   still covers the full radius. A run also stops early, keeping what it found,
   when Yelp says 5 or fewer calls are left on the key today.
 - Re-running within 7 days reuses what was fetched and spends calls only on
-  continuing searches deeper where the last run stopped.
+  continuing searches deeper where the last run stopped; the result says so ("Yelp
+  reused the answers of all its 9 searches...", and on the site the day the area was
+  searched before), so a "0 new" isn't mistaken for a search that didn't look.
 - Yelp returns no business websites and only lists places with at least one
   review, so warehouses and plants are thin; OpenStreetMap fills those in.
 - Yelp's trial is for evaluation, and its terms restrict commercial use and
