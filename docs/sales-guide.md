@@ -2,8 +2,10 @@
 
 How to use the Lead Finder, one task at a time. Each part fits on one screen.
 
-New to the site? Press **Tutorial** in the sidebar (under **Menu** on a phone or tablet) for a
-step-by-step tour of every page. It only looks around and never changes anything.
+New to the site? The first time you open it, a note in the corner offers a step-by-step tour
+of every page: press **Take the tour**, or **No thanks** to skip it (it isn't offered again).
+Open it any time with **Tutorial** in the sidebar (under **Menu** on a phone or tablet). It
+only looks around and never changes anything.
 
 ## A day's work
 

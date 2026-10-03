@@ -458,6 +458,14 @@ dialog::backdrop { background:var(--backdrop); }
 .tour-nav { display:flex; gap:var(--sp-2); }
 .tour-actions button { min-height:44px; }
 @media (prefers-reduced-motion: reduce) { .tour-spot, .tour-box { transition:none; } }
+/* The first visit's offer of the tour: a note in the bottom corner (along the bottom on a phone). */
+.tour-offer { position:fixed; z-index:45; right:var(--sp-5); bottom:var(--sp-5); width:min(360px, calc(100vw - 2 * var(--sp-4)));
+              background:var(--card); color:var(--ink); border:1px solid var(--line); border-left:5px solid var(--accent-2);
+              border-radius:var(--r-md, 10px); padding:var(--sp-4); box-shadow:0 8px 30px rgba(0,0,0,.25); }
+.tour-offer p { margin:0 0 var(--sp-3); line-height:1.5; }
+.tour-offer-actions { display:flex; justify-content:flex-end; gap:var(--sp-2); flex-wrap:wrap; }
+.tour-offer-actions button { min-height:44px; }
+@media (max-width: 600px) { .tour-offer { left:var(--sp-4); right:var(--sp-4); bottom:var(--sp-4); width:auto; } }
 /* The administrator's section is locked until its password is entered. */
 .admin-lock { display:flex; flex-direction:column; gap:var(--sp-3); }
 .admin-lock p { margin:0; }

@@ -19,11 +19,14 @@ sync_api = pytest.importorskip("playwright.sync_api")
 expect = sync_api.expect
 
 
-def _context(browser, name="Tester", **kw):
-    """A browser window whose "Your name" is already set (so a first Yes / No doesn't ask)."""
+def _context(browser, name="Tester", first_visit=False, **kw):
+    """A browser window whose "Your name" is already set (so a first Yes / No doesn't ask),
+    and which was offered the tutorial before (first_visit=True: it never was)."""
     context = browser.new_context(**kw)
     if name:
         context.add_init_script(f"try {{ localStorage.setItem('my-name', {name!r}); }} catch (e) {{}}")
+    if not first_visit:
+        context.add_init_script("try { localStorage.setItem('tour-offered', '1'); } catch (e) {}")
     return context
 
 
@@ -1049,6 +1052,42 @@ def test_the_form_reads_closed_once_the_day_is_used(page):
     assert page.locator("input[name=location]").is_disabled()
     assert page.locator("input[name=radius]").is_disabled()
     assert page.locator("#go").is_disabled()
+
+
+def test_a_first_visit_is_offered_the_tutorial_once(browser, site, page):
+    context = _context(browser, first_visit=True, viewport={"width": 1280, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#find")
+    offer = tab.locator(".tour-offer")
+    expect(offer).to_be_visible()
+    expect(offer).to_contain_text("New here?")
+    tab.get_by_role("button", name="No thanks").click()
+    expect(offer).to_have_count(0)
+    expect(tab.locator("#tour-btn")).to_be_focused()       # where to find it later
+    tab.reload()
+    tab.wait_for_load_state("networkidle")
+    expect(offer).to_have_count(0)                          # not offered again
+    tab.click("#tour-btn")                                  # the button still opens it
+    expect(tab.locator(".tour-box")).to_be_visible()
+    context.close()
+
+    # Taken instead: the tour starts, and once closed it isn't offered again either.
+    context = _context(browser, first_visit=True, viewport={"width": 390, "height": 844}, has_touch=True,
+                       is_mobile=True)
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    offer = tab.locator(".tour-offer")
+    expect(offer).to_be_visible()
+    b = offer.bounding_box()
+    assert b["x"] >= 0 and b["x"] + b["width"] <= 390 and b["y"] + b["height"] <= 844
+    tab.get_by_role("button", name="Take the tour").tap()
+    expect(tab.locator(".tour-box")).to_be_visible()
+    expect(offer).to_have_count(0)
+    tab.keyboard.press("Escape")
+    tab.reload()
+    tab.wait_for_load_state("networkidle")
+    expect(tab.locator(".tour-offer")).to_have_count(0)
+    context.close()
 
 
 def test_miles_have_one_decimal_and_a_category_is_not_repeated(page):

@@ -1,7 +1,8 @@
 /* The Lead Finder page, the tutorial: a step-by-step tour of every page, opened with the
-   Tutorial button in the sidebar (in Menu on phones). Each step switches to its page,
-   highlights one part of it and explains it. The tour only looks: it never clicks, marks,
-   calls or searches. Loaded after the six parts in core.js to start.js. */
+   Tutorial button in the sidebar (in Menu on phones), and offered once on a browser's first
+   visit. Each step switches to its page, highlights one part of it and explains it. The tour
+   only looks: it never clicks, marks, calls or searches. Loaded after the six parts in
+   core.js to start.js. */
 /** @type {TourStep[]} */
 const TOUR = [
   { page: "find", title: "Welcome to the Lead Finder",
@@ -119,6 +120,7 @@ function tourParts() {
 
 function startTour() {
   if (tour.i >= 0) return;
+  tourOffered(true);
   const { box, spot, shade, keys } = tourParts();
   tour.last = document.activeElement;
   // A step about something this site doesn't have (Yelp not set up) is left out.
@@ -200,4 +202,35 @@ function placeTour() {
   box.style.top = `${Math.min(Math.max(edge, y), vh - h - edge)}px`;
 }
 
+/* The first visit: a small note in a corner offers the tour. Taken or turned down, it isn't
+   offered again in this browser; the Tutorial button still opens the tour at any time. */
+const TOUR_OFFERED = "tour-offered";
+/** Whether this browser was offered the tour; with now = true, remember that it was.
+    @param {boolean} [now] @returns {boolean} */
+function tourOffered(now) {
+  const offer = document.querySelector(".tour-offer");
+  try {
+    if (now) { offer?.remove(); localStorage.setItem(TOUR_OFFERED, "1"); }
+    return !!localStorage.getItem(TOUR_OFFERED);
+  } catch (e) { return true; }      // a browser that keeps nothing would be asked on every visit
+}
+
+function offerTour() {
+  if (tourOffered()) return;
+  const offer = el("aside", undefined, "tour-offer");
+  offer.setAttribute("aria-labelledby", "tour-offer-title");
+  offer.innerHTML = '<p><strong id="tour-offer-title">New here?</strong> A short tour shows each page: ' +
+                    "finding leads, marking Yes or No, and logging calls. It only looks; nothing is changed. " +
+                    "You can also open it later with the Tutorial button.</p>" +
+                    '<div class="tour-offer-actions"><button type="button" class="quiet" id="tour-offer-no">' +
+                    'No thanks</button><button type="button" id="tour-offer-yes">Take the tour</button></div>';
+  document.body.append(offer);
+  $("tour-offer-yes").addEventListener("click", startTour);
+  $("tour-offer-no").addEventListener("click", () => {
+    tourOffered(true);
+    if (tourVisible($("tour-btn"))) $("tour-btn").focus();     // where the tour can be found later
+  });
+}
+
 $("tour-btn").addEventListener("click", startTour);
+offerTour();
