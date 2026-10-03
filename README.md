@@ -43,86 +43,112 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 
 ## What it does
 
-- **Find leads** once a day (Utah calendar day) around AARCO's shop or any ZIP or
-  city, from Google Places, Yelp (at most 50 calls in any 24 hours, with the reset
-  time shown, "today at ..." or "tomorrow at ...") and the free OpenStreetMap data
-  (asked in parts, the area around the search's centre first and then outwards, so
-  the nearest businesses come first and busy public servers still answer; parts a
-  busy server missed are asked again automatically once during the search, which so
-  takes about 7 minutes at most, and then **in the background for up to an hour**,
-  within the same search: their businesses join the saved list as they arrive. Find
-  leads says how much of the area was covered **once**, in one plain status: "Covered
+### Find leads, once a Utah calendar day
+
+- **Where, and from what.** Around AARCO's shop or any ZIP or city, from Google
+  Places, Yelp (at most 50 calls in any 24 hours, with the reset time shown, "today at
+  ..." or "tomorrow at ...") and the free OpenStreetMap data. The map data is asked in
+  parts, the area around the search's centre first and then outwards, so the nearest
+  businesses come first and busy public servers still answer.
+- **Parts a busy server missed** are asked again automatically once during the search,
+  which so takes about 7 minutes at most, and then **in the background for up to an
+  hour**, within the same search: their businesses join the saved list as they arrive.
+  A search with missing parts saves what it found and still uses up the day, as the
+  owner asked (the filling in is not a second search). A filling in that runs past
+  midnight stays on Find leads until it ends, and is ended first when the next day's
+  search starts, so two map searches never run at once. Pausing searching ends it
+  within a few seconds, and Find leads says so.
+- **How much of the area was covered** is said **once**, in one plain status: "Covered
   so far: about 6 of the 9 parts of the 30-mile area. Still filling in, in the
   background until about 1:36 PM: Kaysville, Centerville and Morgan. The 418 businesses
   already found are on the Leads page, ready to call now; new ones from the rest of the
   area will appear there on their own." It then says "Covered: the whole 30-mile area",
   or which towns didn't come in today (or, when searching was paused, which weren't
-  searched). The search history's Details say the same in one line ("Free map data:
+  searched).
+- **Said once.** The search history's Details say the same in one line ("Free map data:
   area covered"); no other note repeats it, and internal counts (how many parts were
-  asked again) are never shown. A search with missing parts saves what it found and still
-  uses up the day, as the owner asked; the filling in is not a second search). A
-  filling in that runs past midnight stays on Find leads until it ends, and is ended
-  first when the next day's search starts, so two map searches never run at once.
-  Pausing searching ends it within a few seconds, and Find leads says so.
-  The progress bar covers only the steps the search runs (with the free map data
-  alone it starts near 0%), its map step moves with the parts of the area done, not
-  with the clock, and the "N of M parts of the area done" count stays in view until that step
-  ends; the search history shows today's search as "Running…" from the moment it starts.
-  A search cut off by a server restart (a deploy) keeps what it had found: it is
-  saved, the day's search is given back at once, and the history says so
-  ("Interrupted by a server restart: the 128 businesses it had found were saved"); Find
-  leads says the same (or, when it had found nothing yet, that nothing was saved and
-  today's search is still available).
-  When the place lookups themselves are down, the page says to try again in a minute
-  (nothing spent), not to check the spelling.
-  Before anything is spent, the confirmation names the place the search will
+  asked again) are never shown.
+- **Progress.** The progress bar covers only the steps the search runs (with the free
+  map data alone it starts near 0%), its map step moves with the parts of the area
+  done, not with the clock, and the "N of M parts of the area done" count stays in view
+  until that step ends; the search history shows today's search as "Running…" from the
+  moment it starts.
+- **Restarts and outages.** A search cut off by a server restart (a deploy) keeps what
+  it had found: it is saved, the day's search is given back at once, and the history
+  says so ("Interrupted by a server restart: the 128 businesses it had found were
+  saved"); Find leads says the same (or, when it had found nothing yet, that nothing was
+  saved and today's search is still available). When the place lookups themselves are
+  down, the page says to try again in a minute (nothing spent), not to check the
+  spelling.
+- **Before anything is spent**, the confirmation names the place the search will
   actually run around and how far it is from AARCO's shop; a town name on its own
   ("Murray", "Sandy") means the Utah one. A place outside AARCO's area (more than 30
   miles from the shop, `SERVICE_AREA_MILES`) needs a second, explicit yes that names
   it again, and the search history shows where each search ran under what was typed.
-  The standard words (compactor, baler, waste, recycling) are always searched;
-  **Extra search words** (empty to start) are searched as well. Scores always use
-  the standard words, so the minimum score, the list and Stats all use the same number.
-- One **saved list**, one row per business, kept for good with its source details.
-  The buildings of one site (an apartment complex's numbered buildings, a campus's
-  parts, one name spread over a site up to half a mile across) are one lead, and so
-  are a listing inside the map outline of a same-named one, the parts of an air base,
-  airport or campus up to 1.5 miles apart ("Hill Air Force Base" as the airfield and
-  as the base), a name that only adds its town ("Smith's Distribution Center" /
-  "Smith's Layton Distribution"), and a named building inside its campus's outline
-  ("Intermountain Medical Center South Building"), and a building's map outline named
-  for part of the business it lies on or beside ("Cancer Hospital South" beside
-  "Huntsman Cancer Hospital"), which takes the business's own name. Neighbours with
-  different names or phone numbers (two stores in one strip mall) stay separate.
-  Police, fire, impound and trailer yards and parcel lockers are not prospects,
-  nor are pumping stations, wells, substations and small (under 5,000 sq ft)
-  industrial buildings known only by a map tag, nor self-storage, data centres,
-  career centres or a city's maintenance shops. "Harbor Freight" is a tool shop,
-  not a freight warehouse, and a furniture shop mapped as a mall is not a venue. A
-  resort or shopping mall is what its name says even where the map shows a shop or
-  apartments there ("Snowbird Ski & Summer Resort", "Galleria Mall"). A
-  map listing named only "Recycling" or "Junkyard" gets its operator, street or
-  city added to its name and ranks below named places. A brand counts only when the
-  business is that brand (a hotel named after the air base next to it is not the base).
-  A name word alone never makes a small shop a plant ("Day Dairy Barn" is not a
-  dairy). Parcel delivery stations and depots (mapped as a post depot, or named for a
-  carrier's delivery station or home-delivery hub: "FedEx Home Delivery", "Amazon
-  Delivery Station") are warehouse / logistics sites, not manufacturing; a carrier's
-  shop ("The UPS Store") or lockers are not.
-  A clinic or outpatient centre mapped as a hospital ("Intermountain West Valley
-  Clinic"), a power, heating or cooling plant ("Hospital Generation Plant") and a car
-  or truck wash ("Salt Lake Diesel Wash") are what their names say, not prospects. A
-  map name that only describes a building ("Office and Warehouse, West") with no
-  address, phone or website is no business anyone can call: it is held in tier D
-  (so a search leaves it out) and flagged **Needs a name**; rows saved before show
-  the same way, and the saved row itself is unchanged.
-  **Why this score** and the Excel and CSV **Why This Score** column explain each
-  lead in a salesperson's words: where its kind of business comes from ("from the map
-  listing", "from its name") and, when only the building type or the name suggests
-  it, "confirm before calling". The classifier's own rule names stay in the code. When the buildings of one site marked Yes and No are joined
+- **Search words.** The standard words (compactor, baler, waste, recycling) are always
+  searched; **Extra search words** (empty to start) are searched as well. Scores always
+  use the standard words, so the minimum score, the list and Stats all use the same
+  number.
+
+### One saved list, one row per business
+
+- **Kept for good**, with its source details. Neighbours with different names or phone
+  numbers (two stores in one strip mall) stay separate.
+- **One site is one lead.** The buildings of one site (an apartment complex's numbered
+  buildings, a campus's parts, one name spread over a site up to half a mile across)
+  are one lead, and so are a listing inside the map outline of a same-named one, and
+  the parts of an air base, airport or campus up to 1.5 miles apart ("Hill Air Force
+  Base" as the airfield and as the base).
+- **Names that join.** One lead too: a name that only adds its town ("Smith's
+  Distribution Center" / "Smith's Layton Distribution"), and a named building inside
+  its campus's outline ("Intermountain Medical Center South Building"), and a
+  building's map outline named for part of the business it lies on or beside ("Cancer
+  Hospital South" beside "Huntsman Cancer Hospital"), which takes the business's own
+  name.
+- **Not prospects.** Police, fire, impound and trailer yards and parcel lockers are not
+  prospects, nor are pumping stations, wells, substations and small (under 5,000 sq ft)
+  industrial buildings known only by a map tag, nor self-storage, data centres, career
+  centres or a city's maintenance shops. A clinic or outpatient centre mapped as a
+  hospital ("Intermountain West Valley Clinic"), a power, heating or cooling plant
+  ("Hospital Generation Plant") and a car or truck wash ("Salt Lake Diesel Wash") are
+  what their names say, not prospects.
+- **Names read for what they are.** "Harbor Freight" is a tool shop, not a freight
+  warehouse, and a furniture shop mapped as a mall is not a venue. A resort or shopping
+  mall is what its name says even where the map shows a shop or apartments there
+  ("Snowbird Ski & Summer Resort", "Galleria Mall"). A map listing named only
+  "Recycling" or "Junkyard" gets its operator, street or city added to its name and
+  ranks below named places.
+- **Brands and name words.** A brand counts only when the business is that brand (a
+  hotel named after the air base next to it is not the base). A name word alone never
+  makes a small shop a plant ("Day Dairy Barn" is not a dairy).
+- **Delivery stations.** Parcel delivery stations and depots (mapped as a post depot, or
+  named for a carrier's delivery station or home-delivery hub: "FedEx Home Delivery",
+  "Amazon Delivery Station") are warehouse / logistics sites, not manufacturing; a
+  carrier's shop ("The UPS Store") or lockers are not.
+- **Needs a name.** A map name that only describes a building ("Office and Warehouse,
+  West") with no address, phone or website is no business anyone can call: it is held
+  in tier D (so a search leaves it out) and flagged **Needs a name**; rows saved before
+  show the same way, and the saved row itself is unchanged.
+- **Why this score** and the Excel and CSV **Why This Score** column explain each lead
+  in a salesperson's words: where its kind of business comes from ("from the map
+  listing", "from its name") and, when only the building type or the name suggests it,
+  "confirm before calling". The classifier's own rule names stay in the code.
+- **Marks that disagreed.** When the buildings of one site marked Yes and No are joined
   (`python -m leadgen merge-sites --apply`), the lead keeps Yes and says the marks
   disagreed until someone presses Yes or No on it again.
-- Every Yes / No mark and call needs **Your name**: the server refuses one without it.
+
+### Marks, calls, verified contacts and downloads
+
+- **Yes / No** "has a baler or compactor" marks (permanent; a click can be undone for 5
+  minutes), and **Just called** notes with six results and a Calls tab for each.
+  Every Yes / No mark and call needs **Your name**: the server refuses one without it.
+  Each mark and call records who made it (the name set under **Your name** in that
+  browser, asked before the first mark or call and not skippable).
+- **A filter box** on Leads and Calls alike: several words, such as "walmart layton",
+  find the rows that hold every one of them, in any order; on Calls it also looks in
+  what was said on the calls, how they went and who made them, so "forklift" or a
+  colleague's name finds the business. **Has phone** on Leads shows only businesses
+  that can be phoned; under Not checked, among equal scores, those come first.
 - **Verified phone and contact**: a salesperson who finds the right number or who to
   ask for (the facilities manager) saves it on the business with **Add verified phone
   or contact**. It is shown under the listing's own phone on Leads and Calls, with who
@@ -130,43 +156,52 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   **Verified By** columns next to **Phone**. It is kept apart from the listing's
   details, so a later search never changes it; every save is kept (**Earlier
   versions**), and **Has phone** counts a verified number.
-- **Yes / No** "has a baler or compactor" marks (permanent; a click can be undone
-  for 5 minutes), **Just called** notes with six results and a Calls tab for each
-  (with a filter box: several words, such as "walmart layton", find the rows that
-  hold every one of them, in any order, on Leads and Calls alike; on Calls it also
-  looks in what was said on the calls, how they went and who made them, so
-  "forklift" or a colleague's name finds the business),
-  a **Stats** page, and Excel / CSV downloads (named with the Utah date, in plain words; columns empty for
-  every lead in the file are left out and named on the Run Info sheet; in Excel, Last Called is a real
-  date and time in Utah time, so it sorts and filters by date, and the CSV writes it as text). Each mark and call records who made
-  it (the name set under **Your name** in that browser, asked before the first
-  mark or call and not skippable). **Has phone** on Leads shows only businesses
-  that can be phoned; under Not checked, among equal scores, those come first.
-  Leads and Calls show one page of rows at a time (**Show more** adds the next), with
-  every tab's count however long the list grows; a tab, filter or sort that takes
-  more than a moment says **Loading…** over the dimmed rows (and, after about five
-  seconds, that it is taking longer than usual).
-- A **Map** page: AARCO's own pin at 876 Fortune Rd, the 30-mile circle around it, the
-  nine areas a search asks the free map data in (named after their biggest town, as in
-  the search's "N of 9 parts") shaded by how the latest search of AARCO's area went
-  (searched, partly searched, not searched or still filling in, or not known), and a
-  pin for every saved business with a map position: coloured by its Yes / No answer
-  (blue not checked, green Yes, orange No, a set that stays apart for colour-blind
-  eyes and in the dark theme, each named in the key and the pin's details, never colour
-  alone), competitors and AARCO's own listing as hollow squares. Each group can be
-  hidden (remembered in that browser), and a pin's details give the name, tier and
-  score, phone, address, answer, latest call and **Open on the Leads page**. The
-  street map is OpenStreetMap's (credited on the map); without it (offline, or blocked)
-  the rest is drawn on a plain background and the page says so. The map itself is
-  Leaflet, kept in `leadgen/static/vendor/leaflet` with its licence. It only reads:
-  nothing on it changes a lead, mark or call.
-- A business the listing gives no street address or town for shows the town and ZIP
-  its map position is near ("No street address · near West Jordan, UT 84088 · map"),
-  worked out offline from a small table of Census towns and ZIP areas
-  (`leadgen/data/places.json`, see `leadgen/places.py`), so same-named stores (a
-  dozen Smith's) can be told apart; the downloads write it as City "near West
+- **A Stats page, and Excel / CSV downloads** (named with the Utah date, in plain words;
+  columns empty for every lead in the file are left out and named on the Run Info
+  sheet; in Excel, Last Called is a real date and time in Utah time, so it sorts and
+  filters by date, and the CSV writes it as text).
+- **However long the list grows**, Leads and Calls show one page of rows at a time (100
+  on the Leads page; **Show more** fetches and adds the next page), and every tab's
+  count is always exact. A tab, filter or sort that takes more than a moment says
+  **Loading…** over the dimmed rows (and, after about five seconds, that it is taking
+  longer than usual).
+- **Saves say how they went.** A Yes / No that couldn't be saved (offline, say) is said
+  on the row itself, "Yes not saved." with the reason and **Try again**, until it is
+  saved or dismissed, as well as in the note at the bottom of the screen. No save
+  hangs: a Yes / No, a call, a verified contact or an undo that has had no answer for 10
+  seconds says "This is taking longer than usual. Still trying…", and after 30 seconds
+  it stops waiting and says it was not saved, with **Try again** (a call's notes stay in
+  the box). Trying again never saves it twice.
+- **Keyboard use**: after a Yes / No, an undo, a call saved or **Show more**, the focus
+  stays on that business (or moves to the next one's Yes when it left the view). A
+  click that lands just as the list moves up is not saved, and the page says so.
+
+### The Map page
+
+- **What it shows.** AARCO's own pin at 876 Fortune Rd, the 30-mile circle around it,
+  the nine areas a search asks the free map data in (named after their biggest town, as
+  in the search's "N of 9 parts") shaded by how the latest search of AARCO's area went
+  (searched, partly searched, not searched or still filling in, or not known), and a pin
+  for every saved business with a map position: coloured by its Yes / No answer (blue
+  not checked, green Yes, orange No, a set that stays apart for colour-blind eyes and in
+  the dark theme, each named in the key and the pin's details, never colour alone),
+  competitors and AARCO's own listing as hollow squares.
+- **Using it.** Each group can be hidden (remembered in that browser), and a pin's
+  details give the name, tier and score, phone, address, answer, latest call and **Open
+  on the Leads page**. The street map is OpenStreetMap's (credited on the map); without
+  it (offline, or blocked) the rest is drawn on a plain background and the page says
+  so. The map itself is Leaflet, kept in `leadgen/static/vendor/leaflet` with its
+  licence. It only reads: nothing on it changes a lead, mark or call.
+
+### Towns, devices and login
+
+- **No street address.** A business the listing gives no street address or town for
+  shows the town and ZIP its map position is near ("No street address · near West
+  Jordan, UT 84088 · map"), worked out offline from a small table of Census towns and
+  ZIP areas (`leadgen/data/places.json`, see `leadgen/places.py`), so same-named stores
+  (a dozen Smith's) can be told apart; the downloads write it as City "near West
   Jordan", ZIP "near 84088". It is shown, never saved: the saved rows are unchanged.
-- Town names are shown and downloaded as the town's own name from the same table,
+- **Town names** are shown and downloaded as the town's own name from the same table,
   however the listing typed them: "CLEARFIELD" is Clearfield, "american Fork" American
   Fork, "West Jordan City" West Jordan, "Saratoga Spring" Saratoga Springs, "SLC" Salt
   Lake City, and a short form like "la" the town the business is near that starts with
@@ -174,27 +209,15 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   capitals or all lower case. So **City A to Z** and the filter treat one town as one
   town. As with "near", only what is shown changes; the saved rows keep the text the
   source gave.
-- Keyboard use: after a Yes / No, an undo, a call saved or **Show more**, the focus
-  stays on that business (or moves to the next one's Yes when it left the view). A
-  click that lands just as the list moves up is not saved, and the page says so.
-- A Yes / No that couldn't be saved (offline, say) is said on the row itself, "Yes
-  not saved." with the reason and **Try again**, until it is saved or dismissed, as
-  well as in the note at the bottom of the screen.
-- No save hangs: a Yes / No, a call, a verified contact or an undo that has had no
-  answer for 10 seconds says "This is taking longer than usual. Still trying…", and
-  after 30 seconds it stops waiting and says it was not saved, with **Try again** (a
-  call's notes stay in the box). Trying again never saves it twice.
-- The Leads page gets one page of rows at a time (100); **Show more** fetches the
-  next page, and the tab counts are always exact, however long the list grows.
-- Works on phones, tablets and laptops: below 1,100 px wide each lead is a card,
-  so the reasons for its score are always in view without scrolling sideways.
-- A login from `APP_USERNAME` / `APP_PASSWORD` in the environment, and a separate
-  `ADMIN_PASSWORD` that unlocks the administrator's section. The login page's
-  "Need access or forgot the password?" line names the contact set in
+- **Works on phones, tablets and laptops**: below 1,100 px wide each lead is a card, so
+  the reasons for its score are always in view without scrolling sideways.
+- **A login** from `APP_USERNAME` / `APP_PASSWORD` in the environment, and a separate
+  `ADMIN_PASSWORD` that unlocks the administrator's section. The login page's "Need
+  access or forgot the password?" line names the contact set in
   `LEADGEN_SUPPORT_CONTACT` (a name with a phone number or email, which become
   tap-to-call and email links); until it is set it says "Ask the person who gave you
-  your login, or Wright AI Solutions." Set it in Render's **Environment**, never in
-  the repository.
+  your login, or Wright AI Solutions." Set it in Render's **Environment**, never in the
+  repository.
 
 ## Quick start
 
