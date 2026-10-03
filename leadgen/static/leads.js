@@ -22,7 +22,8 @@ async function loadLeads(quiet) {
     if (seq !== S.seq) return;                     // a newer view was asked for meanwhile
     S.leads = body.leads; S.total = body.total; S.counts = body.counts; S.recent = body.recent;
     S.since = body.now; S.loaded = true; S.loadError = ""; S.refreshError = "";
-    for (const [key, value] of S.sending) updateLead({ key, saving: value });   // still being saved
+    for (const [key, value] of S.sending) updateLead({ key, saving: value, savingSlow: slowMarks.has(key) });
+    settleFailed(body.leads);
   } catch (e) {
     const err = /** @type {ApiError} */ (e);
     if (seq !== S.seq || err.status === 401) return;
@@ -65,6 +66,7 @@ async function loadChanges() {
       if (old && old.saving) continue;               // this page's own click is still being saved
       const shown = S.leads.some((x) => x.key === l.key);
       updateLead(l);
+      settleFailed([l]);
       if (shown && !inView && !pinnedNow(l.key)) S.leads = S.leads.filter((x) => x.key !== l.key);
       if (!shown && inView) missing = true;
     }
@@ -251,6 +253,18 @@ setInterval(() => {
   if (gone) { S.shiftedAt = now; renderLeads(); }
 }, 250);
 
+// The Yes / No saves that have taken longer than usual (core.js save), by business.
+/** @type {Set<string>} */
+const slowMarks = new Set();
+// A Yes / No that got no answer in time may have been saved after all: once the server's list
+// says the business has that answer, the row's "not saved" note goes.
+/** @param {LeadUpdate[]} rows */
+function settleFailed(rows) {
+  for (const l of rows) {
+    const failed = S.failed.get(l.key);
+    if (failed && l.has_baler === failed.value && !l.marks_disagreed) S.failed.delete(l.key);
+  }
+}
 /** @param {Lead} lead @param {string} value "yes" or "no" */
 async function setMark(lead, value) {
   const before = lead.has_baler || "";
@@ -272,10 +286,15 @@ async function setMark(lead, value) {
   updateLead({ key, saving: value });
   renderAll();
   try {
-    const { undo } = await post("/mark", { key, value, by: myName() });
+    // After TIMING.saveSlow the row says it is taking longer than usual; after TIMING.saveLimit
+    // it gives up and says "not saved", with Try again (core.js save).
+    const { undo } = await save("/mark", { key, value, by: myName() }, () => {
+      slowMarks.add(key); updateLead({ key, savingSlow: true }); renderAll();
+    });
     S.failed.delete(key);
     if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);   // "Saved. Moves to …" gets its moment
-    updateLead({ key, saving: "", has_baler: value, marked_by: myName(), marks_disagreed: false, undo_mark: undo });
+    updateLead({ key, saving: "", savingSlow: false, has_baler: value, marked_by: myName(), marks_disagreed: false,
+                 undo_mark: undo });
     moveCount(lead, before, value);
     addRecent(leadByKey(key) || lead);
     renderAll();
@@ -285,10 +304,14 @@ async function setMark(lead, value) {
     // (the note at the bottom of the screen goes after a few seconds and is easy to miss).
     const { status, message } = /** @type {ApiError} */ (err);
     if (status !== 401) S.failed.set(key, { value, message });
-    updateLead({ key, saving: "" });
+    updateLead({ key, saving: "", savingSlow: false });
     renderAll();
     toast(`${lead.name}: answer not saved. ${message}`, null, true);
-  } finally { S.sending.delete(key); if (lead.saving) lead.saving = ""; S.busy--; }
+  } finally {
+    S.sending.delete(key); slowMarks.delete(key);
+    if (lead.saving) { lead.saving = ""; lead.savingSlow = false; }
+    S.busy--;
+  }
 }
 // A Yes / No that didn't reach the server: said on the row, with Try again and Dismiss.
 /** @param {Lead} lead @param {FailedMark} failed */
@@ -310,16 +333,21 @@ function failedNote(lead, failed) {
 async function undoMark(key) {
   const lead = leadByKey(key);
   if (!lead || !lead.undo_mark) return;
-  try { await post("/mark/undo", { id: lead.undo_mark.id }); toast(`${lead.name}: undone.`); }
-  catch (err) { toast(`Couldn't undo ${lead.name}. ${/** @type {Error} */ (err).message}`, null, true); }
+  try {
+    await save("/mark/undo", { id: lead.undo_mark.id }, () => toast(`Undoing ${lead.name}… ${SLOW_SAVE}`));
+    toast(`${lead.name}: undone.`);
+  } catch (err) { toast(`Couldn't undo ${lead.name}. ${/** @type {Error} */ (err).message}`, null, true); }
   await loadChanges();
 }
 /** @param {string} key */
 async function undoCall(key) {
   const lead = leadByKey(key);
   if (!lead || !lead.undo_call) return;
-  try { await post("/calls/undo", { id: lead.undo_call.id }); toast(`${lead.name}: call removed.`); }
-  catch (err) { toast(`Couldn't undo the call to ${lead.name}. ${/** @type {Error} */ (err).message}`, null, true); }
+  try {
+    await save("/calls/undo", { id: lead.undo_call.id },
+               () => toast(`Removing the call to ${lead.name}… ${SLOW_SAVE}`));
+    toast(`${lead.name}: call removed.`);
+  } catch (err) { toast(`Couldn't undo the call to ${lead.name}. ${/** @type {Error} */ (err).message}`, null, true); }
   await loadChanges();
 }
 /** @param {Undo} undo @param {string} label @param {() => unknown} onClick */
@@ -368,7 +396,8 @@ function markCell(lead, withCall) {
   }
   td.append(box);
   if (lead.saving) {
-    const note = el("div", `Saving ${lead.saving === "yes" ? "Yes" : "No"}…`, "sub saving");
+    const note = el("div", `Saving ${lead.saving === "yes" ? "Yes" : "No"}…` +
+                           (lead.savingSlow ? ` ${SLOW_SAVE}` : ""), "sub saving");
     note.setAttribute("role", "status");
     td.append(note);
   } else {

@@ -234,7 +234,7 @@ function openCall(lead) { withName(() => openCallBox(lead)); }
 function openCallBox(lead) {
   callLead = lead;
   $("call-title").textContent = `Just called: ${lead.name}`;
-  $("call-error").textContent = ""; delete $("call-error").dataset.need;
+  $("call-error").textContent = ""; delete $("call-error").dataset.need; $("call-slow").textContent = "";
   $("call-save").disabled = false;
   const box = $("outcomes"); box.replaceChildren();
   for (const o of OUTCOMES) {
@@ -290,9 +290,15 @@ $("call-form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) =
   }
   const target = callLead, key = callLead.key;
   $("call-save").disabled = true; S.busy++;
+  $("call-error").textContent = ""; $("call-slow").textContent = "";
+  // Slow (core.js save): said in the box, or, once it was closed, at the bottom of the screen.
+  const slow = () => {
+    if ($("call-dlg").open && callLead && callLead.key === key) $("call-slow").textContent = `Saving… ${SLOW_SAVE}`;
+    else toast(`Saving the call to ${target.name}… ${SLOW_SAVE}`);
+  };
   try {
-    const { call } = /** @type {{call: SavedCall}} */ (await post("/calls", {
-      key, outcome: callOutcome, notes: $("call-notes").value, id: callId, by: myName() }));
+    const { call } = /** @type {{call: SavedCall}} */ (await save("/calls", {
+      key, outcome: callOutcome, notes: $("call-notes").value, id: callId, by: myName() }, slow));
     writeDraft(key, { notes: "", outcome: "" });
     // Update the lead as it is now (the list may have been reloaded while saving).
     const lead = leadByKey(key) || target;
@@ -309,11 +315,17 @@ $("call-form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) =
     if (!$("page-calls").hidden) loadCalled(true); else S.calledLoaded = false;
     toast(`${lead.name}: saved as ${call.outcome}.`, () => undoCall(key));
   } catch (err) {
-    if (callLead && callLead.key === key) {
-      $("call-error").textContent = `Not saved. ${/** @type {Error} */ (err).message}`;
+    // The notes stay (in the box, and as the business's draft), so Save tries again with them;
+    // the call keeps its id, so it is recorded once even if the first try reached the server.
+    const { message } = /** @type {Error} */ (err);
+    if ($("call-dlg").open && callLead && callLead.key === key) {
+      $("call-error").textContent = `Not saved. ${message} Your notes are kept: press Save to try again.`;
       $("call-save").disabled = false;
+    } else {
+      toast(`The call to ${target.name} was not saved. ${message} Your notes are kept: press Just called ` +
+            "on it to try again.", null, true);
     }
-  } finally { S.busy--; }
+  } finally { S.busy--; $("call-slow").textContent = ""; }
 });
 
 /* A business's verified phone and who to ask for (contacts.py): found while checking it and
@@ -357,7 +369,7 @@ function openContactBox(lead) {
     : "The listing has no phone number. What you save here is shown beside it.";
   /** @type {HTMLInputElement} */ ($("contact-phone")).value = lead.verified_phone || "";
   /** @type {HTMLInputElement} */ ($("contact-name")).value = lead.contact_name || "";
-  $("contact-error").textContent = "";
+  $("contact-error").textContent = ""; $("contact-slow").textContent = "";
   $("contact-save").disabled = false;
   $("contact-dlg").showModal();
   $("contact-phone").focus();
@@ -368,10 +380,16 @@ $("contact-form").addEventListener("submit", async (/** @type {SubmitEvent} */ e
   if (!contactLead) return;
   const target = contactLead, key = contactLead.key;
   $("contact-save").disabled = true; S.busy++;
+  $("contact-error").textContent = ""; $("contact-slow").textContent = "";
+  const slow = () => {
+    if ($("contact-dlg").open && contactLead && contactLead.key === key) {
+      $("contact-slow").textContent = `Saving… ${SLOW_SAVE}`;
+    } else toast(`Saving the verified contact of ${target.name}… ${SLOW_SAVE}`);
+  };
   try {
-    const { contact } = /** @type {{contact: VerifiedContact}} */ (await post("/contact", {
+    const { contact } = /** @type {{contact: VerifiedContact}} */ (await save("/contact", {
       key, phone: /** @type {HTMLInputElement} */ ($("contact-phone")).value,
-      contact: /** @type {HTMLInputElement} */ ($("contact-name")).value, by: myName() }));
+      contact: /** @type {HTMLInputElement} */ ($("contact-name")).value, by: myName() }, slow));
     updateLead({ key, ...contact });
     if (contactLead && contactLead.key === key) { contactLead = null; $("contact-dlg").close(); }
     renderAll();
@@ -380,11 +398,14 @@ $("contact-form").addEventListener("submit", async (/** @type {SubmitEvent} */ e
     toast(contact.verified_phone || contact.contact_name ? `${lead.name}: verified contact saved.`
       : `${lead.name}: verified contact taken off.`);
   } catch (err) {
-    if (contactLead && contactLead.key === key) {
-      $("contact-error").textContent = `Not saved. ${/** @type {Error} */ (err).message}`;
+    const { message } = /** @type {Error} */ (err);
+    if ($("contact-dlg").open && contactLead && contactLead.key === key) {
+      $("contact-error").textContent = `Not saved. ${message}`;
       $("contact-save").disabled = false;
+    } else {
+      toast(`The verified contact of ${target.name} was not saved. ${message}`, null, true);
     }
-  } finally { S.busy--; }
+  } finally { S.busy--; $("contact-slow").textContent = ""; }
 });
 
 /** @param {Lead} lead */

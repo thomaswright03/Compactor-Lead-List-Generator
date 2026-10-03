@@ -3,7 +3,7 @@
    the #address; these scripts load in order and share their top-level names. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, TIMING, S, el, link, phoneLink,
-   button, api, post, fmtTime, serverNow, leftOf, problem, loadingCue, themeChoice, applyTheme, myName,
+   button, api, post, save, SLOW_SAVE, fmtTime, serverNow, leftOf, problem, loadingCue, themeChoice, applyTheme, myName,
    withName, byWho, parseHash, readLeadView, route, writeHash */
 // An element of the page by its id: an input, a dialog, a button... (typed `any`, as the page's
 // ids name every kind; the type check still catches a misspelt function or variable).
@@ -107,6 +107,31 @@ async function api(path, opts) {
 /** @type {(path: string, data: unknown) => Promise<any>} */
 const post = (path, data) => api(path, { method: "POST", headers: { "Content-Type": "application/json" },
                                         body: JSON.stringify(data) });
+// A save (a Yes / No, a call, a verified contact, an undo): post() that never leaves the person
+// wondering. After TIMING.saveSlow it calls `slow` (the caller says, where the person is looking,
+// that it is taking longer than usual); after TIMING.saveLimit it stops waiting and throws an
+// ApiError (status 0, timedOut) saying it may not have been saved. The request is cancelled
+// then, so a late answer never changes the page; trying again is safe, as each save is
+// recorded once (a call carries its own id, and the same Yes / No or contact again changes nothing).
+/** @param {string} path @param {unknown} data @param {() => void} [slow] @returns {Promise<any>} */
+async function save(path, data, slow) {
+  const stop = new AbortController();
+  const slowTimer = slow ? setTimeout(slow, TIMING.saveSlow) : 0;
+  const limit = setTimeout(() => stop.abort(), TIMING.saveLimit);
+  try {
+    const body = await api(path, { method: "POST", headers: { "Content-Type": "application/json" },
+                                   body: JSON.stringify(data), signal: stop.signal });
+    if (stop.signal.aborted) throw new Error("cancelled");         // its answer was cut off
+    return body;
+  } catch (err) {
+    if (!stop.signal.aborted) throw err;
+    throw Object.assign(new Error(`The Lead Finder didn't answer within ${Math.round(TIMING.saveLimit / 1000)} ` +
+                                  "seconds, so it may not have been saved. Check your connection and try again."),
+                        { status: 0, timedOut: true });
+  } finally { clearTimeout(slowTimer); clearTimeout(limit); }
+}
+// What a save says once it has taken TIMING.saveSlow.
+const SLOW_SAVE = "This is taking longer than usual. Still trying…";
 /** @type {(s: number) => string} */
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const serverNow = () => Date.now() / 1000 + S.skew;

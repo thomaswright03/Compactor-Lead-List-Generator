@@ -111,7 +111,10 @@ Good to know:
   If it couldn't be saved (no internet, say), the row itself says "Yes not saved"
   in red, with the reason and a **Try again** button, and keeps saying so until the
   answer is saved or you press **Dismiss**: you can't miss it further down the list.
-  Once you're back online, press **Try again**.
+  Once you're back online, press **Try again**. On a weak connection the row adds
+  "This is taking longer than usual. Still trying…" after 10 seconds, and after 30
+  it gives up and says "Yes not saved" with **Try again**. Pressing it never saves
+  the answer twice.
 - A mark is kept for good. You can switch it between Yes and No later.
 - Pressed the wrong one? Press **Undo** on the row or in **Recent changes**
   within 5 minutes.
@@ -148,6 +151,9 @@ Good to know:
    wrong call can be undone for 5 minutes.
 
 Your typed notes are kept as a draft until you save, even if you close the box.
+On a weak connection the box says "This is taking longer than usual" after 10
+seconds, and after 30 "Not saved … Your notes are kept: press Save to try again"; the
+call is never saved twice.
 Logging a call never changes the Yes / No answer.
 
 ## Save a verified phone or contact

@@ -515,6 +515,7 @@ td.h-where .sub { display:block; }
 /* A Yes / No on its way to the server: the row says so until it is saved. */
 .mark button.sending { outline:2px dashed var(--accent); outline-offset:1px; }
 .c-mark .saving { margin-top:var(--sp-1); font-style:italic; }
+.slow-save:empty { display:none; }
 /* A Yes / No that didn't reach the server: the row says so, with Try again, until it is saved. */
 .mark-failed { margin-top:var(--sp-2); padding:var(--sp-2); border:1px solid var(--bad); border-left-width:4px;
                border-radius:var(--r-sm); background:var(--pts-neg); color:var(--ink); font-size:var(--fs-sm); }

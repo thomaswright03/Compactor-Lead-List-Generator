@@ -180,6 +180,10 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 - A Yes / No that couldn't be saved (offline, say) is said on the row itself, "Yes
   not saved." with the reason and **Try again**, until it is saved or dismissed, as
   well as in the note at the bottom of the screen.
+- No save hangs: a Yes / No, a call, a verified contact or an undo that has had no
+  answer for 10 seconds says "This is taking longer than usual. Still trying…", and
+  after 30 seconds it stops waiting and says it was not saved, with **Try again** (a
+  call's notes stay in the box). Trying again never saves it twice.
 - The Leads page gets one page of rows at a time (100); **Show more** fetches the
   next page, and the tab counts are always exact, however long the list grows.
 - Works on phones, tablets and laptops: below 1,100 px wide each lead is a card,

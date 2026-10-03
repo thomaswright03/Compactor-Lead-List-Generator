@@ -17,7 +17,7 @@ const LIBRARIES = { "map.js": ["L"] };
 
 // The browser's own names the scripts use (ES built-ins such as Map and Intl come with
 // ecmaVersion).
-const BROWSER = ["window", "document", "location", "history", "localStorage", "fetch", "FormData",
+const BROWSER = ["window", "document", "location", "history", "localStorage", "fetch", "AbortController", "FormData",
                  "URL", "URLSearchParams", "DOMParser", "crypto", "setTimeout", "clearTimeout",
                  "setInterval", "getComputedStyle"];
 

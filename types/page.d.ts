@@ -73,8 +73,10 @@ interface Lead {
   contact_saves: number;
   undo_mark: Undo | null;
   undo_call: Undo | null;
-  /** The page's own: the Yes / No it is saving ("yes" / "no"; "" or absent when none). */
+  /** The page's own: the Yes / No it is saving ("yes" / "no"; "" or absent when none), and
+      whether that save has taken longer than usual (core.js TIMING.saveSlow). */
   saving?: string;
+  savingSlow?: boolean;
 }
 
 /** Some fields of a business, to set on every copy the page holds (leads.js updateLead). */
@@ -356,6 +358,8 @@ declare namespace L {
 /** An error from the server (core.js api): its HTTP status (0: no answer) and its body. */
 interface ApiError extends Error {
   status: number;
+  /** A save (core.js save) that got no answer within TIMING.saveLimit. */
+  timedOut?: boolean;
   body?: { error?: string; field?: string; job_id?: string; confirm_far?: boolean; place?: Place };
 }
 

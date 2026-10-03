@@ -5,6 +5,7 @@ chromium). Skipped when they are missing. LEADGEN_CHROMIUM can point at a
 Chromium binary to use instead of Playwright's own.
 """
 
+import contextlib
 import os
 import re
 import threading
@@ -1501,6 +1502,70 @@ def test_a_mark_that_was_not_saved_stays_on_the_row_with_try_again(page):
     expect(other.locator(".mark-failed")).to_have_count(0)
     assert not other.locator(".mark button.on").count()
     assert page.evaluate("document.activeElement.dataset.ctl") == "yes"
+
+
+def test_a_save_that_gets_no_answer_says_so_and_can_be_tried_again(page):
+    """A Yes / No or a call whose request never gets an answer (a weak connection): after
+    TIMING.saveSlow the page says it is taking longer than usual, after TIMING.saveLimit it
+    gives up with "not saved" and Try again (the call's notes kept), and the cancelled
+    request's late answer changes nothing. Tried again, each is saved once."""
+    from leadgen import calls, marks, store
+    page.context.add_init_script("window.leadgenTiming = { saveSlow: 500, saveLimit: 2000 };")
+    page.reload()
+    page.wait_for_selector("table.leads")
+    lost = []
+    page.route("**/mark", lambda route: lost.append(route))           # never answered
+    row = _row(page, "Costco")
+    row.locator(".mark button.yes").click()
+    expect(row.locator(".saving")).to_have_text("Saving Yes… This is taking longer than usual. Still trying…")
+    failed = row.locator(".mark-failed")
+    expect(failed).to_contain_text("Yes not saved. The Lead Finder didn't answer within 2 seconds, so it may not "
+                                   "have been saved. Check your connection and try again.")
+    expect(row.locator(".saving")).to_have_count(0)
+    assert not row.locator(".mark button.on").count() and lost
+    for route in lost:                                # the late answer: the page stopped waiting for it
+        with contextlib.suppress(Exception):
+            route.fulfill(status=200, content_type="application/json", body='{"ok": true, "undo": null}')
+    page.wait_for_timeout(300)
+    assert not row.locator(".mark button.on").count() and failed.is_visible()
+    page.unroute("**/mark")
+    failed.get_by_role("button", name="Try again to save Yes for Costco Wholesale").click()
+    expect(row).to_contain_text("Saved. Moves to “Has baler or compactor”.")
+    expect(row.locator(".mark-failed")).to_have_count(0)
+    expect(page.get_by_role("button", name="Has baler or compactor (1)")).to_be_visible()
+    with store.connect() as db:
+        assert db.one("SELECT COUNT(*) FROM mark_changes")[0] == 1
+
+    # A Yes that reached the server after the page gave up: the next refresh clears the note.
+    page.route("**/mark", lambda route: lost.append(route))
+    other = _row(page, "Hampton")
+    other.locator(".mark button.yes").click()
+    expect(other.locator(".mark-failed")).to_contain_text("Yes not saved.")
+    uid = next(lead.uid for lead in saved.load() if lead.name == "Hampton Inn")
+    marks.set_mark(uid, "yes", "Tester")
+    page.evaluate("loadChanges()")
+    expect(other.locator(".mark-failed")).to_have_count(0)
+    expect(other.locator(".mark button.yes.on")).to_have_count(1)
+    page.unroute("**/mark")
+
+    # A call: the box says it is slow, then not saved, with the notes still in it.
+    page.route("**/calls", lambda route: lost.append(route))
+    _row(page, "Smith").get_by_role("button", name="Just called").click()
+    page.fill("#call-notes", "Spoke to Dana; send a quote.")
+    page.locator("#outcomes").get_by_role("button", name="Follow Up").click()
+    page.click("#call-save")
+    expect(page.locator("#call-slow")).to_have_text("Saving… This is taking longer than usual. Still trying…")
+    expect(page.locator("#call-error")).to_contain_text("Not saved. The Lead Finder didn't answer within 2 seconds")
+    expect(page.locator("#call-error")).to_contain_text("Your notes are kept: press Save to try again.")
+    expect(page.locator("#call-slow")).to_have_text("")
+    assert page.input_value("#call-notes") == "Spoke to Dana; send a quote."
+    assert page.locator("#call-save").is_enabled()
+    page.unroute("**/calls")
+    page.click("#call-save")
+    page.wait_for_selector("#call-dlg:not([open])", state="attached")
+    expect(page.locator("#toast")).to_contain_text("Smith's Marketplace: saved as Follow Up.")
+    smith = next(lead.uid for lead in saved.load() if lead.name.startswith("Smith"))
+    assert [c["notes"] for c in calls.history(smith)] == ["Spoke to Dana; send a quote."]
 
 
 def test_a_place_outside_aarcos_area_is_named_and_needs_a_second_yes(page, monkeypatch):

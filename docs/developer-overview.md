@@ -439,7 +439,17 @@ the sidebar to the page's list (Leads, Calls) or heading.
   buttons disabled; the answer, "Marked by" and "Saved. Moves to …" appear only once
   the server confirms. A failure leaves the answer as it was, and the row says
   "Yes not saved." with the reason, **Try again** and **Dismiss** until the answer is
-  saved or dismissed (`S.failed`, by lead; a toast says it too, but goes). A
+  saved or dismissed (`S.failed`, by lead; a toast says it too, but goes). Every save
+  (a Yes / No, a call, a verified contact, an undo) goes through `core.js` `save()`:
+  after `TIMING.saveSlow` (10 s) the row, or the open box (`#call-slow`,
+  `#contact-slow`), adds "This is taking longer than usual. Still trying…"; after
+  `TIMING.saveLimit` (30 s) the request is cancelled (`AbortController`, so a late
+  answer never changes the page) and it fails like an offline save, "… didn't answer
+  within 30 seconds, so it may not have been saved". Trying again is safe: a call
+  carries its own id, and the same Yes / No or contact again changes nothing. A Yes /
+  No that reached the server after the page gave up clears its note at the next
+  refresh (`settleFailed`). `test_a_save_that_gets_no_answer_says_so_and_can_be_tried_again`
+  checks it with `/mark` and `/calls` never answering. A
   business just marked stays where it is, showing its answer ("Saved. Moves to
   …") and its Undo, until the pointer leaves the list (then a few seconds), or
   you change tab, filter or sort, so a double-click or a quick second click can
