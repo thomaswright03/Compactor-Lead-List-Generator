@@ -541,3 +541,14 @@ def test_after_the_database_drops_every_connection_the_next_request_works(new_co
     for _ in range(5):
         assert client.get("/leads").status_code == 200
     assert new_connections["connections"] == before + 1
+
+
+def test_a_failed_connection_logs_why_without_the_password(caplog):
+    from leadgen import store
+    err = OSError('connection to server failed: FATAL:  password authentication failed for user "app" '
+                  "(postgresql://app:hunter2@db.example/x, password=hunter2)")
+    with caplog.at_level("WARNING"):
+        store.log.warning("x %s", store._reason(err))
+    text = caplog.text
+    assert "password authentication failed" in text
+    assert "hunter2" not in text

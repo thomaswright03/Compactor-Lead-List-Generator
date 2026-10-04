@@ -12,6 +12,7 @@ nothing is saved and Yelp is paused (its daily limit could not be kept).
 import atexit
 import logging
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -265,6 +266,18 @@ def open_db() -> Db:
     return db if db is not None else _new_connection(key, postgres)
 
 
+# Anything in a connection error that could be a password: the user:password@ part of a
+# URL, and password=... in key=value form.
+_SECRETS = re.compile(r"(\w+://)[^@\s/]*@|(password\s*=\s*)\S+", re.IGNORECASE)
+
+
+def _reason(exc: BaseException) -> str:
+    """Why a connection failed, for the log (e.g. "password authentication failed"),
+    on one line and with any password taken out."""
+    text = " ".join(str(exc).split())[:300]
+    return _SECRETS.sub(lambda m: (m.group(1) or m.group(2)) + "***" + ("@" if m.group(1) else ""), text)
+
+
 def _new_connection(key: str, postgres: bool) -> Db:
     """A new connection; the first one in this process also creates any missing tables."""
     conn: Any
@@ -273,7 +286,7 @@ def _new_connection(key: str, postgres: bool) -> Db:
         try:
             conn = psycopg.connect(key, autocommit=True, connect_timeout=15)
         except (psycopg.Error, OSError) as exc:
-            log.warning("Database connection failed: %s", exc.__class__.__name__)
+            log.warning("Database connection failed: %s: %s", exc.__class__.__name__, _reason(exc))
             raise Unavailable("the database could not be reached") from exc
     else:
         http.CACHE_DIR.mkdir(parents=True, exist_ok=True)
