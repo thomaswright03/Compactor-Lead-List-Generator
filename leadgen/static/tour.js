@@ -21,7 +21,9 @@ const TOUR = [
           "A progress bar shows each step, and you can use other pages while it runs. " +
           "New businesses are added to your saved leads; ones you already have are updated, never duplicated." },
   { page: "find", target: "#history", title: "Search history",
-    text: "Every search is listed here: when it ran, where it looked, and how many businesses it found and added." },
+    text: "Every search is listed here: when it ran, where it looked, and how many businesses it found and added. " +
+          "After a search, a note above this list says how much of the area it covered. If some towns are still " +
+          "being filled in, the businesses already found are ready to call now." },
   { page: "find", target: "#admin-card", title: "For the site administrator",
     text: "Kept closed for the sales team and locked with its own administrator password. It lists recent problems, " +
           "has switches to pause searching right away, and a scoring check file to send in once a month." },
@@ -48,7 +50,7 @@ const TOUR = [
           "so Follow Up shows exactly who to call back. The filter finds a business by its name, town, what " +
           "was said on its calls or who called." },
   { page: "map", target: "#map-box", title: "Map",
-    text: `AARCO's pin, the ${CONFIG.area_miles}-mile area searches are meant for, and the parts a search looks ` +
+    text: `AARCO's pin, the ${CONFIG.area_miles}-mile area searches are meant for, and the areas a search looks ` +
           "through one at a time, shaded by how the latest search went. Every saved business is a dot coloured by " +
           "its answer: Yes, No or not checked yet; competitors are hollow squares. Tap one for its phone, its " +
           "latest call and a link to it on the Leads page." },
