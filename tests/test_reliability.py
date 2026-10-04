@@ -552,3 +552,13 @@ def test_a_failed_connection_logs_why_without_the_password(caplog):
     text = caplog.text
     assert "password authentication failed" in text
     assert "hunter2" not in text
+
+
+def test_psycopg_is_loaded_with_the_site_not_first_in_a_thread():
+    # Loaded lazily, two threads (a request and the wake-up thread) could import it at the
+    # same moment, and one was left with a half-loaded module that could never connect.
+    import subprocess
+    import sys
+    out = subprocess.run([sys.executable, "-c", "import sys, leadgen.store; print('psycopg' in sys.modules)"],
+                         capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "True"

@@ -20,6 +20,13 @@ from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any
 
+# Imported here, while the site's code loads, never first inside a request or the wake-up
+# thread: two threads importing psycopg at the same moment can leave one of them with a
+# half-loaded module ("partially initialized module 'psycopg' has no attribute 'connect'"),
+# and then no connection could be made until the site restarted.
+import psycopg
+from psycopg.pq import TransactionStatus
+
 from . import http
 
 log = logging.getLogger(__name__)
@@ -282,7 +289,6 @@ def _new_connection(key: str, postgres: bool) -> Db:
     """A new connection; the first one in this process also creates any missing tables."""
     conn: Any
     if postgres:
-        import psycopg
         try:
             conn = psycopg.connect(key, autocommit=True, connect_timeout=15)
         except (psycopg.Error, OSError) as exc:
@@ -315,7 +321,6 @@ def _idle_now(db: Db) -> bool:
         if db.pid != os.getpid():
             return False
         if db.postgres:
-            from psycopg.pq import TransactionStatus
             return (not db.conn.closed and not db.conn.broken
                     and db.conn.info.transaction_status == TransactionStatus.IDLE)
         return not db.conn.in_transaction
