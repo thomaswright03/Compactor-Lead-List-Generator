@@ -4,11 +4,14 @@
 # artifact for 90 days. The repository is public, so the copy is only ever stored
 # encrypted (AES-256, gpg); without the passphrase it can't be read.
 #
-# Off until the owner adds two repository secrets (Settings > Secrets and variables >
-# Actions): BACKUP_DATABASE_URL (the Neon connection string, the same as Render's
-# DATABASE_URL) and BACKUP_PASSPHRASE (a long passphrase kept in the owner's password
-# manager). Until then each run only says so. Restoring a copy: docs/operator-runbook.md,
-# "Backups and restoring". The job never changes the database.
+# Needs two repository secrets (Settings > Secrets and variables > Actions):
+# BACKUP_DATABASE_URL (the Neon connection string, the same as Render's DATABASE_URL)
+# and BACKUP_PASSPHRASE (a long passphrase kept in the owner's password manager). If one
+# is missing, the nightly (scheduled) run fails, red, naming the missing secret, so a
+# lost or mistyped secret shows on the Actions page and in GitHub's failed-run email; a
+# run started by hand only says so and stays green. Restoring a copy, and the "Restore
+# rehearsal" workflow that proves a copy restores: docs/operator-runbook.md, "Backups
+# and restoring". The job never changes the database.
 name: Nightly backup
 
 on:
@@ -31,8 +34,21 @@ jobs:
       - name: Check the two secrets are set
         id: ready
         run: |
-          if [ -z "$DATABASE_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
-            echo "::notice::The nightly backup is off: add the BACKUP_DATABASE_URL and BACKUP_PASSPHRASE secrets (docs/operator-runbook.md, Backups and restoring)."
+          missing=""
+          if [ -z "$DATABASE_URL" ]; then missing="BACKUP_DATABASE_URL"; fi
+          if [ -z "$BACKUP_PASSPHRASE" ]; then missing="${missing:+$missing and }BACKUP_PASSPHRASE"; fi
+          if [ -n "$missing" ]; then
+            case "$missing" in
+              *" and "*) what="secrets $missing are"; it="them" ;;
+              *) what="secret $missing is"; it="it" ;;
+            esac
+            message="No backup was made: the repository $what missing. Add $it on GitHub: the repository > Settings > Secrets and variables > Actions > New repository secret (docs/operator-runbook.md, Backups and restoring)."
+            if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+              # A nightly run that saved nothing must not look green.
+              echo "::error::$message"
+              exit 1
+            fi
+            echo "::notice::$message"
             echo "on=false" >> "$GITHUB_OUTPUT"
           else
             echo "on=true" >> "$GITHUB_OUTPUT"

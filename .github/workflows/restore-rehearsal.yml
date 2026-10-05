@@ -1,0 +1,194 @@
+# Proves that a real nightly copy can be put back: it takes the newest copy
+# (leadgen-backup-<date>) from the latest successful "Nightly backup" run, decrypts it
+# with the owner's passphrase, restores it with `python -m leadgen restore` (first without,
+# then with --apply, as the runbook's "Restoring" B says) into an empty throwaway Postgres
+# database that lives only for this run, and compares the counts. Started by hand only:
+# GitHub > Actions > Restore rehearsal > Run workflow (docs/operator-runbook.md, "Backups
+# and restoring", "Restore rehearsal").
+#
+# The repository is public, so its logs are too: this job prints only counts (saved
+# leads, Yes / No marks, calls, searches) and the copy's name and date, never a row,
+# a secret or a database error's full text (which can quote a row). It reads the live
+# database (BACKUP_DATABASE_URL) only to count its rows, in a read-only transaction; it
+# never writes to it. It fails (red) when the restored copy holds fewer rows than the
+# copy says it does, or when no copy can be found, downloaded, decrypted or restored.
+name: Restore rehearsal
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read     # find and download the nightly copy (an artifact of another run)
+  contents: read
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: rehearsal-only   # a throwaway database that lives for this run
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      LIVE_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+      # The throwaway database: the restore and its count go here, never to the live one.
+      DATABASE_URL: postgresql://postgres:rehearsal-only@localhost:5432/postgres
+    steps:
+      - name: Check the two secrets are set
+        run: |
+          missing=""
+          if [ -z "$BACKUP_PASSPHRASE" ]; then missing="BACKUP_PASSPHRASE"; fi
+          if [ -z "$LIVE_DATABASE_URL" ]; then missing="${missing:+$missing and }BACKUP_DATABASE_URL"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::The rehearsal needs the repository secret(s) $missing (the same ones the Nightly backup uses). Add them on GitHub: the repository > Settings > Secrets and variables > Actions > New repository secret."
+            exit 1
+          fi
+
+      - name: Find the newest nightly copy
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Successful "Nightly backup" runs, newest first. A run started by hand while a
+          # secret was missing is green but has no copy: it is skipped, and said so.
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/backup.yml/runs?status=success&per_page=30" \
+                   --jq '.workflow_runs[].id')
+          for run in $runs; do
+            name=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/artifacts" \
+                     --jq '[.artifacts[] | select(.expired == false and (.name | startswith("leadgen-backup-")))]
+                           | sort_by(.created_at) | last | .name // empty')
+            if [ -n "$name" ]; then
+              echo "Using $name, from Nightly backup run $run ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run)."
+              echo "run=$run" >> "$GITHUB_OUTPUT"
+              echo "name=$name" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::notice::Nightly backup run $run succeeded but has no copy (a run without the secrets, or its copy is older than 90 days); trying the one before it."
+          done
+          echo "::error::No successful Nightly backup run has a copy to restore. Run Actions > Nightly backup > Run workflow first, then this again."
+          exit 1
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.find.outputs.name }}
+          run-id: ${{ steps.find.outputs.run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/copy
+
+      - name: Decrypt the copy (it stays on this runner)
+        run: |
+          encrypted=$(ls "$RUNNER_TEMP"/copy/*.json.gz.gpg)
+          if ! printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --quiet --yes --pinentry-mode loopback \
+               --passphrase-fd 0 --output "$RUNNER_TEMP/backup.json.gz" --decrypt "$encrypted"; then
+            echo "::error::The copy could not be decrypted with BACKUP_PASSPHRASE: the secret is not the passphrase the copy was made with."
+            exit 1
+          fi
+          rm -f "$encrypted"
+          echo "Decrypted $(basename "$encrypted") ($(du -h "$RUNNER_TEMP/backup.json.gz" | cut -f1))."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Restore it into the throwaway database (prints only counts)
+        run: |
+          # Prints the restore's own lines (counts per table) or, on failure, only its
+          # plain "Error:" line and the kind of error: a database error's full text can
+          # quote a row, and this log is public.
+          restore() {
+            if python -m leadgen restore "$RUNNER_TEMP/backup.json.gz" "$@" > "$RUNNER_TEMP/restore.out" 2> "$RUNNER_TEMP/restore.err"; then
+              cat "$RUNNER_TEMP/restore.out"
+              return 0
+            fi
+            grep -E '^Error: ' "$RUNNER_TEMP/restore.err" | head -n 3 || true
+            kind=$(grep -oE '^[A-Za-z_][A-Za-z0-9_.]*(Error|Exception|Violation|Unavailable)(:|$)' "$RUNNER_TEMP/restore.err" | tail -n 1 | tr -d ':' || true)
+            echo "::error::The restore failed${kind:+ ($kind)}. Its full message is left out of this public log; run the same restore on your own computer (runbook, Restoring, B) to read it."
+            return 1
+          }
+          echo "Without --apply (changes nothing):"
+          restore
+          echo
+          echo "With --apply:"
+          restore --apply
+
+      - name: Compare the counts (copy, restored copy, live database)
+        run: |
+          python - <<'EOF'
+          import os
+          import sys
+          from pathlib import Path
+
+          import psycopg
+
+          from leadgen import backup
+
+          # The same counts as backup.summary (what the copy says it holds, and what
+          # the pages count): saved leads, Yes and No marks, calls, searches.
+          SQL = """SELECT
+            (SELECT count(*) FROM leads WHERE lead <> 'null'),
+            (SELECT count(*) FROM marks WHERE value = 'yes'),
+            (SELECT count(*) FROM marks WHERE value = 'no'),
+            (SELECT count(*) FROM calls),
+            (SELECT count(*) FROM searches) + (SELECT count(*) FROM search_failures)"""
+          NAMES = ("saved leads", "marked yes", "marked no", "calls", "searches")
+
+
+          def counts(url: str) -> dict[str, int]:
+              """The counts, read in a read-only transaction (nothing is ever written)."""
+              with psycopg.connect(url, connect_timeout=30) as conn:
+                  conn.read_only = True
+                  row = conn.execute(SQL).fetchone()
+                  conn.rollback()
+              assert row is not None
+              return dict(zip(NAMES, (int(n) for n in row)))
+
+
+          copy = backup.read(Path(os.environ["RUNNER_TEMP"]) / "backup.json.gz")
+          in_copy = {name: int(copy["counts"].get(name, 0)) for name in NAMES}
+          restored = counts(os.environ["DATABASE_URL"])
+          try:
+              live: dict[str, int] | None = counts(os.environ["LIVE_DATABASE_URL"])
+          except psycopg.Error as exc:
+              # Only the kind of error: its text can name the database's host and user.
+              print(f"::warning::The live database could not be counted ({exc.__class__.__name__}); "
+                    "the restore itself is checked against the copy's own counts.")
+              live = None
+
+          print(f"Copy made {copy.get('made', '?')}.")
+          rows = [f"{'':<12} {'in the copy':>12} {'restored':>10} {'live now':>10}"]
+          for name in NAMES:
+              now = f"{live[name]:,}" if live else "?"
+              rows.append(f"{name:<12} {in_copy[name]:>12,} {restored[name]:>10,} {now:>10}")
+          print("\n".join(rows))
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"### Restore rehearsal\n\nCopy made {copy.get('made', '?')}.\n\n"
+                            "| | In the copy | Restored | Live now |\n|---|---:|---:|---:|\n")
+              for name in NAMES:
+                  now = f"{live[name]:,}" if live else "?"
+                  summary.write(f"| {name} | {in_copy[name]:,} | {restored[name]:,} | {now} |\n")
+
+          short = [name for name in NAMES if restored[name] < in_copy[name]]
+          if short:
+              print(f"::error::The restored copy holds fewer rows than the copy says it does ({', '.join(short)}): "
+                    "the restore did not bring everything back.")
+              sys.exit(1)
+          if restored != in_copy:
+              print("::warning::The restored copy holds more rows than the copy says it does; check the counts.")
+          if live and any(live[name] < in_copy[name] for name in NAMES):
+              print("::warning::The live database now holds fewer of some rows than the copy: rows were "
+                    "removed since the copy was made (merge-sites or out-of-area, or a loss to look into).")
+          print("Pass: the copy restored in full into an empty database.")
+          EOF
+
+      - name: Remove the decrypted copy
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/backup.json.gz" "$RUNNER_TEMP/copy" "$RUNNER_TEMP/restore.out" "$RUNNER_TEMP/restore.err"
