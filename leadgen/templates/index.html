@@ -153,7 +153,7 @@
           <h2>Site switches</h2>
           <p class="muted">Stop searches (or the paid sources) straight away, for example if something
             goes wrong. It works at once, with no restart: new searches are refused, and a search that is
-            running (or still filling in parts of its area) stops within a few seconds, keeping and saving what
+            running (or still filling in missing areas) stops within a few seconds, keeping and saving what
             it had already found (today's search stays used). Saved leads, marks and calls keep working.</p>
           <div id="switch-list"><p class="muted">Loading...</p></div>
           <h2>Scoring check</h2>
@@ -240,7 +240,7 @@
          business (static/map.js; Leaflet is loaded the first time this page opens). -->
     <section class="page" id="page-map" hidden>
       <div class="page-head"><h1>Map</h1>
-        <p>AARCO's {{ area_miles|int }}-mile area, the parts a search looks through one at a time, and every saved business. Tap a pin for its details.</p></div>
+        <p>AARCO's {{ area_miles|int }}-mile area, the areas a search looks through one at a time, and every saved business. Tap a pin for its details.</p></div>
       <div id="map-problem"></div>
       <div id="map-body">
         <div class="map-layout">
@@ -286,7 +286,7 @@
         </div>
         <div class="card">
           <h2>Search areas</h2>
-          <p class="muted">A search looks through AARCO's area in these parts, nearest first (the "3 of 9 areas
+          <p class="muted">A search looks through these areas one at a time, nearest first (the "3 of 9 areas
             done" while it runs). Each is named after its biggest town.</p>
           <ol class="area-list" id="map-areas"></ol>
         </div>

@@ -466,7 +466,7 @@ class _Parts:
         # Parts finish out of order on several threads; the count is of the search's
         # areas, so it only goes forward.
         if len(self.boxes) > 1:
-            split = ", some areas asked again in smaller parts" if self.split and not self.again else ""
+            split = ", some areas asked again in smaller pieces" if self.split and not self.again else ""
             self.say(f"OpenStreetMap: {self.again or 'searching the free map data'} "
                      f"({self.areas_done()} of {len(self.boxes)} areas done{split})",
                      "retry" if self.again else "split" if split else "")

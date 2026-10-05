@@ -128,7 +128,7 @@ const SWITCH_SHOWN = { search_paused: () => true, google_off: () => CONFIG.googl
 const SWITCH_ASK = {
   search_paused: [["Pause all searching for everyone?",
                    "Find leads will refuse to start, for everyone, until this is turned off. A search running now " +
-                   "(or still filling in parts of its area) stops within a few seconds; what it already found is " +
+                   "(or still filling in missing areas) stops within a few seconds; what it already found is " +
                    "saved. Saved leads, marks and calls keep working.", "Pause searching"],
                   ["Let everyone search again?", "Find leads works again for everyone straight away.",
                    "Turn searching back on"]],

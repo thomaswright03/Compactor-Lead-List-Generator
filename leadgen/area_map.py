@@ -199,7 +199,7 @@ def _missed_share(box: Box, missing: Iterable[Box]) -> float:
 
 
 def _missing_boxes(record: dict[str, Any]) -> list[Box] | None:
-    """The parts of the area still missing after the search (and its filling in), or
+    """The areas (or pieces of them) still missing after the search (and its filling in), or
     None when the record doesn't say which they are."""
     fill = _dict(record.get("fill"))
     kept = fill.get("boxes")
@@ -225,7 +225,7 @@ _MAP_DATA_DOWN = re.compile(r"Couldn't reach [^,]*the map data service")
 
 # What an incomplete search's reason said about the map data before the missing parts were
 # kept: "(about 7 of 9 areas searched; not yet: Layton and Coalville)".
-_NOT_YET = re.compile(r"about (\d+) of (\d+) areas searched; not yet: ([^)]*)\)")
+_NOT_YET = re.compile(r"about (\d+) of (\d+) (?:areas|parts) searched; not yet: ([^)]*)\)")
 
 
 def _named_missing(record: dict[str, Any]) -> tuple[set[str], bool] | None:

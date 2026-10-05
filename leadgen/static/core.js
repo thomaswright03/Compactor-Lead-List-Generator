@@ -30,10 +30,11 @@ const PAGE = 100;
 const SHIFT_GUARD_MS = 700;
 // How long the page waits, in milliseconds, before it says something is slow: the first answer
 // after the site woke up (start.js: `waking`, then `stillWaking`), and a save (core.js save():
-// "taking longer than usual" after `saveSlow`, given up as not saved after `saveLimit`). The
+// "taking longer than usual" after `saveSlow`, given up as not saved after `saveLimit`); and
+// how often a page that couldn't load tries again by itself (`retry`, problem()). The
 // browser tests shorten them (window.leadgenTiming, set before the page's scripts run).
 /** @type {Timing} */
-const TIMING = { waking: 4000, stillWaking: 45000, saveSlow: 10000, saveLimit: 30000,
+const TIMING = { waking: 4000, stillWaking: 45000, saveSlow: 10000, saveLimit: 30000, retry: 20000,
                  ...(window.leadgenTiming || {}) };
 // The Leads page holds only the rows it shows (one tab, filtered and sorted by the server,
 // the first `limit` of them), every tab's count, and the leads that can still be undone.
@@ -158,14 +159,55 @@ function loadingCue(id, on) {
   cueTimers.delete(id);
   if (cue.childNodes.length) cue.replaceChildren();
 }
-/** @param {HTMLElement} box @param {string} title @param {string} message @param {() => unknown} [retry] */
-function problem(box, title, message, retry) {
+// A box saying what couldn't be shown, with a Retry button. `again` (a page's list, map or stats
+// that couldn't load: the site or its database may be back in a moment) is tried quietly every
+// TIMING.retry, and at once when the browser tab is shown again, until a load works and the page
+// replaces the box. Only while the box's page is open: another page, or leaving the site, stops it.
+/** @typedef {{node: HTMLElement, again: () => unknown, timer: number}} Retrying */
+/** @type {Map<HTMLElement, Retrying>} */
+const retrying = new Map();
+/**
+ * @param {HTMLElement} box @param {string} title @param {string} message @param {() => unknown} [retry]
+ * @param {() => unknown} [again]
+ */
+function problem(box, title, message, retry, again) {
   const p = el("div", undefined, "problem");
   const text = el("div"); text.append(el("strong", title), el("span", message, "muted"));
   p.append(text);
   if (retry) p.append(button("Retry", "quiet", retry));
   box.replaceChildren(p);
+  let r = retrying.get(box);
+  if (!again) {
+    if (r) clearTimeout(r.timer);
+    retrying.delete(box);
+    return;
+  }
+  // Drawn again while it waits (the page was redrawn): the next try keeps its time.
+  if (r) { r.node = p; r.again = again; } else retrying.set(box, r = { node: p, again, timer: 0 });
+  if (!r.timer) retryBox(box, r, false);
 }
+// One box's next quiet try: after TIMING.retry (now: straight away), if its page is open in a
+// tab in view and the box is still there.
+/** @param {HTMLElement} box @param {Retrying} r @param {boolean} now */
+function retryBox(box, r, now) {
+  clearTimeout(r.timer); r.timer = 0;
+  if (!box.contains(r.node)) { retrying.delete(box); return; }          // loaded since, or replaced
+  const page = /** @type {HTMLElement | null} */ (box.closest(".page"));
+  if (document.visibilityState !== "visible" || (page && page.hidden)) return;
+  const go = () => {
+    r.timer = 0;
+    if (retrying.get(box) !== r) return;
+    retrying.delete(box);                     // a failed try draws the box again, and waits again
+    if (box.contains(r.node)) r.again();
+  };
+  if (now) go(); else r.timer = setTimeout(go, TIMING.retry);
+}
+// Another page was opened, or the tab shown (now) or hidden: each box tries again only on its own page.
+/** @param {boolean} [now] */
+function retryLater(now) {
+  for (const [box, r] of [...retrying]) retryBox(box, r, !!now);
+}
+document.addEventListener("visibilitychange", () => retryLater(true));
 
 function themeChoice() { try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; } }
 /** @param {string} choice "light", "dark" or "system" */
@@ -298,6 +340,7 @@ function route() {
     if (a.dataset.page === page) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
   if (page === "leads" || page === "calls") writeHash(page);
+  retryLater();                               // only the page shown tries again by itself
   if (page === "stats") loadStats();
   if (page === "map") loadMap();
   if (page === "find") loadSearches();

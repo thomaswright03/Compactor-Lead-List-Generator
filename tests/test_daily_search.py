@@ -126,9 +126,9 @@ def test_a_source_that_failed_outright_gets_the_short_note(monkeypatch):
                             "Today's search is now used up; the next one can run tomorrow.")
     assert len(body["warnings"]) == 1 and "map data" not in body["warnings"][0]
     current = client.get("/searches").get_json()["current"]
-    assert current["coverage"]["short"] == "About 6 of 9 parts; the rest of the area didn't come in"
+    assert current["coverage"]["short"] == "About 6 of 9 areas; the rest of the area didn't come in"
     assert current["reason"].startswith("Couldn't reach Google, so its businesses are missing and the free map data "
-                                        "covered only about 6 of the 9 parts of the area")
+                                        "covered only about 6 of the 9 areas")
     assert current["reason"].endswith("the 1 business found was saved.")
 
 

@@ -15,8 +15,17 @@ const ANSWERS = { yes: "Yes", no: "No", unchecked: "Not checked yet" };
 // The order of a pin's fields as the server sends them (area_map.FIELDS).
 const PIN_FIELDS = "key,lat,lon,group,name,tier,score,phone,verified_phone,address,outcome,called,closed,kind";
 const HIDDEN_KEY = "map-hidden";
-// A pin's details box: kept clear of the zoom buttons when the map moves to show it.
-const POPUP = { maxWidth: 300, autoPanPaddingTopLeft: /** @type {L.Point} */ ([64, 12]) };
+// A pin's details box: kept clear of the zoom buttons when the map moves to show it, and never
+// wider or taller than the room that leaves (fitPopups: a phone's map is narrower than 300 px).
+/** @type {L.Point} */
+const PAD_TOP_LEFT = [64, 12];
+/** @type {L.Point} */
+const PAD_BOTTOM_RIGHT = [8, 8];
+const POPUP = { maxWidth: 300, minWidth: 200, autoPanPaddingTopLeft: PAD_TOP_LEFT,
+                autoPanPaddingBottomRight: PAD_BOTTOM_RIGHT };
+// What a box adds around its text: the text's margins and the box's 1 px edge (app.css), the
+// 20 px tip under it (Leaflet's .leaflet-popup margin), and 2 px to spare.
+const POPUP_EDGE = { x: 16 + 24 + 2 + 2, y: 12 + 12 + 2 + 20 + 2 };
 const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const TILE_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
@@ -104,7 +113,7 @@ async function loadMap() {
     const err = /** @type {ApiError} */ (e);
     if (seq !== M.seq || err.status === 401) return;
     mapStatus("");
-    problem($("map-problem"), "Can't show the map right now", err.message, loadMap);
+    problem($("map-problem"), "Can't show the map right now", err.message, loadMap, loadMap);
     $("map-body").hidden = !M.loaded;
     return;
   }
@@ -125,6 +134,7 @@ function drawMap(data) {
   const first = !M.map;
   const map = M.map || makeMap();
   map.invalidateSize();                     // the page was hidden when the map was made
+  fitPopups();
   map.closePopup();
   if (M.areas) M.areas.remove();
   if (M.ring) M.ring.remove();
@@ -213,9 +223,22 @@ function placeLabels() {
   }
 }
 
+// The room a pin's details box has inside the map, beside the zoom buttons (POPUP's padding):
+// app.css keeps the box's text within it, so on a phone the box fits whole, its close button
+// in view, and a long name wraps instead of running off the screen; anything taller scrolls.
+function fitPopups() {
+  const size = M.map ? M.map.getSize() : null;
+  if (!size || !size.x) return;                      // the page is hidden: fitted when shown
+  const width = size.x - PAD_TOP_LEFT[0] - PAD_BOTTOM_RIGHT[0] - POPUP_EDGE.x;
+  const height = size.y - PAD_TOP_LEFT[1] - PAD_BOTTOM_RIGHT[1] - POPUP_EDGE.y;
+  $("map").style.setProperty("--popup-w", `${Math.max(120, width)}px`);
+  $("map").style.setProperty("--popup-h", `${Math.max(120, height)}px`);
+}
+
 function makeMap() {
   const map = L.map($("map"), { preferCanvas: true, zoomSnap: 0.25, zoomDelta: 0.5, minZoom: 5, maxZoom: 18 });
   map.on("zoomend resize", placeLabels);
+  map.on("resize", fitPopups);
   map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
   const tiles = L.tileLayer(TILES, { attribution: TILE_CREDIT, maxZoom: 19 });
   // Without the street map (offline, or the tile servers blocked) the rest still shows, on a plain

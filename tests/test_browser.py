@@ -911,7 +911,7 @@ def test_search_history_is_stacked_cards_on_a_phone(browser, site, page):
     card = tab.locator("#history tbody").first
     text = card.inner_text()
     for part in ("Fortune Rd", "Radius", "30 mi", "Leads", "1,038", "Incomplete", "New",
-                 "about 8 of the 9 parts of the area", "didn't use up the day's search"):
+                 "about 8 of the 9 areas", "didn't use up the day's search"):
         assert part in text, part
     fits = tab.evaluate("""() => {
         const out = (e) => { const r = e.getBoundingClientRect();
@@ -1378,17 +1378,17 @@ def test_the_administrators_section_says_when_it_cannot_read_the_saved_data(brow
 
 # How the Find page says how much of the area a search covered: the coverage notices shown
 # (each visible notice box that speaks of it), the Details lines that do, every "N of M
-# parts" figure on the page, and any words a salesperson shouldn't meet.
+# areas" figure on the page, and any words a salesperson shouldn't meet.
 COVERAGE_SAID = """() => {
     const shown = (e) => Boolean(e.offsetWidth || e.offsetHeight || e.getClientRects().length);
-    const about = /parts? of the|whole [0-9]+-mile area|of the area|covered|filling in|didn't come in/i;
+    const about = /of the [0-9]+ areas|whole [0-9]+-mile area|of the area|covered|filling in|didn't come in/i;
     const page = document.getElementById('page-find');
     const notices = [...page.querySelectorAll('.warn, [role=status], .h-why')]
         .filter((e) => shown(e) && about.test(e.textContent)).map((e) => e.textContent);
     const details = [...page.querySelectorAll('dl.details > div')]
         .filter((d) => shown(d) && about.test(d.textContent)).map((d) => d.textContent);
     const text = page.innerText;
-    const figures = [...text.matchAll(/(\\d+) of (?:the )?(\\d+) parts/gi)].map((m) => m[1] + '/' + m[2]);
+    const figures = [...text.matchAll(/(\\d+) of (?:the )?(\\d+) areas/gi)].map((m) => m[1] + '/' + m[2]);
     return { notices, details, figures,
              banned: ['map areas', 'areas that answered', 'asked again automatically', 'asked again']
                  .filter((w) => text.toLowerCase().includes(w)) };
@@ -1411,7 +1411,7 @@ def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, 
     note = tab.locator("#coverage-note")
     # How much is covered, which towns are still filling in and until when, that calling
     # can start now and that the rest appears on its own.
-    expect(note).to_contain_text("Covered so far: about 5 of the 9 parts of the 30-mile area. Still filling in, "
+    expect(note).to_contain_text("Covered so far: about 5 of the 9 areas within 30 miles. Still filling in, "
                                  "in the background until about ")
     expect(note).to_contain_text(": Layton, West Point, Coalville and the area to the north-west. The 512 "
                                  "businesses already found are on the Leads page, ready to call now; new ones "
@@ -1421,7 +1421,7 @@ def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, 
     daily.finish(day, {"leads": 530, "new": 530, "partial": False,
                        "fill": {**fill, "state": "complete", "left": 0, "found": 18, "new": 18}})
     tab.evaluate("loadSearches()")
-    expect(note).to_have_text("Covered: the whole 30-mile area. The last parts came in later, in the background "
+    expect(note).to_have_text("Covered: the whole 30-mile area. The last areas came in later, in the background "
                               "(18 more businesses, 18 new). Everything found is on the Leads page, ready to call.")
     first = tab.locator("#history tbody").first
     expect(first).to_contain_text("530")
@@ -1430,7 +1430,7 @@ def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, 
     daily.finish(day, {"fill": {**fill, "state": "stopped", "why": "paused", "left": 2, "found": 18, "new": 18,
                                 "where": "Coalville and the area to the north-west"}})
     tab.evaluate("loadSearches()")
-    expect(note).to_have_text("Covered: about 7 of the 9 parts of the 30-mile area. Filling in stopped because "
+    expect(note).to_have_text("Covered: about 7 of the 9 areas within 30 miles. Filling in stopped because "
                               "searching was paused, so these weren't searched today: Coalville and the area to "
                               "the north-west. The 530 businesses already found are on the Leads page, ready to "
                               "call now.")
@@ -1468,13 +1468,13 @@ def test_a_partly_answered_search_says_its_coverage_once(page, monkeypatch):
     page.click("#confirm-go")
     page.wait_for_selector("#done-card:not([hidden])", timeout=60000)
     note = page.locator("#coverage-note")
-    expect(note).to_contain_text("Covered so far: about 6 of the 9 parts of the 30-mile area. Still filling in")
+    expect(note).to_contain_text("Covered so far: about 6 of the 9 areas within 30 miles. Still filling in")
     expect(note).to_contain_text("ready to call now; new ones from the rest of the area will appear there on "
                                  "their own.")
     page.get_by_role("button", name="Details").first.click()
     said = page.evaluate(COVERAGE_SAID)
     assert len(said["notices"]) == 1 and said["notices"][0].startswith("Covered so far"), said
-    assert len(said["details"]) == 1 and "About 6 of 9 parts so far; filling in" in said["details"][0], said
+    assert len(said["details"]) == 1 and "About 6 of 9 areas so far; filling in" in said["details"][0], said
     assert set(said["figures"]) == {"6/9"} and not said["banned"], said
 
     # The rest comes in: the same one notice says so, and the Leads page has the new businesses.
@@ -1485,12 +1485,12 @@ def test_a_partly_answered_search_says_its_coverage_once(page, monkeypatch):
         time.sleep(0.05)
     assert not fillin.running
     page.evaluate("loadSearches()")
-    expect(note).to_contain_text("Covered: the whole 30-mile area. The last parts came in later, in the background")
+    expect(note).to_contain_text("Covered: the whole 30-mile area. The last areas came in later, in the background")
     page.get_by_role("button", name="Details").first.click()
     said = page.evaluate(COVERAGE_SAID)
     assert len(said["notices"]) == 1 and said["notices"][0].startswith("Covered: the whole"), said
     assert len(said["details"]) == 1 and said["details"][0].startswith("Free map data: area covered"), said
-    assert "All 9 parts" in said["details"][0] and not said["banned"], said
+    assert "All 9 areas" in said["details"][0] and not said["banned"], said
     assert not [f for f in said["figures"] if f.split("/")[1] != "9"], said
 
 
@@ -2328,3 +2328,144 @@ def test_a_slow_first_load_says_the_site_is_waking_up(browser, site, page, width
 
 def test_a_quick_first_load_shows_no_starting_notice(page):
     expect(page.locator("#starting")).to_be_hidden()
+
+
+# ---- a pin's details on a phone
+
+LONG_NAME = "Great Basin Regional Distribution and Fulfillment Center for Refrigerated and Frozen Grocery Goods 2"
+
+# Where a pin's details box, its close button and the name in it are once the map has stopped
+# moving to show it, and whether each fits inside the map and the screen.
+PIN_BOX_FITS = """() => {
+    const rect = (s) => document.querySelector(s).getBoundingClientRect();
+    const map = rect('#map'), view = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    const inside = (r, o) => r.left >= o.left && r.right <= o.right && r.top >= o.top && r.bottom <= o.bottom;
+    const box = rect('#map .leaflet-popup-content-wrapper'), close = rect('#map .leaflet-popup-close-button');
+    const name = document.querySelector('#map .pin-box strong');
+    const text = document.querySelector('#map .leaflet-popup-content'), n = name.getBoundingClientRect();
+    return { box: inside(box, map) && inside(box, view), close: inside(close, map) && inside(close, view),
+             closeSize: [close.width, close.height], nameInBox: inside(n, box),
+             clearOfClose: n.right <= close.left || n.top >= close.bottom,
+             wrapped: n.height > 2 * parseFloat(getComputedStyle(name).lineHeight),
+             sideways: text.scrollWidth > text.clientWidth,
+             page: document.documentElement.scrollWidth > window.innerWidth }; }"""
+
+
+@pytest.mark.parametrize("width", [360, 375, 390])
+def test_a_pins_details_fit_a_phones_map_and_close_with_their_button(browser, site, page, width):
+    """On a phone the map is narrower than a details box's usual width: a business with a
+    100-character name, its pin near the map's right edge, opens a box that fits inside the
+    map and the screen, its name wrapped whole and its close button in view, which closes it."""
+    assert len(LONG_NAME) == 100
+    lat, lon = config.SERVICE_CENTER
+    far = Lead(name=LONG_NAME, lat=lat, lon=lon + 0.55, source="yelp", source_id="y-long", phone="(801) 555-0199",
+               city="Salt Lake City", raw_categories=["yelp:grocery"], yelp_reviews=200, address="1 Long Name Way")
+    score_lead(far, config.DEFAULT_KEYWORDS)
+    saved.save_search([far], config.DEFAULT_KEYWORDS)
+    context = _context(browser, viewport={"width": width, "height": 800}, has_touch=True, is_mobile=True)
+    phone = context.new_page()
+    phone.goto(site + "#map")
+    expect(phone.locator("#map .aarco-mark")).to_be_visible()
+    x, y = _on_screen(phone, far.lat, far.lon)
+    edge = phone.locator("#map").bounding_box()
+    assert edge["x"] + edge["width"] - 40 < x < edge["x"] + edge["width"]          # near the right edge
+    phone.touchscreen.tap(x, y)
+    box = phone.locator("#map .pin-box")
+    expect(box.locator("strong").first).to_have_text(LONG_NAME)
+    # The map moves to show the box: measured once it has stopped.
+    phone.wait_for_function("""() => { const b = document.querySelector('#map .leaflet-popup');
+        if (!b) return false; const r = JSON.stringify(b.getBoundingClientRect());
+        const same = window.lastBox === r; window.lastBox = r; return same; }""", polling=200)
+    fits = phone.evaluate(PIN_BOX_FITS)
+    assert fits["box"] and fits["close"] and fits["nameInBox"] and fits["clearOfClose"], fits
+    assert fits["wrapped"] and not fits["sideways"] and not fits["page"], fits
+    assert min(fits["closeSize"]) >= 44, fits
+    phone.locator("#map .leaflet-popup-close-button").tap()
+    expect(box).to_have_count(0)
+    context.close()
+
+
+# ---- the phone bar with large counts
+
+@pytest.mark.parametrize("width", [320, 375])
+def test_the_phone_bar_keeps_one_row_whatever_the_counts(browser, site, page, width):
+    """The five page links stay on one row from 320 px up with four- and five-digit counts
+    beside Leads and Calls, each still a 44 x 44 px touch target."""
+    context = _context(browser, viewport={"width": width, "height": 800}, has_touch=True, is_mobile=True)
+    phone = context.new_page()
+    phone.goto(site + "#leads")
+    phone.wait_for_selector("#n-leads:not([hidden])")
+    for leads, called in [(1060, 1000), (10000, 1060), (99999, 99999)]:
+        phone.evaluate(f"S.counts.unchecked = {leads}; S.counts.called = {called}; counts()")
+        expect(phone.locator("#n-leads")).to_contain_text(f"{leads:,}")
+        expect(phone.locator("#n-calls")).to_contain_text(f"{called:,}")
+        links = phone.evaluate("""() => [...document.querySelectorAll('nav a')].map((a) => {
+            const r = a.getBoundingClientRect(); return [Math.round(r.top), r.width, r.height, r.left, r.right]; })""")
+        assert len(links) == 5 and len({top for top, *_ in links}) == 1, (leads, called, links)
+        assert all(w >= 44 and h >= 44 and left >= 0 and right <= width for _, w, h, left, right in links), links
+        assert phone.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    context.close()
+
+
+# ---- a page that couldn't load tries again by itself
+
+FAILED = {"error": "The saved list can't be read right now. Try again in a minute."}
+
+
+@pytest.mark.parametrize("where,path,shown", [("leads", "**/leads?*", "table.leads"),
+                                              ("calls", "**/leads?*tab=called*", "#calls-body"),
+                                              ("map", "**/map-data", "#map .aarco-mark"),
+                                              ("stats", "**/stats", "#stats-body")])
+def test_a_page_that_could_not_load_shows_its_data_once_the_site_is_back(browser, site, page, where, path, shown):
+    """The site's database was down: the page says it can't show its data, with Retry, and
+    without a click tries again by itself, showing the data as soon as a load works."""
+    context = _context(browser, viewport={"width": 1280, "height": 800})
+    context.add_init_script("window.leadgenTiming = { retry: 600 };")
+    tab = context.new_page()
+    failed = []
+
+    def once(route):
+        if failed:
+            route.continue_()
+        else:
+            failed.append(route.request.url)
+            route.fulfill(status=503, json=FAILED)
+    tab.route(path, once)
+    tab.goto(site + f"#{where}")
+    problem = tab.locator(f"#{where}-problem .problem")
+    expect(problem).to_contain_text("right now")
+    expect(problem.get_by_role("button", name="Retry")).to_be_visible()
+    # Nothing is clicked: the next quiet try works and the data replaces the box.
+    expect(tab.locator(shown)).to_be_visible(timeout=10000)
+    expect(problem).to_have_count(0)
+    assert len(failed) == 1
+    context.close()
+
+
+def test_the_quiet_retries_stop_when_another_page_is_opened(browser, site, page):
+    context = _context(browser, viewport={"width": 1280, "height": 800})
+    context.add_init_script("window.leadgenTiming = { retry: 300 };")
+    tab = context.new_page()
+    asked = []
+
+    def down(route):
+        asked.append(route.request.url)
+        route.fulfill(status=503, json=FAILED)
+    tab.route("**/stats", down)
+    tab.goto(site + "#stats")
+    expect(tab.locator("#stats-problem .problem")).to_contain_text("Can't show the stats right now")
+    for _ in range(50):
+        if len(asked) >= 3:
+            break
+        tab.wait_for_timeout(100)
+    assert len(asked) >= 3                             # it keeps trying while the page is open
+    tab.click("nav a[data-page=find]")
+    tab.wait_for_timeout(400)
+    before = len(asked)
+    tab.wait_for_timeout(1500)                         # five retry periods on another page
+    assert len(asked) == before
+    tab.unroute("**/stats")
+    tab.click("nav a[data-page=stats]")                # back on the page: it loads (and works now)
+    expect(tab.locator("#stats-body")).to_be_visible()
+    expect(tab.locator("#stats-problem .problem")).to_have_count(0)
+    context.close()

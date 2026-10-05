@@ -383,7 +383,7 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
                                 f"the free map data ({exc.reason}); the businesses already "
                                 "found were kept, and the rest of the area wasn't searched.")
         except osm.PartialResult as exc:
-            # Some parts of the area answered: keep what they found; the search is incomplete.
+            # Some of the areas answered: keep what they found; the search is incomplete.
             got.add("osm", exc.leads, exc.warnings)
             if exc.coverage:
                 stats["osm areas searched"] = exc.coverage

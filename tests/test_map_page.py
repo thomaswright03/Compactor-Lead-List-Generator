@@ -263,6 +263,16 @@ def test_searches_recorded_before_the_areas_were_kept_are_read_from_their_words(
     assert set(_statuses(data).values()) == {"unknown"} and "which ones wasn't recorded then" in data["coverage"]
 
 
+def test_a_record_whose_words_called_the_areas_parts_is_read_the_same():
+    names = [a.name for a in area_map.areas()]
+    _record(_aarcos(partial=True, reason=f"Incomplete (about 7 of 9 parts searched; not yet: {names[4]} and "
+                                         f"{names[6]})."))
+    data = _data()
+    statuses = _statuses(data)
+    assert [statuses[n] for n in names] == ["searched"] * 4 + ["missed", "searched", "missed", "searched", "searched"]
+    assert data["coverage"].endswith(": 7 of 9 areas searched in full.")
+
+
 def test_only_a_search_of_aarcos_area_shades_it():
     _record(_aarcos(map_areas={"missing": []}), at=time.time() - 7200)
     newer = time.time() - 60

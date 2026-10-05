@@ -169,9 +169,12 @@ competitors not asked Yes / No, the search confirmation, a refused search saying
 why (in the browser and from the server), the phone cards and the short phone
 header, Stats, downloads and their busy state, reload keeps the
 view, the colour switch fitting from 320 px up, 44 px touch targets on a
-phone, the Calls cards and every page link in view at 320 px, a closed business
+phone, the Calls cards and every page link in view at 320 px, the phone bar's five links
+on one row with four- and five-digit counts, a page that couldn't load showing its data
+by itself once the site is back (and not trying while another page is open), a closed business
 keeping its mark, the skip link and the short Recent changes, and the Map page: AARCO's
-pin, the circle, the nine areas and the missed one, every pin and its details, the group
+pin, the circle, the nine areas and the missed one, every pin and its details (on a phone,
+a long name's box fitting inside the map with its close button), the group
 and area toggles (kept after a reload), a pin opening the business on Leads, the dark
 theme and a phone); it is skipped when Playwright's Chromium is missing. Every browser
 window the tests open refuses requests to anywhere but the test server (`OUTSIDE`), so
@@ -235,7 +238,10 @@ first requests share one parse). `/healthz` returns `up_since`, the process's st
 Utah time. On the page, `start.js` shows `#starting` ("Loading your leads…") until the
 first list arrives, and after `TIMING.waking` (4 s) says the site is starting up and can
 take up to a minute; after `TIMING.stillWaking` (45 s) it adds to reload if nothing
-appears within two minutes. `TIMING` (in `core.js`) can be shortened in a browser test
+appears within two minutes. A Leads, Calls, Map or Stats page that couldn't load (`problem()`
+in `core.js`, given the quiet `again`) tries again every `TIMING.retry` (20 s) and when the
+tab is shown again, only while its page is open, until the data replaces the box.
+`TIMING` (in `core.js`) can be shortened in a browser test
 through `window.leadgenTiming`. `tests/test_awake.py` and the browser tests
 `test_a_slow_first_load_says_the_site_is_waking_up` / `…_quick_first_load_shows_no_starting_notice`
 cover it.
@@ -434,7 +440,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   30-mile search is 9 areas), two at a time, **nearest the centre first** (the area
   the search's centre is in, then outwards; a failed area's quarters take their place
   in that order, `osm._distance`), each starting at a different map server (the
-  progress text says "3 of 9 parts of the area done": the search's areas, fixed for the whole
+  progress text says "3 of 9 areas done": the search's areas, fixed for the whole
   search, an area asked in quarters counting once all four answered; the count only
   moves forward and stays in the text through the catch-up round). An area no server answers is
   asked again as four smaller ones; if one still gets no answer, the search is
@@ -449,7 +455,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   (`OVERPASS_RETRY_ROUNDS`), after a 20-second pause (`OVERPASS_RETRY_PAUSE_SECONDS`)
   with 150 seconds of its own (`OVERPASS_RETRY_SECONDS`), so the map-data step
   never takes more than about 7 minutes; the progress text says "asking again for
-  the parts the busy servers missed" (the record keeps how many were asked again,
+  the areas the busy servers missed" (the record keeps how many were asked again,
   `osm areas asked again`, an internal count the page never shows). Areas still missing then are **filled in in the
   background** (`leadgen/fillin.py`), within the same search: the search reports
   what it found and uses up the day as usual, and a background thread asks the
@@ -469,8 +475,10 @@ the sidebar to the page's list (Leads, Calls) or heading.
   `fillin.plain_reason` rewords an earlier version's reason, and the note beside a
   finished search only names a source that couldn't be reached at all. The stored
   reason keeps the technical form ("about 6 of 9 areas searched; not yet: ...") for
-  the problem list and the Map page. Complete, the
-  search is no longer marked incomplete; parts that never came in are reported
+  the problem list and the Map page. Every screen calls the nine pieces "areas" (progress,
+  coverage, Details, the Map page, the tutorial); what reads saved words (`fillin._FIRST`,
+  `_OLD_WORDS`, `area_map._NOT_YET`) also takes "parts", as earlier words may have said.
+  Complete, the search is no longer marked incomplete; areas that never came in are reported
   as a problem (and the webhook). Pausing searching stops it within a few seconds (between rounds it
   looks at the switch every `osm.STOP_CHECK_SECONDS`, not only at the next round; Find leads then
   polls every 2.5 seconds until it has ended), and a fill-in cut

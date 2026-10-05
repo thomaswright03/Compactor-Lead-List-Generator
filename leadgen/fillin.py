@@ -222,7 +222,7 @@ def _finish(day: str, fill: dict[str, Any], unsaved: int) -> None:
     if fill["state"] not in (COMPLETE, STOPPED):
         left, areas = fill["left"], fill.get("areas") or 0
         if left:
-            missing = (f"{left} of the {areas} parts of the area" if areas > 1 else "part of the area")
+            missing = (f"{left} of the {areas} areas" if areas > 1 else "part of the area")
             final = (f"{missing[:1].upper()}{missing[1:]}{_around(fill)} never came in from the free map "
                      "data today, so businesses there are missing until the next search.")
         else:
@@ -250,7 +250,7 @@ def _around(fill: dict[str, Any]) -> str:
 
 # "about 2 of 9 areas" (the search's own figure), and the towns an incomplete search's
 # reason names as missing.
-_FIRST = re.compile(r"about (\d+) of (\d+) areas")
+_FIRST = re.compile(r"about (\d+) of (\d+) (?:areas|parts)")
 _NOT_YET = re.compile(r"; not yet: ([^)]*)\)")
 # An incomplete search's reason when the free map data answered for part of the area.
 _PARTLY = "answered for only part of the area"
@@ -275,28 +275,29 @@ def coverage(record: dict[str, Any], paused: bool = False, earlier: bool = False
     state = str(fill.get("state") or "partial")
     first = _FIRST.match(searched)
     if fill.get("areas"):
-        parts, left = int(fill["areas"]), int(fill.get("left") or 0)
+        areas, left = int(fill["areas"]), int(fill.get("left") or 0)
         towns = str(fill.get("where") or "")
     else:
-        parts = int(first.group(2)) if first else 1
-        left = parts - int(first.group(1)) if first else 1
+        areas = int(first.group(2)) if first else 1
+        left = areas - int(first.group(1)) if first else 1
         said = _NOT_YET.search(str(record.get("reason") or ""))
         towns = said.group(1) if said else ""
     if not left:
         state = COMPLETE
     radius = record.get("radius")
     area = f"{radius:g}-mile area" if isinstance(radius, (int, float)) and radius else "area"
-    covered = (f"about {parts - left} of the {parts} parts of the {area}" if parts > 1 else f"part of the {area}")
-    short = f"About {parts - left} of {parts} parts" if parts > 1 else "Part of the area"
+    within = f" within {radius:g} miles" if isinstance(radius, (int, float)) and radius else ""
+    covered = f"about {areas - left} of the {areas} areas{within}" if areas > 1 else f"part of the {area}"
+    short = f"About {areas - left} of {areas} areas" if areas > 1 else "Part of the area"
     found, new, leads = int(fill.get("found") or 0), int(fill.get("new") or 0), int(record.get("leads") or 0)
     them = (f"The {leads:,} businesses already found are" if leads != 1 else "The business already found is")
     ready = f"{them} on the Leads page, ready to call now"
     rest = towns or "the rest of the area"
     if state == COMPLETE:
         later = f" ({found:,} more businesses, {new:,} new)" if found else ""
-        text = (f"Covered: the whole {area}. The last parts came in later, in the background{later}. "
+        text = (f"Covered: the whole {area}. The last areas came in later, in the background{later}. "
                 "Everything found is on the Leads page, ready to call.")
-        short = (f"All {parts} parts" if parts > 1 else "The whole area") + \
+        short = (f"All {areas} areas" if areas > 1 else "The whole area") + \
             (f" ({found:,} businesses came in later, in the background)" if found else ", some later in the background")
     elif state == FILLING and paused:
         text = (f"Covered so far: {covered}. Stopping the filling in of {rest}, because searching was paused… "
@@ -339,7 +340,7 @@ _CLAUSE = re.compile(r" and the map data service answered for only part of the a
 # its day back): "the map data service answered for only part of the area (about 2 of 9
 # areas searched; not yet: Layton)".
 _OLD_WORDS = re.compile(r"(t|T)he map data service answered for only part of the area"
-                        r"(?: \(about (\d+) of (\d+) areas searched(?:; [^:)]*: ([^)]*))?\))?")
+                        r"(?: \(about (\d+) of (\d+) (?:areas|parts) searched(?:; [^:)]*: ([^)]*))?\))?")
 
 
 def plain_notes(notes: list[Any]) -> list[str]:
@@ -360,7 +361,6 @@ def plain_reason(text: str) -> str:
     def words(m: re.Match[str]) -> str:
         said = f"{m.group(1)}he free map data covered only part of the area"
         if m.group(2):
-            said = (f"{m.group(1)}he free map data covered only about {m.group(2)} of the {m.group(3)} parts of "
-                    "the area")
+            said = f"{m.group(1)}he free map data covered only about {m.group(2)} of the {m.group(3)} areas"
         return said + (f" (missing: {m.group(4)})" if m.group(4) else "")
     return _OLD_WORDS.sub(words, text)

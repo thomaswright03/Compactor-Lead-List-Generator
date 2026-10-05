@@ -47,7 +47,8 @@ async function loadCalled(quiet) {
 function pickCallTab(view) { S.callView = view; S.callLimit = PAGE; writeHash("calls"); loadCalled(); }
 function renderCalls() {
   if (S.calledError && !S.calledLoaded) {
-    problem($("calls-problem"), "Can't show your calls right now", S.calledError, () => loadCalled());
+    problem($("calls-problem"), "Can't show your calls right now", S.calledError, () => loadCalled(),
+            () => loadCalled(true));
     $("calls-body").hidden = true; loadingCue("calls-loading", false); return;
   }
   // Loaded before: the rows shown stay, with a note that they couldn't be brought up to date.
