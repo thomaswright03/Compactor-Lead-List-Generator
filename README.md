@@ -292,8 +292,8 @@ runbook's [Owner actions still open](docs/operator-runbook.md#owner-actions-stil
 2. Delete the old branches `wip-yelp-cap-and-baler-marks` and `runbook-owner-steps-done`
    on GitHub (nothing on them is missing from `main`). `claude-staging` stays: it is
    the staging route through CI to the protected `main`.
-3. Rehearse a restore of the live data once (GitHub **Actions** → **Restore rehearsal**
-   → **Run workflow**).
+
+A restore of the live data was rehearsed on 2026-10-05 and passed (runbook owner action 6).
 
 The keep-awake pinger (cron-job.org) was set up on 2026-10-05; confirm it after its
 first full working day (runbook owner action 5).

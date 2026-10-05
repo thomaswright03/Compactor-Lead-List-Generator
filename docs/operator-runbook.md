@@ -82,7 +82,7 @@ links to, and take it off the README's "Still open for the owner" list.
    date)**): the job's **History** on cron-job.org lists a 200 answer every 10 minutes,
    and `curl -s https://compactor-lead-finder.onrender.com/healthz` shows the same
    `up_since` at 7 AM, 10 AM, 1 PM and 5 PM.
-6. **Rehearse a restore of the live data once** (GitHub; **Open**, added 2026-10-03).
+6. **Rehearse a restore of the live data once** (GitHub; **Done (2026-10-05)**).
    GitHub → the repository → **Actions** → **Restore rehearsal** → **Run workflow** →
    **Run workflow**. It puts the newest nightly copy back into a throwaway database and
    compares the counts with the copy's own and with the live database's. What a pass
@@ -684,7 +684,7 @@ the result with its counts):
 | Date | What was restored | Result |
 |---|---|---|
 | 2026-10-03 | By the developer, on a copy with test data: a SQLite database (6 leads, 2 marks, 2 calls, 1 search) backed up, restored into an empty Postgres 16 database, and the site started on it | The same counts on Leads, Calls, Stats and the search history as the original; every row identical (also checked by `tests/test_backup.py`, Postgres → SQLite → Postgres) |
-| Open | The live data: the newest nightly copy, by **Actions** → **Restore rehearsal** ([Restore rehearsal](#restore-rehearsal)) | Owner action 6 under [Owner actions still open](#owner-actions-still-open) |
+| 2026-10-05 | The live data: nightly copy `leadgen-backup-2026-10-05` (248 KB), by **Actions** → **Restore rehearsal**, [run 37359442271](https://github.com/thomaswright03/Compactor-Lead-List-Generator/actions/runs/37359442271) | Pass: every step green, so the restored database held at least the copy's own counts of saved leads, marks, calls and searches. The counts are in the run's **Summary** |
 
 ## Login and the free plan
 
