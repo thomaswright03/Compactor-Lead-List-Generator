@@ -102,9 +102,10 @@ def test_every_saved_business_with_a_position_is_a_pin_with_what_its_box_shows()
     unchecked = _lead("Costco Wholesale", "c", lat=40.8, address="", zip="84104")
     rival = _lead("Pro Baler", "p", cats=("yelp:junkremoval",))
     own = _lead("AARCO Compactor", "a", lat=config.OWN_COORDS[0], lon=config.OWN_COORDS[1])
+    parent = _lead("Ace Intermountain Recycling Center", "ace", lat=40.74, cats=("amenity=recycling",))
     nowhere = _lead("Nowhere Foods", "n", lat=0.0, lon=0.0)
     closed = _lead("Old Mill Foods", "m", lat=40.7, address="9 Mill Rd")
-    saved.save_search([yes, no, unchecked, rival, own, nowhere, closed], config.DEFAULT_KEYWORDS)
+    saved.save_search([yes, no, unchecked, rival, own, parent, nowhere, closed], config.DEFAULT_KEYWORDS)
     saved.save_search([_lead("Old Mill Foods", "m", lat=40.7, address="9 Mill Rd",
                              business_status="CLOSED_PERMANENTLY")], config.DEFAULT_KEYWORDS)
     marks.set_mark(yes.uid, "yes", by="Dana")
@@ -115,9 +116,9 @@ def test_every_saved_business_with_a_position_is_a_pin_with_what_its_box_shows()
     data = _data()
     pins = _pins(data)
     assert set(pins) == {"Smith's Marketplace", "Hampton Inn", "Costco Wholesale", "Pro Baler", "AARCO Compactor",
-                         "Old Mill Foods"}
+                         "Ace Intermountain Recycling Center", "Old Mill Foods"}
     assert data["no_position"] == 1                       # Nowhere Foods: on the Leads page only
-    assert data["counts"] == {"unchecked": 2, "yes": 1, "no": 1, "competitor": 2}
+    assert data["counts"] == {"unchecked": 2, "yes": 1, "no": 1, "competitor": 3}
     assert data["fields"] == list(area_map.FIELDS)
     s = pins["Smith's Marketplace"]
     assert (s["key"], s["group"], s["lat"], s["lon"]) == (yes.uid, "yes", 40.75, -111.9)
@@ -130,6 +131,8 @@ def test_every_saved_business_with_a_position_is_a_pin_with_what_its_box_shows()
     assert pins["Costco Wholesale"]["address"].startswith("No street address")
     assert (pins["Pro Baler"]["group"], pins["Pro Baler"]["kind"]) == ("competitor", "Competitor")
     assert (pins["AARCO Compactor"]["group"], pins["AARCO Compactor"]["kind"]) == ("competitor", "Own company")
+    ace = pins["Ace Intermountain Recycling Center"]           # AARCO's parent company's: its own too
+    assert (ace["group"], ace["kind"]) == ("competitor", "Parent company")
     assert pins["Old Mill Foods"]["closed"] is True and pins["Old Mill Foods"]["address"].startswith("9 Mill Rd")
     # A mark made since is on the next answer (the saved list is read fresh).
     marks.set_mark(unchecked.uid, "yes", by="Dana")

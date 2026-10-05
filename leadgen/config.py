@@ -7,7 +7,7 @@ pipeline code.
 
 from dataclasses import dataclass, field
 
-# AARCO Compactor's shop: the default point the radius and "Miles" are measured
+# AARCO's shop: the default point the radius and "Miles" are measured
 # from. Stored as coordinates so it never depends on an online geocoder. Utah's
 # address records have no 876 Fortune Rd; the pin is 1876 W Fortune Rd (Fortune
 # Rd is ~0.4 mi long, so any point on it gives the same distances).
@@ -25,7 +25,12 @@ SERVICE_AREA_MILES = 30.0
 DEFAULT_KEYWORDS = ["compactor", "baler", "waste", "recycling"]
 DEFAULT_MIN_SCORE = 20
 
-OWN_COMPANY = "AARCO Compactor"
+# The client's name, as every page title, the brand block, the login and error pages,
+# the own-listing flag and the problem alerts write it. OWN_COMPANY_SHORT is the brand
+# block's name on a phone, where the full name doesn't fit beside the Menu button.
+OWN_COMPANY = "AARCO Compactors & Balers"
+OWN_COMPANY_SHORT = "AARCO"
+SITE_NAME = f"{OWN_COMPANY} Lead Finder"
 
 # Competitors are flagged (never dropped) so the client can see who else is
 # servicing the area. Matching is done on a normalized name/website.
@@ -35,6 +40,18 @@ COMPETITORS = {
 }
 # AARCO's own listing, under its name or the spelling "Arco" a listing may use.
 SELF_ALIASES = ["aarcocompactor", "aarco compactor", "arcocompactor", "arco compactor"]
+# AARCO is a division of ACE Recycling & Disposal: the parent company's listings are
+# treated exactly like AARCO's own (flagged, never a prospect, out of "Not checked" and
+# Stats). A listing is the parent's when its name or another name it goes by holds one of
+# PARENT_ALIASES as whole words ("Ace Intermountain Recycling Center"; "Ace Hardware" is
+# not), its website is on one of PARENT_DOMAINS, or its street address is one of
+# PARENT_ADDRESSES (street, then town; a listing in another town is not). The owner
+# confirms the list: add a name, domain or facility here, no code change needed.
+PARENT_COMPANY = "ACE Recycling & Disposal"
+PARENT_ALIASES = ["ACE Recycling & Disposal", "ACE Recycling and Disposal", "ACE Disposal",
+                  "Ace Intermountain Recycling", "Ace Recycling"]
+PARENT_DOMAINS = ["acedisposal.com"]
+PARENT_ADDRESSES = ["1240 South Wallace Road, Salt Lake City"]
 
 
 @dataclass

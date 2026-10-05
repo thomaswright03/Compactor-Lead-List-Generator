@@ -125,7 +125,9 @@ Good to know:
   is kept as Yes and says so in red. Check with the business, then press Yes or
   No to confirm; the note goes away.
 - Competitors (Pro Baler, Action Compaction) and AARCO's own listing are shown in
-  orange under **Competitors**. They are not prospects, so they have no Yes / No.
+  orange under **Competitors**. So are the listings of AARCO's parent company, ACE
+  Recycling & Disposal (its recycling centre on Wallace Road too), marked **AARCO's
+  parent company**. They are not prospects, so they have no Yes / No.
   When none has been found yet, the tab says so.
 - A business a later search found **closed for good** keeps its mark and calls
   and moves to the **Closed** tab.
@@ -228,7 +230,8 @@ Open **Map** in the sidebar (in the bar at the top on a phone).
 - **Businesses with a baler or compactor**: how many are marked Yes.
 - The chart shows, for each tier, the share of checked businesses (marked Yes or
   No) that have one. A good scoring has a high share in tier A and a low one in D.
-- Competitors and AARCO's own listing are left out of every number.
+- Competitors and AARCO's own listings (its parent company's too) are left out of
+  every number.
 
 ## Download the list
 
@@ -265,8 +268,9 @@ The Excel file's **Why This Score** column says the same. Parcel delivery statio
 (Amazon, FedEx Home Delivery, UPS hubs) count as warehouse / logistics sites.
 Clinics, a hospital's power plant and car or truck washes are not leads.
 
-A lead flagged **Needs a name** is only a building on the map, with no business
-name, address or phone ("Office and Warehouse, West"). It sits in tier D. Open its
+A lead flagged **Needs a name** is only a building or a word such as "Recycling" on
+the map, with no business name, address or phone ("Office and Warehouse, West"). It
+sits in tier D. Open its
 **map** link to see where it is and find out who is in the building before calling,
 or skip it.
 

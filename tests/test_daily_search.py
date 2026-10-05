@@ -132,20 +132,29 @@ def test_a_source_that_failed_outright_gets_the_short_note(monkeypatch):
     assert current["reason"].endswith("the 1 business found was saved.")
 
 
-def test_a_search_recorded_under_the_old_name_shows_aarco():
-    """Searches run before the owner corrected the company's name (AARCO, not Arco) say
-    AARCO in the history; the stored record keeps its text."""
+def test_a_search_recorded_under_an_old_name_shows_the_name_now():
+    """Searches run under an earlier name of the company ("Arco Compactor", then "AARCO
+    Compactor") show its name now (config.OWN_COMPANY) in the history and still count as
+    the same place; the stored records keep their text."""
     import json
-    old = "Arco Compactor, 876 Fortune Rd, Salt Lake City, UT 84104"
+
+    from leadgen import geo
+    olds = ["Arco Compactor, 876 Fortune Rd, Salt Lake City, UT 84104",
+            "AARCO Compactor, 876 Fortune Rd, Salt Lake City, UT 84104"]
     with store.connect() as db:
-        db.run("INSERT INTO searches (day, at, info) VALUES (?, ?, ?)",
-               ("2026-09-30", time.time() - 3 * 86400,
-                json.dumps({"location": "876 Fortune Rd", "place": old, "found_near": old, "leads": 3})))
-    [record] = daily.history()["searches"]
-    assert record["place"] == record["found_near"] == "AARCO Compactor, 876 Fortune Rd, Salt Lake City, UT 84104"
-    assert daily.earlier_search(record["place"], daily.today(), 0) is not None
+        for n, old in enumerate(olds):
+            db.run("INSERT INTO searches (day, at, info) VALUES (?, ?, ?)",
+                   (f"2026-09-{29 + n}", time.time() - (4 - n) * 86400,
+                    json.dumps({"location": "876 Fortune Rd", "place": old, "found_near": old, "leads": 3})))
+    records = daily.history()["searches"]
+    assert len(records) == 2
+    for record in records:
+        assert record["place"] == record["found_near"] == geo.OWN_LABEL \
+            == "AARCO Compactors & Balers, 876 Fortune Rd, Salt Lake City, UT 84104"
+    assert daily.earlier_search(geo.OWN_LABEL, daily.today(), 0) is not None
+    assert daily.earlier_search(olds[1], daily.today(), 0) is not None
     with store.connect() as db:
-        assert json.loads(db.one("SELECT info FROM searches")[0])["place"] == old
+        assert [json.loads(i)["place"] for (i,) in db.all("SELECT info FROM searches ORDER BY at")] == olds
 
 
 # ---- what a search's record keeps for the Map page

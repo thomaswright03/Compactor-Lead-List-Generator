@@ -34,6 +34,13 @@ input, select, textarea { font:inherit; font-weight:400; padding:var(--sp-2); bo
         position:sticky; top:0; height:100vh; align-self:start; z-index:5; }
 .brand strong { display:block; color:#fff; font-size:var(--fs-md); }
 .brand span { font-size:var(--fs-sm); opacity:.85; }
+/* The company's full name; on a narrow phone, where it doesn't fit beside Menu, its short
+   form (config.OWN_COMPANY_SHORT). */
+.brand .co-short { display:none; }
+@media (max-width: 519px) {
+  .brand .co-full { display:none; }
+  .brand .co-short { display:inline; }
+}
 nav { display:flex; flex-direction:column; gap:var(--sp-1); }
 nav a { color:var(--side-ink); text-decoration:none; padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm); display:flex; gap:var(--sp-1) var(--sp-2);
         justify-content:space-between; align-items:center; font-weight:600; flex-wrap:nowrap; }

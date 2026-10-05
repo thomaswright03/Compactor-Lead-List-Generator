@@ -259,7 +259,8 @@ function pinBox(row) {
   const box = el("div", undefined, "pin-box");
   box.append(el("strong", name));
   if (group === "competitor") {
-    box.append(el("div", kind === "Competitor" ? "Competitor: flagged, not a prospect" : "AARCO's own listing", "sub"));
+    box.append(el("div", kind === "Competitor" ? "Competitor: flagged, not a prospect"
+      : kind === "Parent company" ? "AARCO's parent company" : "AARCO's own listing", "sub"));
   } else {
     const word = TIER_WORDS[tier] || "";
     box.append(el("div", `Tier ${tier}${word ? ` (${word})` : ""} · score ${score}`, "sub"));

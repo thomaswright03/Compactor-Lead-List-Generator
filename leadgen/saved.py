@@ -30,7 +30,7 @@ from . import config, places, store
 from .dedupe import Site, SiteIndex, duplicate_groups, is_duplicate, merge, same_site, site_of, snapshot
 from .geo import haversine_miles
 from .models import Lead
-from .scoring import OWN_FLAG, OWN_FLAG_START, mark_needs_name, score_lead
+from .scoring import current_own_flag, mark_needs_name, mark_parent_company, score_lead
 
 _FIELDS = {f.name for f in fields(Lead)}
 CLOSED = "CLOSED_PERMANENTLY"
@@ -399,12 +399,15 @@ def _ready(row: _Row) -> Lead | None:
         return None
     if is_closed(lead) and CLOSED_FLAG not in lead.flags:
         lead.flags = [CLOSED_FLAG, *lead.flags]
-    if any(f.startswith(OWN_FLAG_START) and f != OWN_FLAG for f in lead.flags):
-        # Saved before the owner corrected the company's name ("Arco"): shown with the name
-        # it has now. Only what is shown changes; the saved row keeps its text.
-        lead.flags = [OWN_FLAG if f.startswith(OWN_FLAG_START) else f for f in lead.flags]
-    # A building with no business name, address or phone, saved before such rows were held
-    # back: shown in tier D and flagged, as a search now scores it (the saved row is unchanged).
+    # Saved under an earlier name of the company ("OWN COMPANY: Arco Compactor", "OWN
+    # COMPANY: AARCO Compactor"): shown with the name it has now. Only what is shown
+    # changes; the saved row keeps its text.
+    lead.flags = [current_own_flag(f) for f in lead.flags]
+    # A listing of AARCO's parent company saved before it was recognised: shown as AARCO's
+    # own (flagged, not a prospect), as a search now scores it (the saved row is unchanged).
+    mark_parent_company(lead)
+    # A building or generic word with no business name, address or phone, saved before such
+    # rows were held back: shown in tier D and flagged, as a search now scores it.
     mark_needs_name(lead)
     lead.uid = row.uid
     lead.distance_miles = round(haversine_miles(*config.DEFAULT_CENTER, lead.lat, lead.lon), 2)

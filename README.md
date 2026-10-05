@@ -3,10 +3,12 @@
 Finds businesses around Salt Lake City (or any ZIP/city) that are likely to run
 **large commercial trash compactors or cardboard balers**, scores each one, and
 exports a ranked lead list to Excel or CSV for manual vetting. Built for
-AARCO Compactor.
+AARCO Compactors & Balers.
 
 Competitors (**Pro Baler**, **Action Compaction**) are **flagged, never dropped**,
-and AARCO Compactor's own listing is flagged too.
+and AARCO's own listings are flagged too, including those of its parent company,
+**ACE Recycling & Disposal** (its names, website and facilities, listed in
+`leadgen/config.py`): never offered as prospects, and left out of Stats.
 
 ## Where to look
 
@@ -126,9 +128,10 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   "Amazon Delivery Station") are warehouse / logistics sites, not manufacturing; a
   carrier's shop ("The UPS Store") or lockers are not.
 - **Needs a name.** A map name that only describes a building ("Office and Warehouse,
-  West") with no address, phone or website is no business anyone can call: it is held
-  in tier D (so a search leaves it out) and flagged **Needs a name**; rows saved before
-  show the same way, and the saved row itself is unchanged.
+  West") or is only a generic word ("Recycling") with no address, phone or website is no
+  business anyone can call: it is held in tier D (so a search leaves it out) and flagged
+  **Needs a name**; rows saved before show the same way, and the saved row itself is
+  unchanged.
 - **Why this score** and the Excel and CSV **Why This Score** column explain each lead
   in a salesperson's words: where its kind of business comes from ("from the map
   listing", "from its name") and, when only the building type or the name suggests it,
@@ -228,7 +231,7 @@ which older versions lack).
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Command line: 30 miles around AARCO Compactor (876 Fortune Rd, SLC), saved to output/leads.xlsx
+# Command line: 30 miles around AARCO's shop (876 Fortune Rd, SLC), saved to output/leads.xlsx
 python -m leadgen run
 
 # Web page at http://127.0.0.1:5000

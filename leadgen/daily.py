@@ -104,7 +104,7 @@ def earlier_search(place: str, day: str, since: float) -> Record | None:
                       (day, since))
     for row in rows:
         record = _as_record(row)
-        if "leads" in record and place and record.get("place") == place:
+        if "leads" in record and place and record.get("place") == _OLD_NAME.sub(config.OWN_COMPANY, place):
             return record
     return None
 
@@ -122,9 +122,9 @@ def _record(row: store.Row | None) -> Record | None:
 FILL_GRACE_SECONDS = 10 * 60
 
 
-# The place label of AARCO's shop in the records of searches run before the owner
-# corrected the company's name ("Arco Compactor, 876 Fortune Rd ...").
-_OLD_NAME = re.compile(r"^Arco Compactor\b")
+# The place label of AARCO's shop in the records of searches run under an earlier name
+# of the company ("Arco Compactor, 876 Fortune Rd ...", "AARCO Compactor, 876 ...").
+_OLD_NAME = re.compile(r"^(?:Arco|AARCO) Compactor(?=,)")
 
 
 def _as_record(row: store.Row) -> Record:

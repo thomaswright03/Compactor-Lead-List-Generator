@@ -286,7 +286,7 @@ explanation, and `--source auto` leaves Yelp out and says so.
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `--location` | AARCO Compactor (876 Fortune Rd, Salt Lake City) | ZIP, city, address, or `lat,lon`. The radius and the Miles column are measured from here |
+| `--location` | AARCO's shop (876 Fortune Rd, Salt Lake City) | ZIP, city, address, or `lat,lon`. The radius and the Miles column are measured from here |
 | `--radius` | 30 | Miles from the center; results outside are removed |
 | `--keywords` | compactor baler waste recycling | Extra search terms (they add businesses to look for; scores always use the defaults) |
 | `--source` | auto | `auto` = OpenStreetMap plus Google and/or Yelp when their key is set. Also `google`, `yelp`, `osm`, and `both` (Google + OpenStreetMap) |
@@ -322,11 +322,17 @@ the full behaviour, for whoever changes or supports the site.
 The sidebar has five pages (Find leads, Leads, Calls, Map, Stats), a Light / Dark / System colour switch (System
 follows the computer's setting; the choice is remembered in each browser), and
 every page carries the Wright AI Solutions copyright. The browser tab names the
-page ("Leads · AARCO Compactor Lead Finder") and shows the Lead Finder icon. The
-company is **AARCO** (the owner's spelling; the site said "Arco" until 2026-10-03):
-records saved before then (a search's place, the own-company flag on a saved lead) are
-shown with the name it has now, by `daily._as_record` and `saved._ready`, without
-rewriting them, and a listing or a search that spells it "Arco" is still AARCO's.
+page ("Leads · AARCO Compactors & Balers Lead Finder") and shows the Lead Finder icon.
+The company's name comes from one setting, `config.OWN_COMPANY` ("AARCO Compactors &
+Balers"): page titles, the brand block, the login and error pages, the own-listing flag,
+the shop's place label and the problem alerts all use it (`config.SITE_NAME`, the
+templates' `company` / `site_name`, the page's `CONFIG.site`). Below 520 px the brand
+block shows `config.OWN_COMPANY_SHORT` ("AARCO"), as the full name doesn't fit beside
+Menu. Records saved under an earlier name ("Arco Compactor" until 2026-10-03, then
+"AARCO Compactor") are shown with the name it has now, by `daily._as_record` (a
+search's place) and `scoring.current_own_flag` in `saved._ready` (the own-company flag
+on a saved lead), without rewriting them, and a listing or a search that spells it
+"Arco" is still AARCO's.
 On phones and tablets every button and link is at least 44 px each way (on a
 narrow window the "Only businesses matching the search words" tick box too). On a
 phone or tablet (up to 820 px wide) the navigation is one short bar at the top (the
@@ -493,8 +499,8 @@ the sidebar to the page's list (Leads, Calls) or heading.
   closed business is under the **Closed** tab. It stays on the Calls page and in
   the downloads (the flag is in the Flags column), and Stats still counts its
   mark: the mark says what it had while it was open. If a later search finds it
-  open again, the flag goes. Competitors and AARCO's own listing are
-  flagged (orange) and have their own **Competitors** tab: they aren't prospects,
+  open again, the flag goes. Competitors and AARCO's own listing (and its parent
+  company's, below) are flagged (orange) and have their own **Competitors** tab: they aren't prospects,
   so they get no Yes / No buttons, aren't in Not checked and aren't counted in
   Stats (they still appear under All and in the downloads). The sidebar badge
   counts the prospects still to check. The server filters, sorts and pages the
@@ -728,13 +734,33 @@ Three rules give no category by what a name says: a clinic or outpatient centre 
 as a hospital (`config.CLINIC_NAME_WORDS`, unless the name also says hospital; its
 operator's brand earns nothing either), a power, heating or cooling plant
 (`config.SERVICE_PLANT_NAME_WORDS`) and a car or truck wash (`config.VEHICLE_WASH_*`).
-A map name that only describes a building (`scoring.needs_name`: "Office and
-Warehouse, West", with no address, phone or website) is held at
+A map name that only describes a building or is only a generic word from
+`config.GENERIC_NAMES`, alone or with its town (`scoring.needs_name`: "Office and
+Warehouse, West", "Recycling", "Recycling, Magna", with no address, phone or website)
+is held at
 `config.NEEDS_NAME_MAX_SCORE` (tier D, below the default minimum, so a search leaves
 it out) and flagged `config.NEEDS_NAME_FLAG` (`scoring.mark_needs_name`). Saved rows
 show the same way as they are read (`saved._ready`); the stored row is unchanged. The
 reference file's **needs_name** list and its round-21 **not_prospect** and
 **name_traps** entries hold these cases.
+
+## AARCO's own listings and its parent company's
+
+AARCO is a division of ACE Recycling & Disposal. A listing is AARCO's own when its
+names hold one of `config.SELF_ALIASES` (`scoring._is_self`, flag `scoring.OWN_FLAG`),
+and its parent company's (`scoring.parent_company`, flag `scoring.PARENT_FLAG`, "OWN
+COMPANY: AARCO's parent company (ACE Recycling & Disposal)") when its name or another
+name it goes by holds one of `config.PARENT_ALIASES` as whole words, its website is on
+one of `config.PARENT_DOMAINS`, or its street address starts with one of
+`config.PARENT_ADDRESSES` (street words written short, "South Road" = "S Rd"; a listing
+that names another town is not). A bare "Ace" never matches: "Ace Hardware", "Ace Auto
+Parts" and "Grace Recycling" are ordinary businesses. Both get the lead type "Own
+company" (`pipeline.EXEMPT_TYPES`): kept and flagged by a search, never in Not checked,
+left out of Stats, a hollow-square pin ("AARCO's parent company" in its box). A competitor
+match wins over both. Rows saved before the parent was recognised show the same way
+(`scoring.mark_parent_company` in `saved._ready`); the saved row is unchanged. The owner
+confirms the names, domain and facility addresses; adding one to `config.py` needs no
+code change. The reference file's **own_company** list holds the cases.
 
 ## The scoring reference file
 
@@ -788,7 +814,12 @@ the name has no shop word from `config.SHOP_NAME_WORDS`, or has a mall word from
 "Recycling" or "Junkyard": the map data adds the operator, street or city to such a
 name (`osm.parse_element`), and one still known only by the word (or the word plus
 its street) scores `config.GENERIC_NAME_PENALTY` less, so it ranks below a named
-place of the same kind. Its **confirmed** list holds real businesses
+place of the same kind; with no address, phone or website it also needs a name (the
+**needs_name** list holds "Recycling" with and without its street address). Its
+**own_company** list holds AARCO's and its parent company's listings, and unrelated
+businesses named "Ace ..." that must stay prospects. The file's `"about"` says in a few
+lines what each list checks; how the lists came about is in git. Its **confirmed** list
+holds real businesses
 AARCO's staff marked Yes / No on the Leads page, with the tier each had:
 `python -m leadgen reference` (with `DATABASE_URL` set to the website's
 database) refreshes it from the site's marks, copying only the facts the

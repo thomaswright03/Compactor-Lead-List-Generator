@@ -21,11 +21,11 @@ import urllib.request
 import uuid
 from typing import Any
 
-from . import THREAD_PREFIX, store
+from . import THREAD_PREFIX, config, store
 from .localtime import date_time_text
 
 WEBHOOK_ENV = "LEADGEN_ALERT_WEBHOOK"
-SITE = "AARCO Compactor Lead Finder"
+SITE = config.SITE_NAME
 THROTTLE_SECONDS = 15 * 60
 # The Find leads page lists the problems of this many days.
 RECENT_SECONDS = 7 * 24 * 3600

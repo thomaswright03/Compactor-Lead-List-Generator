@@ -27,6 +27,7 @@ from .localtime import date_time_text
 from .models import Lead
 from .pipeline import EXEMPT_TYPES
 from .saved import is_closed
+from .scoring import PARENT_FLAG
 from .sources import osm
 
 # A point as the page gets it: [lat, lon], rounded to about a metre.
@@ -327,12 +328,20 @@ def _address(lead: Lead) -> str:
     return " · ".join(words)
 
 
+def _kind(lead: Lead) -> str:
+    """"Competitor", "Own company", "Parent company" (a listing of AARCO's parent company,
+    scoring.PARENT_FLAG), or "" for a prospect."""
+    if lead.lead_type not in EXEMPT_TYPES:
+        return ""
+    return "Parent company" if PARENT_FLAG in lead.flags else lead.lead_type
+
+
 def pin(lead: Lead) -> list[Any]:
     """One lead as the page gets it (FIELDS, in order)."""
     return [lead.uid, round(float(lead.lat), 5), round(float(lead.lon), 5), group(lead), lead.name,
             lead.tier, lead.score, format_phone(lead.phone), format_phone(lead.verified_phone),
             _address(lead), lead.call_outcome, date_time_text(lead.last_call_at) if lead.call_outcome else "",
-            is_closed(lead), lead.lead_type if lead.lead_type in EXEMPT_TYPES else ""]
+            is_closed(lead), _kind(lead)]
 
 
 def page(leads: list[Lead], record: dict[str, Any] | None, unread: bool = False) -> dict[str, Any]:

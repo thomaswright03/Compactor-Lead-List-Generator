@@ -264,7 +264,7 @@ def test_find_leads_asks_before_using_the_days_search(page, monkeypatch):
     text = dialog.inner_text()
     assert "This uses today's only search" in text and "12 miles" in text
     # The place the search will actually run around, and how far it is from AARCO's shop.
-    assert "AARCO Compactor, 876 Fortune Rd" in text and "0.0 miles" in text
+    assert "AARCO Compactors & Balers, 876 Fortune Rd" in text and "0.0 miles" in text
     assert page.locator("#confirm-far").is_hidden()
     page.click("#confirm-back")
     assert not dialog.is_visible() and not sent
@@ -306,13 +306,13 @@ def test_typed_call_notes_survive_closing_the_box(page):
 
 
 def test_titles_hints_and_empty_pages(page):
-    assert page.title() == "Leads · AARCO Compactor Lead Finder"
+    assert page.title() == "Leads · AARCO Compactors & Balers Lead Finder"
     assert "whatever its answer" in page.inner_text("#call-hint")
     page.click("nav a[data-page=calls]")
-    page.wait_for_function("document.title === 'Calls · AARCO Compactor Lead Finder'")
+    page.wait_for_function("document.title === 'Calls · AARCO Compactors & Balers Lead Finder'")
     expect(page.locator("#calls-wrap")).to_contain_text("Log a call with Just called")
     page.click("nav a[data-page=stats]")
-    page.wait_for_function("document.title === 'Stats · AARCO Compactor Lead Finder'")
+    page.wait_for_function("document.title === 'Stats · AARCO Compactors & Balers Lead Finder'")
     page.wait_for_selector("#stats-empty:not([hidden])")
     assert "Mark businesses Yes or No on the Leads page" in page.inner_text("#stats-empty")
     page.click("#stats-empty a")
@@ -359,6 +359,58 @@ def test_competitors_are_flagged_not_asked(page):
     expect(row).to_contain_text("Competitor: not a prospect")
     assert row.locator(".mark button").count() == 0
     assert "aren't asked Yes / No" in page.inner_text("#competitor-hint")
+
+
+def test_aarcos_and_its_parent_companys_listings_are_flagged_with_the_names_now(page):
+    """AARCO's own listing saved under the company's old short name, and its parent
+    company's facility saved before it was recognised, show on the Competitors tab with
+    the names config has now, never in Not checked; "Ace Hardware" stays a prospect."""
+    import json
+
+    from leadgen import store
+    own = Lead(name="AARCO Compactor", lat=40.74, lon=-111.94, source="osm", source_id="own",
+               raw_categories=["building=industrial"])
+    ace = Lead(name="Recycling Center", lat=40.73, lon=-111.93, source="osm", source_id="ace",
+               raw_categories=["amenity=recycling"], address="1240 S Wallace Rd", city="Salt Lake City")
+    hardware = Lead(name="Ace Hardware", lat=40.75, lon=-111.9, source="osm", source_id="hw",
+                    raw_categories=["shop=hardware"], address="5 State St", city="Salt Lake City")
+    for lead in (own, ace, hardware):
+        score_lead(lead, config.DEFAULT_KEYWORDS)
+    saved.save_search([own, ace, hardware], config.DEFAULT_KEYWORDS)
+    with store.connect() as db:          # as saved by earlier versions
+        for uid, flags, kind in ((own.uid, ["OWN COMPANY: AARCO Compactor"], "Own company"),
+                                 (ace.uid, [], "Waste / recycling facility")):
+            data = json.loads(db.one("SELECT lead FROM leads WHERE uid = ?", (uid,))[0])
+            data.update(flags=flags, lead_type=kind)
+            db.run("UPDATE leads SET lead = ?, last_seen = last_seen + 1 WHERE uid = ?", (json.dumps(data), uid))
+    page.reload()
+    page.wait_for_selector("table.leads")
+    listed = page.inner_text("#leads-wrap")
+    assert "Ace Hardware" in listed and "Recycling Center" not in listed and "AARCO Compactor" not in listed
+    page.get_by_role("button", name="Competitors (3)").click()
+    own_row, ace_row = _row(page, "AARCO Compactor"), _row(page, "Recycling Center")
+    expect(own_row).to_contain_text("OWN COMPANY: AARCO Compactors & Balers")
+    expect(own_row).to_contain_text("AARCO's own listing")
+    expect(ace_row).to_contain_text("OWN COMPANY: AARCO's parent company (ACE Recycling & Disposal)")
+    expect(ace_row).to_contain_text("AARCO's parent company")
+    assert ace_row.locator(".mark button").count() == 0
+
+
+def test_the_brand_shows_the_companys_name_and_fits_on_a_phone(browser, site):
+    """The brand block names AARCO Compactors & Balers; on a narrow phone, where that
+    doesn't fit beside Menu, it says AARCO, and nothing is cut off."""
+    for width, name in ((1440, "AARCO Compactors & Balers"), (390, "AARCO"), (320, "AARCO")):
+        context = _context(browser, viewport={"width": width, "height": 800})
+        tab = context.new_page()
+        tab.goto(site + "#find")
+        brand = tab.locator(".side .brand")
+        expect(brand).to_contain_text("Lead Finder")
+        assert brand.evaluate("(b) => b.scrollWidth <= b.clientWidth"), width
+        shown = brand.evaluate("(b) => [...b.querySelectorAll('strong')].filter((s) => s.offsetParent)"
+                               ".map((s) => s.textContent)")
+        assert shown == [name], (width, shown)
+        assert tab.title() == "Find leads · AARCO Compactors & Balers Lead Finder"
+        context.close()
 
 
 def test_a_note_never_follows_to_another_page(page):
@@ -789,7 +841,8 @@ def test_no_competitors_names_them_and_has_phone_filters(browser, site):
     tab.uncheck("#has-phone")
     tab.get_by_role("button", name="Competitors (0)").click()
     expect(tab.locator("#leads-wrap .empty")).to_contain_text(
-        "No Pro Baler, Action Compaction or AARCO Compactor listings found in the saved leads yet.")
+        "No Pro Baler, Action Compaction, AARCO Compactors & Balers or ACE Recycling & Disposal listings found "
+        "in the saved leads yet.")
     context.close()
 
 
