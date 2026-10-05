@@ -292,7 +292,9 @@ need it.
   within two minutes, reload the page. If you see it during the working day, tell whoever
   looks after the site (the keep-awake pinger isn't reaching it).
 - A red or yellow box says what happened and what to do, often with a **Retry**
-  button. Nothing you saved is lost.
+  button. Nothing you saved is lost. When Leads, Calls, Map or Stats can't show its
+  data, the page also tries again by itself every 20 seconds or so (and when you come
+  back to the tab), and the data appears as soon as the site is back.
 - If it keeps happening, tell whoever looks after the site.
 
 ---

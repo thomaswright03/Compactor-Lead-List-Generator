@@ -2352,3 +2352,67 @@ def test_the_phone_bar_keeps_one_row_whatever_the_counts(browser, site, page, wi
         assert all(w >= 44 and h >= 44 and left >= 0 and right <= width for _, w, h, left, right in links), links
         assert phone.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     context.close()
+
+
+# ---- a page that couldn't load tries again by itself
+
+FAILED = {"error": "The saved list can't be read right now. Try again in a minute."}
+
+
+@pytest.mark.parametrize("where,path,shown", [("leads", "**/leads?*", "table.leads"),
+                                              ("calls", "**/leads?*tab=called*", "#calls-body"),
+                                              ("map", "**/map-data", "#map .aarco-mark"),
+                                              ("stats", "**/stats", "#stats-body")])
+def test_a_page_that_could_not_load_shows_its_data_once_the_site_is_back(browser, site, page, where, path, shown):
+    """The site's database was down: the page says it can't show its data, with Retry, and
+    without a click tries again by itself, showing the data as soon as a load works."""
+    context = _context(browser, viewport={"width": 1280, "height": 800})
+    context.add_init_script("window.leadgenTiming = { retry: 600 };")
+    tab = context.new_page()
+    failed = []
+
+    def once(route):
+        if failed:
+            route.continue_()
+        else:
+            failed.append(route.request.url)
+            route.fulfill(status=503, json=FAILED)
+    tab.route(path, once)
+    tab.goto(site + f"#{where}")
+    problem = tab.locator(f"#{where}-problem .problem")
+    expect(problem).to_contain_text("right now")
+    expect(problem.get_by_role("button", name="Retry")).to_be_visible()
+    # Nothing is clicked: the next quiet try works and the data replaces the box.
+    expect(tab.locator(shown)).to_be_visible(timeout=10000)
+    expect(problem).to_have_count(0)
+    assert len(failed) == 1
+    context.close()
+
+
+def test_the_quiet_retries_stop_when_another_page_is_opened(browser, site, page):
+    context = _context(browser, viewport={"width": 1280, "height": 800})
+    context.add_init_script("window.leadgenTiming = { retry: 300 };")
+    tab = context.new_page()
+    asked = []
+
+    def down(route):
+        asked.append(route.request.url)
+        route.fulfill(status=503, json=FAILED)
+    tab.route("**/stats", down)
+    tab.goto(site + "#stats")
+    expect(tab.locator("#stats-problem .problem")).to_contain_text("Can't show the stats right now")
+    for _ in range(50):
+        if len(asked) >= 3:
+            break
+        tab.wait_for_timeout(100)
+    assert len(asked) >= 3                             # it keeps trying while the page is open
+    tab.click("nav a[data-page=find]")
+    tab.wait_for_timeout(400)
+    before = len(asked)
+    tab.wait_for_timeout(1500)                         # five retry periods on another page
+    assert len(asked) == before
+    tab.unroute("**/stats")
+    tab.click("nav a[data-page=stats]")                # back on the page: it loads (and works now)
+    expect(tab.locator("#stats-body")).to_be_visible()
+    expect(tab.locator("#stats-problem .problem")).to_have_count(0)
+    context.close()

@@ -10,8 +10,9 @@ interface Window {
   leadgenTiming?: Partial<Timing>;
 }
 
-/** How long the page waits before it says something is slow, in milliseconds (core.js TIMING). */
-interface Timing { waking: number; stillWaking: number; saveSlow: number; saveLimit: number }
+/** How long the page waits before it says something is slow, and between the quiet retries of a page
+    that couldn't load, in milliseconds (core.js TIMING). */
+interface Timing { waking: number; stillWaking: number; saveSlow: number; saveLimit: number; retry: number }
 
 /** The page's settings, written into the page (templates/index.html, #page-config). */
 interface PageConfig {

@@ -8,7 +8,7 @@ async function loadStats() {
   catch (e) {
     const err = /** @type {ApiError} */ (e);
     if (err.status === 401) return;
-    problem($("stats-problem"), "Can't show the stats right now", err.message, loadStats);
+    problem($("stats-problem"), "Can't show the stats right now", err.message, loadStats, loadStats);
     $("stats-body").hidden = true; return;
   }
   $("stats-problem").replaceChildren(); $("stats-body").hidden = false;

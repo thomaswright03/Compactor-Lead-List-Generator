@@ -113,7 +113,7 @@ async function loadMap() {
     const err = /** @type {ApiError} */ (e);
     if (seq !== M.seq || err.status === 401) return;
     mapStatus("");
-    problem($("map-problem"), "Can't show the map right now", err.message, loadMap);
+    problem($("map-problem"), "Can't show the map right now", err.message, loadMap, loadMap);
     $("map-body").hidden = !M.loaded;
     return;
   }

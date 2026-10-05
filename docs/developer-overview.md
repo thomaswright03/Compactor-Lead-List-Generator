@@ -159,7 +159,8 @@ why (in the browser and from the server), the phone cards and the short phone
 header, Stats, downloads and their busy state, reload keeps the
 view, the colour switch fitting from 320 px up, 44 px touch targets on a
 phone, the Calls cards and every page link in view at 320 px, the phone bar's five links
-on one row with four- and five-digit counts, a closed business
+on one row with four- and five-digit counts, a page that couldn't load showing its data
+by itself once the site is back (and not trying while another page is open), a closed business
 keeping its mark, the skip link and the short Recent changes, and the Map page: AARCO's
 pin, the circle, the nine areas and the missed one, every pin and its details (on a phone,
 a long name's box fitting inside the map with its close button), the group
@@ -223,7 +224,10 @@ first requests share one parse). `/healthz` returns `up_since`, the process's st
 Utah time. On the page, `start.js` shows `#starting` ("Loading your leads…") until the
 first list arrives, and after `TIMING.waking` (4 s) says the site is starting up and can
 take up to a minute; after `TIMING.stillWaking` (45 s) it adds to reload if nothing
-appears within two minutes. `TIMING` (in `core.js`) can be shortened in a browser test
+appears within two minutes. A Leads, Calls, Map or Stats page that couldn't load (`problem()`
+in `core.js`, given the quiet `again`) tries again every `TIMING.retry` (20 s) and when the
+tab is shown again, only while its page is open, until the data replaces the box.
+`TIMING` (in `core.js`) can be shortened in a browser test
 through `window.leadgenTiming`. `tests/test_awake.py` and the browser tests
 `test_a_slow_first_load_says_the_site_is_waking_up` / `…_quick_first_load_shows_no_starting_notice`
 cover it.

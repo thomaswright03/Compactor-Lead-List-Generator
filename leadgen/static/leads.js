@@ -569,7 +569,7 @@ function renderLeads() {
   if (S.loadError && !S.loaded) {
     problem(problemBox, "Can't show your leads right now", S.loadError, () => {
       problemBox.replaceChildren(el("div", "Loading...", "muted")); loadLeads();
-    });
+    }, () => loadLeads());
     $("leads-body").hidden = true; loadingCue("leads-loading", false);
     return;
   }
