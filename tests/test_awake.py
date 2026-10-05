@@ -98,3 +98,14 @@ def test_one_parse_of_the_saved_list_serves_requests_that_overlap(monkeypatch):
 def test_healthz_says_since_when_the_site_is_up():
     body = web.create_app().test_client().get("/healthz").get_json()
     assert body["ok"] and body["up_since"]
+
+
+def test_a_start_at_the_weekend_or_in_the_evening_is_expected(reporting):
+    # The outside pinger only runs on working days, during working hours.
+    awake.check_start("abc1234", _utah(9, 8))                              # Friday
+    assert awake.check_start("abc1234", _utah(10, 11)) is None            # Saturday
+    assert awake.check_start("abc1234", _utah(11, 15)) is None            # Sunday
+    assert awake.check_start("abc1234", _utah(12, 19, 30)) is None        # Monday evening
+    assert awake.check_start("abc1234", _utah(12, 7, 10)) is None         # the first ping of the day
+    assert awake.check_start("abc1234", _utah(12, 11))                    # Monday morning: it slept
+    assert _problems()

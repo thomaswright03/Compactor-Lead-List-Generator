@@ -2,7 +2,7 @@
 
 Render's free plan stops the site after 15 minutes with no visit and starts it again
 on the next one, which then waits 20 to 60 seconds. An outside pinger opens /healthz
-every few minutes from before 6 AM to 9 PM Utah time (the operator runbook's "Keep the
+every few minutes on working days from before 7 AM to about 8 PM Utah time (the operator runbook's "Keep the
 site awake", an owner step), so that never happens while the team works. A GitHub
 Actions job does the same as a backup, but GitHub starts scheduled jobs late or not
 at all.
@@ -27,8 +27,11 @@ from collections.abc import Callable
 from . import THREAD_PREFIX, alerts, saved, store
 from .localtime import date_time_text, utah
 
-# Utah working hours (6 AM to 9 PM), when the site should never have to wake up.
-WORK_HOURS = (6, 21)
+# When the site should never have to wake up: Utah working hours on working days. The
+# outside pinger runs Monday to Friday from before 7 AM to about 8 PM (runbook, "Keep the
+# site awake"), so a start outside these (a weekend, an evening) is expected, not a problem.
+WORK_HOURS = (7, 19)
+WORK_DAYS = range(0, 5)           # Monday (0) to Friday (4)
 # The pinger's first ping of the day may be the one that wakes the site: a start in the
 # first minutes of the working day is expected.
 FIRST_PING_MINUTES = 20
@@ -51,7 +54,7 @@ def check_start(version: str, at: float | None = None) -> str | None:
         db.run("INSERT INTO site_starts (id, at, version) VALUES (?, ?, ?)", (uuid.uuid4().hex, at, version))
         said = db.one("SELECT COUNT(*) FROM problems WHERE text LIKE ?", (f"{today}%",))
     minutes = when.hour * 60 + when.minute
-    if not WORK_HOURS[0] * 60 + FIRST_PING_MINUTES <= minutes < WORK_HOURS[1] * 60:
+    if when.weekday() not in WORK_DAYS or not WORK_HOURS[0] * 60 + FIRST_PING_MINUTES <= minutes < WORK_HOURS[1] * 60:
         return None
     if last is None or last[0] != version:
         return None                   # the first start, or a new version (a deploy)
