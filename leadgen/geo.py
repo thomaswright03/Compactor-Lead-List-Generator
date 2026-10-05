@@ -21,12 +21,13 @@ KNOWN_PLACES = {
     "1876 w fortune rd, salt lake city, ut 84104": config.OWN_COORDS,
     "aarco": config.OWN_COORDS,
     "aarco compactor": config.OWN_COORDS,
+    config.OWN_COMPANY.lower(): config.OWN_COORDS,
     # The spelling the site used before the owner corrected it (AARCO), still understood.
     "arco": config.OWN_COORDS,
     "arco compactor": config.OWN_COORDS,
     "slc": (40.7608, -111.8910),
 }
-OWN_LABEL = f"AARCO Compactor, {config.OWN_ADDRESS}"
+OWN_LABEL = f"{config.OWN_COMPANY}, {config.OWN_ADDRESS}"
 
 # Cities and towns of the Salt Lake area (and nearby): typed bare ("Murray"), with
 # ", UT" or with ", Utah", they mean the Utah place, never a same-named one elsewhere

@@ -20,6 +20,7 @@ from werkzeug.exceptions import HTTPException
 from .. import alerts, awake, calls, config, localtime, marks, store
 from ..localtime import date_time_text
 from ..pipeline import SearchParams
+from ..scoring import PARENT_FLAG
 from . import auth, finding, leads, mapping
 from .auth import LOGIN_DAYS, LOGIN_TRIES, LOGIN_WINDOW
 from .common import (
@@ -89,7 +90,9 @@ def _register_pages(app: Flask) -> None:
     @app.context_processor
     def page_globals() -> dict[str, Any]:
         return {"year": localtime.now().year, "login_on": bool(app.extensions["leadgen"].password),
-                "user": session.get("user", ""), "asset_version": version}
+                "user": session.get("user", ""), "asset_version": version,
+                "company": config.OWN_COMPANY, "company_short": config.OWN_COMPANY_SHORT,
+                "site_name": config.SITE_NAME}
 
     # One database connection per request, shared by everything the request reads.
     @app.before_request
@@ -133,7 +136,8 @@ def _register_pages(app: Flask) -> None:
             yelp_on=bool(yelp_key), switches=switches(), paused_text=SEARCH_PAUSED,
             undo_seconds=marks.UNDO_SECONDS, admin=auth.admin_state(),
             admin_lockable=bool(state().admin_password),
-            flagged=[*config.COMPETITORS, config.OWN_COMPANY], area_miles=config.SERVICE_AREA_MILES)
+            flagged=[*config.COMPETITORS, config.OWN_COMPANY, config.PARENT_COMPANY], parent_flag=PARENT_FLAG,
+            area_miles=config.SERVICE_AREA_MILES)
 
 
 def create_app(password: str | None = None, username: str | None = None,

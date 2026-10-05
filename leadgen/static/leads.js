@@ -378,7 +378,8 @@ setInterval(() => {
 function markCell(lead, withCall) {
   const td = el("td", undefined, "c-mark");
   if (!lead.prospect) {
-    td.append(el("div", lead.lead_type === "Competitor" ? "Competitor: not a prospect" : "AARCO's own listing",
+    td.append(el("div", lead.lead_type === "Competitor" ? "Competitor: not a prospect"
+      : lead.flags.includes(CONFIG.parent_flag) ? "AARCO's parent company" : "AARCO's own listing",
                  "sub not-asked"));
     return td;
   }
@@ -549,7 +550,7 @@ function leadTable(rows, withCall) {
   return table;
 }
 
-// "Pro Baler, Action Compaction or AARCO Compactor".
+// "Pro Baler, Action Compaction, AARCO Compactors & Balers or ACE Recycling & Disposal".
 /** @param {string[]} names */
 function orList(names) {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;

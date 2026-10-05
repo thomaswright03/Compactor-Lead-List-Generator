@@ -1,9 +1,12 @@
 """The saved list: a closed business nobody saved is never added, and refreshing
 after a search stays small."""
 
+import json
 import time
 
-from leadgen import config, marks, saved, web
+import pytest
+
+from leadgen import config, marks, saved, stats, web
 from leadgen.models import Lead
 from leadgen.scoring import score_lead
 
@@ -105,20 +108,56 @@ def test_several_words_find_a_lead_when_each_is_somewhere_in_its_row():
     assert names("walmart provo") == []
 
 
-# ---- the company's name, corrected by the owner (AARCO, not Arco)
+# ---- the company's name, as config.OWN_COMPANY has it now (AARCO Compactors & Balers)
 
-def test_aarcos_own_listing_saved_under_the_old_name_shows_the_new_one():
+@pytest.mark.parametrize("old_flag", ["OWN COMPANY: Arco Compactor", "OWN COMPANY: AARCO Compactor"])
+def test_aarcos_own_listing_saved_under_an_old_name_shows_the_name_now(old_flag):
+    """A row saved under an earlier name of the company (the "Arco" spelling, then the
+    short "AARCO Compactor") is shown with config.OWN_COMPANY; the row keeps its text."""
     from leadgen import store
     lead = _lead("AARCO Compactor", "a1")
     saved.save_search([lead])
-    # A row saved before the name was corrected keeps its text ...
     with store.connect() as db:
         [(text,)] = db.all("SELECT lead FROM leads WHERE uid = ?", (lead.uid,))
-        old = text.replace("OWN COMPANY: AARCO Compactor", "OWN COMPANY: Arco Compactor")
+        old = text.replace("OWN COMPANY: AARCO Compactors & Balers", old_flag)
         assert old != text
         db.run("UPDATE leads SET lead = ?, last_seen = last_seen + 1 WHERE uid = ?", (old, lead.uid))
-    # ... and is shown with the name the company has now; the row itself is not rewritten.
     [row] = saved.load()
-    assert row.flags == ["OWN COMPANY: AARCO Compactor"] and row.lead_type == "Own company"
+    assert row.flags == [f"OWN COMPANY: {config.OWN_COMPANY}"] == ["OWN COMPANY: AARCO Compactors & Balers"]
+    assert row.lead_type == "Own company"
     with store.connect() as db:
-        assert "OWN COMPANY: Arco Compactor" in db.one("SELECT lead FROM leads WHERE uid = ?", (lead.uid,))[0]
+        assert db.one("SELECT lead FROM leads WHERE uid = ?", (lead.uid,))[0] == old
+
+
+def test_a_parent_company_listing_saved_before_it_was_recognised_shows_as_aarcos_own():
+    """A listing of AARCO's parent company saved as a prospect (before config.PARENT_*)
+    is shown flagged as the parent's, not a prospect: out of "Not checked" and Stats.
+    The saved row is not rewritten."""
+    from leadgen import store
+    from leadgen.scoring import PARENT_FLAG
+    ace = _lead("Ace Intermountain Recycling Center", "ace", raw_categories=["amenity=recycling"],
+                address="1240 South Wallace Road", city="Salt Lake City")
+    other = _lead("Ace Hardware", "hw", raw_categories=["shop=hardware"])
+    saved.save_search([ace, other])
+    with store.connect() as db:
+        [(text,)] = db.all("SELECT lead FROM leads WHERE uid = ?", (ace.uid,))
+        data = json.loads(text)
+        assert data["flags"] == [PARENT_FLAG]
+        data.update(flags=[], lead_type="Waste / recycling facility")      # as saved before
+        old = json.dumps(data)
+        db.run("UPDATE leads SET lead = ?, last_seen = last_seen + 1 WHERE uid = ?", (old, ace.uid))
+    rows = {l.name: l for l in saved.load()}
+    shown = rows["Ace Intermountain Recycling Center"]
+    assert shown.lead_type == "Own company" and shown.flags == [PARENT_FLAG]
+    assert PARENT_FLAG == "OWN COMPANY: AARCO's parent company (ACE Recycling & Disposal)"
+    assert rows["Ace Hardware"].lead_type == "Prospect" and rows["Ace Hardware"].flags == []
+    with store.connect() as db:
+        assert db.one("SELECT lead FROM leads WHERE uid = ?", (ace.uid,))[0] == old
+    client = web.create_app(password="").test_client()
+    not_checked = [l["name"] for l in client.get("/leads?tab=unchecked").get_json()["leads"]]
+    assert not_checked == ["Ace Hardware"]
+    flagged = client.get("/leads?tab=competitors").get_json()["leads"]
+    assert [(l["name"], l["prospect"], l["flags"]) for l in flagged] == [
+        ("Ace Intermountain Recycling Center", False, [PARENT_FLAG])]
+    summary = stats.summarize(marks.apply(saved.load()))
+    assert summary["left_out"] == 1 and sum(t["saved"] for t in summary["by_tier"]) == 1

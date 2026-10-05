@@ -304,7 +304,7 @@ So that nobody has to watch the Logs tab, every failed or incomplete search and
 every error the site logs is also recorded in the database (the `problems`
 table; the Find leads page lists the last 7 days under the search history) and,
 when `LEADGEN_ALERT_WEBHOOK` is set, sent as a one-line message such as
-"AARCO Compactor Lead Finder: Today's search failed: Couldn't reach the map data
+"AARCO Compactors & Balers Lead Finder: Today's search failed: Couldn't reach the map data
 service (OpenStreetMap), so no leads were found. (Sep 29, 2026, 5:48 PM, Utah time)".
 To set it up:
 

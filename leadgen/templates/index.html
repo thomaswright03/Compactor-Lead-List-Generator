@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AARCO Compactor Lead Finder</title>
+<title>{{ site_name }}</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 {% include "_theme.html" %}
 <link rel="stylesheet" href="/static/app.css?v={{ asset_version }}">
@@ -12,7 +12,7 @@
 <button type="button" class="skip" id="skip">Skip to main content</button>
 <div class="app">
   <aside class="side">
-    <div class="brand"><strong>AARCO Compactor</strong><span>Lead Finder</span></div>
+    <div class="brand"><strong class="co-full">{{ company }}</strong><strong class="co-short" title="{{ company }}">{{ company_short }}</strong><span>Lead Finder</span></div>
     <button type="button" class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="side-bottom">Menu</button>
     <nav aria-label="Pages">
       <a href="#find" data-page="find" aria-label="Find leads"><span>Find<span class="lw"> leads</span></span></a>
@@ -196,8 +196,8 @@
           </div>
         </div>
         <div id="leads-note"></div>
-        <p class="hint-line" id="competitor-hint" hidden>Competitors and AARCO's own listing are
-          flagged here so you can see who else works the area. They aren't prospects, so they aren't
+        <p class="hint-line" id="competitor-hint" hidden>Competitors and AARCO's own listings (its
+          parent company's too) are flagged here so you can see who else works the area. They aren't prospects, so they aren't
           asked Yes / No and aren't counted in Stats.</p>
         <p class="hint-line" id="closed-hint" hidden>A later search reported these businesses
           closed for good. They keep their Yes / No marks and calls (also on the Calls page and in
@@ -431,7 +431,7 @@
   </div>
 </dialog>
 
-<script id="page-config" type="application/json">{{ {"outcomes": outcomes, "paused": switches.search_paused, "google_on": google_on, "yelp_on": yelp_on, "flagged": flagged, "admin": admin, "area_miles": area_miles}|tojson }}</script>
+<script id="page-config" type="application/json">{{ {"outcomes": outcomes, "paused": switches.search_paused, "google_on": google_on, "yelp_on": yelp_on, "flagged": flagged, "parent_flag": parent_flag, "site": site_name, "admin": admin, "area_miles": area_miles}|tojson }}</script>
 <script src="/static/core.js?v={{ asset_version }}" defer></script>
 <script src="/static/leads.js?v={{ asset_version }}" defer></script>
 <script src="/static/calls.js?v={{ asset_version }}" defer></script>

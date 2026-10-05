@@ -32,11 +32,63 @@ def test_competitor_detected_by_website_only():
 
 
 def test_own_company_is_flagged():
-    lead = score_lead(make("AARCO Compactor"))
+    lead = score_lead(make("AARCO Compactors & Balers"))
     assert lead.lead_type == "Own company"
-    assert "OWN COMPANY: AARCO Compactor" in lead.flags
-    # A listing that spells the name "Arco" is still AARCO's own.
-    assert score_lead(make("Arco Compactor")).lead_type == "Own company"
+    assert lead.flags == ["OWN COMPANY: AARCO Compactors & Balers"]
+    # A listing under the shorter name, or that spells it "Arco", is still AARCO's own.
+    for name in ("AARCO Compactor", "Arco Compactor"):
+        assert score_lead(make(name)).flags == ["OWN COMPANY: AARCO Compactors & Balers"], name
+
+
+def _own_case(item):
+    keep = ("address", "city", "website", "alt_names")
+    return make(item["name"], item["raw_categories"], item["source"], **{k: item[k] for k in keep if k in item})
+
+
+def test_aarcos_and_its_parent_companys_listings_are_never_prospects():
+    """AARCO's own listings and its parent company's (ACE Recycling & Disposal: its names,
+    website and facility addresses, config.PARENT_*) are flagged as the company's own and
+    are never prospects; unrelated businesses whose name merely holds "Ace" are scored as
+    any other ("own_company" in the reference set)."""
+    from leadgen import config
+    from leadgen.pipeline import EXEMPT_TYPES
+    from leadgen.scoring import OWN_FLAG, PARENT_FLAG
+
+    cases = _reference()["own_company"]
+    names = {item["name"] for item in cases}
+    assert {"ACE Recycling & Disposal", "Ace Intermountain Recycling Center", "Ace Hardware", "Ace Auto Parts"} <= names
+    assert PARENT_FLAG == "OWN COMPANY: AARCO's parent company (ACE Recycling & Disposal)"
+    for item in cases:
+        lead = score_lead(_own_case(item), config.DEFAULT_KEYWORDS)
+        if item["own"]:
+            assert lead.lead_type == "Own company" and lead.lead_type in EXEMPT_TYPES, (lead.name, lead.lead_type)
+            assert lead.flags == [PARENT_FLAG if item["own"] == "parent" else OWN_FLAG], (lead.name, lead.flags)
+        else:
+            assert lead.lead_type not in EXEMPT_TYPES, (lead.name, lead.lead_type)
+            assert not any(f.startswith("OWN COMPANY") for f in lead.flags), (lead.name, lead.flags)
+    # Scored as ordinary businesses: the same as under a name with no "Ace" in it.
+    hardware = score_lead(make("Ace Hardware", ["hardware_store"]), config.DEFAULT_KEYWORDS)
+    plain = score_lead(make("Valley Hardware", ["hardware_store"]), config.DEFAULT_KEYWORDS)
+    assert (hardware.score, hardware.tier, hardware.lead_type) == (plain.score, plain.tier, plain.lead_type)
+    # Another name a merged listing goes by counts too, and a competitor stays a competitor.
+    merged = make("Salt Lake Transfer Station", ["waste_transfer_station"])
+    merged.alt_names = ["Ace Disposal"]
+    assert score_lead(merged).flags == [PARENT_FLAG]
+    assert score_lead(make("Pro Baler", website="https://acedisposal.com")).lead_type == "Competitor"
+
+
+def test_the_parent_companys_names_and_facilities_come_from_config(monkeypatch):
+    """A name, website or facility the owner adds to config.PARENT_* is recognised with
+    no code change."""
+    from leadgen import config, scoring
+
+    monkeypatch.setattr(config, "PARENT_ALIASES", [*config.PARENT_ALIASES, "Wasatch Front Waste"])
+    monkeypatch.setattr(config, "PARENT_DOMAINS", [*config.PARENT_DOMAINS, "wfwaste.example"])
+    monkeypatch.setattr(config, "PARENT_ADDRESSES", [*config.PARENT_ADDRESSES, "2500 West 900 South, Ogden"])
+    assert score_lead(make("Wasatch Front Waste Yard")).flags == [scoring.PARENT_FLAG]
+    assert score_lead(make("Yard 2", website="http://wfwaste.example/")).flags == [scoring.PARENT_FLAG]
+    assert score_lead(make("Yard 3", address="2500 W 900 S Unit 4", city="OGDEN")).flags == [scoring.PARENT_FLAG]
+    assert score_lead(make("Yard 4", address="2500 W 900 S", city="Layton")).flags == []
 
 
 def test_equipment_name_is_industry_not_prospect():
@@ -206,7 +258,7 @@ def test_packing_movers_are_not_food_plants():
 
 
 def test_keyword_variants():
-    assert score_lead(make("Ace Disposal Services", [])).lead_type.startswith("Industry")
+    assert score_lead(make("Wasatch Disposal Services", [])).lead_type.startswith("Industry")
     assert score_lead(make("Acme Manufacturers", [])).category_key == "manufacturing"
     assert score_lead(make("Wasatch Recycler", [])).category_key == "recycling"
 
@@ -519,9 +571,15 @@ def test_generic_names_rank_below_named_places():
                            config.DEFAULT_KEYWORDS)
         assert bare.score < named.score and bare.tier not in ("A", "B"), bare.reasons
         assert any("no business name" in r for r in bare.reasons)
+        # With its street, in the name or as its address, it is still only the word: the
+        # same penalty, but there is somewhere to go, so it doesn't need a name.
         located = score_lead(make(f"{item['name']} at 1200 W 500 S", item["raw_categories"],
                                   item["source"]), config.DEFAULT_KEYWORDS)
-        assert located.score == bare.score
+        addressed = score_lead(make(item["name"], item["raw_categories"], item["source"],
+                                    address="1200 W 500 S"), config.DEFAULT_KEYWORDS)
+        assert located.score == addressed.score >= bare.score
+        assert all(any("no business name on the map" in r for r in lead.reasons) for lead in (located, addressed))
+        assert config.NEEDS_NAME_FLAG not in located.flags + addressed.flags
         run = score_lead(make(f"{item['name']} (Salt Lake County)", item["raw_categories"],
                               item["source"]), config.DEFAULT_KEYWORDS)
         assert not any("no business name" in r for r in run.reasons)
@@ -610,25 +668,35 @@ def test_a_clinic_a_hospitals_power_plant_and_a_truck_wash_are_what_their_names_
 
 def test_a_building_with_no_business_name_address_or_phone_needs_a_name():
     """A map name that only describes a building ("Office and Warehouse, West", B 49 in
-    the review) is no lead to call: tier D, below the default minimum (a search leaves
-    it out), flagged as needing a name. The same building with an address keeps its tier
-    ("needs_name" in the reference set), and a business's name is never taken for one."""
+    the review) or is only a generic word ("Recycling") is no lead to call when it has no
+    address, phone or website: tier D, below the default minimum (a search leaves it
+    out), flagged as needing a name. The same place with an address keeps its score and
+    tier ("needs_name" in the reference set), and a business's name is never taken for one."""
     from leadgen import config, scoring
 
     cases = _reference()["needs_name"]
-    assert any(item["name"] == "Office and Warehouse, West" for item in cases)
+    assert {"Office and Warehouse, West", "Recycling"} <= {item["name"] for item in cases}
     for item in cases:
         kw = {"footprint_sqft": item.get("footprint_sqft")}
         bare = score_lead(make(item["name"], item["raw_categories"], item["source"], **kw), config.DEFAULT_KEYWORDS)
         assert bare.tier == "D" and bare.score == config.DEFAULT_MIN_SCORE - 1, (bare.name, bare.score)
         assert config.NEEDS_NAME_FLAG in bare.flags
         plain = scoring.plain_reasons(bare.reasons)
-        assert any(r.startswith("-") and f'"{item["name"]}" only describes a building' in r for r in plain), plain
+        generic = scoring.generic_name(item["name"])
+        what = "is only a word for a kind of place" if generic else "only describes a building"
+        assert any(r.startswith("-") and f'"{item["name"]}" {what}' in r for r in plain), plain
         found = score_lead(make(item["name"], item["raw_categories"], item["source"], address=item["address"],
                                 **kw), config.DEFAULT_KEYWORDS)
         assert found.tier == item["tier"] and config.NEEDS_NAME_FLAG not in found.flags
+        assert found.score == item.get("score", found.score)
+        for contact in ({"phone": "801-555-0100"}, {"website": "https://example.com"}):
+            reachable = score_lead(make(item["name"], item["raw_categories"], item["source"], **contact, **kw),
+                                   config.DEFAULT_KEYWORDS)
+            assert config.NEEDS_NAME_FLAG not in reachable.flags, (item["name"], contact)
+    # The word alone or with its town gives nothing to call; with its street it does.
+    assert scoring.needs_name(make("Recycling, Magna", ["amenity=recycling"], "osm"))
     for name in ("Acme Warehouse", "Warehouse Club", "Rocky Mountain Distribution", "Costco Wholesale",
-                 "Recycling", "Hospital Generation Plant"):
+                 "Recycling at 1200 W 500 S", "Recycling (Salt Lake County)", "Hospital Generation Plant"):
         assert not scoring.needs_name(make(name, ["building=yes"], "osm")), name
     phoned = make("Office and Warehouse, West", ["building=yes"], "osm", phone="801-555-0100")
     assert not scoring.needs_name(phoned)
@@ -656,3 +724,14 @@ def test_a_building_saved_before_shows_as_needing_a_name_and_the_row_is_unchange
     with store.connect() as db:
         stored = json.loads(db.one("SELECT lead FROM leads WHERE uid = ?", ("u1",))[0])
     assert (stored["score"], stored["tier"]) == (49, "B") and stored["flags"] == []
+
+
+def test_the_reference_files_description_is_short_and_names_every_group():
+    """The reference file's "about" says in a few sentences what each group of cases
+    checks, with no change history (that lives in git and the developer overview)."""
+    import re
+
+    data = _reference()
+    about = data["about"]
+    assert len(about) < 500 and not re.search(r"\bround\b", about, re.I)
+    assert all(group in about for group in data if group != "about")

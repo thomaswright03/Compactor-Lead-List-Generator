@@ -17,7 +17,7 @@ const eventEl = (e) => /** @type {HTMLElement} */ (e.target);
 const CONFIG = /** @type {PageConfig} */ (JSON.parse($("page-config").textContent));
 const OUTCOMES = CONFIG.outcomes;
 const PAUSED = CONFIG.paused;
-const SITE = "AARCO Compactor Lead Finder";
+const SITE = CONFIG.site;
 /** @type {Record<string, string>} */
 const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", map: "Map", stats: "Stats" };
 const PAGES = ["find", "leads", "calls", "map", "stats"];

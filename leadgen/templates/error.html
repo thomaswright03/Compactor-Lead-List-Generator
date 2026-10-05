@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ title }} · AARCO Compactor Lead Finder</title>
+<title>{{ title }} · {{ site_name }}</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 {% include "_theme.html" %}
 <style>
@@ -13,7 +13,7 @@
   main { flex:1; display:grid; place-items:center; padding:var(--sp-5) var(--sp-4); }
   .box { width:min(460px,100%); background:var(--card); border-radius:var(--r-lg); padding:var(--sp-6);
          box-shadow:0 20px 60px var(--shadow); }
-  .brand strong { display:block; font-size:var(--fs-md); }
+  .brand strong { display:block; font-size:var(--fs-md); text-wrap:balance; }
   .brand span { color:var(--muted); font-size:var(--fs-sm); }
   h1 { font-size:var(--fs-lg); margin:var(--sp-5) 0 var(--sp-2); }
   p { margin:0 0 var(--sp-5); color:var(--muted); font-size:var(--fs-md); }
@@ -27,7 +27,7 @@
 <body>
 <main>
   <div class="box">
-    <div class="brand"><strong>AARCO Compactor</strong><span>Lead Finder</span></div>
+    <div class="brand"><strong>{{ company }}</strong><span>Lead Finder</span></div>
     <h1>{{ title }}</h1>
     <p>{{ text }}</p>
     <a class="btn" href="/">Back to Lead Finder</a>

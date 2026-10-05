@@ -1,5 +1,5 @@
 {
- "about": "Reference listings for the scoring rules. \"businesses\": typical examples of each business type as Google, Yelp or OpenStreetMap reports it, and whether that kind of business runs a baler or compactor. \"confirmed\": real businesses AARCO's staff marked Yes / No on the Leads page, with the tier each had when copied; refresh it with `python -m leadgen reference` (DATABASE_URL = the website's database), so a scoring change that demotes known-good businesses fails the tests. \"not_campus\": places named after a university or college that are not the campus (a garden, house, condo, department, press...); they must never score as a campus prospect. Businesses with \"not_prospect\": true (police, fire, impound, trailer yards, parcel lockers) must get no prospect category and score below the default minimum. \"not_production\": small shops and eateries whose name has a production word (\"Day Dairy Barn\"); a name alone must never make them a food & beverage plant. Map listings known only by a catch-all industrial tag on a small building (under 5,000 sq ft), and pumping stations, water wells, substations or a utility's or city's structures, are \"not_prospect\" too (with their footprint_sqft). \"name_traps\": listings whose name holds another business's name or a misleading word (a hotel named after the air base beside it, a thrift store called \"... Industries\"); each must get \"category\" and must never show a reason containing \"never_reason\". Self-storage places (\"Magna Safe Storage\", tagged or named so), data centres, career centres and a city's maintenance shops on a catch-all industrial tag are \"not_prospect\" too. More \"name_traps\": a retail chain whose name holds a warehouse word (\"Harbor Freight\") is retail, and a furniture shop mapped as a mall is never a venue. \"generic_names\": map listings whose only name is a generic word (\"Recycling\", \"Junkyard\"); each must score below the same place with a real name (\"named\"), and the free map data gives it a descriptive name (operator, street or city) where the map has one. Round 21 (a real 30-mile map search around AARCO): an outpatient clinic mapped as a hospital (\"Intermountain West Valley Clinic\"), a hospital's power plant (\"Hospital Generation Plant\") and a truck wash on an industrial building (\"Salt Lake Diesel Wash\") are \"not_prospect\" and \"name_traps\" (no category, never \"Hospital\" or \"Manufacturing\"). \"needs_name\": map listings whose name only describes a building (\"Office and Warehouse, West\") with no address, phone or website; each must land in tier D, below the default minimum score, flagged as needing a name, while the same building with an address (\"address\") keeps \"tier\". The same hospital as two rows (its building's outline \"Cancer Hospital South\" beside \"Huntsman Cancer Hospital\") is a dedupe case (tests/test_sites.py).",
+ "about": "Listings the scoring must keep handling as agreed. businesses: typical listings and whether each runs a baler or compactor (not_prospect: below the minimum score). confirmed: staff's Yes / No marks; no tier may move against them. not_campus, not_production, name_traps: names never to be read as a campus, a plant or another business. generic_names, needs_name: no real name ranks low; nothing to call means tier D. own_company: AARCO's and its parent's listings, never prospects.",
  "businesses": [
   {
    "name": "Smith's Marketplace",
@@ -668,6 +668,138 @@
    "footprint_sqft": 45000,
    "address": "500 N Redwood Rd",
    "tier": "C"
+  },
+  {
+   "name": "Recycling",
+   "source": "osm",
+   "raw_categories": [
+    "amenity=recycling"
+   ],
+   "address": "1200 W 500 S",
+   "tier": "C",
+   "score": 25
+  }
+ ],
+ "own_company": [
+  {
+   "name": "AARCO Compactors & Balers",
+   "source": "google",
+   "raw_categories": [
+    "point_of_interest"
+   ],
+   "own": "AARCO"
+  },
+  {
+   "name": "ACE Recycling & Disposal",
+   "source": "google",
+   "raw_categories": [
+    "recycling_center"
+   ],
+   "own": "parent"
+  },
+  {
+   "name": "Ace Recycling and Disposal",
+   "source": "yelp",
+   "raw_categories": [
+    "yelp:recyclingcenter"
+   ],
+   "own": "parent"
+  },
+  {
+   "name": "Ace Intermountain Recycling Center",
+   "source": "osm",
+   "raw_categories": [
+    "amenity=recycling"
+   ],
+   "address": "1240 South Wallace Road",
+   "city": "Salt Lake City",
+   "own": "parent"
+  },
+  {
+   "name": "ACE Disposal - Roll Off Containers",
+   "source": "google",
+   "raw_categories": [
+    "point_of_interest"
+   ],
+   "own": "parent"
+  },
+  {
+   "name": "Recycling Center",
+   "source": "osm",
+   "raw_categories": [
+    "amenity=recycling"
+   ],
+   "address": "1240 S Wallace Rd",
+   "city": "SLC",
+   "own": "parent"
+  },
+  {
+   "name": "Wasatch Front Transfer",
+   "source": "google",
+   "raw_categories": [
+    "waste_transfer_station"
+   ],
+   "website": "https://www.acedisposal.com/locations",
+   "own": "parent"
+  },
+  {
+   "name": "Ace Hardware",
+   "source": "google",
+   "raw_categories": [
+    "hardware_store"
+   ],
+   "own": false
+  },
+  {
+   "name": "Ace Auto Parts",
+   "source": "osm",
+   "raw_categories": [
+    "shop=car_parts"
+   ],
+   "own": false
+  },
+  {
+   "name": "Ace Cash Express",
+   "source": "google",
+   "raw_categories": [
+    "point_of_interest"
+   ],
+   "own": false
+  },
+  {
+   "name": "Ace Recycled Electronics",
+   "source": "osm",
+   "raw_categories": [
+    "shop=electronics"
+   ],
+   "own": false
+  },
+  {
+   "name": "Grace Recycling",
+   "source": "osm",
+   "raw_categories": [
+    "amenity=recycling"
+   ],
+   "own": false
+  },
+  {
+   "name": "Wasatch Recycling",
+   "source": "osm",
+   "raw_categories": [
+    "amenity=recycling"
+   ],
+   "address": "1240 S Wallace Rd",
+   "city": "Ogden",
+   "own": false
+  },
+  {
+   "name": "Valley Disposal",
+   "source": "google",
+   "raw_categories": [
+    "point_of_interest"
+   ],
+   "website": "https://notacedisposal.com.example.net",
+   "own": false
   }
  ]
 }
