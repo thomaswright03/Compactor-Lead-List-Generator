@@ -2277,6 +2277,61 @@ def test_a_quick_first_load_shows_no_starting_notice(page):
     expect(page.locator("#starting")).to_be_hidden()
 
 
+# ---- a pin's details on a phone
+
+LONG_NAME = "Great Basin Regional Distribution and Fulfillment Center for Refrigerated and Frozen Grocery Goods 2"
+
+# Where a pin's details box, its close button and the name in it are once the map has stopped
+# moving to show it, and whether each fits inside the map and the screen.
+PIN_BOX_FITS = """() => {
+    const rect = (s) => document.querySelector(s).getBoundingClientRect();
+    const map = rect('#map'), view = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    const inside = (r, o) => r.left >= o.left && r.right <= o.right && r.top >= o.top && r.bottom <= o.bottom;
+    const box = rect('#map .leaflet-popup-content-wrapper'), close = rect('#map .leaflet-popup-close-button');
+    const name = document.querySelector('#map .pin-box strong');
+    const text = document.querySelector('#map .leaflet-popup-content'), n = name.getBoundingClientRect();
+    return { box: inside(box, map) && inside(box, view), close: inside(close, map) && inside(close, view),
+             closeSize: [close.width, close.height], nameInBox: inside(n, box),
+             clearOfClose: n.right <= close.left || n.top >= close.bottom,
+             wrapped: n.height > 2 * parseFloat(getComputedStyle(name).lineHeight),
+             sideways: text.scrollWidth > text.clientWidth,
+             page: document.documentElement.scrollWidth > window.innerWidth }; }"""
+
+
+@pytest.mark.parametrize("width", [360, 375, 390])
+def test_a_pins_details_fit_a_phones_map_and_close_with_their_button(browser, site, page, width):
+    """On a phone the map is narrower than a details box's usual width: a business with a
+    100-character name, its pin near the map's right edge, opens a box that fits inside the
+    map and the screen, its name wrapped whole and its close button in view, which closes it."""
+    assert len(LONG_NAME) == 100
+    lat, lon = config.SERVICE_CENTER
+    far = Lead(name=LONG_NAME, lat=lat, lon=lon + 0.55, source="yelp", source_id="y-long", phone="(801) 555-0199",
+               city="Salt Lake City", raw_categories=["yelp:grocery"], yelp_reviews=200, address="1 Long Name Way")
+    score_lead(far, config.DEFAULT_KEYWORDS)
+    saved.save_search([far], config.DEFAULT_KEYWORDS)
+    context = _context(browser, viewport={"width": width, "height": 800}, has_touch=True, is_mobile=True)
+    phone = context.new_page()
+    phone.goto(site + "#map")
+    expect(phone.locator("#map .aarco-mark")).to_be_visible()
+    x, y = _on_screen(phone, far.lat, far.lon)
+    edge = phone.locator("#map").bounding_box()
+    assert edge["x"] + edge["width"] - 40 < x < edge["x"] + edge["width"]          # near the right edge
+    phone.touchscreen.tap(x, y)
+    box = phone.locator("#map .pin-box")
+    expect(box.locator("strong").first).to_have_text(LONG_NAME)
+    # The map moves to show the box: measured once it has stopped.
+    phone.wait_for_function("""() => { const b = document.querySelector('#map .leaflet-popup');
+        if (!b) return false; const r = JSON.stringify(b.getBoundingClientRect());
+        const same = window.lastBox === r; window.lastBox = r; return same; }""", polling=200)
+    fits = phone.evaluate(PIN_BOX_FITS)
+    assert fits["box"] and fits["close"] and fits["nameInBox"] and fits["clearOfClose"], fits
+    assert fits["wrapped"] and not fits["sideways"] and not fits["page"], fits
+    assert min(fits["closeSize"]) >= 44, fits
+    phone.locator("#map .leaflet-popup-close-button").tap()
+    expect(box).to_have_count(0)
+    context.close()
+
+
 # ---- the phone bar with large counts
 
 @pytest.mark.parametrize("width", [320, 375])

@@ -161,7 +161,8 @@ view, the colour switch fitting from 320 px up, 44 px touch targets on a
 phone, the Calls cards and every page link in view at 320 px, the phone bar's five links
 on one row with four- and five-digit counts, a closed business
 keeping its mark, the skip link and the short Recent changes, and the Map page: AARCO's
-pin, the circle, the nine areas and the missed one, every pin and its details, the group
+pin, the circle, the nine areas and the missed one, every pin and its details (on a phone,
+a long name's box fitting inside the map with its close button), the group
 and area toggles (kept after a reload), a pin opening the business on Leads, the dark
 theme and a phone); it is skipped when Playwright's Chromium is missing. Every browser
 window the tests open refuses requests to anywhere but the test server (`OUTSIDE`), so

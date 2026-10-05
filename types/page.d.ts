@@ -321,7 +321,8 @@ declare namespace L {
     addTo(target: Map | LayerGroup): this;
     remove(): this;
     bindPopup(content: (layer: Layer) => HTMLElement,
-              options?: { maxWidth?: number; minWidth?: number; autoPanPaddingTopLeft?: Point }): this;
+              options?: { maxWidth?: number; minWidth?: number; autoPanPaddingTopLeft?: Point;
+                          autoPanPaddingBottomRight?: Point }): this;
     on(type: string, fn: () => void): this;
   }
   interface Path extends Layer { setStyle(style: PathOptions): this }
@@ -335,6 +336,7 @@ declare namespace L {
     removeLayer(layer: Layer): this;
     hasLayer(layer: Layer): boolean;
     invalidateSize(): this;
+    getSize(): { x: number; y: number };
     closePopup(): this;
     getContainer(): HTMLElement;
     on(type: string, fn: () => void): this;

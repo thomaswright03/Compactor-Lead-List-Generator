@@ -212,8 +212,9 @@ Open **Map** in the sidebar (in the bar at the top on a phone).
   each with its count; untick one to hide those pins. This browser remembers what you
   hid.
 - **Tap a pin** for its name, tier and score, phone, address, Yes / No answer and
-  latest call. **Open on the Leads page** shows just that business on Leads, ready to
-  mark or log a call; **Show the whole list** there brings every business back.
+  latest call (on a phone too, the whole box fits the map; close it with its **×**).
+  **Open on the Leads page** shows just that business on Leads, ready to mark or log a
+  call; **Show the whole list** there brings every business back.
 - Zoom with the **+** / **−** buttons, two fingers, or the mouse wheel. Where pins are
   close together, zoom in to tap the one you want; some area names show only once
   zoomed in.

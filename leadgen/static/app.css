@@ -584,6 +584,10 @@ td.h-where .sub { display:block; }
 #map .leaflet-popup-content-wrapper, #map .leaflet-popup-tip { background:var(--card); color:var(--ink);
                                                                box-shadow:0 3px 14px var(--shadow); }
 #map .leaflet-popup-content { margin:var(--sp-3) var(--sp-5) var(--sp-3) var(--sp-4); line-height:1.45; font-size:var(--fs-sm); }
+/* A pin's details box stays inside the map (map.js fitPopups sets the room it has): narrower on a
+   phone, its lines wrap; taller than the map, it scrolls. */
+#map .leaflet-popup-content { max-width:var(--popup-w, 300px); max-height:var(--popup-h, none); overflow-y:auto;
+                              overflow-wrap:anywhere; }
 #map a.leaflet-popup-close-button { color:var(--muted); width:32px; height:32px; font:22px/32px system-ui, sans-serif; }
 #map .leaflet-bar a { background:var(--card); color:var(--ink); border-bottom-color:var(--line); }
 #map .leaflet-bar a:hover { background:var(--hover); }
@@ -624,8 +628,10 @@ td.h-where .sub { display:block; }
               border-radius:var(--sp-1); background:var(--aarco); color:var(--aarco-ink); font-weight:800;
               font-size:var(--fs-sm); letter-spacing:.04em; white-space:nowrap; }
 /* A business's details, opened from its pin. */
-.pin-box { display:flex; flex-direction:column; gap:2px; min-width:200px; }
-.pin-box strong:first-child { font-size:var(--fs-md); }
+.pin-box { display:flex; flex-direction:column; gap:2px; }
+/* The name stays clear of the close button (larger on a touch screen). */
+.pin-box strong:first-child { font-size:var(--fs-md); margin-right:var(--sp-2); }
+@media (pointer: coarse) { .pin-box strong:first-child { margin-right:var(--sp-5); } }
 .pin-box .sub { color:var(--muted); }
 .pin-box .flag { color:var(--bad-ink); font-weight:600; }
 .pin-box .open-lead { margin-top:var(--sp-2); font-weight:600; }
