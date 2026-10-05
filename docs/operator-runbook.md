@@ -754,9 +754,8 @@ the working day:
       sleep means the two headers are missing (step 5).
 
    Nothing pings the site on weekends or at night, on purpose: a visit then waits for
-   the site to wake, and a weekend visit after 6:20 AM is listed under **Recent
-   problems** as "The site had gone to sleep" (expected; the site's own check, 3 below,
-   doesn't know about weekends). UptimeRobot's free plan can't send these headers, so
+   the site to wake (the site's own check, 3 below, expects that and says nothing).
+   UptimeRobot's free plan can't send these headers, so
    use cron-job.org.
 2. **The GitHub job, as a backup** (`.github/workflows/keep-awake.yml`). GitHub starts
    scheduled jobs late and skips many (from 2026-09-30 to 2026-10-03 it ran this one
@@ -768,8 +767,8 @@ the working day:
    during it. GitHub turns scheduled jobs off after 60 days with no commits: re-enable it
    under **Actions** → **Keep the site awake** → **Enable workflow** if so.
 3. **The site's own check.** Each start of the site is recorded (the additive
-   `site_starts` table: when, and which version). A start between 6:20 AM and 9 PM Utah
-   time without a new version (no deploy since the start before) means the site had gone
+   `site_starts` table: when, and which version). A start on a weekday between 7:20 AM and 7 PM
+   Utah time without a new version (no deploy since the start before) means the site had gone
    to sleep, or Render restarted it, and it says so once a Utah day under **For the site
    administrator** → **Recent problems** (and on the webhook): "The site had gone to sleep and
    started again at … Utah time without a new version, so whoever opened it then waited
