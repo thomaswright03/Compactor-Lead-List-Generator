@@ -2275,3 +2275,25 @@ def test_a_slow_first_load_says_the_site_is_waking_up(browser, site, page, width
 
 def test_a_quick_first_load_shows_no_starting_notice(page):
     expect(page.locator("#starting")).to_be_hidden()
+
+
+# ---- the phone bar with large counts
+
+@pytest.mark.parametrize("width", [320, 375])
+def test_the_phone_bar_keeps_one_row_whatever_the_counts(browser, site, page, width):
+    """The five page links stay on one row from 320 px up with four- and five-digit counts
+    beside Leads and Calls, each still a 44 x 44 px touch target."""
+    context = _context(browser, viewport={"width": width, "height": 800}, has_touch=True, is_mobile=True)
+    phone = context.new_page()
+    phone.goto(site + "#leads")
+    phone.wait_for_selector("#n-leads:not([hidden])")
+    for leads, called in [(1060, 1000), (10000, 1060), (99999, 99999)]:
+        phone.evaluate(f"S.counts.unchecked = {leads}; S.counts.called = {called}; counts()")
+        expect(phone.locator("#n-leads")).to_contain_text(f"{leads:,}")
+        expect(phone.locator("#n-calls")).to_contain_text(f"{called:,}")
+        links = phone.evaluate("""() => [...document.querySelectorAll('nav a')].map((a) => {
+            const r = a.getBoundingClientRect(); return [Math.round(r.top), r.width, r.height, r.left, r.right]; })""")
+        assert len(links) == 5 and len({top for top, *_ in links}) == 1, (leads, called, links)
+        assert all(w >= 44 and h >= 44 and left >= 0 and right <= width for _, w, h, left, right in links), links
+        assert phone.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    context.close()

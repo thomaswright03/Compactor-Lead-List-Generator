@@ -394,8 +394,11 @@ dialog::backdrop { background:var(--backdrop); }
   .side { position:static; height:auto; display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center;
           gap:var(--sp-2) var(--sp-3); padding:var(--sp-3) var(--sp-4); }
   nav { flex-direction:row; flex-wrap:wrap; grid-column:2; grid-row:1; }
-  nav a { padding:var(--sp-2) var(--sp-3); }
-  nav .count .cw { display:none; }               /* "Leads 24": the words are in the link's title */
+  /* A page's count sits under its name (the words are in the link's title), so a link is as
+     wide as "Leads" or "99,999" and the five pages keep one row however large the counts grow. */
+  nav a { padding:var(--sp-1) var(--sp-3); flex-direction:column; justify-content:center; gap:0; line-height:1.25; }
+  nav .count { line-height:1.25; }
+  nav .count .cw { display:none; }
   .menu-btn { display:inline-flex; align-items:center; justify-content:center; background:none; border:1px solid rgba(255,255,255,.3);
               color:var(--side-ink); padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); min-height:44px; min-width:44px;
               grid-column:3; grid-row:1; }
@@ -404,9 +407,6 @@ dialog::backdrop { background:var(--backdrop); }
   .side .who { border-top:0; padding-top:0; }
   main { padding:var(--sp-4) var(--sp-4) var(--sp-6); }
 }
-/* Small phones: the first page's link says "Find" (its name is still "Find leads"), so the
-   five pages fit one row from 375 px up. */
-@media (max-width: 429px) { nav .lw { display:none; } }
 @media (max-width: 700px) {
   /* Phones: one short bar at the top (name and Menu, then the pages); the rest is in the menu. */
   .side { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:var(--sp-1) var(--sp-3);
@@ -414,7 +414,7 @@ dialog::backdrop { background:var(--backdrop); }
   .brand { display:flex; gap:var(--sp-2); align-items:baseline; min-width:0; white-space:nowrap; overflow:hidden; }
   .brand strong { display:inline; }
   .menu-btn { grid-column:auto; grid-row:auto; }
-  /* Every page's link stays in view: they wrap to a second line on the narrowest phones. */
+  /* Every page's link stays in view, in one row from 320 px up (narrower, they would wrap). */
   nav { grid-column:1 / -1; grid-row:auto; flex-wrap:wrap; gap:var(--sp-1); }
   /* Each page's link is a full 44px tap target on a phone (touch screen or not). */
   nav a { padding:var(--sp-1) 6px; flex:none; font-size:var(--fs-sm); flex-wrap:nowrap; min-height:44px; min-width:44px; justify-content:center; }
@@ -479,6 +479,9 @@ dialog::backdrop { background:var(--backdrop); }
   table.plain.hist tr.more-row td { background:none; }
   .scroll-x:has(table.plain.hist) { overflow:visible; }
 }
+/* Small phones: the first page's link says "Find" (its name is still "Find leads"), so the
+   five pages fit one row from 320 px up, whatever their counts, each link still 44 px wide. */
+@media (max-width: 429px) { nav .lw { display:none; } nav a { padding-inline:var(--sp-1); } }
 
 /* The tutorial (tour.js): a dimmed page with one part cut out and a box explaining it. */
 .side .tour-btn { background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.3); align-self:flex-start; }

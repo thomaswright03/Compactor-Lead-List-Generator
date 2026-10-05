@@ -158,7 +158,8 @@ competitors not asked Yes / No, the search confirmation, a refused search saying
 why (in the browser and from the server), the phone cards and the short phone
 header, Stats, downloads and their busy state, reload keeps the
 view, the colour switch fitting from 320 px up, 44 px touch targets on a
-phone, the Calls cards and every page link in view at 320 px, a closed business
+phone, the Calls cards and every page link in view at 320 px, the phone bar's five links
+on one row with four- and five-digit counts, a closed business
 keeping its mark, the skip link and the short Recent changes, and the Map page: AARCO's
 pin, the circle, the nine areas and the missed one, every pin and its details, the group
 and area toggles (kept after a reload), a pin opening the business on Leads, the dark
