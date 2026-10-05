@@ -15,7 +15,8 @@ staff want the [sales guide](sales-guide.md); developers the
 | Make a backup now | `python -m leadgen backup` with `DATABASE_URL` set, or GitHub → **Actions** → **Nightly backup** → **Run workflow** | [Backups](#backups-and-restoring) |
 | Get lost data back | Neon → **Branches** → **New branch** from past data (last 6 hours), or `python -m leadgen restore <copy>` (lists what it would add), then the same with `--apply` (adds only, never overwrites) | [Restoring](#restoring) |
 | Change the login password | Render → **Environment** → `APP_PASSWORD` → **Save Changes** (everyone logs in again) | [Login](#login-and-the-free-plan) |
-| Keep the site awake while the team works | cron-job.org (or UptimeRobot) opens `https://compactor-lead-finder.onrender.com/healthz` every 5 minutes, 5 AM to 9 PM Utah time; **For the site administrator** says "The site had gone to sleep" when it missed | [Keep the site awake](#keep-the-site-awake) |
+| Prove a nightly copy restores | GitHub → **Actions** → **Restore rehearsal** → **Run workflow** (prints only counts) | [Restore rehearsal](#restore-rehearsal) |
+| Keep the site awake while the team works | cron-job.org opens `https://compactor-lead-finder.onrender.com/healthz` every 10 minutes on weekdays in working hours (Utah time), with the headers `User-Agent: curl/8.0` and `Accept: application/json`; **For the site administrator** says "The site had gone to sleep" when it missed | [Keep the site awake](#keep-the-site-awake) |
 | Name the login page's help contact | Render → **Environment** → `LEADGEN_SUPPORT_CONTACT` = a name with a phone or email | [Login](#login-and-the-free-plan) |
 | Merge a business saved as two rows | `python -m leadgen merge-sites` (lists, changes nothing), then `--apply` | [The database](#the-database-saved-leads-marks-calls-the-yelp-count) |
 | Send the monthly scoring check | **For the site administrator** → **Scoring check** → download, send to the developer | [Monthly](#monthly-the-scoring-check) |
@@ -43,23 +44,25 @@ links to, and take it off the README's "Still open for the owner" list.
    *Check:* `gh api repos/thomaswright03/Compactor-Lead-List-Generator/branches/main --jq .protected`
    prints `true` (or the repository's **Branches** page shows `main` as protected).
 2. **Name a real contact on the login page** (Render; **Open**, checked 2026-10-03).
-   So a salesperson who forgot the password, or is locked out, knows whom to call. In
-   Render open the **compactor-lead-finder** service → **Environment** → **Add
-   Environment Variable**: key `LEADGEN_SUPPORT_CONTACT`, value a name with a phone
-   number or email, such as `Jane Doe at (801) 555-0100 or jane@example.com` → **Save
-   Changes** (the site restarts in about a minute). Set it in Render only, never in
-   this repository. Until it is set, every start of the site logs "LEADGEN_SUPPORT_CONTACT
-   is not set" (Render → **Logs**). *Check:*
+   So someone locked out of the site knows whom to ask.
+   1. Render → the **compactor-lead-finder** service → **Environment** → **Add
+      Environment Variable**.
+   2. Key `LEADGEN_SUPPORT_CONTACT`; value a name with a phone number or email, for
+      example `Jane Doe at (801) 555-0100 or jane@example.com`.
+   3. **Save Changes** (the site restarts in about a minute).
+
+   Set it in Render only, never in this repository. *Check:*
    `curl -s https://compactor-lead-finder.onrender.com/login | grep -oE 'href="(tel|mailto):[^"]+"'`
-   prints the contact's `tel:` or `mailto:` link (nothing printed: not set yet). More
-   in [Login and the free plan](#login-and-the-free-plan).
-3. **Delete the three old branches** (GitHub; **Open**, checked 2026-10-03):
-   `wip-yelp-cap-and-baler-marks`, `runbook-owner-steps-done` and `claude-staging`.
-   Nothing on them is missing from `main` and nothing deploys from them; they only make
-   whoever reads the repository next wonder whether work is unmerged. Steps, with an
-   optional archive tag: [Old branches](#the-size-of-a-clone). *Check:*
-   `git ls-remote --heads origin` lists only `refs/heads/main` (plus a branch with an
-   open pull request, if any).
+   prints the contact's `tel:` or `mailto:` link (nothing printed: not set yet).
+3. **Delete the two old branches** (GitHub; **Open**, checked 2026-10-03):
+   `wip-yelp-cap-and-baler-marks` and `runbook-owner-steps-done`. Nothing on them is
+   missing from `main` and nothing deploys from them. `claude-staging` is **kept on
+   purpose**: it is the staging route to the protected `main` (work is pushed there, the
+   three CI checks run on it, and `main` moves up to it only once they are green), so
+   don't delete it. Steps, with an optional archive tag:
+   [Branches](#the-size-of-a-clone). *Check:* `git ls-remote --heads origin` lists
+   only `refs/heads/main` and `refs/heads/claude-staging` (plus a branch with an open
+   pull request, if any).
 4. **Turn on the nightly backup** (GitHub; **Done (2026-10-03)**: first run green). So a copy older
    than Neon's 6-hour history exists. On GitHub open the repository → **Settings** →
    **Secrets and variables** → **Actions** → **New repository secret**, twice:
@@ -68,20 +71,23 @@ links to, and take it off the README's "Still open for the owner" list.
    manager (without it the copies can't be read, by anyone). Then **Actions** →
    **Nightly backup** → **Run workflow**. *Check:* the run is green and has an artifact
    `leadgen-backup-<date>`. Details: [Backups and restoring](#backups-and-restoring).
-5. **Set up the outside keep-awake pinger** (cron-job.org; **Open**, added 2026-10-03).
-   So nobody waits up to a minute for the site to wake up during the working day:
-   GitHub ran the keep-awake job only every 3 to 5 hours, and Render's free plan sleeps
-   after 15 idle minutes. Steps: [Keep the site awake](#keep-the-site-awake) (a free
-   cron-job.org job that opens `/healthz` every 5 minutes from 5 AM to 9 PM Utah time).
-   *Check:* the job's **History** on cron-job.org lists a 200 answer every 5 minutes, and
-   `curl -s https://compactor-lead-finder.onrender.com/healthz` shows the same `up_since`
-   at 7 AM and at 5 PM.
-6. **Rehearse a restore of the live data once** (your computer; **Open**, added
-   2026-10-03). Download a nightly copy (or make one: `python -m leadgen backup`), then
-   restore it into a local SQLite file with no `DATABASE_URL` set (`python -m leadgen
-   restore <file> --apply`), run `python -m leadgen web` and compare Leads, Calls and Stats
-   with the live site. *Check:* the counts match; write the date in the rehearsals table
-   under [Backups and restoring](#backups-and-restoring).
+5. **Set up the outside keep-awake pinger** (cron-job.org; **Done (2026-10-05), confirm
+   after the first full working day**). So nobody waits up to a minute for the site to
+   wake up during the working day: GitHub ran the keep-awake job only every 3 to 5
+   hours, and Render's free plan sleeps after 15 idle minutes. The owner's cron-job.org
+   job opens `/healthz` every 10 minutes on weekdays during working hours
+   (America/Denver), with the headers `User-Agent: curl/8.0` and
+   `Accept: application/json`. Steps: [Keep the site awake](#keep-the-site-awake).
+   *Check* (on the first full working day; then change this to plain **Done (the
+   date)**): the job's **History** on cron-job.org lists a 200 answer every 10 minutes,
+   and `curl -s https://compactor-lead-finder.onrender.com/healthz` shows the same
+   `up_since` at 7 AM, 10 AM, 1 PM and 5 PM.
+6. **Rehearse a restore of the live data once** (GitHub; **Open**, added 2026-10-03).
+   GitHub → the repository → **Actions** → **Restore rehearsal** → **Run workflow** →
+   **Run workflow**. It puts the newest nightly copy back into a throwaway database and
+   compares the counts with the copy's own and with the live database's. What a pass
+   looks like: [Restore rehearsal](#restore-rehearsal). *Check:* the run is green; write
+   its row in the rehearsals table there, then mark this item **Done (the date)**.
 
 ## Emergency switches: stop searches or paid calls
 
@@ -370,35 +376,33 @@ everyone's clones and the deploy link, so it is left there; it has no effect on
 the running site. `*.whl` files are now ignored so it can't happen again. Purge
 it only if the owner agrees to rewrite the history.
 
-**Old branches** (checked 2026-10-03; all three are safe to delete, by the owner):
+**Branches** (checked 2026-10-03). `main` is the only branch the site runs from.
+`claude-staging` stays; the other two are safe to delete, by the owner:
 
+- `claude-staging` (**kept on purpose**): the staging route to the protected `main`.
+  Review-round fixes are pushed there first, the three CI checks run on it, and `main`
+  moves up to it only once they are green; between rounds it points at a commit already
+  on `main`. Nothing deploys from it. Don't delete it.
 - `wip-yelp-cap-and-baler-marks` (last commit 20eb261, 2026-09-29): the first draft of
   the 50-a-day Yelp cap, the Yes / No marks and the Postgres database. That work
   reached `main` as commit 54de1e5 ("Save leads and baler marks permanently; cap the
   website at 50 Yelp calls a day") and has been built on ever since.
 - `runbook-owner-steps-done` (7692522, 2026-10-03, "Runbook: main is protected and the
   nightly backup is on"): that commit is already part of `main`.
-- `claude-staging`: where Claude's review-round fixes are pushed so the three checks run
-  before `main` moves up to them; once a round is finished it points at a commit already
-  on `main`. Delete it only when no review round is running (Claude's next round
-  creates it again with its first push).
 
-To delete them: GitHub → the repository → **Branches** → **All branches** → the bin
-icon next to each of the three; or, on a computer with a clone:
+To delete the two old ones: GitHub → the repository → **Branches** → **All branches** →
+the bin icon next to each; or, on a computer with a clone:
 
 ```bash
 git fetch origin
 git merge-base --is-ancestor origin/runbook-owner-steps-done origin/main && echo on main  # prints: on main
-git merge-base --is-ancestor origin/claude-staging origin/main && echo on main            # prints: on main
 git push origin 20eb26110c8537af04bd3e68420251e18a50696d:refs/tags/archive/wip-yelp-cap-and-baler-marks  # optional: keep a tag
-git push origin --delete wip-yelp-cap-and-baler-marks runbook-owner-steps-done claude-staging
-git ls-remote --heads origin        # check: lists only refs/heads/main
+git push origin --delete wip-yelp-cap-and-baler-marks runbook-owner-steps-done
+git ls-remote --heads origin        # check: lists only refs/heads/main and refs/heads/claude-staging
 ```
 
-If `claude-staging` doesn't print "on main", a round is still running: leave it and
-delete it later. Then mark owner action 3 **Done** under
+Then mark owner action 3 **Done (the date)** under
 [Owner actions still open](#owner-actions-still-open) and shorten this paragraph.
-`main` is the only branch the site needs.
 
 ## The database (saved leads, marks, calls, the Yelp count)
 
@@ -539,8 +543,12 @@ DATABASE_URL='postgresql://...' python -m leadgen backup
 **The nightly copy** (`.github/workflows/backup.yml`) runs at about 3 AM Utah time, makes
 the same copy, encrypts it with the owner's passphrase (AES-256, gpg; the repository is
 public, so it is never stored unencrypted) and keeps it for 90 days as the run's artifact
-`leadgen-backup-<date>`. It does nothing until the owner adds the two secrets; until then
-each run says "The nightly backup is off". To get a copy: GitHub → **Actions** →
+`leadgen-backup-<date>`. It needs the two secrets `BACKUP_DATABASE_URL` and
+`BACKUP_PASSPHRASE` (owner action 4). If one goes missing (removed, renamed or
+mistyped), the nightly run **fails** (red on the **Actions** page, and GitHub emails the
+owner about a failed run) with "No backup was made: the repository secret … is missing"
+and where to add it; a run started by hand with **Run workflow** only shows the same line
+as a notice and stays green. A green nightly run always has its artifact. To get a copy: GitHub → **Actions** →
 **Nightly backup** → the night's run → **Artifacts** → `leadgen-backup-<date>` (a zip
 holding `leadgen-backup-<date>.json.gz.gpg`), then unzip it and decrypt it (GnuPG:
 `brew install gnupg` on a Mac, Gpg4win on Windows) with the passphrase:
@@ -602,12 +610,81 @@ businesses), **Stats** (saved and checked counts by tier) and the search history
 computer against the restored database: `DATABASE_URL='postgresql://...' python -m
 leadgen web`, then open http://127.0.0.1:5000.
 
-**Rehearsals** (write each one here):
+### Restore rehearsal
+
+Proves that a real nightly copy can be put back, without touching the live data and
+without downloading anything to a computer (`.github/workflows/restore-rehearsal.yml`;
+it only runs when started by hand):
+
+1. GitHub → the repository → **Actions** → **Restore rehearsal** (left column) → **Run
+   workflow** → leave **Branch: main** → **Run workflow**.
+2. Wait a few minutes, then open the run.
+
+What it does (the run's step names say the same):
+
+- Finds the newest copy (`leadgen-backup-<date>`) of the latest successful **Nightly
+  backup** run. A green run without a copy (one started by hand while a secret was
+  missing) is skipped, and the log says so.
+- Downloads it and decrypts it with `BACKUP_PASSPHRASE`, on GitHub's machine for this
+  run only.
+- Restores it, exactly as in B above, into an empty throwaway Postgres 16 database that
+  exists only for this run: `python -m leadgen restore <copy>` (changes nothing), then the
+  same with `--apply`.
+- Counts saved leads, Yes and No marks, calls and searches three ways: what the copy says
+  it holds, the restored throwaway database, and the live database now
+  (`BACKUP_DATABASE_URL`, read in a read-only transaction; nothing is written to it).
+
+The repository is public, and so are its run logs: the run prints only those counts,
+the copy's name and when it was made, never a row, the passphrase or a connection
+string. If the restore fails it prints only the kind of error (its full text can quote
+a row; run B on your own computer to read it). The decrypted copy is deleted at the end
+and never kept as an artifact.
+
+**A pass:** every step has a green tick, the step "Compare the counts" ends with a table
+and "Pass: the copy restored in full into an empty database.", and the run's
+**Summary** page shows the same table. For example (made-up numbers):
+
+```
+              in the copy   restored   live now
+saved leads         1,204      1,204      1,210
+marked yes             88         88         90
+marked no              61         61         61
+calls                 240        240        247
+searches               34         34         35
+```
+
+"restored" must equal "in the copy". "live now" is usually the same or a little higher
+(work done since the copy was made at about 3 AM). If it is lower, the run warns: rows
+were removed since the copy (`merge-sites --apply` or `out-of-area --remove`), or
+something was lost; look into it.
+
+**A fail** (red), and what to do:
+
+- "No successful Nightly backup run has a copy to restore": run **Nightly backup** →
+  **Run workflow** first, then this again.
+- "The copy could not be decrypted with BACKUP_PASSPHRASE": the secret isn't the
+  passphrase the copy was made with. Set it again from the password manager (owner
+  action 4).
+- "The restore failed (…)" or "The restored copy holds fewer rows than the copy says it
+  does": the copy doesn't restore as written. Download it, run B and C on your own
+  computer against a new database to see why, and tell the developer.
+- "The rehearsal needs the repository secret(s) …": add them as in owner action 4.
+- The warning "The live database could not be counted": the restore was still checked
+  against the copy; check `BACKUP_DATABASE_URL` (the nightly backup uses it too).
+
+**After each run**, add a row to the table below: the date; what was restored (the copy's
+name, shown in the step "Find the newest nightly copy", and a link to the run); and the
+result (pass or fail, with the in the copy / restored / live now counts of saved leads,
+marks, calls and searches from the run's **Summary**). To also see the restored data in
+the site (C), restore the same copy on your own computer and run the site on it.
+
+**Rehearsals** (write each one here: date, the copy restored with the run's link, and
+the result with its counts):
 
 | Date | What was restored | Result |
 |---|---|---|
 | 2026-10-03 | By the developer, on a copy with test data: a SQLite database (6 leads, 2 marks, 2 calls, 1 search) backed up, restored into an empty Postgres 16 database, and the site started on it | The same counts on Leads, Calls, Stats and the search history as the original; every row identical (also checked by `tests/test_backup.py`, Postgres → SQLite → Postgres) |
-| Open | The live data: a nightly or on-request copy restored into a new Neon branch or a SQLite file on the owner's computer (B, then C) | Owner action 6 under [Owner actions still open](#owner-actions-still-open) |
+| Open | The live data: the newest nightly copy, by **Actions** → **Restore rehearsal** ([Restore rehearsal](#restore-rehearsal)) | Owner action 6 under [Owner actions still open](#owner-actions-still-open) |
 
 ## Login and the free plan
 
@@ -640,34 +717,47 @@ starts it again and waits 20 to 60 seconds. While it waits, the Leads page says
 "Starting up… The Lead Finder sleeps when nobody has used it for a while, and the first
 visit can take up to a minute to wake it. Your leads appear here by themselves." (after
 45 seconds it adds "Still starting. If nothing appears within two minutes, reload the
-page."), and the list appears by itself. Three things keep that from happening from 6 AM
-to 9 PM Utah time:
+page."), and the list appears by itself. Three things keep that from happening during
+the working day:
 
-1. **An outside pinger** (the one that counts; [owner action 5](#owner-actions-still-open)).
-   A free [cron-job.org](https://cron-job.org) job opens
-   `https://compactor-lead-finder.onrender.com/healthz` every 5 minutes from 5 AM to
-   9 PM Utah time (`/healthz` needs no login and holds no data). Steps:
+1. **An outside pinger** (the one that counts; [owner action 5](#owner-actions-still-open),
+   **set up 2026-10-05**). A free [cron-job.org](https://cron-job.org) job opens
+   `https://compactor-lead-finder.onrender.com/healthz` every 10 minutes on weekdays
+   during working hours, Utah time (`/healthz` needs no login and holds no data). It
+   sends two headers, `User-Agent: curl/8.0` and `Accept: application/json`: Render
+   answers a sleeping site's visitor that looks like a web browser with its own
+   "loading" page, which does not wake the site, and cron-job.org looks like a browser
+   unless told otherwise. Without the headers the site keeps sleeping, and the job's
+   **History** may show the first ping after a sleep as failed with "Output too large"
+   (that loading page). Steps, to set it up again or check it:
    1. Open https://console.cron-job.org/signup, sign up (free) with the owner's email
       and confirm the email it sends.
-   2. Log in at https://console.cron-job.org → **Cronjobs** → **Create cronjob**.
+   2. Log in at https://console.cron-job.org → **Cronjobs** → **Create cronjob** (or
+      open the existing `Lead Finder keep-awake` job → **Edit**).
    3. **Title** `Lead Finder keep-awake`; **URL**
       `https://compactor-lead-finder.onrender.com/healthz`; **Enable job** on.
-   4. **Execution schedule** → **Custom**: every day of the month, every day of the
-      week, every month; **Hours** 5 to 20 (tick 5, 6, 7 … 20); **Minutes** 0, 5, 10 …
-      55. **Time zone** (on the **Advanced** tab of the same page): `America/Denver`,
-      which follows Utah's summer and winter time.
-   5. **Notifications**: tick **execution of the cronjob fails**, so you get an email
+   4. **Execution schedule** → **Custom**: every day of the month, every month; **Days
+      of the week** Monday to Friday; **Hours** the team's working hours, starting an
+      hour before the first person starts (tick each hour); **Minutes** 0, 10, 20, 30,
+      40, 50.
+   5. **Advanced** tab of the same page:
+      - **Time zone** `America/Denver` (follows Utah's summer and winter time).
+      - **Headers** → add `User-Agent` with the value `curl/8.0`, then `Accept` with the
+        value `application/json`.
+      - **Timeout**: the largest offered (30 seconds on the free plan). The first ping
+        of the day may time out while the site wakes; the one 10 minutes later finds it
+        awake.
+   6. **Notifications**: tick **execution of the cronjob fails**, so you get an email
       when the site doesn't answer.
-   6. **Advanced** → **Timeout**: the largest offered (30 seconds on the free plan). The
-      5 AM ping may time out while the site wakes; the one 5 minutes later finds it awake.
-   7. **Create** (or **Save**). Wait 10 minutes and open the job's **History**: a line
-      every 5 minutes, each **200 OK**.
+   7. **Create** (or **Save**). Wait 20 minutes and open the job's **History**: a line
+      every 10 minutes, each **200 OK**. A first line "Output too large" right after a
+      sleep means the two headers are missing (step 5).
 
-   UptimeRobot works too (https://uptimerobot.com → **Register** → **New monitor** →
-   **HTTP(s)**, the same URL, **Monitoring interval** 5 minutes, your email as the alert
-   contact → **Create monitor**), but its free plan can't skip the night: the site then
-   runs all month, about 744 hours, which fits Render's 750 free hours a month only while
-   it is the only free service on the Render account. Prefer cron-job.org.
+   Nothing pings the site on weekends or at night, on purpose: a visit then waits for
+   the site to wake, and a weekend visit after 6:20 AM is listed under **Recent
+   problems** as "The site had gone to sleep" (expected; the site's own check, 3 below,
+   doesn't know about weekends). UptimeRobot's free plan can't send these headers, so
+   use cron-job.org.
 2. **The GitHub job, as a backup** (`.github/workflows/keep-awake.yml`). GitHub starts
    scheduled jobs late and skips many (from 2026-09-30 to 2026-10-03 it ran this one
    every 3 to 5 hours instead of every 10 minutes), so it can't be the only pinger. It is
@@ -688,7 +778,7 @@ to 9 PM Utah time:
    database and reads the saved list once, in the background, so the first page doesn't
    wait for either.
 
-**Check it is working** (any day, after 6 AM):
+**Check it is working** (on a weekday, once the pinger's hours have begun):
 
 - `curl -s https://compactor-lead-finder.onrender.com/healthz` prints `"ok": true` and
   `"up_since"`, the Utah time this start of the site began. The same `up_since` at 7 AM

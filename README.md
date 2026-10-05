@@ -26,9 +26,9 @@ and AARCO Compactor's own listing is flagged too.
 | Save a verified phone or contact | **Leads** → **Add verified phone or contact** under the business's phone | [Sales guide](docs/sales-guide.md#save-a-verified-phone-or-contact) |
 | See the area and every business on a map | **Map** → tap a pin → **Open on the Leads page** | [Sales guide](docs/sales-guide.md#see-the-businesses-on-the-map) |
 | Download the list | **Leads** → **Download Excel** / **Download CSV** | [Sales guide](docs/sales-guide.md#download-the-list) |
-| Keep the site awake while the team works | An outside pinger (cron-job.org) opens `/healthz` every 5 minutes, 5 AM to 9 PM Utah time (an owner step); the site says under **Recent problems** when it slept anyway | [Runbook](docs/operator-runbook.md#keep-the-site-awake) |
+| Keep the site awake while the team works | An outside pinger (cron-job.org, set up 2026-10-05) opens `/healthz` every 10 minutes on weekdays in Utah working hours; the site says under **Recent problems** when it slept anyway | [Runbook](docs/operator-runbook.md#keep-the-site-awake) |
 | Undo a bad deploy | Render → the service → **Events** → last good deploy → **Rollback** | [Runbook](docs/operator-runbook.md#logs-and-rolling-back-a-bad-deploy) |
-| Back up or restore the data | `python -m leadgen backup`; `python -m leadgen restore <copy>` lists, `--apply` adds (never overwrites) | [Runbook](docs/operator-runbook.md#backups-and-restoring) |
+| Back up or restore the data | `python -m leadgen backup`; `python -m leadgen restore <copy>` lists, `--apply` adds (never overwrites); GitHub **Actions** → **Restore rehearsal** proves the newest nightly copy restores | [Runbook](docs/operator-runbook.md#backups-and-restoring) |
 | Run it on your computer | Python 3.11 or newer, then the [quick start](#quick-start) | [Developer overview](docs/developer-overview.md) |
 
 **Emergency stop, in full:** on the site, **Find leads** → **For the site administrator**
@@ -286,11 +286,14 @@ runbook's [Owner actions still open](docs/operator-runbook.md#owner-actions-stil
 
 1. Set `LEADGEN_SUPPORT_CONTACT` in Render, so the login page names a real contact
    (until then each start of the site logs that it is not set).
-2. Delete the old branches `wip-yelp-cap-and-baler-marks`, `runbook-owner-steps-done`
-   and `claude-staging` on GitHub (nothing on them is missing from `main`).
-3. Set up the outside keep-awake pinger (a free cron-job.org job that opens `/healthz`
-   every 5 minutes in Utah working hours).
-4. Rehearse a restore of the live data once.
+2. Delete the old branches `wip-yelp-cap-and-baler-marks` and `runbook-owner-steps-done`
+   on GitHub (nothing on them is missing from `main`). `claude-staging` stays: it is
+   the staging route through CI to the protected `main`.
+3. Rehearse a restore of the live data once (GitHub **Actions** → **Restore rehearsal**
+   → **Run workflow**).
+
+The keep-awake pinger (cron-job.org) was set up on 2026-10-05; confirm it after its
+first full working day (runbook owner action 5).
 
 ---
 

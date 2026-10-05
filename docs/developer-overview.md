@@ -17,6 +17,10 @@ flowchart LR
   S --> L["Leads, Calls, Stats, downloads<br/>web/leads.py + static/*.js"]
   L -->|"Yes / No, Just called"| K[("marks.py, calls.py")]
   K --> L
+  S --> A["GET /map-data<br/>web/mapping.py + area_map.py"]
+  K --> A
+  A --> MP["Map page<br/>static/map.js (Leaflet)"]
+  T["OpenStreetMap tiles<br/>tile.openstreetmap.org"] -->|"loaded by each browser"| MP
 ```
 
 In words: the Find leads page claims the day's search (`daily.py`) and runs
@@ -27,7 +31,14 @@ within the radius, merges duplicates (`dedupe.py`), scores each business
 into the one saved list, one row per business. The Leads, Calls and Stats pages
 read the saved list (`/leads`, filtered, sorted and paged by the server) with the
 marks and calls added; Yes / No and Just called write to their own tables and
-never touch the saved row. Problems go to `alerts.py`.
+never touch the saved row. The Map page (`leadgen/static/map.js`) asks
+`/map-data` (`leadgen/web/mapping.py`), which reads the same saved list with each
+lead's mark and latest call, and the latest search of AARCO's area; `leadgen/area_map.py`
+draws the coverage from them (AARCO's 30-mile circle, the nine search areas shaded by
+how that search covered them) and a pin for every saved lead. The street map behind it
+is OpenStreetMap tiles that each browser loads straight from tile.openstreetmap.org
+(`TILES` in `map.js`; Leaflet is served from `leadgen/static/vendor/leaflet/`), never
+through the server. Problems go to `alerts.py`.
 
 ## The search, step by step
 
@@ -207,9 +218,12 @@ but never the live site; branch protection on `main` (an owner setting, see
 `leadgen/` has parameter and return annotations (`strict = true` for mypy).
 
 **Sleeping and waking (`leadgen/awake.py`).** Render's free plan stops the site after 15
-idle minutes. An outside pinger (cron-job.org, an owner step in the runbook's
-[Keep the site awake](operator-runbook.md#keep-the-site-awake)) opens `/healthz` every 5
-minutes in Utah working hours; `.github/workflows/keep-awake.yml` is the backup (GitHub
+idle minutes. An outside pinger (cron-job.org, set up by the owner on 2026-10-05; the
+runbook's [Keep the site awake](operator-runbook.md#keep-the-site-awake)) opens `/healthz`
+every 10 minutes on weekdays in Utah working hours, with the headers
+`User-Agent: curl/8.0` and `Accept: application/json` (Render answers a browser-like
+request to a sleeping site with its own loading page, which doesn't wake it);
+`.github/workflows/keep-awake.yml` is the backup (GitHub
 starts scheduled jobs late, so each run pings every 5 minutes for 50 minutes). `wsgi.py`
 calls `awake.start(version)` once per process, in a `leadgen wake-up` thread:
 `check_start` records the start in the additive `site_starts` table (when, and the
@@ -253,7 +267,11 @@ python -m leadgen restore FILE    # what a copy would add back (--apply adds it)
 a running search's checkpoints and `site_starts` (`backup.SKIPPED`; its tables and their keys are read from the schema, so a
 new table is copied too), in one transaction, to gzip-compressed JSON; a restore inserts
 only the rows whose key is missing (`ON CONFLICT DO NOTHING`), never updating or deleting.
-The nightly encrypted copy is `.github/workflows/backup.yml`; the steps are in the
+The nightly encrypted copy is `.github/workflows/backup.yml` (a scheduled run with a
+backup secret missing fails, red); `.github/workflows/restore-rehearsal.yml` (started by
+hand) restores the newest nightly copy into a throwaway Postgres service container with
+`restore --apply` and compares counts only, never rows, with the copy's own and the live
+database's (read-only). The steps are in the
 [operator runbook](operator-runbook.md#backups-and-restoring).
 
 `run` warns when the place is outside AARCO's area (`config.SERVICE_AREA_MILES`).
