@@ -239,16 +239,16 @@ even after the automatic retries) saves what it found and uses up the day like a
 complete one. A source that couldn't be reached at all (Google, say) is named in the
 note beside the result.
 
-Parts of the area the free map servers missed are then filled in in the background
+Areas the free map servers missed are then filled in in the background
 for up to an hour, within that same search (not a second one). Find leads says how
 much of the area was covered in **one** status line, for example "Covered so far:
-about 6 of the 9 parts of the 30-mile area. Still filling in, in the background until
+about 6 of the 9 areas within 30 miles. Still filling in, in the background until
 about 1:36 PM: Kaysville and Centerville. The 418 businesses already found are on the
 Leads page, ready to call now; ...". It ends as "Covered: the whole 30-mile area", or
 names the towns that didn't come in today (that one is also reported under Recent
 problems and to the webhook). The search history's Details say it in one line ("Free
 map data: area covered"). No other note repeats it, and internal counts (how many
-parts were asked again) are not shown. The words are worked out from the record's
+areas were asked again) are not shown. The words are worked out from the record's
 numbers each time it is shown, so searches saved by earlier versions read the same
 way and no saved record is rewritten.
 

@@ -207,11 +207,11 @@ def _areas(done, total, note=""):
                 done, total, note=note)
 
 
-def test_progress_says_how_many_parts_of_the_map_are_done():
+def test_progress_says_how_many_areas_of_the_map_are_done():
     job = {}
     progress = web._Progress(job)
     progress(_areas(3, 9))
-    assert job["message"] == "Searching the free map data: 3 of 9 parts of the area done…"
+    assert job["message"] == "Searching the free map data: 3 of 9 areas done…"
     # Yelp and Google made no calls: the bar is locate, the map data, merge and save.
     assert job["step"] == 2 and job["pct"] == pytest.approx(100 * (3 + 36 * 3 / 9) / 53, abs=0.1)
 
@@ -228,8 +228,8 @@ def test_map_progress_never_counts_backwards():
         seen.append(job["message"])
     done = [int(m.split(": ")[1].split(" of ")[0]) for m in seen]
     assert done == sorted(done) == [8, 8, 9, 10, 10]
-    assert seen[0] == "Searching the free map data: 8 of 17 parts of the area done…"
-    assert seen[-1] == ("Searching the free map data: 10 of 17 parts of the area done (some parts are being "
+    assert seen[0] == "Searching the free map data: 8 of 17 areas done…"
+    assert seen[-1] == ("Searching the free map data: 10 of 17 areas done (some areas are being "
                         "asked again in smaller pieces)…")
 
 
@@ -306,9 +306,9 @@ def test_the_area_count_stays_on_the_page_until_the_map_step_ends(monkeypatch):
         shown.append(job["message"])
         bar.append(progress.pct())
     osm.search(40.76, -111.89, 30, progress=follow)
-    assert all(re.search(r": \d+ of 9 parts of the area done", m) for m in shown), shown
-    assert any("asking again for the parts the busy servers missed" in m for m in shown)
-    assert shown[-1].startswith("Searching the free map data: 9 of 9 parts of the area done")
+    assert all(re.search(r": \d+ of 9 areas done", m) for m in shown), shown
+    assert any("asking again for the areas the busy servers missed" in m for m in shown)
+    assert shown[-1].startswith("Searching the free map data: 9 of 9 areas done")
     # The bar starts in single digits and follows the count.
     assert bar[0] < 10 and bar == sorted(bar)
     done = [int(m.split(": ")[1].split(" of ")[0]) for m in shown]
@@ -337,7 +337,7 @@ def test_the_map_data_alone_starts_the_bar_near_zero(monkeypatch):
                 break
             time.sleep(0.02)
         assert body["skipped"] == [1] and body["pct"] < 10
-        assert body["message"] == "Searching the free map data: 0 of 9 parts of the area done…"
+        assert body["message"] == "Searching the free map data: 0 of 9 areas done…"
     finally:
         gate.set()
     _wait(client, job)

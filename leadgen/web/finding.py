@@ -150,8 +150,8 @@ def plain_details(details: dict[str, object] | None, coverage: dict[str, Any] | 
 # How each paid source names one of its calls, on the page as in the search's details.
 _CALLS = {"google": ("Google", "lookups"), "yelp": ("Yelp", "calls")}
 # What the map step is doing besides counting its areas (progress.Step's note).
-_MAP_NOTES = {"split": " (some parts are being asked again in smaller pieces)",
-              "retry": " (asking again for the parts the busy servers missed)"}
+_MAP_NOTES = {"split": " (some areas are being asked again in smaller pieces)",
+              "retry": " (asking again for the areas the busy servers missed)"}
 
 
 def plain_progress(msg: str) -> str:
@@ -168,7 +168,7 @@ def plain_progress(msg: str) -> str:
             return f"Searching {name}"
         return f"Searching {name} for {msg.note} ({msg.done:,} of up to {msg.total:,} {calls})"
     if msg.step == MAP:
-        count = (f": {msg.done:,} of {msg.total:,} parts of the area done" if msg.total > 1 else "")
+        count = (f": {msg.done:,} of {msg.total:,} areas done" if msg.total > 1 else "")
         if msg.note == "stopped":
             return ("Stopping: the administrator paused searching. Keeping what was already "
                     f"found{f' ({count[2:]})' if count else ''}…")

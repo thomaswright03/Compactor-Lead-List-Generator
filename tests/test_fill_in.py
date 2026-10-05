@@ -38,7 +38,8 @@ def _servers(fail_times):
 
 
 # What a note would say if it repeated the coverage status (it never does).
-_COVERAGE_WORDS = re.compile(r"part of the area|map areas|parts? of the|areas? (?:searched|asked)|asked again")
+_COVERAGE_WORDS = re.compile(r"part of the area|map areas|parts? of the|of the \d+ areas|areas? (?:searched|asked)"
+                             r"|asked again")
 
 
 def _no_coverage(notes):
@@ -78,12 +79,12 @@ def test_missing_map_areas_are_filled_in_later_and_the_search_ends_complete(fill
     assert _no_coverage(record["warnings"])
     coverage = record["coverage"]
     assert coverage["state"] == "complete" and not coverage["filling"] and coverage["found"] == found
-    assert coverage["text"] == ("Covered: the whole 30-mile area. The last parts came in later, in the "
+    assert coverage["text"] == ("Covered: the whole 30-mile area. The last areas came in later, in the "
                                 f"background ({found} more businesses, {found} new). Everything found is on "
                                 "the Leads page, ready to call.")
     details = dict(record["details"])
     assert details["Free map data: area covered"] == \
-        f"All 9 parts ({found} businesses came in later, in the background)"
+        f"All 9 areas ({found} businesses came in later, in the background)"
     # Internal counts (how many parts were asked again) are never shown.
     assert not any("asked again" in str(label) or "filled in later" in str(label) for label in details)
     assert history["current"]["coverage"] == coverage
@@ -112,14 +113,14 @@ def test_areas_that_never_answer_are_reported_after_the_hour(filling, monkeypatc
     # Said once, in one set of words: how much was covered, which towns are missing, and
     # that what was found can be called now.
     assert record["coverage"]["text"] == (
-        f"Covered: about 6 of the 9 parts of the 30-mile area. {where} didn't come in today, so businesses "
+        f"Covered: about 6 of the 9 areas within 30 miles. {where} didn't come in today, so businesses "
         "there are missing until the next search. The 6 businesses already found are on the Leads page, "
         "ready to call now.")
     assert _no_coverage(record["warnings"])
-    assert dict(record["details"])["Free map data: area covered"] == f"About 6 of 9 parts; {where} didn't come in"
-    # The administrator's problem list says it too (in the same words: parts, not areas).
+    assert dict(record["details"])["Free map data: area covered"] == f"About 6 of 9 areas; {where} didn't come in"
+    # The administrator's problem list says it too (in the same words: areas, as on the Map page).
     problems = [p for p in alerts_sent if "stayed incomplete" in p]
-    assert problems == [f"Today's search stayed incomplete: 3 of the 9 parts of the area (around {where}) "
+    assert problems == [f"Today's search stayed incomplete: 3 of the 9 areas (around {where}) "
                         "never came in from the free map data today, so businesses there are missing until "
                         "the next search."]
 
@@ -141,11 +142,11 @@ def test_pausing_searches_stops_the_filling_in(filling, monkeypatch):
     where = record["fill"]["where"]
     assert re.match(r"Centerville|Kaysville", where)
     assert record["coverage"]["text"] == (
-        "Covered: about 6 of the 9 parts of the 30-mile area. Filling in stopped because searching was paused, "
+        "Covered: about 6 of the 9 areas within 30 miles. Filling in stopped because searching was paused, "
         f"so these weren't searched today: {where}. The 6 businesses already found are on the Leads page, "
         "ready to call now.")
     assert dict(record["details"])["Free map data: area covered"] == \
-        f"About 6 of 9 parts; not searched: {where} (searching was paused)"
+        f"About 6 of 9 areas; not searched: {where} (searching was paused)"
     text = " ".join([record["coverage"]["text"], *record["warnings"], *map(str, dict(record["details"]).values())])
     assert "didn't come in" not in text and "never" not in text
 
@@ -158,7 +159,7 @@ def test_a_filling_in_cut_short_by_a_restart_reads_as_interrupted():
     record = daily.history()["current"]
     assert record["fill"]["state"] == "interrupted" and record["fill"]["until_text"]
     assert fillin.coverage(record)["text"].startswith(
-        "Covered: about 6 of the 9 parts of the area. A server restart cut the filling in short, so businesses in "
+        "Covered: about 6 of the 9 areas. A server restart cut the filling in short, so businesses in "
         "the rest of the area are missing until the next search.")
     daily.finish(day, {"fill": {**record["fill"], "state": "filling", "until": time.time() + 60}})
     assert daily.history()["current"]["fill"]["state"] == "filling"
@@ -234,7 +235,7 @@ def test_pausing_searching_ends_a_fill_in_within_seconds(filling, monkeypatch, h
     assert _wait(client, job)["state"] == "done"
     current = client.get("/searches").get_json()["current"]
     assert current["fill"]["state"] == "filling" and current["coverage"]["filling"]
-    assert re.match(r"Covered so far: about 6 of the 9 parts of the 30-mile area\. Still filling in, in the "
+    assert re.match(r"Covered so far: about 6 of the 9 areas within 30 miles\. Still filling in, in the "
                     r"background until about \d+:\d\d [AP]M: (Centerville|Kaysville)", current["coverage"]["text"])
     assert current["coverage"]["text"].endswith("The 6 businesses already found are on the Leads page, ready to "
                                                 "call now; new ones from the rest of the area will appear there "
@@ -297,7 +298,7 @@ def test_a_complete_filling_in_reads_as_the_whole_area():
     assert record["warnings"] == []
     assert record["coverage"]["text"].startswith("Covered: the whole 30-mile area.")
     details = dict(record["details"])
-    assert details["Free map data: area covered"] == "All 9 parts (559 businesses came in later, in the background)"
+    assert details["Free map data: area covered"] == "All 9 areas (559 businesses came in later, in the background)"
     assert not any("asked again" in label or "filled in later" in label for label in details)
     # The stored record is unchanged (the page's words are worked out each time).
     assert _partial_record()["details"]["osm areas asked again"] == "7 (some never answered)"
@@ -306,8 +307,8 @@ def test_a_complete_filling_in_reads_as_the_whole_area():
 def test_a_partly_filled_in_search_names_one_list_of_missing_towns():
     where = "Kaysville, Farmington, Centerville and more"
     record = _page(_partial_record(state="gave_up", left=6, found=120, new=118, where=where))
-    assert dict(record["details"])["Free map data: area covered"] == f"About 3 of 9 parts; {where} didn't come in"
-    assert record["coverage"]["text"].startswith(f"Covered: about 3 of the 9 parts of the 30-mile area. {where} "
+    assert dict(record["details"])["Free map data: area covered"] == f"About 3 of 9 areas; {where} didn't come in"
+    assert record["coverage"]["text"].startswith(f"Covered: about 3 of the 9 areas within 30 miles. {where} "
                                                  "didn't come in today")
     assert "Salt Lake City" not in " ".join([record["coverage"]["text"], *record["warnings"]])
 
@@ -332,10 +333,29 @@ def test_a_search_that_never_filled_in_names_the_towns_its_reason_named():
     record = _page(stored)
     assert record["coverage"]["state"] == "partial"
     assert record["coverage"]["text"].startswith(
-        "Covered: about 2 of the 9 parts of the 30-mile area. Salt Lake City, West Valley City, Herriman, Draper "
+        "Covered: about 2 of the 9 areas within 30 miles. Salt Lake City, West Valley City, Herriman, Draper "
         "and more didn't come in today")
-    assert record["reason"].startswith("The free map data covered only about 2 of the 9 parts of the area "
+    assert record["reason"].startswith("The free map data covered only about 2 of the 9 areas "
                                        "(missing: Salt Lake City, West Valley City, Herriman, Draper and more)")
+
+
+def test_a_record_that_called_the_areas_parts_reads_in_the_pages_words():
+    """The nine pieces of the area are "areas" on every page; a record whose saved words
+    called them "parts" is still read (its figure and the towns it named), never rewritten."""
+    stored = _partial_record()
+    del stored["fill"]
+    stored["details"]["osm areas searched"] = "about 2 of 9 parts"
+    stored["reason"] = stored["reason"].replace("of 9 areas searched", "of 9 parts searched")
+    record = _page(stored)
+    assert record["coverage"]["text"].startswith(
+        "Covered: about 2 of the 9 areas within 30 miles. Salt Lake City, West Valley City, Herriman, Draper "
+        "and more didn't come in today")
+    assert dict(record["details"])["Free map data: area covered"].startswith("About 2 of 9 areas; ")
+    assert record["reason"].startswith("The free map data covered only about 2 of the 9 areas "
+                                       "(missing: Salt Lake City, West Valley City, Herriman, Draper and more)")
+    said = " ".join([record["coverage"]["text"], record["reason"], *map(str, dict(record["details"]).values())])
+    assert "parts" not in said
+    assert stored["details"]["osm areas searched"] == "about 2 of 9 parts"      # the record is unchanged
 
 
 def test_another_sources_problem_keeps_its_note_without_the_map_clause():

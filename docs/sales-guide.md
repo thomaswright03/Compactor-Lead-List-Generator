@@ -44,7 +44,7 @@ only looks around and never changes anything.
    distance: **Search there anyway** uses the day's search there; **Go back and edit**
    spends nothing.
 4. The progress bar shows each step; during the free map data its percentage moves
-   with the parts of the area done ("3 of 9 parts of the area done"). The map data is asked for
+   with the areas done ("3 of 9 areas done"). The map data is asked for
    the area around the search's centre first, so the nearest businesses come in
    first. A search takes a few
    minutes; you can use the other pages meanwhile. The search history shows it as
@@ -62,11 +62,11 @@ Good to know:
   earlier search: businesses found then count as updated, not new, so "0 new"
   means nothing new since then, not that the search didn't look.
 - When the free map servers are busy, the search asks again by itself for the
-  parts they missed (the progress bar says so), so you don't need to do anything.
-  It can then take up to about 7 minutes. Parts still missing after that are filled
+  areas they missed (the progress bar says so), so you don't need to do anything.
+  It can then take up to about 7 minutes. Areas still missing after that are filled
   in in the background for up to an hour. One line above the search history says how
-  it stands, for example: "Covered so far: about 6 of the 9 parts of the 30-mile
-  area. Still filling in, in the background until about 1:36 PM: Kaysville,
+  it stands, for example: "Covered so far: about 6 of the 9 areas within 30
+  miles. Still filling in, in the background until about 1:36 PM: Kaysville,
   Centerville and Morgan. The 418 businesses already found are on the Leads page,
   ready to call now; new ones from the rest of the area will appear there on their
   own." **You can start calling straight away**: nothing has gone wrong, and the new
@@ -198,8 +198,8 @@ Open **Map** in the sidebar (in the bar at the top on a phone).
 - **AARCO's pin** (the dark teardrop with a star, labelled AARCO) is the shop at 876
   Fortune Rd. The **circle** around it is AARCO's 30-mile area: the day's search is
   meant for it.
-- The **search areas** are the nine parts a search looks through one at a time (the "3
-  of 9 parts of the area done" while it runs), each named after its biggest town. Their edges show
+- The **search areas** are the nine areas a search looks through one at a time (the "3
+  of 9 areas done" while it runs), each named after its biggest town. Their edges show
   how the latest search of AARCO's area went: a thin solid edge where it was searched,
   a dashed, shaded edge where the free map data didn't come in for all or part of it (or it
   is still filling in, in the background), and a dotted edge where that isn't
