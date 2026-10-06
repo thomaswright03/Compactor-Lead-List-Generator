@@ -185,3 +185,38 @@ def test_the_finished_search_sends_counts_not_the_saved_list(monkeypatch):
     body = res.get_json()
     assert body["saved"] and body["new_leads"] == 1 and body["saved_count"] == 1501 and body["found"] == 1
     assert "leads" not in body and len(res.data) < 5000
+
+
+def test_after_an_ended_login_the_login_page_says_so_and_goes_back_to_the_same_view(monkeypatch):
+    """core.js sends a page whose login ended to /login?ended=1&next=<its path and #address>:
+    the page says what may not have been saved, and logging in goes back there."""
+    monkeypatch.setattr(web.time, "sleep", lambda s: None)
+    client = web.create_app(password="s3cret", username="Matt").test_client()
+    page = client.get("/login?ended=1&next=%2F%23leads%3Ftab%3Dyes%26q%3Dsmith").data.decode()
+    assert web.auth.ENDED.replace("'", "&#39;") in page
+    assert '<input type="hidden" name="next" value="/#leads?tab=yes&amp;q=smith">' in page
+    assert '<input type="hidden" name="ended" value="1">' in page
+    assert 'id="ended"' not in client.get("/login").data.decode()           # an ordinary visit
+    # A wrong password keeps both.
+    form = {"username": "Matt", "password": "no", "next": "/#leads?tab=yes&q=smith", "ended": "1"}
+    wrong = client.post("/login", data=form).data.decode()
+    assert 'value="/#leads?tab=yes&amp;q=smith"' in wrong and 'id="ended"' in wrong
+    res = client.post("/login", data={**form, "password": "s3cret"})
+    assert res.status_code == 302 and res.headers["Location"] == "/#leads?tab=yes&q=smith"
+    # Already logged in: straight there.
+    again = client.get("/login?next=%2F%23calls")
+    assert again.status_code == 302 and again.headers["Location"] == "/#calls"
+
+
+def test_logging_in_never_sends_anyone_to_another_site(monkeypatch):
+    monkeypatch.setattr(web.time, "sleep", lambda s: None)
+    for target in ("https://evil.example/", "//evil.example/x", "/\\evil.example", "\\\\evil.example",
+                   "javascript:alert(1)", "evil.example", "/login", "/logout", "/x\r\nSet-Cookie: a=b",
+                   "http:/evil.example", "/" + "a" * 3000):
+        assert web.auth.return_to(target) == "", target
+        client = web.create_app(password="s3cret", username="Matt").test_client()
+        assert 'name="next"' not in client.get("/login", query_string={"next": target}).data.decode()
+        res = client.post("/login", data={"username": "Matt", "password": "s3cret", "next": target})
+        assert res.status_code == 302 and res.headers["Location"] == "/", target
+    for target in ("/", "/#leads", "/#leads?tab=competitors&tier=A", "/#find"):
+        assert web.auth.return_to(target) == target

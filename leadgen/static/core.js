@@ -4,7 +4,7 @@
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, TIMING, S, el, link, phoneLink,
    button, api, post, save, SLOW_SAVE, fmtTime, serverNow, leftOf, problem, loadingCue, themeChoice, applyTheme, myName,
-   withName, byWho, parseHash, readLeadView, route, writeHash */
+   withName, byWho, parseHash, readLeadView, route, writeHash, loggedOut */
 // An element of the page by its id: an input, a dialog, a button... (typed `any`, as the page's
 // ids name every kind; the type check still catches a misspelt function or variable).
 /** @type {(id: string) => any} */
@@ -96,7 +96,10 @@ async function api(path, opts) {
     throw Object.assign(new Error("Can't reach the Lead Finder. Check your internet connection and try again."),
                         { status: 0 });
   }
-  if (res.status === 401) { location.href = "/login"; throw new Error("Logged out"); }
+  if (res.status === 401) {
+    loggedOut(lostAction(path, opts));
+    throw Object.assign(new Error("You were logged out."), { status: 401 });
+  }
   const body = await res.json().catch(() => ({}));
   if (typeof body.now === "number") S.skew = body.now - Date.now() / 1000;
   if (!res.ok) {
@@ -105,8 +108,53 @@ async function api(path, opts) {
   }
   return body;
 }
+/* The login ended (the site answered "logged out", 401): the login page says so, and what
+   wasn't saved ("Your Yes for Target wasn't saved."), and after logging in comes back to the
+   same page and tab (its #address; web/auth.py return_to). The words go to the login page in
+   this tab's sessionStorage, never in its address. Notes typed in the call box stay as the
+   business's draft (calls.js), so nothing typed is lost. */
+const LOGGED_OUT_KEY = "logged-out";
+let leaving = false;
+/** @param {string} note what wasn't saved, or "" (a list that couldn't load: nothing was lost) */
+function loggedOut(note) {
+  try {
+    // A click that wasn't saved is said over a list that couldn't refresh at the same moment.
+    if (note || !leaving) window.sessionStorage.setItem(LOGGED_OUT_KEY, JSON.stringify({ note, at: Date.now() }));
+  } catch (e) { /* the login page says it more generally */ }
+  if (leaving) return;
+  leaving = true;
+  location.assign(`/login?ended=1&next=${encodeURIComponent(location.pathname + location.hash)}`);
+}
+try { window.sessionStorage.removeItem(LOGGED_OUT_KEY); } catch (e) { /* nothing kept */ }
+// What a request the login ended on was doing, in the words the login page shows; "" for one
+// that only reads (a list, the stats), which loses nothing.
+/** @param {string} path @param {RequestInit} [opts] @returns {string} */
+function lostAction(path, opts) {
+  if (!opts || !opts.method || opts.method.toUpperCase() === "GET") return "";
+  /** @type {Record<string, any>} */
+  let data = {};
+  try { data = typeof opts.body === "string" ? JSON.parse(opts.body) : {}; } catch (e) { /* not JSON */ }
+  // The business it was about: by its key (a Yes / No, a call, a contact) or its undo's id.
+  const lead = [...S.leads, ...S.called, ...S.recent].find((l) => (data.key && l.key === data.key)
+    || (data.id && ((l.undo_mark && l.undo_mark.id === data.id) || (l.undo_call && l.undo_call.id === data.id))));
+  /** @type {(word: string) => string} */
+  const of = (word) => lead ? ` ${word} ${lead.name}` : "";
+  const answer = data.value === "yes" ? "Yes" : data.value === "no" ? "No" : "answer";
+  /** @type {Record<string, string>} */
+  const said = {
+    "/mark": `Your ${answer}${of("for")} wasn't saved.`,
+    "/mark/undo": `Your Undo${of("for")} wasn't saved.`,
+    "/calls": `Your call${of("to")} wasn't saved. Your notes are kept: open Just called on it again to save them.`,
+    "/calls/undo": `Removing the call${of("to")} wasn't saved.`,
+    "/contact": `The verified contact${of("for")} wasn't saved.`,
+    "/search": "Your search didn't start, so today's search wasn't used.",
+    "/switches": "The switch wasn't changed.",
+    "/admin/unlock": "The administrator's section wasn't unlocked.",
+  };
+  return said[path.split("?")[0]] || "What you did last wasn't saved.";
+}
 /** @type {(path: string, data: unknown) => Promise<any>} */
-const post = (path, data) => api(path, { method: "POST", headers: { "Content-Type": "application/json" },
+const post =(path, data) => api(path, { method: "POST", headers: { "Content-Type": "application/json" },
                                         body: JSON.stringify(data) });
 // A save (a Yes / No, a call, a verified contact, an undo): post() that never leaves the person
 // wondering. After TIMING.saveSlow it calls `slow` (the caller says, where the person is looking,

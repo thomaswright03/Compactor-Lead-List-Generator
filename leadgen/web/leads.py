@@ -17,6 +17,7 @@ from ..export import saved_list_info, to_csv_bytes, to_xlsx_bytes
 from ..localtime import date_time_text
 from ..models import Lead
 from ..pipeline import EXEMPT_TYPES
+from ..scoring import OWN_TYPE
 from .auth import admin_open
 from .common import (
     MARKS_DOWN,
@@ -49,10 +50,13 @@ bp = Blueprint("leads", __name__)
 # flagged) but is no longer offered for checking.
 VIEWS = ("unchecked", "yes", "no", "competitors", "closed", "all", "called")
 # Column sorts: the value to sort by. Equal values keep the saved order (best first).
+# "contact" (the Contact column): the businesses that can be phoned first, a number the
+# team verified before the listing's own, then those with no phone.
 SORTS: dict[str, Callable[[Lead], Any]] = {
     "score": lambda l: l.score,
     "name": lambda l: l.name.lower(),
     "city": lambda l: (places.town_of(l) or "~").lower(),
+    "contact": lambda l: 0 if l.verified_phone.strip() else 1 if l.phone.strip() else 2,
     "miles": lambda l: 1e9 if l.distance_miles is None else l.distance_miles,
     "called": lambda l: l.last_call_at or 0,
 }
@@ -86,6 +90,12 @@ def views_of(lead: Lead) -> list[str]:
     return tabs
 
 
+def tier_of(lead: Lead) -> str:
+    """The tier the page shows and filters by: AARCO's own listings (its parent company's
+    too) have none, as they are never prospects."""
+    return "" if lead.lead_type == OWN_TYPE else lead.tier
+
+
 def has_phone(lead: Lead) -> bool:
     """A number to call: the listing's own, or one the team verified."""
     return bool(lead.phone.strip() or lead.verified_phone.strip())
@@ -105,7 +115,7 @@ def matches(lead: Lead, q: str, tier: str, phone: bool = False, more: str = "",
     category, address, type, flags or verified contact name (or in `more`: on the Calls
     page, its calls' summaries, outcomes and callers), in any order and any case (q is
     lowercased). text: the lead's filter_text, when already known."""
-    if tier and lead.tier != tier:
+    if tier and tier_of(lead) != tier:
         return False
     if phone and not has_phone(lead):
         return False
@@ -236,7 +246,7 @@ class Listing:
         value = SORTS[sort]
         if not desc:
             return lambda l: (value(l), place[l.uid])
-        if sort in ("score", "miles", "called"):              # numbers: descending is the negated value
+        if sort in ("score", "miles", "called", "contact"):   # numbers: descending is the negated value
             return lambda l: (-value(l), place[l.uid])
         return None
 
@@ -418,7 +428,7 @@ def saved_leads() -> ResponseReturnValue:
 
     def filtered(l: Lead) -> bool:
         # matches(), with each lead's filter text read once (Listing.text).
-        if (only and l.uid != only) or (outcome and l.call_outcome != outcome) or (tier and l.tier != tier):
+        if (only and l.uid != only) or (outcome and l.call_outcome != outcome) or (tier and tier_of(l) != tier):
             return False
         if phone and not has_phone(l):
             return False
@@ -577,8 +587,17 @@ def mark() -> ResponseReturnValue:
         return jsonify({"error": "Bad mark"}), 400
     if not store.person(data.get("by")):
         return jsonify({"error": NO_NAME}), 400
+    # The answer the page showed: a colleague's answer given since is never replaced unasked.
+    was = data.get("was")
+    was = was if isinstance(was, str) and was in ("", *marks.VALUES) else None
     try:
-        undo = marks.set_mark(uid, value, str(data.get("by") or ""))
+        undo = marks.set_mark(uid, value, str(data.get("by") or ""), was)
+    except marks.Changed as now:
+        word = {"yes": "Yes", "no": "No"}[now.value]
+        return jsonify({"error": f"Marked {word} by {now.by} on {date_time_text(now.at)} meanwhile, so "
+                                 "nothing was saved.",
+                        "changed": {"value": now.value, "by": now.by, "at": now.at,
+                                    "when": date_time_text(now.at)}}), 409
     except ValueError:
         return jsonify({"error": "That business isn't in the saved list. Reload the "
                                  "page."}), 404
@@ -586,7 +605,8 @@ def mark() -> ResponseReturnValue:
         log.error("Saving a mark failed", exc_info=True)
         # The page already says the answer wasn't saved; this says why and what to do.
         return jsonify({"error": db_message(exc)}), 503
-    return jsonify({"ok": True, "undo": undo, "now": time.time()})
+    at = undo["until"] - marks.UNDO_SECONDS if undo else time.time()
+    return jsonify({"ok": True, "undo": undo, "now": time.time(), "at": at, "when": date_time_text(at)})
 
 
 def _undo(fn: Callable[[str], bool], what: str) -> ResponseReturnValue:

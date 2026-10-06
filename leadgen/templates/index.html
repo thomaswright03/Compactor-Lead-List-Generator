@@ -184,7 +184,8 @@
             </select>
             <select id="sort-pick" class="cards-only" aria-label="Sort">
               <option value="score:desc">Best score first</option><option value="name:asc">Name A to Z</option>
-              <option value="city:asc">City A to Z</option><option value="miles:asc">Nearest first</option>
+              <option value="city:asc">City A to Z</option><option value="contact:asc">Phone first</option>
+              <option value="miles:asc">Nearest first</option>
             </select>
           </div>
           <label class="check phone-pick"><input type="checkbox" id="has-phone"> Has phone</label>
@@ -393,7 +394,20 @@
   </form>
 </dialog>
 
-<dialog id="switch-dlg" aria-labelledby="switch-title" aria-describedby="switch-why">
+<!-- Replacing a colleague's Yes / No: whose it is and when, first (leads.js askReplace). -->
+<dialog id="mark-dlg" aria-labelledby="mark-title" aria-describedby="mark-who mark-ask">
+  <form class="dlg" method="dialog" id="mark-form">
+    <h2 id="mark-title">Change this answer?</h2>
+    <p class="confirm-why" id="mark-who"></p>
+    <p id="mark-ask"></p>
+    <div class="dlg-actions">
+      <button type="button" class="quiet" id="mark-cancel">Cancel</button>
+      <button type="submit" id="mark-go">Change it</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="switch-dlg"aria-labelledby="switch-title" aria-describedby="switch-why">
   <form class="dlg" method="dialog" id="switch-form">
     <h2 id="switch-title"></h2>
     <p id="switch-why"></p>

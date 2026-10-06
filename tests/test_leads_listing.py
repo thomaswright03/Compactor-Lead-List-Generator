@@ -189,3 +189,30 @@ def test_rows_that_come_in_without_a_click_are_read_in_full(seeded, monkeypatch,
     # A search changes the saved rows: read in full as well.
     saved.save_search([_lead(500)], config.DEFAULT_KEYWORDS)
     assert _asked(client, "all") == _expected("all") and len(reads) == 3
+
+
+def test_aarcos_own_listing_has_no_tier_to_filter_by(seeded):
+    """AARCO's own listings (its parent company's too) are shown without a score or tier,
+    so a tier filter never picks them; a competitor keeps its tier."""
+    own = Lead(name="AARCO Compactor", lat=40.74, lon=-111.94, source="osm", source_id="own",
+               raw_categories=["building=industrial"])
+    score_lead(own, config.DEFAULT_KEYWORDS)
+    assert own.lead_type == "Own company" and own.tier
+    saved.save_search([own], config.DEFAULT_KEYWORDS)
+    client = web.create_app().test_client()
+    assert own.uid in _asked(client, "competitors")[0]
+    for view in ("competitors", "all"):
+        assert own.uid not in _asked(client, view, tier=own.tier)[0]
+        assert _asked(client, view, tier=own.tier) == _expected(view, tier=own.tier)
+    competitor = next(l for l in seeded if l.lead_type == "Competitor")
+    assert competitor.uid in _asked(client, "competitors", tier=competitor.tier)[0]
+
+
+def test_the_contact_sort_puts_the_businesses_with_a_phone_first(seeded):
+    client = web.create_app().test_client()
+    leads = {l.uid: l for l in web.load_saved()[0]}
+    rows = _asked(client, "all", sort="contact", limit=500)[0]
+    ranks = [0 if leads[u].verified_phone else 1 if leads[u].phone else 2 for u in rows]
+    assert ranks == sorted(ranks) and ranks[0] == 0 and ranks[-1] == 2
+    assert _asked(client, "all", sort="contact", desc=True, limit=500)[0][0] in {
+        u for u, r in zip(rows, ranks, strict=True) if r == 2}

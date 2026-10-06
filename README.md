@@ -8,7 +8,8 @@ AARCO Waste & Disposal.
 Competitors (**Pro Baler**, **Action Compaction**) are **flagged, never dropped**,
 and AARCO's own listings are flagged too, including those of its parent company,
 **ACE Recycling & Disposal** (its names, website and facilities, listed in
-`leadgen/config.py`): never offered as prospects, and left out of Stats.
+`leadgen/config.py`): never offered as prospects, and left out of Stats. They are
+listed under **Competitors & AARCO**, and AARCO's own show no score or tier.
 
 ## Where to look
 
@@ -146,12 +147,16 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   minutes), and **Just called** notes with six results and a Calls tab for each.
   Every Yes / No mark and call needs **Your name**: the server refuses one without it.
   Each mark and call records who made it (the name set under **Your name** in that
-  browser, asked before the first mark or call and not skippable).
+  browser, asked before the first mark or call and not skippable). Changing an answer
+  someone else gave first says whose it is and when ("Marked No by Dana on Oct 6, 2026,
+  4:21 PM") and asks; Cancel leaves it. Changing your own answer doesn't ask.
 - **A filter box** on Leads and Calls alike: several words, such as "walmart layton",
   find the rows that hold every one of them, in any order; on Calls it also looks in
   what was said on the calls, how they went and who made them, so "forklift" or a
   colleague's name finds the business. **Has phone** on Leads shows only businesses
-  that can be phoned; under Not checked, among equal scores, those come first.
+  that can be phoned; under Not checked, among equal scores, those come first. The
+  **Contact** column sorts the same way: a verified phone first, then the listing's,
+  then none (**Phone first** in the sort list on a phone).
 - **Verified phone and contact**: a salesperson who finds the right number or who to
   ask for (the facilities manager) saves it on the business with **Add verified phone
   or contact**. It is shown under the listing's own phone on Leads and Calls, with who
@@ -220,7 +225,9 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   `LEADGEN_SUPPORT_CONTACT` (a name with a phone number or email, which become
   tap-to-call and email links); until it is set it says "Ask the person who gave you
   your login, or Wright AI Solutions." Set it in Render's **Environment**, never in the
-  repository.
+  repository. When a login ends mid-task, the login page says what wasn't saved
+  ("Your Yes for Target wasn't saved.") and, after logging in, opens the same page and
+  tab again (only a path on this site is accepted as the way back).
 
 ## Quick start
 

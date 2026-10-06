@@ -46,9 +46,9 @@ def _to_lead(data: dict[str, Any]) -> Lead:
 
 # What a lead holds that isn't the listing's: its mark, calls and verified contact are
 # read from their own tables each time (marks.py, calls.py, contacts.py), never stored here.
-_NOT_STORED = ("parts", "has_baler", "mark_clicks", "last_call_at", "call_outcome", "call_notes", "call_count",
-               "earlier_notes", "earlier_notes_at", "verified_phone", "contact_name", "contact_by", "contact_at",
-               "contact_saves")
+_NOT_STORED = ("parts", "has_baler", "marked_at", "mark_clicks", "last_call_at", "call_outcome", "call_notes",
+               "call_count", "earlier_notes", "earlier_notes_at", "verified_phone", "contact_name", "contact_by",
+               "contact_at", "contact_saves")
 
 
 def _lead_json(lead: Lead) -> str:

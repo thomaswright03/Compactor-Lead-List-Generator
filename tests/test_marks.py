@@ -7,6 +7,7 @@ import pytest
 from leadgen import calls, daily, marks, saved, web
 from leadgen.dedupe import dedupe
 from leadgen.export import COLUMNS, to_csv_bytes
+from leadgen.localtime import date_time_text
 from leadgen.models import Lead
 from leadgen.pipeline import RunResult
 
@@ -188,3 +189,51 @@ def test_a_call_without_notes_keeps_the_earlier_notes(monkeypatch):
     calls.log_call(lead.uid, "Interested", "Quote sent")        # a newer note replaces it
     row = lead_json(calls.apply(saved.load())[0])
     assert row["call_notes"] == "Quote sent" and row["earlier_notes"] == ""
+
+
+def test_the_list_says_who_gave_each_answer_and_when_without_storing_it_in_the_saved_row():
+    from leadgen import store
+    a = _lead()
+    saved.save_search([a])
+    with store.connect() as db:
+        row_before = db.one("SELECT lead FROM leads WHERE uid = ?", (a.uid,))[0]
+    marks.set_mark(a.uid, "no", "Dana")
+    first = marks.apply(saved.load())[0]
+    assert first.marked_by == "Dana" and first.marked_at is not None
+    sent = web.create_app().test_client().get("/leads?tab=all").get_json()["leads"][0]
+    assert sent["marked_by"] == "Dana" and sent["marked_at"] == first.marked_at
+    assert sent["marked_when"] == date_time_text(first.marked_at)
+    with store.connect() as db:                        # the saved row is never rewritten
+        assert db.one("SELECT lead FROM leads WHERE uid = ?", (a.uid,))[0] == row_before
+    assert "marked_at" not in row_before
+    # An unmarked business has neither.
+    marks.undo(marks.pending_undos()[a.uid]["id"])
+    sent = web.create_app().test_client().get("/leads?tab=all").get_json()["leads"][0]
+    assert (sent["marked_by"], sent["marked_at"], sent["marked_when"]) == ("", None, "")
+
+
+def test_a_colleagues_answer_given_since_the_page_looked_is_not_replaced_unasked():
+    """The page says which answer it showed (`was`): when another person has answered
+    since, nothing is saved and the answer says whose it is and when (409). One's own
+    earlier answer, or the answer the page showed, is changed straight away."""
+    a = _lead()
+    saved.save_search([a])
+    client = web.create_app().test_client()
+
+    def click(value, by, was):
+        return client.post("/mark", json={"key": a.uid, "value": value, "by": by, "was": was})
+
+    assert click("no", "Dana", "").status_code == 200
+    res = click("yes", "Sam", "")                      # Sam's page still showed no answer
+    assert res.status_code == 409
+    body = res.get_json()
+    assert body["changed"]["value"] == "no" and body["changed"]["by"] == "Dana"
+    assert body["changed"]["when"] and body["error"].startswith("Marked No by Dana on ")
+    assert marks.get_all([a.uid]) == {a.uid: "no"}     # nothing saved
+    assert click("yes", "dana", "").status_code == 200  # Dana's own answer (any case): saved
+    assert click("no", "Sam", "yes").status_code == 200  # the page showed it, and Sam confirmed
+    assert marks.get_all([a.uid]) == {a.uid: "no"}
+    # A page that doesn't say (an older one) saves as before.
+    assert client.post("/mark", json={"key": a.uid, "value": "yes", "by": "Lee"}).status_code == 200
+    ok = click("no", "Lee", "yes").get_json()
+    assert ok["undo"] and ok["when"] == date_time_text(ok["at"])

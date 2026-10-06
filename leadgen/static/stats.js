@@ -1,6 +1,19 @@
 /* Part 5: the Stats page. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported loadStats, chartRows, drawChart */
+// What the numbers leave out, named apart: "1 competitor and 1 AARCO listing are left out ...".
+/** @param {StatsAnswer} s */
+function leftOutNote(s) {
+  const own = s.left_out_own || 0, rivals = s.left_out - own;
+  /** @type {(n: number, one: string, many: string) => string} */
+  const count = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+  const parts = [rivals && count(rivals, "competitor", "competitors"),
+                 own && count(own, "AARCO listing", "AARCO listings")].filter(Boolean);
+  const one = s.left_out === 1;
+  return `${parts.join(" and ")} ${one ? "is" : "are"} left out of these numbers: ` +
+    (one ? "it is flagged in the list, but it isn't a prospect."
+      : "they are flagged in the list, but they aren't prospects.");
+}
 async function loadStats() {
   /** @type {StatsAnswer} */
   let s;
@@ -16,9 +29,7 @@ async function loadStats() {
   // Until something is marked, only the note that says how to get numbers shows.
   empty.hidden = s.checked > 0; $("stats-data").hidden = !s.checked;
   $("stats-left-out").hidden = !s.left_out;
-  $("stats-left-out").textContent = `${s.left_out.toLocaleString()} competitor and own-company ` +
-    `listing${s.left_out === 1 ? " is" : "s are"} left out of these numbers: they are flagged in the list, ` +
-    "but they aren't prospects.";
+  $("stats-left-out").textContent = leftOutNote(s);
   $("stats-closed").hidden = !s.closed;
   $("stats-closed").textContent = `${s.closed.toLocaleString()} of the businesses checked ` +
     `${s.closed === 1 ? "has" : "have"} since closed for good. They still count: the mark says what they had ` +

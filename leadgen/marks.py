@@ -20,6 +20,15 @@ VALUES = ("yes", "no")
 UNDO_SECONDS = 5 * 60           # how long after a click it can still be undone
 
 
+class Changed(Exception):
+    """Someone else answered since the page last looked: the mark it has now (value),
+    who gave it and when. Nothing was saved (set_mark with `was`)."""
+
+    def __init__(self, value: str, by: str, at: float) -> None:
+        super().__init__(f"Marked {value} by {by}")
+        self.value, self.by, self.at = value, by, at
+
+
 def get_all(uids: Iterable[str]) -> dict[str, str]:
     """{uid: "yes"/"no"} for the given uids that have a mark.
 
@@ -60,14 +69,27 @@ def _unconfirmed(db: store.Db, uid: str) -> bool:
     return not last or last[0] is None or last[0] < since
 
 
-def set_mark(uid: str, value: str, by: str = "") -> Undo | None:
+def _given_by(db: store.Db, uid: str, value: str) -> tuple[str, float | None]:
+    """Who gave a business the answer it has (value), and when: its latest click to it."""
+    row = db.one("SELECT made_by.name, mark_changes.at FROM mark_changes "
+                 "LEFT JOIN made_by ON made_by.id = mark_changes.id "
+                 "WHERE mark_changes.uid = ? AND mark_changes.value = ? AND mark_changes.undone_at IS NULL "
+                 "ORDER BY mark_changes.at DESC LIMIT 1", (uid, value))
+    return (row[0] or "", row[1]) if row else ("", None)
+
+
+def set_mark(uid: str, value: str, by: str = "", was: str | None = None) -> Undo | None:
     """Save a mark ("yes" or "no"; a mark is only taken back by undo()) made by `by`
     (a name, or "" when unknown). Returns the undo for the click ({"id", "until"}),
     or None when nothing changed. Clicking the current answer changes nothing, except
     on a lead whose joined buildings were marked differently: that confirms it.
 
-    Raises ValueError for a bad value or a business that isn't saved, and
-    store.Unavailable or a database error when it can't be saved.
+    was: the answer the page showed ("yes", "no" or "" for none), when it says. If
+    another person has given another answer since, nothing is saved and Changed says
+    whose it is, so the page can ask before replacing a colleague's answer.
+
+    Raises ValueError for a bad value or a business that isn't saved, Changed (above),
+    and store.Unavailable or a database error when it can't be saved.
     """
     if value not in VALUES:
         raise ValueError("A baler mark must be yes or no")
@@ -78,6 +100,10 @@ def set_mark(uid: str, value: str, by: str = "") -> Undo | None:
         previous = _current(db, uid)
         if previous == value and not _unconfirmed(db, uid):
             return None
+        if was is not None and previous and previous not in (was, value):
+            name, at = _given_by(db, uid, previous)
+            if name and at is not None and name.casefold() != store.person(by).casefold():
+                raise Changed(previous, name, at)
         db.run("INSERT INTO marks (uid, value, updated_at) VALUES (?, ?, ?) "
                "ON CONFLICT (uid) DO UPDATE SET value = excluded.value, "
                "updated_at = excluded.updated_at", (uid, value, now))
@@ -168,7 +194,7 @@ def history(uid: str) -> list[dict[str, Any]]:
 
 
 def apply(leads: list[Lead]) -> list[Lead]:
-    """Set lead.has_baler (who marked it, how many clicks its mark history holds, and
+    """Set lead.has_baler (who marked it and when, how many clicks its mark history holds, and
     whether the buildings it was joined from were marked differently and nobody has
     marked it since) from the saved marks (raises when they can't be read)."""
     found = get_all(lead.uid for lead in leads)
@@ -176,17 +202,20 @@ def apply(leads: list[Lead]) -> list[Lead]:
     clicks = _clicks(marked)
     disagreed = _disagreed_since(marked)
     latest: dict[str, str] = {}
+    given_at: dict[str, float] = {}
     kept: dict[str, int] = {}
     last_at: dict[str, float] = {}
     for uid, value, name, at, undone_at in clicks:
         if undone_at is None:
-            if value == found.get(uid):        # who gave the answer it has now
+            if value == found.get(uid):        # who gave the answer it has now, and when
                 latest[uid] = name
+                given_at[uid] = at
             kept[uid] = kept.get(uid, 0) + 1
             last_at[uid] = at
     for lead in leads:
         lead.has_baler = found.get(lead.uid, "")
         lead.marked_by = latest.get(lead.uid, "") if lead.has_baler else ""
+        lead.marked_at = given_at.get(lead.uid) if lead.has_baler else None
         lead.mark_clicks = kept.get(lead.uid, 0) if lead.has_baler else 0
         since = disagreed.get(lead.uid)
         lead.marks_disagreed = since is not None and last_at.get(lead.uid, 0.0) < since

@@ -116,12 +116,13 @@ function counts() {
   show("n-calls", S.counts.called, "called");
 }
 
-// Competitors and AARCO's own listing have their own tab: they are flagged, never asked Yes / No.
+// Competitors and AARCO's own listings (its parent company's too) have their own tab, named for
+// both: they are flagged, never asked Yes / No, and AARCO's own aren't scored (isOwn).
 // Businesses a later search found closed for good keep their mark (and stay under Yes or No,
 // flagged); the Closed tab lists them all, and they leave Not checked.
 /** @type {[string, string][]} */
 const LEAD_TABS = [["", "Not checked"], ["yes", "Has baler or compactor"], ["no", "No baler or compactor"],
-                   ["competitors", "Competitors"], ["closed", "Closed"], ["all", "All"]];
+                   ["competitors", "Competitors & AARCO"], ["closed", "Closed"], ["all", "All"]];
 // How many businesses a tab ("" is Not checked) holds.
 /** @type {(c: Counts | null, tab: string) => number} */
 const tabCount = (c, tab) => {
@@ -132,8 +133,13 @@ const tabCount = (c, tab) => {
 // What each tier means (the tier list's words).
 /** @type {Record<string, string>} */
 const TIER_WORDS = { A: "strong", B: "likely", C: "possible", D: "weak" };
+// "contact": the businesses that can be phoned first (a verified phone, then the listing's).
 /** @type {Record<string, {dir: string}>} */
-const SORTS = { score: { dir: "desc" }, name: { dir: "asc" }, city: { dir: "asc" }, miles: { dir: "asc" } };
+const SORTS = { score: { dir: "desc" }, name: { dir: "asc" }, city: { dir: "asc" }, contact: { dir: "asc" },
+                miles: { dir: "asc" } };
+// AARCO's own listing, or its parent company's: not a prospect, and not given a score or tier.
+/** @type {(l: Lead) => boolean} */
+const isOwn = (l) => l.lead_type === "Own company";
 
 /** A tab per [value, label, count]; the current one pressed.
     @param {HTMLElement} box @param {[string, string, number][]} items @param {string} current
@@ -270,7 +276,7 @@ function settleFailed(rows) {
   }
 }
 /** @param {Lead} lead @param {string} value "yes" or "no" */
-async function setMark(lead, value) {
+function setMark(lead, value) {
   const before = lead.has_baler || "";
   // Clearing is only via Undo; clicking the current answer only confirms a lead whose buildings disagreed.
   if ((value === before && !lead.marks_disagreed) || lead.saving || !lead.key || !lead.prospect) return;
@@ -281,7 +287,50 @@ async function setMark(lead, value) {
           `${value === "yes" ? "Yes" : "No"} again.`, null, true);
     return;
   }
+  // A colleague's answer is replaced only once the person sees whose it is and says so.
+  if (before && value !== before && othersAnswer(lead)) { askReplace(lead, value); return; }
+  saveMark(lead, value);
+}
+// True when the lead's answer was given by someone else than the name in the sidebar (one's
+// own answer changes without asking; an answer nobody signed can't be said to be anyone's).
+/** @type {(lead: Lead) => boolean} */
+const othersAnswer = (lead) => !!lead.marked_by && personKey(lead.marked_by) !== personKey(myName());
+/** @type {(name: string) => string} */
+const personKey = (name) => (name || "").trim().replace(/\s+/g, " ").toLowerCase();
+
+/* Replacing a colleague's answer: "Marked No by Dana on Oct 6, 2026, 4:21 PM", and a
+   confirmation first. Cancel (or Escape) leaves their answer as it is. */
+/** @type {(() => void) | null} */
+let replaceThen = null;
+/** @param {Lead} lead @param {string} value the answer clicked */
+function askReplace(lead, value) {
+  const word = value === "yes" ? "Yes" : "No", was = lead.has_baler === "yes" ? "Yes" : "No";
+  $("mark-title").textContent = `Change ${lead.marked_by}'s answer?`;
+  $("mark-who").textContent = `Marked ${was} by ${lead.marked_by}${lead.marked_when ? ` on ${lead.marked_when}` : ""}.`;
+  $("mark-ask").textContent = `Change ${lead.name} to ${word}? If you aren't sure, ask ${lead.marked_by} first.`;
+  $("mark-go").textContent = `Change to ${word}`;
   const key = lead.key;
+  replaceThen = () => {
+    const now = leadByKey(key) || lead;
+    if (!now.saving) saveMark(now, value);
+  };
+  $("mark-dlg").showModal();
+  $("mark-cancel").focus();
+}
+$("mark-form").addEventListener("submit", (/** @type {SubmitEvent} */ e) => {
+  e.preventDefault(); $("mark-dlg").close();
+  const then = replaceThen; replaceThen = null;
+  if (then) then();
+});
+$("mark-cancel").addEventListener("click", () => { replaceThen = null; $("mark-dlg").close(); });
+$("mark-dlg").addEventListener("cancel", () => { replaceThen = null; });
+
+/** @param {Lead} lead @param {string} value "yes" or "no" */
+async function saveMark(lead, value) {
+  const before = lead.has_baler || "";
+  const key = lead.key;
+  /** @type {{value: string, by: string, when: string, at: number} | null} */
+  let changed = null;
   // Keep the row where it is instead of letting the next one slide under the pointer.
   if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);
   // Until the server has saved it the row says "Saving…" (Yes / No disabled); the answer, "Marked
@@ -292,13 +341,14 @@ async function setMark(lead, value) {
   try {
     // After TIMING.saveSlow the row says it is taking longer than usual; after TIMING.saveLimit
     // it gives up and says "not saved", with Try again (core.js save).
-    const { undo } = await save("/mark", { key, value, by: myName() }, () => {
+    // `was`: the answer this page showed, so one a colleague gave since is never replaced unasked.
+    const { undo, at, when } = await save("/mark", { key, value, by: myName(), was: before }, () => {
       slowMarks.add(key); updateLead({ key, savingSlow: true }); renderAll();
     });
     S.failed.delete(key);
     if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);   // "Saved. Moves to …" gets its moment
-    updateLead({ key, saving: "", savingSlow: false, has_baler: value, marked_by: myName(), marks_disagreed: false,
-                 undo_mark: undo });
+    updateLead({ key, saving: "", savingSlow: false, has_baler: value, marked_by: myName(), marked_at: at,
+                 marked_when: when, marks_disagreed: false, undo_mark: undo });
     moveCount(lead, before, value);
     addRecent(leadByKey(key) || lead);
     renderAll();
@@ -306,15 +356,26 @@ async function setMark(lead, value) {
   } catch (err) {
     // The row itself says the answer wasn't saved, with Try again, until it is saved or dismissed
     // (the note at the bottom of the screen goes after a few seconds and is easy to miss).
-    const { status, message } = /** @type {ApiError} */ (err);
-    if (status !== 401) S.failed.set(key, { value, message });
-    updateLead({ key, saving: "", savingSlow: false });
+    const { status, message, body } = /** @type {ApiError} */ (err);
+    changed = status === 409 && body && body.changed ? body.changed : null;
+    if (changed) {
+      // A colleague answered meanwhile (nothing was saved): show theirs, and ask as for any other.
+      updateLead({ key, saving: "", savingSlow: false, has_baler: changed.value, marked_by: changed.by,
+                   marked_at: changed.at, marked_when: changed.when, marks_disagreed: false });
+    } else {
+      if (status !== 401) S.failed.set(key, { value, message });
+      updateLead({ key, saving: "", savingSlow: false });
+      toast(`${lead.name}: answer not saved. ${message}`, null, true);
+    }
     renderAll();
-    toast(`${lead.name}: answer not saved. ${message}`, null, true);
   } finally {
     S.sending.delete(key); slowMarks.delete(key);
     if (lead.saving) { lead.saving = ""; lead.savingSlow = false; }
     S.busy--;
+  }
+  if (changed) {
+    loadChanges();                                  // the tabs' counts follow the colleague's answer
+    askReplace(leadByKey(key) || lead, value);
   }
 }
 // A Yes / No that didn't reach the server: said on the row, with Try again and Dismiss.
@@ -396,7 +457,9 @@ function markCell(lead, withCall) {
     if (lead.saving) b.setAttribute("aria-disabled", "true");
     b.dataset.ctl = value;
     b.setAttribute("aria-pressed", String(lead.has_baler === value));
-    b.setAttribute("aria-label", `${lead.name}: ${value === "yes" ? "has" : "doesn't have"} a baler or compactor`);
+    // The name starts with the word shown ("Yes: Target has a baler or compactor"), so "click Yes" finds it.
+    b.setAttribute("aria-label",
+                   `${label}: ${lead.name} ${value === "yes" ? "has" : "doesn't have"} a baler or compactor`);
     box.append(b);
   }
   td.append(box);
@@ -459,15 +522,24 @@ function callBox(lead) {
 function leadRow(l, withCall) {
   const tr = el("tr");
   tr.dataset.key = l.key;
-  tr.className = l.tier + (l.lead_type === "Competitor" ? " competitor" : "")
+  const own = isOwn(l);
+  tr.className = (own ? "own" : l.tier) + (l.lead_type === "Competitor" ? " competitor" : "")
     + (pinnedNow(l.key) && !inTab(l) ? " just-marked" : "");
   tr.append(markCell(l, withCall));
-  // The tier's meaning is written next to the score (A strong, B likely, C possible, D weak).
-  const word = TIER_WORDS[l.tier] || "";
-  const score = el("td", String(l.score), "score nowrap");
-  score.append(el("span", ` ${l.tier} ${word}`.trimEnd(), "tier-word"));
-  score.title = `Score ${l.score} of 100, tier ${l.tier}${word ? `: ${word} to have a baler or compactor` : ""}`;
-  tr.append(score);
+  if (own) {
+    // AARCO's own: no prospect score or tier (it is never sold to).
+    const none = el("td", undefined, "score nowrap");
+    none.append(el("span", "Not scored", "sub"));
+    none.title = "AARCO's own listing: not a prospect, so it has no score or tier";
+    tr.append(none);
+  } else {
+    // The tier's meaning is written next to the score (A strong, B likely, C possible, D weak).
+    const word = TIER_WORDS[l.tier] || "";
+    const score = el("td", String(l.score), "score nowrap");
+    score.append(el("span", ` ${l.tier} ${word}`.trimEnd(), "tier-word"));
+    score.title = `Score ${l.score} of 100, tier ${l.tier}${word ? `: ${word} to have a baler or compactor` : ""}`;
+    tr.append(score);
+  }
   const name = el("td", undefined, "c-name");
   name.append(el("strong", l.name));
   if (l.category) name.append(el("div", l.category, "sub"));
@@ -505,7 +577,11 @@ function leadRow(l, withCall) {
   // One decimal for every distance ("4.6", "2.2"), so the column reads evenly.
   if (l.distance != null) { miles.append(Number(l.distance).toFixed(1)); miles.append(el("span", " mi", "unit")); }
   tr.append(miles);
-  tr.append(whyCell(l.reasons));
+  if (own) {
+    const why = el("td", undefined, "c-why");
+    why.append(el("div", "AARCO's own, so it isn't scored as a prospect.", "sub"));
+    tr.append(why);
+  } else tr.append(whyCell(l.reasons));
   return tr;
 }
 
@@ -531,7 +607,8 @@ function sortHeader(label, sort) {
   });
   b.append(el("span", label), el("span", on ? (S.dir === "asc" ? "▲" : "▼") : "↕", "arrow"));
   th.setAttribute("aria-sort", on ? (S.dir === "asc" ? "ascending" : "descending") : "none");
-  b.title = `Sort by ${label.toLowerCase()}`;
+  b.title = sort === "contact" ? "Sort by contact: the businesses with a phone number first (a verified one first)"
+    : `Sort by ${label.toLowerCase()}`;
   th.append(b);
   return th;
 }
@@ -541,7 +618,7 @@ function leadTable(rows, withCall) {
   // Shown from 1100px wide (narrower windows show cards); the Why column takes the rest.
   /** @type {[string, string | null, string?][]} */
   const cols = [[withCall ? "Baler? / Call" : "Baler or compactor?", withCall ? "176px" : "118px"],
-                ["Score", "90px", "score"], ["Business", "20%", "name"], ["Contact", "20%", "city"],
+                ["Score", "90px", "score"], ["Business", "20%", "name"], ["Contact", "20%", "contact"],
                 ["Miles", "72px", "miles"], ["Why this score", null]];
   const cg = el("colgroup");
   for (const [, w] of cols) { const c = el("col"); if (w) c.style.width = w; cg.append(c); }
@@ -621,8 +698,12 @@ function renderLeads() {
       const what = [S.q && `“${S.q}”`, S.tier && `tier ${S.tier} (${TIER_WORDS[S.tier]})`,
                     S.phone && "a phone number"].filter(Boolean).join(" and ");
       const box = el("div", undefined, "empty");
+      // Spelling advice only for typed text; a tier or "Has phone" alone can only be widened.
+      const widen = [S.tier && "pick All tiers or another tier", S.phone && "turn off Has phone"].filter(Boolean);
+      const advice = S.q ? "Check the spelling, pick another tab, or clear the filters to see the whole list."
+        : `${widen.join(", ")}, pick another tab, or clear the filters to see the whole list.`;
       box.append(el("strong", `No leads match ${what} in ${tab}.`),
-                 el("p", "Check the spelling, pick another tab, or clear the filters to see the whole list."),
+                 el("p", advice.charAt(0).toUpperCase() + advice.slice(1)),
                  button("Clear filters", "quiet", clearFilters));
       wrap.replaceChildren(box);
     } else {
@@ -783,7 +864,11 @@ async function download(a) {
   a.textContent = a.dataset.busyLabel || label;
   try {
     const res = await fetch(a.href);
-    if (res.status === 401) { location.href = "/login"; return; }
+    // Logged out: the server sends a download's address on to the login page (fetch follows it).
+    if (res.status === 401 || (res.redirected && new URL(res.url).pathname === "/login")) {
+      loggedOut(`Your ${a.href.endsWith(".csv") ? "CSV" : "Excel"} download didn't start.`);
+      return;
+    }
     if (!res.ok) {                                  // the server's error page says why, in plain words
       const page = new DOMParser().parseFromString(await res.text().catch(() => ""), "text/html");
       throw new Error(page.querySelector(".box p")?.textContent || "Try again in a minute.");
@@ -809,7 +894,7 @@ $all("a[data-download]").forEach((a) => a.addEventListener("click", (e) => {
 // to it. Only what changed comes back, so this stays small however long the list grows.
 function refreshSoon() {
   if (document.visibilityState !== "visible" || S.busy || !S.loaded) return;
-  if ($("call-dlg").open || $("hist-dlg").open) return;
+  if ($("call-dlg").open || $("hist-dlg").open || $("mark-dlg").open) return;
   loadChanges();
 }
 setInterval(refreshSoon, 60000);

@@ -46,6 +46,7 @@ class Lead:
     sources: list[str] = field(default_factory=list)
     has_baler: str = ""              # "yes" / "no" as marked on the results page (marks.py)
     marked_by: str = ""              # who set that mark ("Your name" in their browser), if known
+    marked_at: float | None = None   # when that mark was given (epoch seconds), if known
     mark_clicks: int = 0             # Yes / No clicks kept in its mark history (not undone)
     marks_disagreed: bool = False    # joined from buildings marked Yes and No (kept Yes), not re-marked since
     uid: str = ""                    # the saved lead's id (saved.py)

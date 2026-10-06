@@ -188,6 +188,7 @@ def test_competitors_and_own_listing_are_left_out_of_stats_and_checking():
     for key in ("with_equipment", "checked", "average_score", "average_tier", "by_tier"):
         assert after[key] == before[key], key         # ...but it isn't a prospect
     assert after["left_out"] == 2 and after["with_equipment"] == 1 and after["checked"] == 2
+    assert after["left_out_competitors"] == 1 and after["left_out_own"] == 1     # named apart on the page
     page = client.get("/leads?tab=unchecked&limit=10").get_json()
     assert page["counts"] == counts and page["counts"]["unchecked"] == 0
     assert page["counts"]["competitors"] == 2 and page["counts"]["all"] == 4

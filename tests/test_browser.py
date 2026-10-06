@@ -354,7 +354,7 @@ def test_touch_targets_on_a_phone(browser, site, page):
 def test_competitors_are_flagged_not_asked(page):
     assert "Pro Baler" not in page.inner_text("#leads-wrap")      # not in Not checked
     assert page.inner_text("#n-leads") == "3 to check"
-    page.get_by_role("button", name="Competitors (1)").click()
+    page.get_by_role("button", name="Competitors & AARCO (1)").click()
     row = _row(page, "Pro Baler")
     expect(row).to_contain_text("Competitor: not a prospect")
     assert row.locator(".mark button").count() == 0
@@ -363,7 +363,7 @@ def test_competitors_are_flagged_not_asked(page):
 
 def test_aarcos_and_its_parent_companys_listings_are_flagged_with_the_names_now(page):
     """AARCO's own listing saved under the company's old short name, and its parent
-    company's facility saved before it was recognised, show on the Competitors tab with
+    company's facility saved before it was recognised, show on the Competitors & AARCO tab with
     the names config has now, never in Not checked; "Ace Hardware" stays a prospect."""
     import json
 
@@ -387,13 +387,19 @@ def test_aarcos_and_its_parent_companys_listings_are_flagged_with_the_names_now(
     page.wait_for_selector("table.leads")
     listed = page.inner_text("#leads-wrap")
     assert "Ace Hardware" in listed and "Recycling Center" not in listed and "AARCO Compactor" not in listed
-    page.get_by_role("button", name="Competitors (3)").click()
+    page.get_by_role("button", name="Competitors & AARCO (3)").click()
     own_row, ace_row = _row(page, "AARCO Compactor"), _row(page, "Recycling Center")
     expect(own_row).to_contain_text("OWN COMPANY: AARCO Waste & Disposal")
     expect(own_row).to_contain_text("AARCO's own listing")
     expect(ace_row).to_contain_text("OWN COMPANY: AARCO's parent company (ACE Recycling & Disposal)")
     expect(ace_row).to_contain_text("AARCO's parent company")
     assert ace_row.locator(".mark button").count() == 0
+    # Neither is given a prospect's score or tier, and Stats names them as AARCO's.
+    for row in (own_row, ace_row):
+        expect(row.locator("td.score")).to_have_text("Not scored")
+    page.click("nav a[data-page=stats]")
+    expect(page.locator("#stats-left-out")).to_contain_text(
+        "1 competitor and 2 AARCO listings are left out of these numbers")
 
 
 def test_the_brand_shows_the_companys_name_and_fits_on_a_phone(browser, site):
@@ -425,7 +431,7 @@ def test_stats_show_only_the_note_until_something_is_marked(page):
     page.click("nav a[data-page=stats]")
     page.wait_for_selector("#stats-empty:not([hidden])")
     assert page.locator("#stats-data").is_hidden()
-    assert "1 competitor and own-company listing is left out" in page.inner_text("#stats-left-out")
+    assert "1 competitor is left out of these numbers" in page.inner_text("#stats-left-out")
     page.click("#stats-empty a")
     _row(page, "Costco").locator(".mark button.yes").click()
     page.wait_for_selector("#recent:not([hidden])")
@@ -839,7 +845,7 @@ def test_no_competitors_names_them_and_has_phone_filters(browser, site):
     assert "Maceys" not in tab.inner_text("#leads-wrap")
     assert "phone=1" in tab.url
     tab.uncheck("#has-phone")
-    tab.get_by_role("button", name="Competitors (0)").click()
+    tab.get_by_role("button", name="Competitors & AARCO (0)").click()
     expect(tab.locator("#leads-wrap .empty")).to_contain_text(
         "No Pro Baler, Action Compaction, AARCO Waste & Disposal or ACE Recycling & Disposal listings found "
         "in the saved leads yet.")
@@ -2469,3 +2475,189 @@ def test_the_quiet_retries_stop_when_another_page_is_opened(browser, site, page)
     expect(tab.locator("#stats-body")).to_be_visible()
     expect(tab.locator("#stats-problem .problem")).to_have_count(0)
     context.close()
+
+
+@contextlib.contextmanager
+def _logged_in_site():
+    """A site behind a login, served on this machine (the page fixture's leads are its leads)."""
+    from werkzeug.serving import make_server
+    server = make_server("127.0.0.1", 0, web.create_app(password="pw", username="Matt"), threaded=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/"
+    finally:
+        server.shutdown()
+
+
+def _log_in(tab, password="pw"):
+    tab.fill("input[name=username]", "Matt")
+    tab.fill("input[name=password]", password)
+    tab.locator("form button[type=submit]").click()
+
+
+def test_a_login_that_ended_says_what_was_not_saved_and_comes_back_to_the_same_view(browser, page):
+    """The login ends (its cookie is gone) and the next click can't be saved: the login page
+    says which click wasn't saved, and logging in again opens the same page and tab. The
+    notes typed for a call are still there."""
+    from leadgen import marks
+    with _logged_in_site() as url:
+        context = _context(browser, viewport={"width": 1280, "height": 900})
+        tab = context.new_page()
+        tab.goto(url + "login")
+        _log_in(tab)
+        tab.goto(url + "#leads?tab=all&q=o")
+        tab.wait_for_selector("table.leads")
+        view = tab.url
+        # A call whose Save meets an ended login: its notes stay as the business's draft.
+        _row(tab, "Smith").get_by_role("button", name="Just called").click()
+        tab.fill("#call-notes", "Spoke to Dana; call back Friday.")
+        tab.locator("#outcomes").get_by_role("button", name="Follow Up").click()
+        context.clear_cookies()
+        tab.click("#call-save")
+        tab.wait_for_url("**/login?**")
+        expect(tab.locator("#ended")).to_have_text(
+            "Your login ended. Your call to Smith's Marketplace wasn't saved. Your notes are kept: open Just "
+            "called on it again to save them. Log in to go back to where you were.")
+        _log_in(tab)
+        tab.wait_for_selector("table.leads")
+        assert tab.url == view                                  # the same page, tab and filter
+        expect(tab.locator("#lead-tabs button.on")).to_contain_text("All")
+        _row(tab, "Smith").get_by_role("button", name="Just called").click()
+        assert tab.input_value("#call-notes") == "Spoke to Dana; call back Friday."
+        tab.click("#call-cancel")
+        # A Yes that meets an ended login names the business, and is indeed not saved.
+        context.clear_cookies()
+        _row(tab, "Costco").locator(".mark button.yes").click()
+        tab.wait_for_url("**/login?**")
+        expect(tab.locator("#ended")).to_contain_text("Your Yes for Costco Wholesale wasn't saved.")
+        # A wrong password keeps the note and the way back.
+        _log_in(tab, "wrong")
+        expect(tab.locator(".error")).to_have_text("Wrong username or password.")
+        expect(tab.locator("#ended")).to_contain_text("Your Yes for Costco Wholesale wasn't saved.")
+        _log_in(tab)
+        tab.wait_for_selector("table.leads")
+        assert tab.url == view
+        expect(_row(tab, "Costco").locator(".mark button.yes")).to_have_attribute("aria-pressed", "false")
+        assert not any(marks.get_all([l.uid for l in saved.load()]).values())
+        # Back in, the note is gone: an ordinary visit to the login page says nothing about it.
+        context.clear_cookies()
+        tab.goto(url + "login")
+        expect(tab.locator("#ended")).to_have_count(0)
+        context.close()
+
+
+def test_aarcos_own_listings_have_no_score_and_stats_names_them_apart(page):
+    own = Lead(name="AARCO Compactor", lat=40.74, lon=-111.94, source="osm", source_id="own",
+               raw_categories=["building=industrial"])
+    score_lead(own, config.DEFAULT_KEYWORDS)
+    assert own.lead_type == "Own company" and own.tier           # scored inside, never shown
+    saved.save_search([own], config.DEFAULT_KEYWORDS)
+    page.reload()
+    page.wait_for_selector("table.leads")
+    page.get_by_role("button", name="Competitors & AARCO (2)").click()
+    row = _row(page, "AARCO Compactor")
+    expect(row.locator("td.score")).to_have_text("Not scored")
+    expect(row.locator(".tier-word")).to_have_count(0)
+    expect(row.locator(".pts")).to_have_count(0)                  # no points that add up to a score
+    expect(row).to_contain_text("AARCO's own listing")
+    # A competitor keeps its flag and its score: it is listed, never dropped.
+    expect(_row(page, "Pro Baler").locator(".tier-word")).to_have_count(1)
+    expect(_row(page, "Pro Baler")).to_contain_text("Competitor: not a prospect")
+    # A tier picks prospects and competitors; AARCO's own has none.
+    page.select_option("#tier", own.tier)
+    expect(_row(page, "AARCO Compactor")).to_have_count(0)
+    page.click("nav a[data-page=stats]")
+    expect(page.locator("#stats-left-out")).to_have_text(
+        "1 competitor and 1 AARCO listing are left out of these numbers: they are flagged in the list, but they "
+        "aren't prospects.")
+
+
+def test_yes_and_no_are_named_by_the_word_they_show(page):
+    yes = page.get_by_role("button", name="Yes: Costco Wholesale has a baler or compactor")
+    no = page.get_by_role("button", name="No: Costco Wholesale doesn't have a baler or compactor")
+    expect(yes).to_have_text("Yes")
+    expect(no).to_have_text("No")
+    for button in page.locator(".mark button[data-ctl=yes], .mark button[data-ctl=no]").all():
+        assert button.get_attribute("aria-label").startswith(button.inner_text() + ": ")
+
+
+def test_changing_a_colleagues_answer_says_whose_it_is_and_asks_first(page):
+    from leadgen import marks
+    sent = _posts(page, "/mark")
+    _row(page, "Costco").locator(".mark button.no").click()       # marked No by Tester
+    page.wait_for_selector("#recent:not([hidden])")
+    page.get_by_role("button", name="All (4)").click()
+    # The same person changes their own answer: no question.
+    _row(page, "Costco").locator(".mark button.yes").click()
+    expect(_row(page, "Costco").locator(".mark button.yes")).to_have_attribute("aria-pressed", "true")
+    assert not page.locator("#mark-dlg").is_visible() and len(sent) == 2
+    # Someone else (the name in the side bar changed) is asked, with who and when.
+    page.click("#me-change")
+    page.fill("#name-input", "Sam")
+    page.click("#name-save")
+    _row(page, "Costco").locator(".mark button.no").click()
+    expect(page.locator("#mark-dlg")).to_be_visible()
+    expect(page.locator("#mark-who")).to_have_text(re.compile(r"^Marked Yes by Tester on \w{3} \d+, \d{4}, "
+                                                             r"\d+:\d\d [AP]M\.$"))
+    expect(page.locator("#mark-ask")).to_contain_text("Change Costco Wholesale to No?")
+    assert page.evaluate("document.activeElement.id") == "mark-cancel"
+    page.click("#mark-cancel")                                     # Cancel: Tester's Yes stays
+    expect(page.locator("#mark-dlg")).to_be_hidden()
+    assert len(sent) == 2
+    lead = next(l for l in marks.apply(saved.load()) if l.name == "Costco Wholesale")
+    assert lead.has_baler == "yes" and lead.marked_by == "Tester"
+    expect(_row(page, "Costco").locator(".mark button.yes")).to_have_attribute("aria-pressed", "true")
+    _row(page, "Costco").locator(".mark button.no").click()
+    expect(page.locator("#mark-dlg")).to_be_visible()
+    page.keyboard.press("Escape")                                  # Escape: the same
+    expect(page.locator("#mark-dlg")).to_be_hidden()
+    assert len(sent) == 2
+    _row(page, "Costco").locator(".mark button.no").click()
+    page.click("#mark-go")
+    expect(_row(page, "Costco")).to_contain_text("Marked by Sam")
+    assert next(l for l in marks.apply(saved.load()) if l.name == "Costco Wholesale").has_baler == "no"
+    # A colleague who answers after the page last looked is asked about all the same: nothing
+    # is saved, and the page shows their answer and asks.
+    smith = next(l for l in saved.load() if l.name.startswith("Smith"))
+    marks.set_mark(smith.uid, "no", "Dana")
+    _row(page, "Smith").locator(".mark button.yes").click()
+    expect(page.locator("#mark-dlg")).to_be_visible()
+    expect(page.locator("#mark-who")).to_contain_text("Marked No by Dana on ")
+    expect(_row(page, "Smith").locator(".mark button.no")).to_have_attribute("aria-pressed", "true")
+    assert marks.get_all([smith.uid]) == {smith.uid: "no"}
+    page.click("#mark-go")
+    expect(_row(page, "Smith")).to_contain_text("Marked by Sam")
+    assert marks.get_all([smith.uid]) == {smith.uid: "yes"}
+
+
+def test_the_contact_column_sorts_by_contact(page):
+    """The Contact header sorts by what it shows: the businesses that can be phoned first,
+    a number the team verified before the listing's own."""
+    from leadgen import contacts
+    hampton = next(l for l in saved.load() if l.name == "Hampton Inn")
+    contacts.save(hampton.uid, "801-555-0199", "Lee", "Sam")
+    page.reload()
+    page.wait_for_selector("table.leads")
+    assert "Hampton Inn" not in page.locator("table.leads tbody tr").first.inner_text()
+    header = page.locator("table.leads thead button.sort", has_text="Contact")
+    assert "contact" in header.get_attribute("title").lower()
+    header.click()
+    expect(page.locator("table.leads tbody tr").first).to_contain_text("Hampton Inn")
+    assert "sort=contact" in page.url
+    expect(page.locator("table.leads thead th", has_text="Contact")).to_have_attribute("aria-sort", "ascending")
+
+
+def test_a_tier_alone_that_matches_nothing_gives_no_spelling_advice(page):
+    shown = {l.tier for l in saved.load() if l.lead_type == "Prospect"}
+    empty_tier = next(t for t in "ABCD" if t not in shown)
+    page.select_option("#tier", empty_tier)
+    box = page.locator("#leads-wrap .empty")
+    expect(box).to_contain_text(f"No leads match tier {empty_tier}")
+    assert "spelling" not in box.inner_text()
+    expect(box).to_contain_text("Pick All tiers or another tier, pick another tab, or clear the filters")
+    page.check("#has-phone")
+    expect(box).to_contain_text("Pick All tiers or another tier, turn off Has phone, pick another tab")
+    assert "spelling" not in box.inner_text()
+    page.select_option("#tier", "")
+    page.fill("#filter", "zzzz")
+    expect(box).to_contain_text("Check the spelling")

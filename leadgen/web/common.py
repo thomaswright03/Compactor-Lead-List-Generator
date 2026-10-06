@@ -118,6 +118,8 @@ def lead_json(lead: Lead, undo: Undos | None = None) -> dict[str, Any]:
         "distance": lead.distance_miles, "reasons": plain_reasons(lead.reasons), "map_url": lead.map_url,
         "sources": lead.sources, "key": lead.uid, "has_baler": lead.has_baler,
         "marked_by": lead.marked_by, "mark_clicks": lead.mark_clicks,
+        # When that answer was given (the page asks before replacing someone else's).
+        "marked_at": lead.marked_at, "marked_when": date_time_text(lead.marked_at),
         "marks_disagreed": lead.marks_disagreed,
         "last_call_by": lead.last_call_by,
         "call_outcome": lead.call_outcome, "call_notes": lead.call_notes,

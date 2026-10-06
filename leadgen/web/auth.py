@@ -6,6 +6,7 @@ import ipaddress
 import os
 import re
 import time
+from urllib.parse import urlsplit
 
 from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, session
 from flask.typing import ResponseReturnValue
@@ -95,16 +96,38 @@ def require_login() -> ResponseReturnValue | None:
     return jsonify({"error": "You were logged out. Reload the page to log in again."}), 401
 
 
-def _login_page(error: str = "", name: str = "", status: int = 200) -> ResponseReturnValue:
+def return_to(target: object) -> str:
+    """Where to go after logging in: the page's own path and #address ("/#leads?tab=yes",
+    core.js loggedOut), so a login that ended mid-task comes back to the same page and
+    tab; "" for anything else. Only a path on this site is taken, never another site's
+    address ("https://...", "//host", "/\\host") or the login page itself, so the
+    login can't be used to send people elsewhere."""
+    text = str(target or "")
+    if not text.startswith("/") or len(text) > 2000 or not text.isprintable() or "\\" in text:
+        return ""
+    parts = urlsplit(text)
+    if text.startswith("//") or parts.scheme or parts.netloc or parts.path.startswith(("/login", "/logout")):
+        return ""
+    return text
+
+
+# What the login page says after the site answered a click with "logged out" (core.js
+# loggedOut puts the click's own words in its place, "Your Yes for Target wasn't saved.").
+ENDED = "Your login ended, so what you did last may not have been saved: check it after you log in."
+
+
+def _login_page(error: str = "", name: str = "", status: int = 200, ended: bool = False,
+                then: str = "") -> ResponseReturnValue:
     return render_template("login.html", error=error, username=name, contact=support_contact(),
-                           no_contact=SUPPORT_DEFAULT), status
+                           no_contact=SUPPORT_DEFAULT, ended=ENDED if ended else "", then=then), status
 
 
 @bp.get("/login")
 def login_page() -> ResponseReturnValue:
+    then = return_to(request.args.get("next"))
     if not state().password or session.get("login") == login_token():
-        return redirect("/")
-    return _login_page()
+        return redirect(then or "/")
+    return _login_page(ended=request.args.get("ended") == "1", then=then)
 
 
 @bp.post("/login")
@@ -117,8 +140,10 @@ def login() -> ResponseReturnValue:
     now, who = time.time(), _client_address()
     recent = [t for t in s.failures.get(who, []) if now - t < LOGIN_WINDOW]
     name = (request.form.get("username") or "").strip()
+    # A wrong password keeps the note about the ended login, and where to go back to.
+    then, ended = return_to(request.form.get("next")), request.form.get("ended") == "1"
     if len(recent) >= LOGIN_TRIES:
-        return _login_page("Too many wrong tries. Wait 15 minutes and try again.", name, 429)
+        return _login_page("Too many wrong tries. Wait 15 minutes and try again.", name, 429, ended, then)
     supplied = request.form.get("password") or ""
     name_ok = not s.username or hmac.compare_digest(name.encode(), s.username.encode())
     if name_ok and hmac.compare_digest(supplied.encode(), s.password.encode()):
@@ -126,12 +151,12 @@ def login() -> ResponseReturnValue:
         session.clear()
         session.permanent = True
         session.update(login=login_token(), user=s.username or name)
-        return redirect("/")
+        return redirect(then or "/")
     s.failures[who] = [*recent, now]
     if len(s.failures) > 5000:              # keep memory bounded
         s.failures.clear()
     time.sleep(0.5)
-    return _login_page("Wrong username or password.", name, 401)
+    return _login_page("Wrong username or password.", name, 401, ended, then)
 
 
 @bp.post("/logout")

@@ -11,7 +11,7 @@ from typing import Any
 from .models import Lead
 from .pipeline import EXEMPT_TYPES
 from .saved import is_closed
-from .scoring import TIERS
+from .scoring import OWN_TYPE, TIERS
 
 TIER_ORDER = ("A", "B", "C", "D")
 
@@ -27,6 +27,7 @@ def summarize(leads: list[Lead]) -> dict[str, Any]:
     """leads: saved leads with has_baler set."""
     prospects = [l for l in leads if l.lead_type not in EXEMPT_TYPES]
     left_out = len(leads) - len(prospects)
+    own = sum(l.lead_type == OWN_TYPE for l in leads)
     leads = prospects
     yes = [l for l in leads if l.has_baler == "yes"]
     checked = [l for l in leads if l.has_baler in ("yes", "no")]
@@ -47,6 +48,9 @@ def summarize(leads: list[Lead]) -> dict[str, Any]:
                         if avg is not None else None,
         "by_tier": by_tier,
         "left_out": left_out,
+        # The same, apart: competitors, and AARCO's own listings (its parent company's too).
+        "left_out_competitors": left_out - own,
+        "left_out_own": own,
         "closed": sum(is_closed(l) for l in checked),
         # The lowest score of every tier but D, for the page's note about tier D.
         "tier_floors": {t: threshold for threshold, t in TIERS},

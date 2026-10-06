@@ -58,6 +58,9 @@ interface Lead {
   /** "yes", "no", or "" when nobody has answered. */
   has_baler: string;
   marked_by: string;
+  /** When that answer was given (epoch seconds; null when not known), and the same in words. */
+  marked_at: number | null;
+  marked_when: string;
   mark_clicks: number;
   marks_disagreed: boolean;
   last_call_by: string;
@@ -268,6 +271,9 @@ interface StatsAnswer {
   average_score: number | null;
   average_tier: string;
   left_out: number;
+  /** Of them, AARCO's own listings (its parent company's too); the rest are competitors. */
+  left_out_own: number;
+  left_out_competitors: number;
   closed: number;
   by_tier: TierRow[];
   tier_floors: Record<string, number>;
@@ -367,7 +373,9 @@ interface ApiError extends Error {
   status: number;
   /** A save (core.js save) that got no answer within TIMING.saveLimit. */
   timedOut?: boolean;
-  body?: { error?: string; field?: string; job_id?: string; confirm_far?: boolean; place?: Place };
+  body?: { error?: string; field?: string; job_id?: string; confirm_far?: boolean; place?: Place;
+          /** POST /mark: a colleague answered since the page looked (nothing was saved). */
+          changed?: { value: string; by: string; when: string; at: number } };
 }
 
 /** One step of the tutorial (tour.js). */
