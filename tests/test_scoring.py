@@ -32,12 +32,15 @@ def test_competitor_detected_by_website_only():
 
 
 def test_own_company_is_flagged():
-    lead = score_lead(make("AARCO Compactors & Balers"))
+    lead = score_lead(make("AARCO Waste & Disposal"))
     assert lead.lead_type == "Own company"
-    assert lead.flags == ["OWN COMPANY: AARCO Compactors & Balers"]
-    # A listing under the shorter name, or that spells it "Arco", is still AARCO's own.
-    for name in ("AARCO Compactor", "Arco Compactor"):
-        assert score_lead(make(name)).flags == ["OWN COMPANY: AARCO Compactors & Balers"], name
+    assert lead.flags == ["OWN COMPANY: AARCO Waste & Disposal"]
+    # A listing under an earlier name, or that spells it "Arco", is still AARCO's own.
+    for name in ("AARCO Waste and Disposal", "AARCO Compactors & Balers", "AARCO Compactor", "Arco Compactor"):
+        assert score_lead(make(name)).flags == ["OWN COMPANY: AARCO Waste & Disposal"], name
+    # Other waste companies are not.
+    for name in ("Waste Management", "Republic Services Waste & Recycling"):
+        assert score_lead(make(name)).lead_type != "Own company", name
 
 
 def _own_case(item):

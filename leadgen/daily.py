@@ -123,8 +123,9 @@ FILL_GRACE_SECONDS = 10 * 60
 
 
 # The place label of AARCO's shop in the records of searches run under an earlier name
-# of the company ("Arco Compactor, 876 Fortune Rd ...", "AARCO Compactor, 876 ...").
-_OLD_NAME = re.compile(r"^(?:Arco|AARCO) Compactor(?=,)")
+# of the company ("Arco Compactor, 876 Fortune Rd ...", "AARCO Compactor, 876 ...",
+# "AARCO Compactors & Balers, 876 ...").
+_OLD_NAME = re.compile(r"^(?:(?:Arco|AARCO) Compactor|AARCO Compactors & Balers)(?=,)")
 
 
 def _as_record(row: store.Row) -> Record:

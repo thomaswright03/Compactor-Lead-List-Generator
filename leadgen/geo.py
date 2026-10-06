@@ -21,6 +21,7 @@ KNOWN_PLACES = {
     "1876 w fortune rd, salt lake city, ut 84104": config.OWN_COORDS,
     "aarco": config.OWN_COORDS,
     "aarco compactor": config.OWN_COORDS,
+    "aarco compactors & balers": config.OWN_COORDS,
     config.OWN_COMPANY.lower(): config.OWN_COORDS,
     # The spelling the site used before the owner corrected it (AARCO), still understood.
     "arco": config.OWN_COORDS,

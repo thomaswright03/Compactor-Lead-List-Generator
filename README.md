@@ -3,7 +3,7 @@
 Finds businesses around Salt Lake City (or any ZIP/city) that are likely to run
 **large commercial trash compactors or cardboard balers**, scores each one, and
 exports a ranked lead list to Excel or CSV for manual vetting. Built for
-AARCO Compactors & Balers.
+AARCO Waste & Disposal.
 
 Competitors (**Pro Baler**, **Action Compaction**) are **flagged, never dropped**,
 and AARCO's own listings are flagged too, including those of its parent company,

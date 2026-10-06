@@ -28,7 +28,9 @@ DEFAULT_MIN_SCORE = 20
 # The client's name, as every page title, the brand block, the login and error pages,
 # the own-listing flag and the problem alerts write it. OWN_COMPANY_SHORT is the brand
 # block's name on a phone, where the full name doesn't fit beside the Menu button.
-OWN_COMPANY = "AARCO Compactors & Balers"
+# Earlier names (AARCO Compactors & Balers, AARCO Compactor) still read as this one in
+# saved flags and search records (scoring.current_own_flag, daily._OLD_NAME).
+OWN_COMPANY = "AARCO Waste & Disposal"
 OWN_COMPANY_SHORT = "AARCO"
 SITE_NAME = f"{OWN_COMPANY} Lead Finder"
 
@@ -38,8 +40,10 @@ COMPETITORS = {
     "Pro Baler": ["probaler", "pro baler"],
     "Action Compaction": ["actioncompaction", "action compaction"],
 }
-# AARCO's own listing, under its name or the spelling "Arco" a listing may use.
-SELF_ALIASES = ["aarcocompactor", "aarco compactor", "arcocompactor", "arco compactor"]
+# AARCO's own listing, under its name (AARCO Waste & Disposal), an earlier one (AARCO
+# Compactors & Balers, AARCO Compactor) or the spelling "Arco" a listing may use.
+SELF_ALIASES = ["aarcowaste", "aarco waste", "aarcocompactor", "aarco compactor", "arcocompactor",
+                "arco compactor"]
 # AARCO is a division of ACE Recycling & Disposal: the parent company's listings are
 # treated exactly like AARCO's own (flagged, never a prospect, out of "Not checked" and
 # Stats). A listing is the parent's when its name or another name it goes by holds one of

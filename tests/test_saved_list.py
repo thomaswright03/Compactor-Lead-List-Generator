@@ -108,22 +108,24 @@ def test_several_words_find_a_lead_when_each_is_somewhere_in_its_row():
     assert names("walmart provo") == []
 
 
-# ---- the company's name, as config.OWN_COMPANY has it now (AARCO Compactors & Balers)
+# ---- the company's name, as config.OWN_COMPANY has it now (AARCO Waste & Disposal)
 
-@pytest.mark.parametrize("old_flag", ["OWN COMPANY: Arco Compactor", "OWN COMPANY: AARCO Compactor"])
+@pytest.mark.parametrize("old_flag", ["OWN COMPANY: Arco Compactor", "OWN COMPANY: AARCO Compactor",
+                                      "OWN COMPANY: AARCO Compactors & Balers"])
 def test_aarcos_own_listing_saved_under_an_old_name_shows_the_name_now(old_flag):
-    """A row saved under an earlier name of the company (the "Arco" spelling, then the
-    short "AARCO Compactor") is shown with config.OWN_COMPANY; the row keeps its text."""
+    """A row saved under an earlier name of the company (the "Arco" spelling, the short
+    "AARCO Compactor", then "AARCO Compactors & Balers") is shown with config.OWN_COMPANY;
+    the row keeps its text."""
     from leadgen import store
     lead = _lead("AARCO Compactor", "a1")
     saved.save_search([lead])
     with store.connect() as db:
         [(text,)] = db.all("SELECT lead FROM leads WHERE uid = ?", (lead.uid,))
-        old = text.replace("OWN COMPANY: AARCO Compactors & Balers", old_flag)
+        old = text.replace(f"OWN COMPANY: {config.OWN_COMPANY}", old_flag)
         assert old != text
         db.run("UPDATE leads SET lead = ?, last_seen = last_seen + 1 WHERE uid = ?", (old, lead.uid))
     [row] = saved.load()
-    assert row.flags == [f"OWN COMPANY: {config.OWN_COMPANY}"] == ["OWN COMPANY: AARCO Compactors & Balers"]
+    assert row.flags == [f"OWN COMPANY: {config.OWN_COMPANY}"] == ["OWN COMPANY: AARCO Waste & Disposal"]
     assert row.lead_type == "Own company"
     with store.connect() as db:
         assert db.one("SELECT lead FROM leads WHERE uid = ?", (lead.uid,))[0] == old

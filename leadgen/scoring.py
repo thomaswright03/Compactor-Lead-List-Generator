@@ -751,7 +751,8 @@ def mark_parent_company(lead: Lead) -> Lead:
 
 def current_own_flag(flag: str) -> str:
     """An own-company flag as it reads now: one saved under an earlier name of AARCO
-    ("OWN COMPANY: AARCO Compactor", "OWN COMPANY: Arco Compactor") or of the parent
+    ("OWN COMPANY: AARCO Compactors & Balers", "OWN COMPANY: AARCO Compactor",
+    "OWN COMPANY: Arco Compactor") or of the parent
     company reads with the names config has now; any other flag is returned as it is."""
     if not flag.startswith(OWN_FLAG_START):
         return flag

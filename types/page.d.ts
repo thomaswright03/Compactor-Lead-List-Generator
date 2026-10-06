@@ -23,7 +23,7 @@ interface PageConfig {
   flagged: string[];
   /** The flag on a listing of AARCO's parent company (scoring.PARENT_FLAG). */
   parent_flag: string;
-  /** The site's name in page titles ("AARCO Compactors & Balers Lead Finder", config.SITE_NAME). */
+  /** The site's name in page titles ("AARCO Waste & Disposal Lead Finder", config.SITE_NAME). */
   site: string;
   admin: string;
   area_miles: number;
