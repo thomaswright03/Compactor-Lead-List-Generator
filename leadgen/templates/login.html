@@ -8,30 +8,48 @@
 {% include "_theme.html" %}
 <style>
   * { box-sizing:border-box; }
-  body { margin:0; min-height:100vh; display:flex; flex-direction:column; background:var(--side);
-         font:var(--fs-base)/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); }
+  body { margin:0; min-height:100vh; display:flex; flex-direction:column; color:var(--ink);
+         font:var(--fs-base)/1.5 var(--font);
+         background:radial-gradient(1200px 600px at 10% -10%, rgba(143,194,250,.22), transparent 60%),
+                    radial-gradient(900px 500px at 110% 110%, rgba(47,124,224,.25), transparent 60%),
+                    linear-gradient(160deg, var(--side), var(--side-2)); background-color:var(--side); }
   main { flex:1; display:grid; place-items:center; padding:var(--sp-5) var(--sp-4); }
-  .box { width:min(400px,100%); background:var(--card); border-radius:var(--r-lg); padding:var(--sp-6); box-shadow:0 20px 60px var(--shadow); }
-  .brand strong { display:block; font-size:var(--fs-lg); }
-  .brand span { color:var(--muted); }
-  .purpose { margin:var(--sp-3) 0 0; color:var(--muted); }
+  .box { width:min(420px,100%); background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg);
+         padding:var(--sp-6); box-shadow:var(--shadow-lg); }
+  .brand { display:flex; align-items:center; gap:var(--sp-3); }
+  .brand .logo { width:44px; height:44px; flex:none; border-radius:var(--r-sm); box-shadow:var(--shadow-sm); }
+  .brand strong { display:block; font-size:var(--fs-md); line-height:1.3; letter-spacing:-.01em; }
+  .brand span { color:var(--muted); font-size:var(--fs-sm); }
+  .box h1 { margin:var(--sp-5) 0 0; font-size:var(--fs-lg); line-height:1.25; letter-spacing:-.015em; }
+  .purpose { margin:var(--sp-2) 0 0; color:var(--muted); }
   form { display:flex; flex-direction:column; gap:var(--sp-4); margin-top:var(--sp-5); }
-  label { display:flex; flex-direction:column; gap:var(--sp-1); font-weight:600; font-size:var(--fs-sm); color:var(--muted); }
-  input { font:inherit; font-weight:400; padding:var(--sp-3); border:1px solid var(--line); border-radius:var(--r-sm); color:var(--ink); background:var(--input); min-height:44px; }
-  button { font:inherit; font-weight:600; border:0; border-radius:var(--r-sm); padding:var(--sp-3); background:var(--btn); color:var(--btn-ink); cursor:pointer; min-height:44px; }
+  label { display:flex; flex-direction:column; gap:6px; font-weight:600; font-size:var(--fs-sm); color:var(--ink); }
+  input { font:inherit; font-weight:400; padding:var(--sp-3); border:1px solid var(--line-strong); border-radius:var(--r-sm);
+          color:var(--ink); background:var(--input); min-height:44px; transition:border-color .15s, box-shadow .15s; }
+  input:hover { border-color:var(--muted); }
+  input:focus { border-color:var(--accent-2); box-shadow:0 0 0 4px var(--accent-soft); outline:none; }
+  button { font:inherit; font-weight:600; border:0; border-radius:var(--r-sm); padding:var(--sp-3); background:var(--btn);
+           color:var(--btn-ink); cursor:pointer; min-height:48px; margin-top:var(--sp-1); box-shadow:var(--shadow-sm);
+           transition:background-color .15s, transform .05s; }
+  button:hover { background:var(--btn-hover); }
+  button:active { transform:translateY(1px); }
   input:focus-visible, button:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
-  .error { color:var(--bad-ink); font-weight:600; margin:0; }
-  .help { margin:var(--sp-4) 0 0; font-size:var(--fs-sm); color:var(--muted); }
+  .error { color:var(--bad-ink); background:var(--pts-neg); border-radius:var(--r-sm); padding:var(--sp-2) var(--sp-3);
+           font-weight:600; margin:0; }
+  .help { margin:var(--sp-5) 0 0; padding-top:var(--sp-4); border-top:1px solid var(--line); font-size:var(--fs-sm); color:var(--muted); }
   .help a { color:var(--accent); font-weight:600; white-space:nowrap; }
   .help a:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
   @media (pointer: coarse) { .help a { padding-block:14px; } }   /* a 44px tap area; the lines don't move */
+  @media (max-width: 420px) { .box { padding:var(--sp-5); } }
   footer { text-align:center; color:var(--side-ink); font-size:var(--fs-sm); padding:var(--sp-4); }
 </style>
 </head>
 <body>
 <main>
   <div class="box">
-    <div class="brand"><strong>{{ company }}</strong><span>Lead Finder</span></div>
+    <div class="brand"><img class="logo" src="/static/favicon.svg" alt="" width="44" height="44">
+      <div><strong>{{ company }}</strong><span>Lead Finder</span></div></div>
+    <h1>Welcome back</h1>
     <p class="purpose">Finds businesses likely to use a baler or compactor, and keeps the sales team's Yes / No answers and call notes in one list.</p>
     <form method="post" action="/login">
       <label>Username <input name="username" autocomplete="username" value="{{ username or '' }}" required{% if not error %} autofocus{% endif %}></label>

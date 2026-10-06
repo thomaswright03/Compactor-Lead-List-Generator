@@ -2,7 +2,8 @@
    sizes (--fs-xs to --fs-xl) come from templates/_theme.html; use those, not raw pixel values. */
 * { box-sizing:border-box; }
 [hidden] { display:none !important; }
-body { margin:0; font:var(--fs-base)/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+body { margin:0; font:var(--fs-base)/1.45 var(--font); background:var(--bg); color:var(--ink);
+       -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
 a { color:var(--accent); }
 button, .btn { font:inherit; font-weight:600; border-radius:var(--r-sm); cursor:pointer; border:1px solid transparent;
                padding:var(--sp-2) var(--sp-4); background:var(--btn); color:var(--btn-ink); text-decoration:none; display:inline-block; }
@@ -23,7 +24,7 @@ th { overflow-wrap:normal; }
 table.plain.hist td.h-when, table.plain.hist td.h-radius,
 table.plain.hist td.h-leads, table.plain.hist td.h-new, table.plain.hist td.h-act { overflow-wrap:normal; }
 table.plain.hist td.h-where { overflow-wrap:break-word; }
-input, select, textarea { font:inherit; font-weight:400; padding:var(--sp-2); border:1px solid var(--line); border-radius:var(--r-sm); color:var(--ink); background:var(--input); }
+input, select, textarea { font:inherit; font-weight:400; padding:var(--sp-2); border:1px solid var(--line-strong); border-radius:var(--r-sm); color:var(--ink); background:var(--input); }
 
 /* Layout: sidebar + pages */
 .app { display:grid; grid-template-columns:232px minmax(0,1fr); min-height:100vh; }
@@ -642,3 +643,149 @@ td.h-where .sub { display:block; }
 .pin-box .sub { color:var(--muted); }
 .pin-box .flag { color:var(--bad-ink); font-weight:600; }
 .pin-box .open-lead { margin-top:var(--sp-2); font-weight:600; }
+
+/* ==== The look (2026 refresh) ====================================================
+   Visual only: colours, depth, radii and motion on top of the layout above. Nothing here
+   changes what is shown or where; sizes that tests and tap targets rely on stay as set above. */
+
+/* Buttons: a soft lift, a darker hover, a press. */
+button, .btn { box-shadow:var(--shadow-sm); transition:background-color .15s, border-color .15s, color .15s, box-shadow .15s, transform .05s; }
+/* Low specificity on purpose: any button with its own colours (quiet, tabs, Yes / No, the sidebar's)
+   keeps them on hover. */
+:where(button:not(:disabled), .btn):hover { background-color:var(--btn-hover); }
+button:not(:disabled):active, .btn:active { transform:translateY(1px); }
+button.quiet:not(:disabled):hover, .btn.quiet:hover { background:var(--hover); border-color:var(--line-strong); }
+button.quiet, .btn.quiet { border-color:var(--line-strong); }
+button.link, button.undo, button.why-toggle, .theme button, .side .who button, .menu-btn, .side .tour-btn,
+table.leads th button.sort, .viz button { box-shadow:none; }
+button.link:not(:disabled):hover, button.undo:not(:disabled):hover { background:none; text-decoration:underline; }
+table.leads th button.sort:not(:disabled):hover { background:none; color:var(--accent); }
+button.danger:not(:disabled):hover { background:var(--bad); filter:brightness(.92); }
+
+/* Fields: a clear edge on hover, an accent ring on focus. */
+input, select, textarea { transition:border-color .15s, box-shadow .15s; }
+input:hover:not(:disabled), select:hover:not(:disabled), textarea:hover:not(:disabled) { border-color:var(--muted); }
+input:focus, select:focus, textarea:focus { border-color:var(--accent-2); box-shadow:0 0 0 4px var(--accent-soft); }
+input[type=checkbox], input[type=radio] { accent-color:var(--btn); }
+
+/* The sidebar: AARCO's navy with a soft fall of light, the page you are on marked with a bar. */
+.side { background:linear-gradient(180deg, var(--side) 0%, var(--side-2) 100%); background-color:var(--side);
+        box-shadow:inset -1px 0 0 rgba(255,255,255,.08); }
+.brand strong { letter-spacing:-.01em; }
+nav a { position:relative; transition:background-color .15s, color .15s; }
+nav a.on { background:rgba(255,255,255,.12); box-shadow:inset 3px 0 0 var(--side-on); }
+nav a.on .count { background:var(--side-on); color:var(--side); }
+.side .who, .theme, .side .who button, .menu-btn { border-color:rgba(255,255,255,.18); }
+.theme { background:rgba(0,0,0,.15); padding:2px; gap:2px; border-radius:var(--r-sm); }
+.theme button, .theme button:first-child, .theme button:last-child { border-radius:calc(var(--r-sm) - 3px); }
+.theme button[aria-pressed="true"] { background:rgba(255,255,255,.18); box-shadow:0 1px 2px rgba(0,0,0,.25); }
+.theme button:not([aria-pressed="true"]):hover, .side .who button:hover, .side .menu-btn:hover { background:rgba(255,255,255,.08); }
+.side .tour-btn:hover { background:rgba(255,255,255,.2); }
+.side .tour-btn { border-radius:var(--r-pill); padding-inline:var(--sp-4); }
+
+@media (min-width: 821px) {
+  .side { padding:var(--sp-5) var(--sp-3); }
+  .brand { display:grid; grid-template-columns:36px minmax(0,1fr); column-gap:var(--sp-3); align-items:center; padding:0 var(--sp-1); }
+  .brand::before { content:""; grid-row:1 / span 2; width:36px; height:36px; border-radius:var(--r-sm);
+                   background:url("favicon.svg") center / cover no-repeat; box-shadow:0 2px 8px rgba(0,0,0,.3); }
+  .brand > * { grid-column:2; }
+  .brand strong { line-height:1.25; }
+  nav { gap:2px; }
+  nav a { justify-content:flex-start; gap:var(--sp-3); padding:10px var(--sp-3); }
+  nav a .count { margin-left:auto; }
+  /* Each page's icon (a mask in the text's colour). */
+  nav a::before { content:""; width:18px; height:18px; flex:none; background:currentColor; opacity:.85;
+                  -webkit-mask:var(--icon) center / contain no-repeat; mask:var(--icon) center / contain no-repeat; }
+  nav a.on::before { opacity:1; color:var(--side-on); }
+  nav a[data-page=find] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
+  nav a[data-page=leads] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M9 6h11M9 12h11M9 18h11'/%3E%3Ccircle cx='4.5' cy='6' r='1.2' fill='black'/%3E%3Ccircle cx='4.5' cy='12' r='1.2' fill='black'/%3E%3Ccircle cx='4.5' cy='18' r='1.2' fill='black'/%3E%3C/svg%3E"); }
+  nav a[data-page=calls] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.1' stroke-linejoin='round'%3E%3Cpath d='M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z'/%3E%3C/svg%3E"); }
+  nav a[data-page=map] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.1' stroke-linejoin='round'%3E%3Cpath d='M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.5'/%3E%3C/svg%3E"); }
+  nav a[data-page=stats] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M4 20h16M7 16v-5M12 16V6M17 16v-8'/%3E%3C/svg%3E"); }
+  .side-bottom { padding:0 var(--sp-1); }
+}
+@media (max-width: 820px) {
+  .side { box-shadow:0 1px 0 rgba(255,255,255,.06), 0 4px 16px rgba(0,0,0,.18); }
+  nav a.on { box-shadow:inset 0 -3px 0 var(--side-on); }
+}
+
+/* Page headings and cards: a calmer, roomier read. */
+.page-head { margin-bottom:var(--sp-5); }
+.page-head h1 { letter-spacing:-.02em; line-height:1.2; }
+.page-head p { max-width:72ch; }
+.card { box-shadow:var(--shadow-sm); }
+.card h2 { letter-spacing:-.01em; }
+dialog { border:1px solid var(--line); box-shadow:var(--shadow-lg); }
+dialog::backdrop { backdrop-filter:blur(2px); }
+.dlg h2 { letter-spacing:-.015em; }
+.dlg-actions { padding-top:var(--sp-2); }
+.warn, .form-closed { border-left-width:4px; }
+.problem { box-shadow:var(--shadow-sm); }
+
+/* Find leads: the search box stands out; the big button is the one thing to press. */
+#form.card { padding:var(--sp-5); }
+details.advanced summary { width:max-content; max-width:100%; }
+.go-row button { box-shadow:0 1px 2px rgba(16,24,40,.12), 0 4px 12px color-mix(in srgb, var(--btn) 30%, transparent); }
+.step .dot { transition:background-color .2s, border-color .2s; }
+.done-box .big { letter-spacing:-.015em; }
+#done-card { border-left:4px solid var(--good); }
+details.admin summary { width:max-content; max-width:100%; }
+
+/* Tables: quiet headings, a hover row, a little air. */
+table.plain th { font-weight:600; background:var(--th); }
+table.plain tbody tr { transition:background-color .12s; }
+table.plain tbody tr:hover td { background:var(--hover); }
+table.leads th { font-weight:600; color:var(--muted); box-shadow:inset 0 -1px 0 var(--line); }
+table.leads th button.sort { color:var(--ink); }
+table.leads tbody tr td { transition:background-color .12s; }
+@media (min-width: 1100px) {
+  table.leads tbody tr:hover td:not(.score) { background:var(--hover); }
+  tr.competitor:hover td:not(.score) { background:var(--comp) !important; }
+}
+table.leads td.score { font-weight:700; font-variant-numeric:tabular-nums; }
+.table-wrap { box-shadow:var(--shadow-sm); }
+@media (max-width: 1099px) {
+  .table-wrap, .table-wrap.stale { box-shadow:none; }
+  table.leads tr { box-shadow:var(--shadow-sm); transition:box-shadow .15s, border-color .15s; }
+  table.leads tr:hover { border-color:var(--line-strong); box-shadow:var(--shadow-md); }
+}
+
+/* Tabs: a row of pills; the open one filled. */
+.tabs button { border-radius:var(--r-pill); box-shadow:none; }
+.tabs button:not(.on):not(:disabled):hover { background:var(--hover); border-color:var(--line-strong); }
+.tabs button.on:not(:disabled):hover { background:var(--btn-hover); }
+.recent { box-shadow:var(--shadow-sm); border-left:4px solid var(--accent-2); }
+.mark button { box-shadow:none; }
+.mark button.yes:not(.on):not(:disabled):hover { border-color:var(--good); color:var(--good-ink); background:var(--pts); }
+.mark button.no:not(.on):not(:disabled):hover { border-color:var(--bad); color:var(--bad-ink); background:var(--pts-neg); }
+.mark button.yes.on:not(:disabled):hover { background:var(--good); }
+.mark button.no.on:not(:disabled):hover { background:var(--bad); }
+.outcomes button { border-radius:var(--r-pill); box-shadow:none; }
+.outcomes button:not(.on):not(:disabled):hover { background:var(--hover); border-color:var(--line-strong); }
+.outcomes button.on:not(:disabled):hover { background:var(--btn-hover); }
+.badge { letter-spacing:.01em; }
+.history .item { background:var(--bg); }
+.only-one { box-shadow:var(--shadow-sm); }
+
+/* Stats: tiles with a coloured top edge, big tabular numbers. */
+.tile { position:relative; overflow:hidden; border-top:3px solid var(--accent-2); }
+.tile .value { letter-spacing:-.02em; }
+.tiles .tile:nth-child(2) { border-top-color:var(--good); }
+
+/* The map: a framed panel, its key in matching cards. */
+.map-box { box-shadow:var(--shadow-md); }
+#map .leaflet-popup-content-wrapper { border-radius:var(--r-md); }
+
+/* Toast, loading and the tutorial: the same depth as dialogs. */
+.toast { box-shadow:var(--shadow-lg); }
+.toast button:not(:disabled):hover { background:var(--toast-ink); filter:brightness(.92); }
+.loading-cue, .starting { box-shadow:var(--shadow-md); }
+.tour-box { border-radius:var(--r-md); box-shadow:var(--shadow-lg); border-top:4px solid var(--accent-2); }
+.tour-offer { border-radius:var(--r-md); box-shadow:var(--shadow-lg); }
+.tour-count { font-weight:600; letter-spacing:.02em; color:var(--accent); }
+.tour-spot { border-radius:var(--r-md); }
+
+@media (prefers-reduced-motion: reduce) {
+  button, .btn, input, select, textarea, nav a, table.leads tr, table.plain tbody tr, table.leads tbody tr td { transition:none; }
+  button:active, .btn:active { transform:none; }
+}
