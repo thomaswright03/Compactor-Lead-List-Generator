@@ -449,8 +449,8 @@ the sidebar to the page's list (Leads, Calls) or heading.
   notice them (see "Problems: the webhook" in the [operator runbook](operator-runbook.md)). The public map servers often
   refuse or time out on one big query, so a wide search asks the free map data
   **in parts**: a grid of areas up to 20 miles wide (`OVERPASS_PART_MILES`; a
-  30-mile search is 9 areas), two at a time, **nearest the centre first** (the area
-  the search's centre is in, then outwards; a failed area's quarters take their place
+  30-mile search is 9 areas), two at a time, **nearest the center first** (the area
+  the search's center is in, then outwards; a failed area's quarters take their place
   in that order, `osm._distance`), each starting at a different map server (the
   progress text says "3 of 9 areas done": the search's areas, fixed for the whole
   search, an area asked in quarters counting once all four answered; the count only
@@ -512,7 +512,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   neither is set up) are shown as skipped.
 - **Leads**: the saved list, with **Yes** / **No** buttons for "has a baler or
   compactor" and tabs for Not checked, Has baler or compactor, No baler or
-  compactor, Competitors, Closed and All. A saved business that a later search
+  compactor, Competitors & AARCO, Closed and All. A saved business that a later search
   reports **closed for good** stays in the list with its mark and calls, flagged
   "Closed for good" in red: it leaves Not checked (there is nothing left to
   check), stays under Has / No baler or compactor if it was marked, and every
@@ -520,7 +520,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   the downloads (the flag is in the Flags column), and Stats still counts its
   mark: the mark says what it had while it was open. If a later search finds it
   open again, the flag goes. Competitors and AARCO's own listing (and its parent
-  company's, below) are flagged (orange) and have their own **Competitors** tab: they aren't prospects,
+  company's, below) are flagged (orange) and have their own **Competitors & AARCO** tab: they aren't prospects,
   so they get no Yes / No buttons, aren't in Not checked and aren't counted in
   Stats (they still appear under All and in the downloads). The sidebar badge
   counts the prospects still to check. The server filters, sorts and pages the
@@ -676,7 +676,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
     pin, or the map's edge waits until the map is zoomed in (`placeLabels`).
   - The shading, from the latest search of AARCO's area (`area_map.latest_search`: the
     newest day's record that found leads, ran within 0.1 mile of the shop with the
-    service area's miles, and used the map data). A search now records its centre
+    service area's miles, and used the map data). A search now records its center
     (`center`) and the boxes of the parts no server answered for (`map_areas.missing`,
     `[]` when all did, `[null]` when none did, `{"known": false}` when stopped), and the
     filling in keeps its own list as areas answer (`fill.boxes`). An area all of which
@@ -766,7 +766,7 @@ entry to the table where it belongs in the order and one example business to
 `tests/test_classify_rules.py` (a test fails when a rule or veto has no example).
 The scoring tests and the scoring reference file below must still pass.
 
-Three rules give no category by what a name says: a clinic or outpatient centre mapped
+Three rules give no category by what a name says: a clinic or outpatient center mapped
 as a hospital (`config.CLINIC_NAME_WORDS`, unless the name also says hospital; its
 operator's brand earns nothing either), a power, heating or cooling plant
 (`config.SERVICE_PLANT_NAME_WORDS`) and a car or truck wash (`config.VEHICLE_WASH_*`).
@@ -812,7 +812,7 @@ university or college that are not the campus (a community garden, a president's
 house, condominiums, a department, a press, a library): `config.NOT_CAMPUS_WORDS`
 keeps them from scoring as a campus prospect, so one campus is one lead. Businesses
 marked **not_prospect** (a police impound lot, a fire department's training and
-logistics centre, a trailer yard, a parcel-locker brand) must get no prospect
+logistics center, a trailer yard, a parcel-locker brand) must get no prospect
 category and score below the default minimum: `config.NON_PROSPECT_NAME_WORDS`
 (police, sheriff, fire department, impound, trailer yard, fleet maintenance, parcel
 lockers, Luxer...) outrank every tag and name word, unless a specific recycling or
@@ -831,7 +831,7 @@ also holds what a later real search got wrong: self-storage ("Library Storage",
 "Magna Safe Storage", "Storage Warehouse": `config.SELF_STORAGE_*` tags, Google
 types and name words, or the word "storage" without a cold-store or logistics word)
 gets no prospect category, and neither does a catch-all industrial building whose
-name says it is a data centre, a career centre or a city's shops
+name says it is a data center, a career center or a city's shops
 (`config.NOT_PLANT_NAME_WORDS`: "Flexential ...", "Utah Career Center", "Woods
 Cross City Shops"). Its
 **name_traps** list holds names that hold another business's name or a misleading

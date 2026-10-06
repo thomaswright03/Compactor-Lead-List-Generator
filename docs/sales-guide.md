@@ -45,7 +45,7 @@ only looks around and never changes anything.
    spends nothing.
 4. The progress bar shows each step; during the free map data its percentage moves
    with the areas done ("3 of 9 areas done"). The map data is asked for
-   the area around the search's centre first, so the nearest businesses come in
+   the area around the search's center first, so the nearest businesses come in
    first. A search takes a few
    minutes; you can use the other pages meanwhile. The search history shows it as
    "Running…" until it finishes.
@@ -89,7 +89,7 @@ Good to know:
 ## Work the list
 
 - Open **Leads**. The tabs are **Not checked**, **Has baler or compactor**,
-  **No baler or compactor**, **Competitors**, **Closed** and **All**. On a phone
+  **No baler or compactor**, **Competitors & AARCO**, **Closed** and **All**. On a phone
   they are one list at the top.
 - Type in the filter box to find a business by name, city or type; several words
   narrow it down in any order ("walmart layton" finds the Walmart in Layton); pick a tier
@@ -125,8 +125,8 @@ Good to know:
   is kept as Yes and says so in red. Check with the business, then press Yes or
   No to confirm; the note goes away.
 - Competitors (Pro Baler, Action Compaction) and AARCO's own listing are shown in
-  orange under **Competitors**. So are the listings of AARCO's parent company, ACE
-  Recycling & Disposal (its recycling centre on Wallace Road too), marked **AARCO's
+  orange under **Competitors & AARCO**, marked **Not scored**. So are the listings of AARCO's parent company, ACE
+  Recycling & Disposal (its recycling center on Wallace Road too), marked **AARCO's
   parent company**. They are not prospects, so they have no Yes / No.
   When none has been found yet, the tab says so.
 - A business a later search found **closed for good** keeps its mark and calls

@@ -51,7 +51,7 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
 - **Where, and from what.** Around AARCO's shop or any ZIP or city, from Google
   Places, Yelp (at most 50 calls in any 24 hours, with the reset time shown, "today at
   ..." or "tomorrow at ...") and the free OpenStreetMap data. The map data is asked in
-  areas (nine for a 30-mile search), the area around the search's centre first and then
+  areas (nine for a 30-mile search), the area around the search's center first and then
   outwards, so the nearest businesses come first and busy public servers still answer.
 - **Areas a busy server missed** are asked again automatically once during the search,
   which so takes about 7 minutes at most, and then **in the background for up to an
@@ -114,8 +114,8 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   name.
 - **Not prospects.** Police, fire, impound and trailer yards and parcel lockers are not
   prospects, nor are pumping stations, wells, substations and small (under 5,000 sq ft)
-  industrial buildings known only by a map tag, nor self-storage, data centres, career
-  centres or a city's maintenance shops. A clinic or outpatient centre mapped as a
+  industrial buildings known only by a map tag, nor self-storage, data centers, career
+  centers or a city's maintenance shops. A clinic or outpatient center mapped as a
   hospital ("Intermountain West Valley Clinic"), a power, heating or cooling plant
   ("Hospital Generation Plant") and a car or truck wash ("Salt Lake Diesel Wash") are
   what their names say, not prospects.

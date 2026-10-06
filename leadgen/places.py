@@ -108,7 +108,7 @@ def biggest_town(box: tuple[float, float, float, float], centre: tuple[float, fl
 _SHORT = {"n": "north", "no": "north", "s": "south", "so": "south", "e": "east", "w": "west",
           "mt": "mount", "ft": "fort", "pt": "point", "hts": "heights", "hgts": "heights",
           "spg": "springs", "spgs": "springs", "spr": "springs", "vly": "valley", "pk": "park",
-          "cyn": "canyon", "ctr": "center", "cntr": "centre", "twp": "township", "saint": "st"}
+          "cyn": "canyon", "ctr": "center", "cntr": "center", "twp": "township", "saint": "st"}
 # A state after the town ("Layton, UT", "Ogden Utah") or a county note ("Draper (Sl Co)").
 _STATE_NAMES = {"UT": "utah", "ID": "idaho", "NV": "nevada", "WY": "wyoming", "CO": "colorado"}
 _AFTER = re.compile(r"\s*\([^)]*\)\s*$|[\s,]+(?:ut|utah|id|idaho|nv|nevada|wy|wyoming|co|colorado)\.?$|,\s*$",
