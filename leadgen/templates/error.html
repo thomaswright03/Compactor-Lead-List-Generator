@@ -15,12 +15,12 @@
          border:1px solid var(--line); box-shadow:var(--shadow-lg); }
   .brand { display:flex; align-items:center; gap:var(--sp-3); }
   .brand .logo { width:40px; height:40px; flex:none; border-radius:var(--r-sm); }
-  .brand strong { display:block; font-size:var(--fs-md); text-wrap:balance; }
+  .brand strong { font-family:var(--serif); display:block; font-size:var(--fs-md); text-wrap:balance; }
   .brand span { color:var(--muted); font-size:var(--fs-sm); }
-  h1 { letter-spacing:-.015em; font-size:var(--fs-lg); margin:var(--sp-5) 0 var(--sp-2); }
+  h1 { font-family:var(--serif); font-weight:540; letter-spacing:-.015em; font-size:var(--fs-lg); margin:var(--sp-5) 0 var(--sp-2); }
   p { margin:0 0 var(--sp-5); color:var(--muted); font-size:var(--fs-md); }
   .code { font-size:var(--fs-sm); color:var(--muted); margin-top:var(--sp-4); }
-  a.btn { display:inline-block; font-weight:600; border-radius:var(--r-sm); padding:var(--sp-3) var(--sp-4); background:var(--btn);
+  a.btn { display:inline-block; font-weight:600; border-radius:var(--r-pill); background-image:linear-gradient(180deg, var(--btn), var(--btn-2)); padding:var(--sp-3) var(--sp-4); background:var(--btn);
           color:var(--btn-ink); text-decoration:none; min-height:44px; box-shadow:var(--shadow-sm); }
   a.btn:hover { background:var(--btn-hover); }
   a.btn:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }

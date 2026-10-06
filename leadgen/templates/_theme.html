@@ -1,50 +1,72 @@
 {#- Colour, spacing and type tokens and the theme boot for every page (included in each <head>).
     Light is the default; dark follows the OS unless the Light / Dark / System
     control (stored in this browser) says otherwise. -#}
+{#- "Midnight & Brass": near-black navy, AARCO's blue lifted for the dark, brass highlights. -#}
 {%- set dark -%}
   color-scheme:dark;
-  --bg:#0c1320; --card:#141d2c; --ink:#e6ebf2; --muted:#a4afc1; --line:#253248; --line-strong:#33425b;
-  --accent:#8fc2fa; --btn:#2f6db0; --btn-ink:#fff; --btn-hover:#3a7cc2; --accent-2:#5aa7f2; --accent-soft:rgba(90,167,242,.18);
-  --side:#0b1220; --side-2:#070c16; --side-ink:#c9d6e5; --side-on:#8fc2fa; --input:#0f1725; --th:#1a2436;
-  --a:#17432c; --b:#26401f; --c:#463a13; --d:#262f3f; --comp:#55301d;
-  --good:#1c7a4c; --good-ink:#7ddba6; --bad:#c8372d; --bad-ink:#ff9d94;
-  --warn-bg:#352b10; --warn-line:#6f5a1f; --warn-ink:#f5e2a6;
-  --pts:#173a28; --pts-neg:#4a1f1d; --pts-zero:#243041;
-  --toast:#e6ebf2; --toast-ink:#0f1726; --badge:#24304a; --hover:#1a2537;
-  --chart-bar:#5aa7f2; --chart-grid:#253248; --chart-base:#4a586e; --chart-text:#c3ccd8;
-  --shadow:rgba(0,0,0,.5); --backdrop:rgba(3,7,15,.65);
-  --shadow-sm:0 1px 2px rgba(0,0,0,.35); --shadow-md:0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.28);
-  --shadow-lg:0 2px 6px rgba(0,0,0,.35), 0 24px 60px rgba(0,0,0,.5);
+  --bg:#0a0e16; --card:#111722; --surface-2:#161d2a; --surface-3:#1d2534; --surface-glass:rgba(17,23,34,.72);
+  --ink:#e6ebf2; --ink-2:#b4bccb; --muted:#a3acbb; --ink-inverse:#0a0e16; --line:#212a39; --line-strong:#323d51;
+  --accent:#9cc4ef; --btn:#2c67a5; --btn-2:#1f4f84; --btn-ink:#fff; --btn-hover:#3574b6; --accent-2:#6aa6e6;
+  --accent-soft:rgba(106,166,230,.2); --accent-tint:rgba(106,166,230,.12); --accent-glow:rgba(70,140,220,.35);
+  --gold:#d6b16a; --gold-text:#e8c886; --gold-soft:rgba(214,177,106,.16);
+  --side:#0b1220; --side-2:#060a12; --side-ink:#c9d3e0; --side-on:#d6b16a; --input:#0d131d; --th:#141b27;
+  --a:#1b3550; --b:#3b3220; --c:#2e2a24; --d:#222a37; --comp:#4a2a1c;
+  --good:#2f8a5c; --good-ink:#8fd3a8; --bad:#c23b2f; --bad-2:#8f2219; --bad-ink:#ff9d90;
+  --warn-bg:#2a2313; --warn-line:#6b5525; --warn-ink:#f2dfaa; --info-tint:rgba(106,166,230,.12);
+  --pts:#163526; --pts-neg:#45201c; --pts-zero:#1f2735;
+  --toast:#e6ebf2; --toast-ink:#0f1726; --badge:#1f2838; --hover:#151c28;
+  --chart-bar:#6aa6e6; --chart-grid:#212a39; --chart-base:#46536a; --chart-text:#c3ccd8;
+  --shadow:rgba(0,0,0,.55); --backdrop:rgba(3,6,12,.66);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4), 0 1px 1px -1px rgba(0,0,0,.4);
+  --shadow-md:0 2px 4px -1px rgba(0,0,0,.4), 0 10px 24px -6px rgba(0,0,0,.45);
+  --shadow-lg:0 4px 10px -2px rgba(0,0,0,.45), 0 32px 64px -16px rgba(0,0,0,.65);
+  --highlight:inset 0 1px 0 rgba(255,255,255,.05);
   --pin-unchecked:#3987e5; --pin-yes:#199e70; --pin-no:#d95926; --pin-comp:#e6ebf2; --pin-ring:#0f1623;
   --aarco:#f5f7fa; --aarco-ink:#15304d; --area-done:#8cc0f5; --area-miss:#f5c542; --area-unknown:#a6b0c0;
-  --map-bg:#121a28;
-  --tier-a:#34c27a; --tier-b:#8cc63f; --tier-c:#e8a23a; --tier-d:#64748b; --track:#0a101b; --glow:rgba(90,167,242,.10);
+  --map-bg:#101622;
+  --tier-a:#7fb5ec; --tier-b:#d6b16a; --tier-c:#9c8a6d; --tier-d:#4a5568;
+  --tier-a-ink:#9cc4ef; --tier-b-ink:#e8c886; --tier-c-ink:#c9b89a; --tier-d-ink:#a3acbb;
+  --track:#0c111a; --glow:rgba(60,120,200,.16); --glow-2:rgba(214,177,106,.07);
 {%- endset -%}
 {#- The browser's own bar takes the sidebar's colour, light and dark: by the OS's setting,
     or by the Light / Dark choice once one is made (setThemeColor, below). -#}
 <meta name="theme-color" content="#15304d" data-system="#15304d" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b1220" data-system="#0b1220" media="(prefers-color-scheme: dark)">
 <style>
+  @font-face { font-family:"Inter Variable"; font-style:normal; font-weight:100 900; font-display:swap;
+               src:url("/static/vendor/fonts/inter-latin-wght-normal.woff2") format("woff2-variations"); }
+  @font-face { font-family:"Fraunces Variable"; font-style:normal; font-weight:100 900; font-display:swap;
+               src:url("/static/vendor/fonts/fraunces-latin-opsz-normal.woff2") format("woff2-variations"); }
+  @font-face { font-family:"Fraunces Variable"; font-style:italic; font-weight:100 900; font-display:swap;
+               src:url("/static/vendor/fonts/fraunces-latin-opsz-italic.woff2") format("woff2-variations"); }
   :root {
     /* One scale for every page: spacing and radii, and six text sizes. Reading text is at
        least 14px (--fs-sm); only badges and counts use --fs-xs. */
     --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
-    --r-sm:10px; --r-md:14px; --r-lg:20px; --r-pill:999px;
+    --r-sm:10px; --r-md:14px; --r-lg:22px; --r-pill:999px;
     --fs-xs:12px; --fs-sm:14px; --fs-base:15px; --fs-md:16px; --fs-lg:24px; --fs-xl:32px;
+    /* "Ivory & Navy": warm ivory paper, AARCO's navy, thin brass lines. */
     color-scheme:light;
-    --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-    --bg:#f2f5f9; --card:#fff; --ink:#1d2433; --muted:#506074; --line:#e2e7ee; --line-strong:#cdd5e0;
-    --accent:#1b5aa0; --btn:#1d5ea6; --btn-ink:#fff; --btn-hover:#174e8c; --accent-2:#2f7ce0; --accent-soft:rgba(47,124,224,.16);
-    --side:#15304d; --side-2:#0f243b; --side-ink:#cbd8e6; --side-on:#8fc2fa; --input:#fff; --th:#f6f8fb;
-    --a:#cdf2d8; --b:#e3f1d6; --c:#fdf0c4; --d:#edf0f4; --comp:#f9d3ba;
-    --good:#146c43; --good-ink:#146c43; --bad:#b42318; --bad-ink:#b42318;
-    --warn-bg:#fff8e6; --warn-line:#f6d77e; --warn-ink:#1d2433;
-    --pts:#e1f4e7; --pts-neg:#fdecea; --pts-zero:#eef1f5;
-    --toast:#1d2433; --toast-ink:#fff; --badge:#e8edf4; --hover:#f5f8fc;
-    --chart-bar:#2f7ce0; --chart-grid:#e6e9ee; --chart-base:#c9ced6; --chart-text:#4a5261;
-    --shadow:rgba(16,24,40,.18); --backdrop:rgba(10,20,36,.5);
-    --shadow-sm:0 1px 2px rgba(16,24,40,.06); --shadow-md:0 1px 2px rgba(16,24,40,.05), 0 4px 14px rgba(16,24,40,.07);
-    --shadow-lg:0 2px 6px rgba(16,24,40,.08), 0 24px 60px rgba(16,24,40,.2);
+    --font:"Inter Variable",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --serif:"Fraunces Variable",Georgia,"Times New Roman",serif;
+    --ease:cubic-bezier(.22,1,.36,1);
+    --bg:#f6f2ea; --card:#fffdf8; --surface-2:#f2ede3; --surface-3:#e9e2d5; --surface-glass:rgba(255,253,248,.78);
+    --ink:#1d2433; --ink-2:#4a4f5c; --muted:#5b5853; --ink-inverse:#fffdf8; --line:#e6ddcf; --line-strong:#cfc3ae;
+    --accent:#1d4f80; --btn:#235a8f; --btn-2:#163a60; --btn-ink:#fff; --btn-hover:#1b4b79; --accent-2:#2f6fb0;
+    --accent-soft:rgba(47,111,176,.18); --accent-tint:rgba(35,90,143,.07); --accent-glow:rgba(35,90,143,.28);
+    --gold:#a8803a; --gold-text:#6e4f14; --gold-soft:rgba(168,128,58,.14);
+    --side:#15304d; --side-2:#0d2036; --side-ink:#d3dce8; --side-on:#d6b16a; --input:#fffdf8; --th:#f3eee5;
+    --a:#dde8f3; --b:#f2e8d2; --c:#efe9df; --d:#ece8e1; --comp:#f6dfcd;
+    --good:#2c6a3c; --good-ink:#2c6a3c; --bad:#a3241a; --bad-2:#7d1910; --bad-ink:#a3241a;
+    --warn-bg:#fbf3df; --warn-line:#e4c98a; --warn-ink:#1d2433; --info-tint:rgba(35,90,143,.07);
+    --pts:#e3efe4; --pts-neg:#f8e4e0; --pts-zero:#efeae1;
+    --toast:#1d2433; --toast-ink:#fffdf8; --badge:#efe8dc; --hover:#faf6ef;
+    --chart-bar:#235a8f; --chart-grid:#ebe4d8; --chart-base:#cfc3ae; --chart-text:#4a4f5c;
+    --shadow:rgba(40,32,20,.16); --backdrop:rgba(20,22,30,.45);
+    --shadow-sm:0 1px 2px rgba(60,45,25,.06), 0 1px 1px -1px rgba(60,45,25,.06);
+    --shadow-md:0 2px 4px -1px rgba(60,45,25,.06), 0 10px 24px -8px rgba(40,50,80,.14);
+    --shadow-lg:0 4px 10px -2px rgba(60,45,25,.08), 0 32px 64px -18px rgba(30,40,70,.28);
+    --highlight:inset 0 1px 0 rgba(255,255,255,.7);
     /* The Map page: pins by Yes / No answer (a blue / aqua / orange set that stays apart for
        colour-blind eyes, checked with a CVD validator in both themes), competitors as hollow
        squares, AARCO's own pin, and the search areas' edges by how the latest search went. */
@@ -52,7 +74,9 @@
     --aarco:#15304d; --aarco-ink:#fff; --area-done:#1f4e78; --area-miss:#b54708; --area-unknown:#4d5566;
     --map-bg:#e9edf2;
     /* Tier stripes on the lead cards, the tabs' track, the soft light at the top of each page. */
-    --tier-a:#15a35a; --tier-b:#6aa628; --tier-c:#d98a10; --tier-d:#94a3b8; --track:#e6ebf2; --glow:rgba(47,124,224,.10);
+    --tier-a:#235a8f; --tier-b:#b08a3e; --tier-c:#b9a98f; --tier-d:#cfc3ae;
+    --tier-a-ink:#1d4f80; --tier-b-ink:#6e4f14; --tier-c-ink:#5b5853; --tier-d-ink:#5b5853;
+    --track:#ece5d8; --glow:rgba(35,90,143,.09); --glow-2:rgba(168,128,58,.08);
   }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { {{ dark }} } }
   :root[data-theme="dark"] { {{ dark }} }

@@ -823,7 +823,7 @@ main { background:radial-gradient(1100px 380px at 50% -160px, var(--glow), trans
 @media (min-width: 701px) {
   #leads-body .toolbar { background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg); padding:var(--sp-2);
                          gap:var(--sp-2); box-shadow:var(--shadow-sm); margin:var(--sp-3) 0 var(--sp-4); }
-  #leads-body .toolbar input#filter, #leads-body .toolbar select { border-color:transparent; background-color:var(--bg); min-height:40px; }
+  #leads-body .toolbar input#filter, #leads-body .toolbar select { border-color:transparent; background-color:var(--bg); min-height:44px; }
   #leads-body .toolbar input#filter:hover, #leads-body .toolbar select:hover { border-color:var(--line-strong); }
   #leads-body .toolbar input#filter:focus, #leads-body .toolbar select:focus { border-color:var(--accent-2); background-color:var(--input); }
   #leads-body .toolbar .phone-pick { padding:0 var(--sp-2); }
@@ -927,3 +927,237 @@ a:hover { text-decoration-color:currentColor; }
 .dlg { padding:var(--sp-6) var(--sp-5) var(--sp-5); }
 .dlg textarea { border-radius:var(--r-md); }
 .tile .value small { letter-spacing:0; margin-left:var(--sp-1); }
+
+/* ==== Ivory & Navy / Midnight & Brass ==============================================
+   The luxury layer: Fraunces for titles, names and big numbers, Inter for the rest, AARCO's
+   navy as the one accent with brass as its highlight. Tokens only (templates/_theme.html). */
+
+/* Atmosphere: two soft glows and a faint paper grain behind every page. */
+body { background-color:var(--bg);
+  background-image:radial-gradient(900px 600px at 12% -8%, var(--glow), transparent 65%),
+                   radial-gradient(800px 600px at 100% 100%, var(--glow-2), transparent 60%),
+                   url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.45 0 0 0 0 0.4 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-attachment:fixed; }
+main { background:none; }
+
+/* Type: serif display, tight and confident; numbers line up. */
+.page-head h1, .card h2, .dlg h2, .tour-box h2, .done-box .big, .tile .value, .recent h2,
+table.leads td.c-name strong, table.plain.calls td.c-name strong, .pin-box strong:first-child,
+.brand strong, .empty strong, .problem strong, .map-side legend + * strong {
+  font-family:var(--serif); font-optical-sizing:auto; }
+.page-head h1 { font-weight:560; letter-spacing:-.02em; font-variation-settings:"SOFT" 30; }
+@media (min-width: 821px) { .page-head h1 { font-size:40px; line-height:1.1; } }
+.page-head h1::after { content:""; display:block; width:64px; height:2px; margin:var(--sp-3) 0 var(--sp-2);
+                       border-radius:2px; background:linear-gradient(90deg, var(--accent-2), var(--gold)); }
+.page-head p { color:var(--ink-2); }
+.card h2 { font-size:20px; font-weight:560; letter-spacing:-.01em; }
+.dlg h2 { font-size:26px; font-weight:560; }
+td, .tile .value, .tab-n, nav .count, dl.details dd, #s-table td, .bar-row { font-variant-numeric:tabular-nums; }
+.muted, .sub, label .hint { color:var(--muted); }
+
+/* Surfaces: ivory cards with a hairline, a lit top edge and tinted depth. */
+.card, .recent, .problem, .only-one, .tour-offer, .tour-box, .loading-cue, .starting, .admin-body {
+  background:var(--card); border-color:var(--line); box-shadow:var(--shadow-sm), var(--highlight); }
+.card { border-radius:var(--r-lg); padding:var(--sp-5); }
+.card h2 { margin-bottom:var(--sp-4); }
+.hairline, .dlg h2::after { content:""; display:block; height:1px; margin-top:var(--sp-3);
+  background:linear-gradient(90deg, transparent, var(--gold), transparent); opacity:.7; }
+
+/* The hero: Find leads' search form, framed in a navy-to-brass border with a glow in its corners. */
+#form.card { position:relative; border:1px solid transparent; padding:var(--sp-6);
+  background:radial-gradient(420px 200px at 0 0, var(--accent-tint), transparent 70%) padding-box,
+             radial-gradient(420px 220px at 100% 100%, var(--gold-soft), transparent 70%) padding-box,
+             linear-gradient(var(--card), var(--card)) padding-box,
+             linear-gradient(135deg, color-mix(in srgb, var(--accent-2) 55%, transparent), var(--line) 40%, var(--line) 60%, color-mix(in srgb, var(--gold) 70%, transparent)) border-box;
+  box-shadow:var(--shadow-md), var(--highlight); }
+@media (max-width: 700px) { #form.card { padding:var(--sp-4); } }
+
+/* Buttons: the main one a navy gradient pill with a glow; the rest raised neutral pills. */
+button, .btn { border-radius:var(--r-pill); padding-inline:18px; letter-spacing:.005em;
+  transition:background-color .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease),
+             box-shadow .25s var(--ease), transform .2s var(--ease), filter .2s var(--ease); }
+:where(button:not(.quiet):not(.link):not(.undo):not(.danger), .btn:not(.quiet)) {
+  background-image:linear-gradient(180deg, var(--btn), var(--btn-2));
+  box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 1px 2px rgba(10,20,40,.2), 0 6px 16px -6px var(--accent-glow); }
+:where(button:not(.quiet):not(.link):not(.undo):not(.danger):not(:disabled), .btn:not(.quiet)):hover {
+  transform:translateY(-1px); filter:brightness(1.06);
+  box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 2px 4px rgba(10,20,40,.2), 0 10px 22px -8px var(--accent-glow); }
+:where(button:not(:disabled), .btn):active { transform:translateY(0); filter:brightness(.97); }
+button.quiet, .btn.quiet { background:var(--card); background-image:linear-gradient(180deg, var(--card), var(--surface-2));
+  border-color:var(--line-strong); color:var(--ink); box-shadow:var(--shadow-sm), var(--highlight); }
+button.quiet:not(:disabled):hover, .btn.quiet:hover { background:var(--card); border-color:var(--gold); transform:translateY(-1px); }
+button.danger { background:linear-gradient(180deg, var(--bad), var(--bad-2)); border:0; }
+button:disabled, button[aria-disabled="true"] { filter:saturate(.3); box-shadow:none; transform:none; }
+button.link, button.undo { color:var(--accent); background:none; text-decoration:underline;
+  text-decoration-color:color-mix(in srgb, currentColor 40%, transparent); text-underline-offset:3px; }
+/* The sidebar's controls and the tabs keep their own quiet look. */
+.side button, .tabs button, .mark button, .outcomes button, .theme button, .toast button,
+table.leads th button.sort { background-image:none; }
+.side button:hover, .tabs button:hover, .mark button:hover, .outcomes button:hover, .theme button:hover,
+table.leads th button.sort:hover, .toast button:hover { transform:none; filter:none; }
+.side .tour-btn { background:rgba(214,177,106,.12); border-color:rgba(214,177,106,.45); color:#f3e3bf; }
+.side .tour-btn:hover { background:rgba(214,177,106,.22); }
+
+/* Fields: taller, soft corners, a brass-free navy focus ring; a drawn chevron on pickers. */
+input:not([type=checkbox]):not([type=radio]), select, textarea { border-radius:var(--r-md); border-color:var(--line-strong);
+  background-color:var(--input); box-shadow:inset 0 1px 2px rgba(40,30,20,.04); }
+input:not([type=checkbox]):not([type=radio]), select { min-height:44px; padding-inline:var(--sp-3); }
+select { appearance:none; -webkit-appearance:none; padding-right:36px; background-repeat:no-repeat;
+  background-position:right 12px center; background-size:12px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%23888070' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m1 1.5 5 5 5-5'/%3E%3C/svg%3E"); }
+input:focus, select:focus, textarea:focus { border-color:var(--accent-2); box-shadow:0 0 0 4px var(--accent-soft); }
+input[aria-invalid="true"], select[aria-invalid="true"] { border-color:var(--bad); box-shadow:0 0 0 4px color-mix(in srgb, var(--bad) 14%, transparent); }
+label { color:var(--ink); }
+#form .form-grid > label { font-variant-caps:all-small-caps; letter-spacing:.07em; font-size:var(--fs-md); color:var(--ink-2); }
+#form .form-grid > label > input, #form .form-grid > label > select, #form .form-grid > label > .hint {
+  font-variant-caps:normal; letter-spacing:0; font-size:var(--fs-sm); }
+#form .form-grid > label > input, #form .form-grid > label > select { font-size:var(--fs-base); color:var(--ink); }
+
+/* Tick boxes: a drawn box that fills navy with a white tick; a chip when it sits on its own. */
+input[type=checkbox]:not(#has-phone) { appearance:none; -webkit-appearance:none; flex:none; width:18px; height:18px; margin:0;
+  border:1.5px solid var(--line-strong); border-radius:5px; background:var(--input) no-repeat center / 12px;
+  cursor:pointer; transition:background-color .15s var(--ease), border-color .15s var(--ease); }
+input[type=checkbox]:not(#has-phone):checked { background-color:var(--btn); border-color:var(--btn);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m1.5 5 3 3 6-6.5'/%3E%3C/svg%3E"); }
+input[type=checkbox]:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
+#form label.check { width:fit-content; padding:var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-3); border:1px solid var(--line-strong);
+  border-radius:var(--r-pill); background:var(--card); transition:background-color .2s var(--ease), border-color .2s var(--ease); }
+#form label.check:has(input:checked), .toolbar .phone-pick:has(input:checked) { background:var(--accent-tint); border-color:var(--accent-2); }
+.toolbar .phone-pick { border:1px solid transparent; border-radius:var(--r-pill); }
+label.check:has(input:focus-visible) { outline:3px solid var(--accent-2); outline-offset:2px; }
+
+/* The sidebar: deep navy with a brass bar on the page you are on, the page a raised pill. */
+.side { background:radial-gradient(400px 300px at 0 0, rgba(214,177,106,.10), transparent 70%),
+                   linear-gradient(180deg, var(--side), var(--side-2)); }
+.brand strong { font-size:17px; font-weight:600; letter-spacing:-.005em; color:#fff; }
+.brand span { color:var(--side-on); font-variant-caps:all-small-caps; letter-spacing:.1em; font-size:var(--fs-md); opacity:1; }
+nav a { border-radius:var(--r-pill); }
+nav a.on { background:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.07));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12), 0 4px 12px -4px rgba(0,0,0,.4); }
+@media (min-width: 821px) {
+  nav a.on::after { content:""; position:absolute; left:6px; top:50%; width:3px; height:16px; margin-top:-8px;
+                    border-radius:3px; background:var(--side-on); }
+  nav a { padding-left:var(--sp-4); }
+  .brand::before { border-radius:12px; box-shadow:0 0 0 1px rgba(214,177,106,.45), 0 6px 16px rgba(0,0,0,.35); }
+  .side-bottom::before { content:""; display:block; height:1px; margin-bottom:var(--sp-2);
+    background:linear-gradient(90deg, transparent, rgba(214,177,106,.5), transparent); }
+}
+nav a.on .count { background:var(--side-on); color:var(--side-2); }
+.theme { border-radius:var(--r-pill); }
+.theme button, .theme button:first-child, .theme button:last-child { border-radius:var(--r-pill); }
+.theme button[aria-pressed="true"] { background:rgba(255,255,255,.92); color:var(--side); box-shadow:0 2px 6px rgba(0,0,0,.3); }
+
+/* Tabs: a pill track; the open tab raised, its count in navy. */
+.tabs { border-radius:var(--r-pill); background:var(--track); box-shadow:inset 0 1px 2px rgba(40,30,20,.06); }
+.tabs button { border-radius:var(--r-pill); }
+.tabs button.on, .tabs button.on:not(:disabled):hover { background:var(--card); box-shadow:var(--shadow-md), var(--highlight); }
+.tabs button.on .tab-n { background:linear-gradient(180deg, var(--btn), var(--btn-2)); }
+#leads-body .toolbar { border-radius:var(--r-pill); padding:6px; }
+#leads-body .toolbar input#filter, #leads-body .toolbar select { border-radius:var(--r-pill); }
+@media (max-width: 1099px) and (min-width: 701px) { #leads-body .toolbar { border-radius:var(--r-lg); } }
+
+/* The lead cards: serif names, the score in serif figures tinted by tier, a warm hover. */
+@media (min-width: 1100px) {
+  table.leads { border-spacing:0 12px; }
+  table.leads th { background:color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter:saturate(1.6) blur(14px);
+                   -webkit-backdrop-filter:saturate(1.6) blur(14px); color:var(--ink-2); }
+  table.leads th[aria-sort=ascending] .arrow, table.leads th[aria-sort=descending] .arrow { color:var(--gold); }
+  table.leads tbody td { border-color:var(--line); }
+  table.leads tbody td:first-child { border-radius:var(--r-lg) 0 0 var(--r-lg); }
+  table.leads tbody td:last-child { border-radius:0 var(--r-lg) var(--r-lg) 0; }
+  table.leads tbody tr:hover td { background:var(--hover); border-color:var(--line-strong); }
+  table.leads tbody tr td.score { font-family:var(--serif); font-size:34px; font-weight:500; letter-spacing:-.02em; }
+  table.leads tbody tr:hover td.score { background:var(--hover); }
+  td.score .tier-word { font-family:var(--font); }
+}
+table.leads tr.A td.score { color:var(--tier-a-ink); } table.leads tr.B td.score { color:var(--tier-b-ink); }
+table.leads tr.C td.score, table.leads tr.D td.score { color:var(--tier-c-ink); }
+table.leads td.c-name strong { font-size:19px; font-weight:560; letter-spacing:-.01em; }
+@media (max-width: 1099px) {
+  table.leads tr { border-radius:var(--r-lg); box-shadow:var(--shadow-sm), var(--highlight); }
+  table.leads td.score { border-radius:var(--r-pill); }
+  tr.A td.score { background:var(--a); } tr.B td.score { background:var(--b); }
+}
+.reason .pts { border-radius:var(--r-pill); }
+.badge { display:inline-flex; align-items:center; gap:6px; padding:1px 9px 1px 8px; background:var(--badge); color:var(--ink);
+         border:1px solid var(--line); }
+.badge::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--gold); flex:none; }
+.verified .v-tag::before { background:var(--good); }
+.mark button { border-radius:var(--r-pill); padding-inline:var(--sp-4); background:var(--card); border-color:var(--line-strong); }
+.mark button.yes.on { background:linear-gradient(180deg, #3a8a55, var(--good)); border-color:var(--good); }
+.mark button.no.on { background:linear-gradient(180deg, var(--bad), var(--bad-2)); border-color:var(--bad); }
+.outcomes button { background:var(--card); border-color:var(--line-strong); }
+.outcomes button.on, .outcomes button.on:not(:disabled):hover { background:linear-gradient(180deg, var(--btn), var(--btn-2)); border-color:var(--btn-2); color:var(--btn-ink); }
+.recent { border-left:3px solid var(--gold); border-radius:var(--r-lg); }
+.notes { font-family:var(--font); }
+table.plain.calls td.notes { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--ink-2);
+                             border-left:2px solid var(--gold-soft); padding-left:var(--sp-3); }
+@media (min-width: 701px) {
+  table.plain.calls tbody td:first-child { border-radius:var(--r-lg) 0 0 var(--r-lg); }
+  table.plain.calls tbody td:last-child { border-radius:0 var(--r-lg) var(--r-lg) 0; }
+  table.plain.calls tbody tr:hover td { background:var(--hover); }
+  table.plain.calls td.c-name strong { font-size:17px; font-weight:560; }
+}
+@media (max-width: 700px) { table.plain.calls tr { border-radius:var(--r-lg); box-shadow:var(--shadow-sm); } }
+table.plain th, #s-table th { color:var(--ink-2); }
+
+/* Notes and banners: tinted panels with a coloured edge. */
+.warn, .form-closed { background:var(--warn-bg); border:1px solid var(--warn-line); border-left:3px solid var(--gold); border-radius:var(--r-md); }
+.problem { border-left:3px solid var(--bad); border-radius:var(--r-lg); }
+.hint-line::before { background:var(--gold-soft); color:var(--gold-text); }
+#day-note::before { background:var(--good); box-shadow:0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
+
+/* Progress: a navy-to-brass bar, steps with ringed dots. */
+.bar { background:var(--surface-3); height:10px; }
+.bar > div { background:linear-gradient(90deg, var(--btn-2), var(--accent-2) 60%, var(--gold)); }
+.step.done .dot { background:var(--btn); border-color:var(--btn); }
+.step.now .dot { border-color:var(--gold); border-top-color:transparent; }
+progress, meter { accent-color:var(--btn); }
+
+/* Empty states: a small ornament (a navy-to-brass ring) above the words. */
+.empty::before { content:""; display:block; width:44px; height:44px; margin:0 auto var(--sp-4); border-radius:50%;
+  background:conic-gradient(from 210deg, var(--accent-2), var(--gold), var(--accent-2));
+  -webkit-mask:radial-gradient(circle, transparent 15px, #000 16px); mask:radial-gradient(circle, transparent 15px, #000 16px); opacity:.85; }
+.empty strong { font-size:22px; font-weight:560; }
+
+/* Stats: big serif figures; tiles lit along the top in navy and brass. */
+.tile .value { font-family:var(--serif); font-size:54px; font-weight:500; letter-spacing:-.03em; }
+.tile .value small { font-family:var(--font); }
+.tile::before { background:linear-gradient(90deg, var(--btn-2), var(--accent-2)); height:3px; }
+.tiles .tile:nth-child(2)::before { background:linear-gradient(90deg, var(--gold-text), var(--gold)); }
+#s-table td:first-child { font-family:var(--serif); font-size:17px; }
+
+/* Dialogs: a blurred, dimmed backdrop, a large radius, a serif title over a brass hairline. */
+dialog { border-radius:var(--r-lg); background:var(--card); box-shadow:var(--shadow-lg), var(--highlight); }
+dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturate(1.2); }
+dialog[open] { animation:rise .35s var(--ease); }
+dl.confirm-list { background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-2) var(--sp-4); }
+.history .item { background:var(--surface-2); border-color:var(--line); border-radius:var(--r-md); }
+
+/* Toast and the tutorial. */
+.toast { border-radius:var(--r-pill); padding-left:var(--sp-5); }
+.toast button { border-radius:var(--r-pill); }
+.tour-box { border-top:0; border-radius:var(--r-lg); }
+.tour-box::before { content:""; position:absolute; inset:0 24px auto; height:2px; border-radius:2px;
+                    background:linear-gradient(90deg, transparent, var(--gold), transparent); }
+.tour-count { color:var(--gold-text); font-variant-caps:all-small-caps; letter-spacing:.1em; font-size:var(--fs-md); }
+.tour-offer { border-left:3px solid var(--gold); border-radius:var(--r-lg); }
+.tour-spot { box-shadow:0 0 0 9999px rgba(8,12,20,.6), 0 0 0 3px var(--gold); border-radius:var(--r-md); }
+
+/* Map. */
+.map-box { border-radius:var(--r-lg); }
+#map .leaflet-popup-content-wrapper { border-radius:var(--r-lg); }
+.area-list li { border-radius:var(--r-md); background:var(--surface-2); }
+
+/* Motion: things rise into place; text is never faded in. */
+@keyframes rise { from { transform:translateY(12px); } to { transform:none; } }
+.page:not([hidden]) .page-head { animation:rise .4s var(--ease); }
+.toast:not([hidden]) { animation:rise .3s var(--ease); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation:none !important; transition:none !important; }
+}
+@media (forced-colors: active) {
+  .card, .tabs, .toolbar, table.leads tbody td, dialog, .badge, .tile { border:1px solid CanvasText; }
+  button, .btn { border:1px solid ButtonText; }
+  .page-head h1::after, .tile::before { background:CanvasText; }
+}
