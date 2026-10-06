@@ -328,17 +328,18 @@ the full behaviour, for whoever changes or supports the site.
 The sidebar has five pages (Find leads, Leads, Calls, Map, Stats), a Light / Dark / System colour switch (System
 follows the computer's setting; the choice is remembered in each browser), and
 every page carries the Wright AI Solutions copyright. The browser tab names the
-page ("Leads · AARCO Compactors & Balers Lead Finder") and shows the Lead Finder icon.
-The company's name comes from one setting, `config.OWN_COMPANY` ("AARCO Compactors &
-Balers"): page titles, the brand block, the login and error pages, the own-listing flag,
+page ("Leads · AARCO Waste & Disposal Lead Finder") and shows the Lead Finder icon.
+The company's name comes from one setting, `config.OWN_COMPANY` ("AARCO Waste &
+Disposal"): page titles, the brand block, the login and error pages, the own-listing flag,
 the shop's place label and the problem alerts all use it (`config.SITE_NAME`, the
 templates' `company` / `site_name`, the page's `CONFIG.site`). Below 520 px the brand
 block shows `config.OWN_COMPANY_SHORT` ("AARCO"), as the full name doesn't fit beside
 Menu. Records saved under an earlier name ("Arco Compactor" until 2026-10-03, then
-"AARCO Compactor") are shown with the name it has now, by `daily._as_record` (a
-search's place) and `scoring.current_own_flag` in `saved._ready` (the own-company flag
-on a saved lead), without rewriting them, and a listing or a search that spells it
-"Arco" is still AARCO's.
+"AARCO Compactor", then "AARCO Compactors & Balers" until 2026-10-06) are shown with
+the name it has now, by `daily._as_record` (a search's place) and
+`scoring.current_own_flag` in `saved._ready` (the own-company flag on a saved lead),
+without rewriting them. A listing under any of those names (`config.SELF_ALIASES`), or a
+search that spells it "Arco", is still AARCO's.
 On phones and tablets every button and link is at least 44 px each way (on a
 narrow window the "Only businesses matching the search words" tick box too). On a
 phone or tablet (up to 820 px wide) the navigation is one short bar at the top (the

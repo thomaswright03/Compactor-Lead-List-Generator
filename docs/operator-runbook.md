@@ -54,15 +54,11 @@ links to, and take it off the README's "Still open for the owner" list.
    Set it in Render only, never in this repository. *Check:*
    `curl -s https://compactor-lead-finder.onrender.com/login | grep -oE 'href="(tel|mailto):[^"]+"'`
    prints the contact's `tel:` or `mailto:` link (nothing printed: not set yet).
-3. **Delete the two old branches** (GitHub; **Open**, checked 2026-10-03):
-   `wip-yelp-cap-and-baler-marks` and `runbook-owner-steps-done`. Nothing on them is
-   missing from `main` and nothing deploys from them. `claude-staging` is **kept on
-   purpose**: it is the staging route to the protected `main` (work is pushed there, the
-   three CI checks run on it, and `main` moves up to it only once they are green), so
-   don't delete it. Steps, with an optional archive tag:
-   [Branches](#the-size-of-a-clone). *Check:* `git ls-remote --heads origin` lists
-   only `refs/heads/main` and `refs/heads/claude-staging` (plus a branch with an open
-   pull request, if any).
+3. **Delete the two old branches** (GitHub; **Done (2026-10-05)**):
+   `wip-yelp-cap-and-baler-marks` and `runbook-owner-steps-done` are gone; the repository
+   has only `main` and `claude-staging`. `claude-staging` is **kept on purpose**: it is the
+   staging route to the protected `main`, so don't delete it. *Check:* `git ls-remote --heads origin`
+   lists only `refs/heads/main` and `refs/heads/claude-staging`. See [Branches](#the-size-of-a-clone).
 4. **Turn on the nightly backup** (GitHub; **Done (2026-10-03)**: first run green). So a copy older
    than Neon's 6-hour history exists. On GitHub open the repository → **Settings** →
    **Secrets and variables** → **Actions** → **New repository secret**, twice:
@@ -310,7 +306,7 @@ So that nobody has to watch the Logs tab, every failed or incomplete search and
 every error the site logs is also recorded in the database (the `problems`
 table; the Find leads page lists the last 7 days under the search history) and,
 when `LEADGEN_ALERT_WEBHOOK` is set, sent as a one-line message such as
-"AARCO Compactors & Balers Lead Finder: Today's search failed: Couldn't reach the map data
+"AARCO Waste & Disposal Lead Finder: Today's search failed: Couldn't reach the map data
 service (OpenStreetMap), so no leads were found. (Sep 29, 2026, 5:48 PM, Utah time)".
 To set it up:
 
@@ -376,33 +372,20 @@ everyone's clones and the deploy link, so it is left there; it has no effect on
 the running site. `*.whl` files are now ignored so it can't happen again. Purge
 it only if the owner agrees to rewrite the history.
 
-**Branches** (checked 2026-10-03). `main` is the only branch the site runs from.
-`claude-staging` stays; the other two are safe to delete, by the owner:
+**Branches** (checked 2026-10-05). `main` is the only branch the site runs from. The
+repository has two branches:
 
+- `main`: what the site runs.
 - `claude-staging` (**kept on purpose**): the staging route to the protected `main`.
   Review-round fixes are pushed there first, the three CI checks run on it, and `main`
   moves up to it only once they are green; between rounds it points at a commit already
   on `main`. Nothing deploys from it. Don't delete it.
-- `wip-yelp-cap-and-baler-marks` (last commit 20eb261, 2026-09-29): the first draft of
-  the 50-a-day Yelp cap, the Yes / No marks and the Postgres database. That work
-  reached `main` as commit 54de1e5 ("Save leads and baler marks permanently; cap the
-  website at 50 Yelp calls a day") and has been built on ever since.
-- `runbook-owner-steps-done` (7692522, 2026-10-03, "Runbook: main is protected and the
-  nightly backup is on"): that commit is already part of `main`.
 
-To delete the two old ones: GitHub → the repository → **Branches** → **All branches** →
-the bin icon next to each; or, on a computer with a clone:
-
-```bash
-git fetch origin
-git merge-base --is-ancestor origin/runbook-owner-steps-done origin/main && echo on main  # prints: on main
-git push origin 20eb26110c8537af04bd3e68420251e18a50696d:refs/tags/archive/wip-yelp-cap-and-baler-marks  # optional: keep a tag
-git push origin --delete wip-yelp-cap-and-baler-marks runbook-owner-steps-done
-git ls-remote --heads origin        # check: lists only refs/heads/main and refs/heads/claude-staging
-```
-
-Then mark owner action 3 **Done (the date)** under
-[Owner actions still open](#owner-actions-still-open) and shorten this paragraph.
+The old branches `wip-yelp-cap-and-baler-marks` (an early draft of work that reached
+`main` as 54de1e5) and `runbook-owner-steps-done` (already part of `main`) were deleted by
+the owner on 2026-10-05. *Check:* `git ls-remote --heads origin` lists only
+`refs/heads/main` and `refs/heads/claude-staging` (plus a branch with an open pull
+request, if any).
 
 ## The database (saved leads, marks, calls, the Yelp count)
 

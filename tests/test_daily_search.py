@@ -134,25 +134,27 @@ def test_a_source_that_failed_outright_gets_the_short_note(monkeypatch):
 
 def test_a_search_recorded_under_an_old_name_shows_the_name_now():
     """Searches run under an earlier name of the company ("Arco Compactor", then "AARCO
-    Compactor") show its name now (config.OWN_COMPANY) in the history and still count as
-    the same place; the stored records keep their text."""
+    Compactor", then "AARCO Compactors & Balers") show its name now (config.OWN_COMPANY)
+    in the history and still count as the same place; the stored records keep their text."""
     import json
 
     from leadgen import geo
     olds = ["Arco Compactor, 876 Fortune Rd, Salt Lake City, UT 84104",
-            "AARCO Compactor, 876 Fortune Rd, Salt Lake City, UT 84104"]
+            "AARCO Compactor, 876 Fortune Rd, Salt Lake City, UT 84104",
+            "AARCO Compactors & Balers, 876 Fortune Rd, Salt Lake City, UT 84104"]
     with store.connect() as db:
         for n, old in enumerate(olds):
             db.run("INSERT INTO searches (day, at, info) VALUES (?, ?, ?)",
-                   (f"2026-09-{29 + n}", time.time() - (4 - n) * 86400,
+                   (f"2026-09-{28 + n}", time.time() - (5 - n) * 86400,
                     json.dumps({"location": "876 Fortune Rd", "place": old, "found_near": old, "leads": 3})))
     records = daily.history()["searches"]
-    assert len(records) == 2
+    assert len(records) == 3
     for record in records:
         assert record["place"] == record["found_near"] == geo.OWN_LABEL \
-            == "AARCO Compactors & Balers, 876 Fortune Rd, Salt Lake City, UT 84104"
+            == "AARCO Waste & Disposal, 876 Fortune Rd, Salt Lake City, UT 84104"
     assert daily.earlier_search(geo.OWN_LABEL, daily.today(), 0) is not None
-    assert daily.earlier_search(olds[1], daily.today(), 0) is not None
+    for old in olds[1:]:
+        assert daily.earlier_search(old, daily.today(), 0) is not None
     with store.connect() as db:
         assert [json.loads(i)["place"] for (i,) in db.all("SELECT info FROM searches ORDER BY at")] == olds
 

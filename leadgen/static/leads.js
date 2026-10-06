@@ -554,7 +554,7 @@ function leadTable(rows, withCall) {
   return table;
 }
 
-// "Pro Baler, Action Compaction, AARCO Compactors & Balers or ACE Recycling & Disposal".
+// "Pro Baler, Action Compaction, AARCO Waste & Disposal or ACE Recycling & Disposal".
 /** @param {string[]} names */
 function orList(names) {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;

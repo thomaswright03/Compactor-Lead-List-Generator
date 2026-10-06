@@ -146,6 +146,9 @@ def test_default_location_is_aarco_offline():
     assert geocode(None)[:2] == config.OWN_COORDS
     assert geocode("876 Fortune Rd,  Salt Lake City, UT 84104")[:2] == config.OWN_COORDS
     assert geocode("AARCO Compactor")[:2] == config.OWN_COORDS
+    # The company's name, and its earlier one, find the shop too, labelled with the name now.
+    for name in ("AARCO Waste & Disposal", "AARCO Compactors & Balers"):
+        assert geocode(name) == (*config.OWN_COORDS, "AARCO Waste & Disposal, 876 Fortune Rd, Salt Lake City, UT 84104")
     assert geocode("aarco")[:2] == geocode("Arco Compactor")[:2] == config.OWN_COORDS
     assert geocode("salt lake city ut")[:2] == (40.7608, -111.8910)
 

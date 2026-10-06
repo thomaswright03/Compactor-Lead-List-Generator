@@ -682,6 +682,14 @@
  ],
  "own_company": [
   {
+   "name": "AARCO Waste & Disposal",
+   "source": "google",
+   "raw_categories": [
+    "point_of_interest"
+   ],
+   "own": "AARCO"
+  },
+  {
    "name": "AARCO Compactors & Balers",
    "source": "google",
    "raw_categories": [

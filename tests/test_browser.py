@@ -264,7 +264,7 @@ def test_find_leads_asks_before_using_the_days_search(page, monkeypatch):
     text = dialog.inner_text()
     assert "This uses today's only search" in text and "12 miles" in text
     # The place the search will actually run around, and how far it is from AARCO's shop.
-    assert "AARCO Compactors & Balers, 876 Fortune Rd" in text and "0.0 miles" in text
+    assert "AARCO Waste & Disposal, 876 Fortune Rd" in text and "0.0 miles" in text
     assert page.locator("#confirm-far").is_hidden()
     page.click("#confirm-back")
     assert not dialog.is_visible() and not sent
@@ -306,13 +306,13 @@ def test_typed_call_notes_survive_closing_the_box(page):
 
 
 def test_titles_hints_and_empty_pages(page):
-    assert page.title() == "Leads · AARCO Compactors & Balers Lead Finder"
+    assert page.title() == "Leads · AARCO Waste & Disposal Lead Finder"
     assert "whatever its answer" in page.inner_text("#call-hint")
     page.click("nav a[data-page=calls]")
-    page.wait_for_function("document.title === 'Calls · AARCO Compactors & Balers Lead Finder'")
+    page.wait_for_function("document.title === 'Calls · AARCO Waste & Disposal Lead Finder'")
     expect(page.locator("#calls-wrap")).to_contain_text("Log a call with Just called")
     page.click("nav a[data-page=stats]")
-    page.wait_for_function("document.title === 'Stats · AARCO Compactors & Balers Lead Finder'")
+    page.wait_for_function("document.title === 'Stats · AARCO Waste & Disposal Lead Finder'")
     page.wait_for_selector("#stats-empty:not([hidden])")
     assert "Mark businesses Yes or No on the Leads page" in page.inner_text("#stats-empty")
     page.click("#stats-empty a")
@@ -389,7 +389,7 @@ def test_aarcos_and_its_parent_companys_listings_are_flagged_with_the_names_now(
     assert "Ace Hardware" in listed and "Recycling Center" not in listed and "AARCO Compactor" not in listed
     page.get_by_role("button", name="Competitors (3)").click()
     own_row, ace_row = _row(page, "AARCO Compactor"), _row(page, "Recycling Center")
-    expect(own_row).to_contain_text("OWN COMPANY: AARCO Compactors & Balers")
+    expect(own_row).to_contain_text("OWN COMPANY: AARCO Waste & Disposal")
     expect(own_row).to_contain_text("AARCO's own listing")
     expect(ace_row).to_contain_text("OWN COMPANY: AARCO's parent company (ACE Recycling & Disposal)")
     expect(ace_row).to_contain_text("AARCO's parent company")
@@ -397,9 +397,9 @@ def test_aarcos_and_its_parent_companys_listings_are_flagged_with_the_names_now(
 
 
 def test_the_brand_shows_the_companys_name_and_fits_on_a_phone(browser, site):
-    """The brand block names AARCO Compactors & Balers; on a narrow phone, where that
+    """The brand block names AARCO Waste & Disposal; on a narrow phone, where that
     doesn't fit beside Menu, it says AARCO, and nothing is cut off."""
-    for width, name in ((1440, "AARCO Compactors & Balers"), (390, "AARCO"), (320, "AARCO")):
+    for width, name in ((1440, "AARCO Waste & Disposal"), (390, "AARCO"), (320, "AARCO")):
         context = _context(browser, viewport={"width": width, "height": 800})
         tab = context.new_page()
         tab.goto(site + "#find")
@@ -409,7 +409,7 @@ def test_the_brand_shows_the_companys_name_and_fits_on_a_phone(browser, site):
         shown = brand.evaluate("(b) => [...b.querySelectorAll('strong')].filter((s) => s.offsetParent)"
                                ".map((s) => s.textContent)")
         assert shown == [name], (width, shown)
-        assert tab.title() == "Find leads · AARCO Compactors & Balers Lead Finder"
+        assert tab.title() == "Find leads · AARCO Waste & Disposal Lead Finder"
         context.close()
 
 
@@ -841,7 +841,7 @@ def test_no_competitors_names_them_and_has_phone_filters(browser, site):
     tab.uncheck("#has-phone")
     tab.get_by_role("button", name="Competitors (0)").click()
     expect(tab.locator("#leads-wrap .empty")).to_contain_text(
-        "No Pro Baler, Action Compaction, AARCO Compactors & Balers or ACE Recycling & Disposal listings found "
+        "No Pro Baler, Action Compaction, AARCO Waste & Disposal or ACE Recycling & Disposal listings found "
         "in the saved leads yet.")
     context.close()
 

@@ -102,7 +102,7 @@ def test_the_place_is_shown_with_its_distance_from_aarco():
     assert body["label"] == "Murray, UT" and not body["outside"]
     assert 4 < body["miles"] < 7 and body["area_miles"] == config.SERVICE_AREA_MILES
     aarco = client.get("/place?location=876 Fortune Rd").get_json()
-    assert aarco["miles"] == 0 and aarco["label"].startswith("AARCO Compactor")
+    assert aarco["miles"] == 0 and aarco["label"] == "AARCO Waste & Disposal, 876 Fortune Rd, Salt Lake City, UT 84104"
     blank = client.get("/place?location=")
     assert blank.status_code == 400 and blank.get_json()["field"] == "location"
     assert not daily.history()["searches"]

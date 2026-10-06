@@ -3,7 +3,7 @@
 Finds businesses around Salt Lake City (or any ZIP/city) that are likely to run
 **large commercial trash compactors or cardboard balers**, scores each one, and
 exports a ranked lead list to Excel or CSV for manual vetting. Built for
-AARCO Compactors & Balers.
+AARCO Waste & Disposal.
 
 Competitors (**Pro Baler**, **Action Compaction**) are **flagged, never dropped**,
 and AARCO's own listings are flagged too, including those of its parent company,
@@ -289,11 +289,10 @@ runbook's [Owner actions still open](docs/operator-runbook.md#owner-actions-stil
 
 1. Set `LEADGEN_SUPPORT_CONTACT` in Render, so the login page names a real contact
    (until then each start of the site logs that it is not set).
-2. Delete the old branches `wip-yelp-cap-and-baler-marks` and `runbook-owner-steps-done`
-   on GitHub (nothing on them is missing from `main`). `claude-staging` stays: it is
-   the staging route through CI to the protected `main`.
 
-A restore of the live data was rehearsed on 2026-10-05 and passed (runbook owner action 6).
+A restore of the live data was rehearsed on 2026-10-05 and passed (runbook owner action 6),
+and the two old branches were deleted the same day; `claude-staging` stays, as the staging
+route through CI to the protected `main`.
 
 The keep-awake pinger (cron-job.org) was set up on 2026-10-05; confirm it after its
 first full working day (runbook owner action 5).
