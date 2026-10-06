@@ -24,7 +24,7 @@ import time
 from dataclasses import replace
 from typing import Any
 
-from . import THREAD_PREFIX, alerts, config, daily, saved
+from . import THREAD_PREFIX, alerts, area_map, config, daily, saved
 from .models import Lead
 from .pipeline import RunResult, SearchParams, finish_leads
 from .sources import osm
@@ -86,11 +86,17 @@ def start(day: str, params: SearchParams, result: RunResult) -> bool:
     return True
 
 
+def _tally(parts: list[osm.Part], result: RunResult, params: SearchParams) -> area_map.Tally:
+    """How the search covers its areas with `parts` still missing, as the Map page counts them."""
+    return area_map.tally(result.center[0], result.center[1], params.radius_miles, osm.part_boxes(parts))
+
+
 def where(parts: list[osm.Part], result: RunResult, params: SearchParams) -> str:
-    """The missing parts in words, nearest the centre first ("Salt Lake City and West
-    Valley City"): the page says which towns are still being filled in."""
+    """The areas the missing parts leave not searched in full, in words, nearest the
+    center first ("Salt Lake City and Layton"), named as the Map page names them: the
+    page says which towns are still being filled in."""
     try:
-        return osm.areas_text(parts, result.center[0], result.center[1], params.radius_miles)
+        return area_map.names_text(_tally(parts, result, params).left) if parts else ""
     except Exception:                 # only words for the page; never stops the fill-in
         log.warning("Naming the missing map areas failed", exc_info=True)
         return ""
@@ -173,7 +179,12 @@ def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]
         fill["left"] = osm.areas_left(parts, result.osm_areas)
         fill["where"] = where(parts, result, params) if parts else ""
         fill["boxes"] = osm.part_boxes(parts)
-        _finish(day, fill, len(unsaved))
+        try:
+            counted: area_map.Tally | None = _tally(parts, result, params)
+        except Exception:
+            log.warning("Counting the missing map areas failed", exc_info=True)
+            counted = None
+        _finish(day, fill, len(unsaved), counted)
         running.pop(day, None)
         _ending.pop(day, None)
 
@@ -214,13 +225,16 @@ def _write(day: str, fill: dict[str, Any], more: dict[str, int] | None = None,
         log.exception("Recording how the filling in of the map areas stands failed")
 
 
-def _finish(day: str, fill: dict[str, Any], unsaved: int) -> None:
+def _finish(day: str, fill: dict[str, Any], unsaved: int, counted: area_map.Tally | None = None) -> None:
     """Record how the filling in ended (the page words it, coverage()); parts that never
-    answered are reported as a problem (the administrator's list and the webhook)."""
+    answered are reported as a problem (the administrator's list and the webhook), with
+    the areas counted as the pages count them (`counted`)."""
     if unsaved:
         log.warning("Search %s: %d businesses found while filling in couldn't be saved", day, unsaved)
     if fill["state"] not in (COMPLETE, STOPPED):
         left, areas = fill["left"], fill.get("areas") or 0
+        if left and counted is not None and counted.left:
+            left, areas = len(counted.left), counted.areas
         if left:
             missing = (f"{left} of the {areas} areas" if areas > 1 else "part of the area")
             final = (f"{missing[:1].upper()}{missing[1:]}{_around(fill)} never came in from the free map "
@@ -273,22 +287,38 @@ def coverage(record: dict[str, Any], paused: bool = False, earlier: bool = False
     if not fill.get("areas") and not searched and not partly:
         return None
     state = str(fill.get("state") or "partial")
-    first = _FIRST.match(searched)
-    if fill.get("areas"):
-        areas, left = int(fill["areas"]), int(fill.get("left") or 0)
-        towns = str(fill.get("where") or "")
-    else:
-        areas = int(first.group(2)) if first else 1
-        left = areas - int(first.group(1)) if first else 1
-        said = _NOT_YET.search(str(record.get("reason") or ""))
-        towns = said.group(1) if said else ""
-    if not left:
-        state = COMPLETE
     radius = record.get("radius")
     area = f"{radius:g}-mile area" if isinstance(radius, (int, float)) and radius else "area"
     within = f" within {radius:g} miles" if isinstance(radius, (int, float)) and radius else ""
-    covered = f"about {areas - left} of the {areas} areas{within}" if areas > 1 else f"part of the {area}"
-    short = f"About {areas - left} of {areas} areas" if areas > 1 else "Part of the area"
+    # Counted and named area by area, as the Map page does (area_map.Tally), from the parts
+    # the record keeps as missing; a record an earlier version saved has only its numbers.
+    try:
+        counted = area_map.record_tally(record)
+    except Exception:
+        log.warning("Counting the search's map areas failed", exc_info=True)
+        counted = None
+    if counted is not None and counted.areas > 1:
+        areas, left = counted.areas, len(counted.left)
+        towns = area_map.names_text(counted.left)
+        covered = f"{areas - left} of the {areas} areas{within} searched in full"
+        short = f"{areas - left} of {areas} areas searched in full"
+        if not left and state == FILLING:
+            left = 1                             # only slivers are left: still filling in
+    else:
+        first = _FIRST.match(searched)
+        if fill.get("areas"):
+            areas, left = int(fill["areas"]), int(fill.get("left") or 0)
+            towns = str(fill.get("where") or "")
+        else:
+            areas = int(first.group(2)) if first else 1
+            left = areas - int(first.group(1)) if first else 1
+            said = _NOT_YET.search(str(record.get("reason") or ""))
+            towns = said.group(1) if said else ""
+        towns = area_map.plain_names(towns, record)
+        covered = f"about {areas - left} of the {areas} areas{within}" if areas > 1 else f"part of the {area}"
+        short = f"About {areas - left} of {areas} areas" if areas > 1 else "Part of the area"
+    if not left:
+        state = COMPLETE
     found, new, leads = int(fill.get("found") or 0), int(fill.get("new") or 0), int(record.get("leads") or 0)
     them = (f"The {leads:,} businesses already found are" if leads != 1 else "The business already found is")
     ready = f"{them} on the Leads page, ready to call now"

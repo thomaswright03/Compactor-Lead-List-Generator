@@ -65,3 +65,40 @@ def test_the_runbook_lists_the_owners_open_steps_with_a_check_for_each():
     assert "wip-yelp-cap-and-baler-marks" in text and "git ls-remote --heads origin" in text
     assert "**Delete the two old branches** (GitHub; **Done (2026-10-05)**)" in runbook
     assert "docs/operator-runbook.md#owner-actions-still-open" in _read("README.md")
+
+
+def test_the_runbooks_branch_check_expects_merged_branches_and_flags_unmerged_work():
+    """The runbook names the branches that stay (main and claude-staging) and checks the rest
+    by whether they are merged into main, so a merged branch waiting to be deleted (ui-revamp,
+    2026-10-06) doesn't make its own check fail; anything unmerged still shows."""
+    runbook = _read("docs/operator-runbook.md")
+    owner = " ".join(runbook.split("## Owner actions still open", 1)[1].split("\n## ", 1)[0].split())
+    branches = " ".join(runbook.split("**Branches** (checked", 1)[1].split("\n## ", 1)[0].split())
+    for text in (owner, branches):
+        assert "`refs/heads/main` and `refs/heads/claude-staging`" in text
+        assert "git fetch --prune origin" in text and "git branch -r --no-merged origin/main" in text
+        assert "already merged into `main`" in text and "open pull request" in text
+        assert "lists only" not in text and "has only" not in text
+        assert "`ui-revamp`" in text and "harmless" in text
+    assert "**kept on purpose**" in owner and "**kept on purpose**" in branches
+    assert "ask whoever made it before deleting it" in branches
+
+
+def test_the_example_settings_file_has_every_setting_the_site_and_docs_rely_on():
+    """Every setting Render is told about is in .env.example, each under a comment saying what
+    it does; the administrator's password says what it unlocks."""
+    example = _read(".env.example").splitlines()
+    keys = re.findall(r"^\s*- key: (\w+)", _read("render.yaml"), re.M)
+    assert "ADMIN_PASSWORD" in keys
+    for key in keys:
+        if key == "PYTHON_VERSION":
+            continue
+        assert f"{key}=" in example, key
+        i = example.index(f"{key}=")
+        above = example[i - 1]
+        assert above.startswith("# ") or re.fullmatch(r"\w+=", above), (key, above)
+    admin = example.index("ADMIN_PASSWORD=")
+    assert re.fullmatch(r'# Unlocks "For the site administrator".*', example[admin - 1])
+    assert example[admin].endswith("=") and example[admin] == "ADMIN_PASSWORD="          # no value in the file
+    for doc in ("README.md", "docs/operator-runbook.md"):
+        assert "ADMIN_PASSWORD" in _read(doc), doc

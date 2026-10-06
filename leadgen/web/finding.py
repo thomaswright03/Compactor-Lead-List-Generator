@@ -720,15 +720,16 @@ def search() -> ResponseReturnValue:
     return jsonify({"job_id": job_id})
 
 
-def _recover() -> bool:
-    """Finish the searches a server restart cut off (interrupted.recover); True while
-    one is still to be finished (its server is stopping, or has just stopped)."""
+def _recover() -> float | None:
+    """Finish the searches a server restart cut off (interrupted.recover); while one is
+    still to be finished (its server is stopping, or has just stopped), about how many
+    seconds until it can be (interrupted.wait), else None."""
     try:
         interrupted.recover()
-        return interrupted.pending()
+        return interrupted.wait()
     except Exception:
         log.warning("Finishing a search a server restart cut off failed", exc_info=True)
-        return False
+        return None
 
 
 @bp.get("/searches")
@@ -765,8 +766,12 @@ def searches() -> ResponseReturnValue:
         # When an unfinished search stops holding the day, in Utah time like every time.
         current["free_at"] = clock_text(current["at"] + daily.STALE_SECONDS)
     running = state().running_job()
-    # A search cut off by a restart, still being finished: the page says so and asks again.
-    body["cut_off"] = cut_off and running is None
+    # A search cut off by a restart, still being finished: the page says so, and when Find
+    # leads is available again (it asks again then, and re-enables by itself).
+    body["cut_off"] = cut_off is not None and running is None
+    if body["cut_off"] and cut_off is not None:
+        body["cut_off_wait"] = math.ceil(cut_off)
+        body["cut_off_until"] = clock_text(time.time() + cut_off)
     return jsonify({**body, "yelp": yelp_quota(), "running": running,
                     "paused": SEARCH_PAUSED if switches()["search_paused"] else None,
                     "switches": _switch_list(), "admin": admin_state()})
@@ -782,6 +787,8 @@ def _for_page(record: dict[str, Any], paused: bool, earlier: bool = False) -> di
     record["warnings"] = fillin.plain_notes(record.get("warnings") or [])
     if isinstance(record.get("reason"), str):
         record["reason"] = fillin.plain_reason(record["reason"])
+        if record.get("interrupted"):
+            record["reason"] = interrupted.plain_reason(record["reason"])
     return record
 
 

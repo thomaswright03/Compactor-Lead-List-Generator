@@ -75,11 +75,15 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   the clock, and the "N of M areas done" count stays in view
   until that step ends; the search history shows today's search as "Running…" from the
   moment it starts.
-- **Restarts and outages.** A search cut off by a server restart (a deploy) keeps what
-  it had found: it is saved, the day's search is given back at once, and the history
-  says so ("Interrupted by a server restart: the 128 businesses it had found were
-  saved"); Find leads says the same (or, when it had found nothing yet, that nothing was
-  saved and today's search is still available). When the place lookups themselves are
+- **Restarts and outages.** While the server doesn't answer, the progress card says
+  "Reconnecting…" within a few seconds and its timer keeps counting. A search cut off by
+  a server restart (a deploy, a crash or a manual restart: the page can't tell which, so
+  it never says) keeps what it had found: it is saved, the day's search is given back,
+  and every place says it in one sentence: "The server restarted during the search; what
+  it had found is being saved", then "...; the 128 businesses it had found were saved"
+  (or that nothing had been found yet). Beside Find leads the page says when searching
+  is available again (within about a minute) and re-enables it by itself. History rows
+  saved by earlier versions read in the same words; nothing rewrites them. When the place lookups themselves are
   down, the page says to try again in a minute (nothing spent), not to check the
   spelling.
 - **Before anything is spent**, the confirmation names the place the search will
@@ -191,7 +195,10 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   competitors and AARCO's own listing as hollow squares.
 - **Using it.** Each group can be hidden (remembered in that browser), and a pin's
   details give the name, tier and score, phone, address, answer, latest call and **Open
-  on the Leads page**. The street map is OpenStreetMap's (credited on the map); without
+  on the Leads page**. Zoomed out, businesses close together show as one circle with
+  their number (its ring in their answers' colours); tapping it, or zooming in, splits it
+  into single pins (businesses at one address open a list). Only what is in view is
+  drawn, so 10,000 or more businesses stay quick. The street map is OpenStreetMap's (credited on the map); without
   it (offline, or blocked) the rest is drawn on a plain background and the page says
   so. The map itself is Leaflet, kept in `leadgen/static/vendor/leaflet` with its
   licence. It only reads: nothing on it changes a lead, mark or call.
@@ -292,7 +299,8 @@ runbook's [Owner actions still open](docs/operator-runbook.md#owner-actions-stil
 
 A restore of the live data was rehearsed on 2026-10-05 and passed (runbook owner action 6),
 and the two old branches were deleted the same day; `claude-staging` stays, as the staging
-route through CI to the protected `main`.
+route through CI to the protected `main`. Another branch already merged into `main` (on
+2026-10-06, `ui-revamp`; the owner will delete it) is expected and harmless.
 
 The keep-awake pinger (cron-job.org) was set up on 2026-10-05; confirm it after its
 first full working day (runbook owner action 5).

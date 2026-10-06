@@ -224,6 +224,9 @@ interface SearchesAnswer {
   filling?: { day: string; when: string; fill: Fill; coverage?: Coverage | null } | null;
   running: string | null;
   cut_off: boolean;
+  /** While cut_off: about how many seconds until Find leads is available again, and the time then. */
+  cut_off_wait?: number;
+  cut_off_until?: string;
   paused: string | null;
   yelp: YelpQuota | null;
   problems: Problems | null;
@@ -325,14 +328,16 @@ declare namespace L {
   interface Layer {
     addTo(target: Map | LayerGroup): this;
     remove(): this;
-    bindPopup(content: (layer: Layer) => HTMLElement,
+    bindPopup(content: HTMLElement | ((layer: Layer) => HTMLElement),
               options?: { maxWidth?: number; minWidth?: number; autoPanPaddingTopLeft?: Point;
                           autoPanPaddingBottomRight?: Point }): this;
     on(type: string, fn: () => void): this;
   }
   interface Path extends Layer { setStyle(style: PathOptions): this }
-  interface Marker extends Layer { getElement(): HTMLElement | undefined }
-  interface LayerGroup extends Layer { addLayer(layer: Layer): this; clearLayers(): this }
+  interface Popup { setContent(content: HTMLElement): this }
+  interface Marker extends Layer { getElement(): HTMLElement | undefined; getPopup(): Popup | undefined }
+  interface LayerGroup extends Layer { addLayer(layer: Layer): this; removeLayer(layer: Layer): this; clearLayers(): this }
+  interface PixelPoint { x: number; y: number }
   interface TileLayer extends Layer {}
   interface Control { readonly _control?: never }
   interface Map {
@@ -342,6 +347,10 @@ declare namespace L {
     hasLayer(layer: Layer): boolean;
     invalidateSize(): this;
     getSize(): { x: number; y: number };
+    getZoom(): number;
+    getPixelBounds(): { min: PixelPoint; max: PixelPoint };
+    /** A point's place in pixels on the whole world's map at `zoom`. */
+    project(at: Point, zoom?: number): PixelPoint;
     closePopup(): this;
     getContainer(): HTMLElement;
     on(type: string, fn: () => void): this;

@@ -9,7 +9,7 @@ import time
 import pytest
 from test_fill_in import _servers, filling  # noqa: F401  (a fixture)
 
-from leadgen import area_map, calls, config, contacts, fillin, marks, pipeline, saved, store, web
+from leadgen import area_map, calls, config, contacts, daily, fillin, marks, pipeline, saved, store, web
 from leadgen.geo import haversine_miles
 from leadgen.models import Lead
 from leadgen.scoring import score_lead
@@ -203,7 +203,7 @@ def test_the_parts_no_server_answered_for_are_shaded_missed_or_partly():
     statuses = _statuses(data)
     assert statuses.pop(north_west.name) == "missed" and statuses.pop("Layton") == "partly"
     assert set(statuses.values()) == {"searched"}
-    assert data["coverage"].endswith(": 7 of 9 areas searched in full.")
+    assert data["coverage"].endswith(": 7 of the 9 areas searched in full.")
     texts = {a["name"]: a["status_text"] for a in data["areas"]}
     assert texts["Layton"] == "Partly searched: some of it didn't come in"
     assert texts[north_west.name] == "Not searched: the free map data didn't come in for it"
@@ -218,7 +218,7 @@ def test_areas_being_asked_again_in_the_background_say_so():
     data = _data()
     statuses = _statuses(data)
     assert statuses.pop("Layton") == "asking" and set(statuses.values()) == {"searched"}
-    assert data["coverage"].endswith(": 8 of 9 areas searched in full, the rest still being asked in the "
+    assert data["coverage"].endswith(": 8 of the 9 areas searched in full, the rest still being asked in the "
                                      "background.")
     # Once the filling in has every area, all are searched.
     _record(_aarcos(fill={"state": "complete", "left": 0, "boxes": []}), day="2026-10-01", at=time.time())
@@ -232,7 +232,7 @@ def test_a_search_stopped_partway_or_whose_map_data_never_answered():
     _record(_aarcos(partial=True, map_areas={"missing": [None]}), day="2026-10-01", at=time.time())
     data = _data()
     assert set(_statuses(data).values()) == {"missed"}
-    assert data["coverage"].endswith(": 0 of 9 areas searched in full.")
+    assert data["coverage"].endswith(": 0 of the 9 areas searched in full.")
 
 
 def test_searches_recorded_before_the_areas_were_kept_are_read_from_their_words():
@@ -270,7 +270,7 @@ def test_a_record_whose_words_called_the_areas_parts_is_read_the_same():
     data = _data()
     statuses = _statuses(data)
     assert [statuses[n] for n in names] == ["searched"] * 4 + ["missed", "searched", "missed", "searched", "searched"]
-    assert data["coverage"].endswith(": 7 of 9 areas searched in full.")
+    assert data["coverage"].endswith(": 7 of the 9 areas searched in full.")
 
 
 def test_only_a_search_of_aarcos_area_shades_it():
@@ -313,10 +313,68 @@ def test_a_search_of_aarcos_area_that_missed_the_north_is_shaded_on_the_map(fill
     north = [a.name for a in area_map.areas() if a.box[0] > 40.8]
     assert len(north) == 3 and {statuses.pop(n) for n in north} == {"missed"}
     assert set(statuses.values()) == {"searched"}
-    assert data["coverage"].endswith(": 6 of 9 areas searched in full.")
+    assert data["coverage"].endswith(": 6 of the 9 areas searched in full.")
 
 
 @pytest.mark.parametrize("value", [None, "x", [1], [1, 2, 3]])
 def test_a_record_with_an_odd_centre_or_radius_is_not_aarcos(value):
     assert not area_map._of_aarcos_area(_aarcos(center=value, miles=None))
     assert not area_map._of_aarcos_area(_aarcos(radius=value if value != [1] else "abc"))
+
+
+# ---- the Find page and the Map page say the same about the areas
+
+def _today_of_aarcos_area(**info):
+    """Today's search of AARCO's area, as the search history keeps it."""
+    day, _ = daily.claim({"location": config.OWN_ADDRESS, "radius": config.SERVICE_AREA_MILES, "source": "auto",
+                          "place": f"{config.OWN_COMPANY}, {config.OWN_ADDRESS}", "miles": 0.0,
+                          "center": list(AARCO)})
+    daily.finish(day, {"leads": 40, "new": 40, "partial": True,
+                       "details": {"osm areas searched": "about 7 of 9 areas"}, **info})
+    return day
+
+
+def test_the_find_page_and_the_map_count_and_name_the_areas_alike():
+    """After a partial search the Find page's status and the Map page give one count and the
+    same names: the center's area by its town (Salt Lake City), never "the search's centre",
+    even when only a quarter of it is missing."""
+    centre = next(a for a in area_map.areas() if a.n == 1)
+    layton = _areas()["Layton"]
+    south, west, north, east = centre.box
+    quarter = [south, west, (south + north) / 2, (west + east) / 2]
+    missing = [quarter, list(layton.box)]
+    _today_of_aarcos_area(map_areas={"missing": missing},
+                          fill={"state": "filling", "left": 1, "areas": 9, "boxes": missing, "found": 0, "new": 0,
+                                "rounds": 0, "where": "the area around the search's centre and Layton",
+                                "until": time.time() + 600})
+    client = web.create_app().test_client()
+    find = client.get("/searches").get_json()["current"]["coverage"]
+    shown = _data(client)
+    assert centre.name == "Salt Lake City"
+    assert find["text"].startswith("Covered so far: 7 of the 9 areas within 30 miles searched in full. Still filling "
+                                   "in, in the background")
+    assert ": Salt Lake City and Layton. " in find["text"]
+    assert find["short"].startswith("7 of 9 areas searched in full so far; filling in Salt Lake City and Layton")
+    assert shown["coverage"].endswith(": 7 of the 9 areas searched in full, the rest still being asked in the "
+                                      "background.")
+    statuses = _statuses(shown)
+    assert statuses.pop("Salt Lake City") == "partly" and statuses.pop("Layton") == "asking"
+    assert set(statuses.values()) == {"searched"}
+    for text in (find["text"], find["short"], shown["coverage"], *(a["name"] for a in shown["areas"])):
+        assert "centre" not in text and "north-west" not in text, text
+
+
+def test_a_record_an_earlier_version_saved_still_reads_alike_on_both_pages():
+    """A search saved before the missing parts were kept named the center's area "the area
+    around the search's centre": both pages now name it Salt Lake City, and the record keeps
+    its words."""
+    layton = _areas()["Layton"]
+    day = _today_of_aarcos_area(fill={"state": "gave_up", "left": 2, "areas": 9, "found": 0, "new": 0, "rounds": 3,
+                                      "where": "the area around the search's centre and Layton"})
+    client = web.create_app().test_client()
+    find = client.get("/searches").get_json()["current"]["coverage"]
+    assert "Salt Lake City and Layton didn't come in today" in find["text"] and "centre" not in find["text"]
+    statuses = _statuses(_data(client))
+    assert statuses.pop("Salt Lake City") == statuses.pop(layton.name) == "missed"
+    assert set(statuses.values()) == {"searched"}
+    assert daily.info(day)["fill"]["where"] == "the area around the search's centre and Layton"

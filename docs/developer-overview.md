@@ -414,9 +414,20 @@ the sidebar to the page's list (Leads, Calls) or heading.
   server is gone (marked ended, or no heartbeat for 45 seconds): its listings are
   merged, scored and saved like a search's own, and the day is given back at once,
   with a history row marked **Interrupted** that says how many businesses were saved
-  ("Interrupted by a server restart (the site was updated or restarted): the 128
-  businesses it had found were saved. It didn't use up the day's search."). Until
-  then Find leads says the search was cut off and checks again every few seconds.
+  ("The server restarted during the search; the 128 businesses it had found were
+  saved. It didn't use up the day's search."). Every place says it in that one
+  neutral sentence (`interrupted.RESTARTED`, `RESTARTED` in `find.js`; a test keeps
+  them equal), as the page can't tell a deploy from a crash; rows saved by earlier
+  versions ("Interrupted by a server restart (the site was updated or restarted): ...")
+  are shown in it too (`interrupted.plain_reason`, in `finding._for_page`), never
+  rewritten. Until the run is finished `/searches` says `cut_off`, with `cut_off_wait`
+  (seconds until it can be: `interrupted.wait`, from the old server's last heartbeat)
+  and `cut_off_until` (that time in Utah): Find leads says "...; what it had found is
+  being saved. Find leads is available again by 3:42 PM (in about 40 seconds); this
+  page updates by itself." and asks again then. While a search runs, a status check
+  not answered within 2.5 seconds (`FOLLOW.cueMs`) puts "Reconnecting…" on the
+  progress card, whose timer keeps counting; one not answered in 10 seconds is asked
+  again, every 2 seconds (every 5 after 15 tries) until the server answers.
   It is never re-run by itself (that would spend paid lookups without anyone asking).
   A search's working rows are removed when it ends. One with no such rows (from
   before this, or when they could not be written) stops holding the day after 30
@@ -464,10 +475,10 @@ the sidebar to the page's list (Leads, Calls) or heading.
   (`FILL_IN_SECONDS`), never asking Yelp or Google. What they find is merged,
   scored and filtered like the search's own (`pipeline.finish_leads`) and saved
   into the list as it arrives; the day's record gets a `fill` entry (state
-  filling / complete / gave_up / stopped, areas left and the towns they hold
-  (`where`: each missing area's biggest town from the bundled places table, or its
-  direction from the centre, nearest first: `osm.areas_text`), businesses found and
-  new). **How much of the area a search covered is said once**: `fillin.coverage(record)`
+  filling / complete / gave_up / stopped, areas left and the areas not yet searched in
+  full (`where`: named as the Map page names them, each by its biggest town from the
+  bundled places table, or its direction from the center, nearest first:
+  `fillin.where`, `area_map.names_text`), businesses found and new). **How much of the area a search covered is said once**: `fillin.coverage(record)`
   words it from the record's numbers each time `/searches` is read (`finding._for_page`),
   as `coverage.text` (the Find page's one status, `#coverage-note`, polled every 30
   seconds while filling) and `coverage.short` (the one Details line, "Free map data:
@@ -660,7 +671,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
     `SERVICE_AREA_MILES` around `SERVICE_CENTER`.
   - The areas a search asks the free map data in (`osm.area_boxes`, the "N of 9 areas"
     of its progress), each cut to the circle and named by `osm.area_name` like
-    elsewhere (its biggest town, else "The area to the north-west"), with up to three
+    elsewhere (its biggest town, else "The area to the northwest"), with up to three
     more towns for the list under the map. An area name that would cover another, AARCO's
     pin, or the map's edge waits until the map is zoomed in (`placeLabels`).
   - The shading, from the latest search of AARCO's area (`area_map.latest_search`: the
@@ -674,7 +685,12 @@ the sidebar to the page's list (Leads, Calls) or heading.
     from its words: complete means all searched, "Couldn't reach ... the map data
     service" all missed, and the towns its note or filling in named as missing mark
     those areas, the others searched only when that list is surely whole (else "not
-    known"). Nothing rewrites the old records.
+    known"). Nothing rewrites the old records. The Find page counts and names a search's
+    areas the same way (`area_map.Tally`: `record_tally` from the record's `center`,
+    `radius` and missing boxes, used by `fillin.coverage`), so both say "6 of the 9 areas
+    searched in full" for the same search and name the missing areas alike (the center's
+    area by its town, as on the map); `area_map.plain_names` shows names an earlier
+    version saved ("the area around the search's centre", "north-west") in today's words.
   - A pin for every saved lead with a map position (`fields` names each pin's short
     list: key, lat, lon, group, name, tier, score, phone, verified phone, address,
     outcome, called, closed, kind), from the same parsed saved list as the Leads page, so
@@ -685,6 +701,17 @@ the sidebar to the page's list (Leads, Calls) or heading.
   licence and a README saying where it came from), loaded the first time the page opens.
   Dots are drawn on one canvas (a wider tap tolerance on touch screens); competitors are
   hollow squares and AARCO a teardrop with a star, as HTML markers that take the keyboard.
+  Pins are grouped by zoom (`placePins`, no library): each pin's place on the world map
+  at zoom 0 is worked out once, and at each zoom the pins in one square of a
+  `CLUSTER_CELL` (56 px) grid fixed to the world are drawn as one circle with their
+  count, its ring in their groups' colours in proportion (an HTML marker, focusable,
+  titled with the mix). Tapping a circle zooms in to its pins; from zoom
+  `CLUSTER_UNTIL` (15) every pin is drawn on its own, except businesses at one spot,
+  whose circle opens a list of them. Only the squares in or near the view (half a map
+  around it) are drawn, and only what changed is redrawn when the map moves, so an
+  open details box stays open; a pin's marker is made the first time it is drawn on its
+  own. 10,000 businesses draw as a few dozen circles at the default zoom (the browser
+  test `test_ten_thousand_businesses_are_grouped_and_split_as_the_map_zooms`).
   Colours come from `_theme.html` (`--pin-*`, `--aarco*`, `--area-*`), checked with a
   colour-blind validator in both themes, and every colour is also named in words (the
   key, the details box); the canvas is redrawn in the new colours when the theme

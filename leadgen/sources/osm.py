@@ -649,8 +649,8 @@ def area_boxes(lat: float, lon: float, radius_miles: float) -> list[Box]:
 
 
 def area_name(lat: float, lon: float, radius_miles: float, box: Box) -> str:
-    """An area of a search in words, as the page names it ("Salt Lake City", "the
-    area to the north-west")."""
+    """An area of a search in words, as the pages name it ("Salt Lake City", "the
+    area to the northwest"): area_map.py names every area with it."""
     return _area_name(lat, lon, radius_miles, box)
 
 
@@ -668,38 +668,24 @@ def areas_left(parts: Sequence[Part], areas: int) -> int:
     return max(1, round(share * areas)) if share > 0.001 else 0
 
 
-_DIRECTIONS = ("north", "north-east", "east", "south-east", "south", "south-west", "west",
-               "north-west")
+_DIRECTIONS = ("north", "northeast", "east", "southeast", "south", "southwest", "west",
+               "northwest")
+# The words for the area a search's center is in when no town's center is in it.
+CENTER_AREA = "the area around the search's center"
 
 
 def _area_name(lat: float, lon: float, radius_miles: float, box: Box) -> str:
     """A part of a search's area in words: its biggest town ("Salt Lake City"), or
-    where it lies from the centre ("the area to the north-west") when it has none."""
+    where it lies from the center ("the area to the northwest") when it has none."""
     town = places.biggest_town(box, (lat, lon), radius_miles)
     if town:
         return town
     mid_lat, mid_lon = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
     if box[0] <= lat <= box[2] and box[1] <= lon <= box[3]:
-        return "the area around the search's centre"
+        return CENTER_AREA
     east = (mid_lon - lon) * math.cos(math.radians(lat))
     bearing = math.degrees(math.atan2(east, mid_lat - lat)) % 360
     return f"the area to the {_DIRECTIONS[round(bearing / 45) % 8]}"
-
-
-def areas_text(parts: Sequence[Part], lat: float, lon: float, radius_miles: float,
-               most: int = 4) -> str:
-    """The parts of a search's area still missing, in words for the page, nearest the
-    centre first: "Salt Lake City, West Valley City and the area to the west" (at most
-    `most` names, then "and more"); "" when none is."""
-    names: list[str] = []
-    square = _square(lat, lon, radius_miles)
-    for box, _, _ in sorted(parts, key=lambda part: _distance(lat, lon, part[0])):
-        name = _area_name(lat, lon, radius_miles, box or square)
-        if name not in names:
-            names.append(name)
-    if len(names) > most:
-        return ", ".join(names[:most]) + " and more"
-    return ", ".join(names[:-1]) + (" and " if len(names) > 1 else "") + (names[-1] if names else "")
 
 
 def fill_in(lat: float, lon: float, radius_miles: float, keywords: Sequence[str],
