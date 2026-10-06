@@ -18,6 +18,7 @@
   --pin-unchecked:#3987e5; --pin-yes:#199e70; --pin-no:#d95926; --pin-comp:#e6ebf2; --pin-ring:#0f1623;
   --aarco:#f5f7fa; --aarco-ink:#15304d; --area-done:#8cc0f5; --area-miss:#f5c542; --area-unknown:#a6b0c0;
   --map-bg:#121a28;
+  --tier-a:#34c27a; --tier-b:#8cc63f; --tier-c:#e8a23a; --tier-d:#64748b; --track:#0a101b; --glow:rgba(90,167,242,.10);
 {%- endset -%}
 {#- The browser's own bar takes the sidebar's colour, light and dark: by the OS's setting,
     or by the Light / Dark choice once one is made (setThemeColor, below). -#}
@@ -50,6 +51,8 @@
     --pin-unchecked:#2a78d6; --pin-yes:#1baf7a; --pin-no:#eb6834; --pin-comp:#1d2433; --pin-ring:#fff;
     --aarco:#15304d; --aarco-ink:#fff; --area-done:#1f4e78; --area-miss:#b54708; --area-unknown:#4d5566;
     --map-bg:#e9edf2;
+    /* Tier stripes on the lead cards, the tabs' track, the soft light at the top of each page. */
+    --tier-a:#15a35a; --tier-b:#6aa628; --tier-c:#d98a10; --tier-d:#94a3b8; --track:#e6ebf2; --glow:rgba(47,124,224,.10);
   }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { {{ dark }} } }
   :root[data-theme="dark"] { {{ dark }} }

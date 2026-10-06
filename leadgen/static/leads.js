@@ -141,7 +141,11 @@ const SORTS = { score: { dir: "desc" }, name: { dir: "asc" }, city: { dir: "asc"
 function tabs(box, items, current, onPick) {
   box.replaceChildren();
   for (const [value, label, n] of items) {
-    const b = button(`${label} (${n.toLocaleString()})`, value === current ? "on" : "", () => onPick(value));
+    const b = button("", value === current ? "on" : "", () => onPick(value));
+    // The count as a badge; its brackets stay in the text ("Not checked (22)"), drawn at no size.
+    const n2 = el("span", undefined, "tab-n");
+    n2.append(el("span", "(", "p"), n.toLocaleString(), el("span", ")", "p"));
+    b.append(el("span", label, "tab-label"), " ", n2);
     b.setAttribute("aria-pressed", String(value === current));
     box.append(b);
   }

@@ -738,10 +738,6 @@ table.plain tbody tr:hover td { background:var(--hover); }
 table.leads th { font-weight:600; color:var(--muted); box-shadow:inset 0 -1px 0 var(--line); }
 table.leads th button.sort { color:var(--ink); }
 table.leads tbody tr td { transition:background-color .12s; }
-@media (min-width: 1100px) {
-  table.leads tbody tr:hover td:not(.score) { background:var(--hover); }
-  tr.competitor:hover td:not(.score) { background:var(--comp) !important; }
-}
 table.leads td.score { font-weight:700; font-variant-numeric:tabular-nums; }
 .table-wrap { box-shadow:var(--shadow-sm); }
 @media (max-width: 1099px) {
@@ -751,9 +747,6 @@ table.leads td.score { font-weight:700; font-variant-numeric:tabular-nums; }
 }
 
 /* Tabs: a row of pills; the open one filled. */
-.tabs button { border-radius:var(--r-pill); box-shadow:none; }
-.tabs button:not(.on):not(:disabled):hover { background:var(--hover); border-color:var(--line-strong); }
-.tabs button.on:not(:disabled):hover { background:var(--btn-hover); }
 .recent { box-shadow:var(--shadow-sm); border-left:4px solid var(--accent-2); }
 .mark button { box-shadow:none; }
 .mark button.yes:not(.on):not(:disabled):hover { border-color:var(--good); color:var(--good-ink); background:var(--pts); }
@@ -789,3 +782,148 @@ table.leads td.score { font-weight:700; font-variant-numeric:tabular-nums; }
   button, .btn, input, select, textarea, nav a, table.leads tr, table.plain tbody tr, table.leads tbody tr td { transition:none; }
   button:active, .btn:active { transform:none; }
 }
+
+/* ==== Lists that don't read like a spreadsheet ===================================== */
+main { background:radial-gradient(1100px 380px at 50% -160px, var(--glow), transparent 70%) no-repeat; }
+@media (min-width: 821px) {
+  .page-head h1 { font-size:30px; font-weight:750; letter-spacing:-.025em; }
+}
+
+/* Tabs: one segmented control; the open tab a raised chip, each count a small badge. */
+.tabs { display:flex; width:fit-content; max-width:100%; gap:2px; padding:4px; background:var(--track);
+        border:1px solid var(--line); border-radius:calc(var(--r-md) + 2px); }
+.tabs button { display:inline-block; background:transparent; border:0; box-shadow:none;
+               color:var(--muted); padding:7px var(--sp-3); border-radius:var(--r-sm); }
+.tabs button:not(.on):not(:disabled):hover { background:color-mix(in srgb, var(--card) 55%, transparent); color:var(--ink); }
+.tabs button.on, .tabs button.on:not(:disabled):hover { background:var(--card); color:var(--ink); border:0;
+                   box-shadow:0 1px 2px rgba(16,24,40,.08), 0 2px 8px rgba(16,24,40,.08); }
+.tab-n { display:inline-block; margin-left:var(--sp-1); min-width:22px; padding:1px 7px; border-radius:var(--r-pill); background:var(--badge);
+         color:var(--muted); font-size:var(--fs-xs); font-weight:700; line-height:1.5; text-align:center;
+         font-variant-numeric:tabular-nums; }
+.tab-n .p { font-size:0; }                 /* the brackets stay in the text, unseen */
+.tabs button.on .tab-n { background:var(--btn); color:var(--btn-ink); }
+
+/* The Leads tools: one bar holding the filter (with a search icon), the pickers, a Has phone
+   switch and the downloads at the far end. */
+#has-phone { appearance:none; -webkit-appearance:none; flex:none; width:38px; height:22px; margin:0; padding:0;
+             border:0; border-radius:var(--r-pill); background:var(--line-strong); position:relative; cursor:pointer;
+             transition:background-color .15s; }
+#has-phone::before { content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%;
+                     background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); transition:transform .15s; }
+#has-phone:checked { background:var(--btn); }
+#has-phone:checked::before { transform:translateX(16px); }
+#has-phone:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
+.toolbar .phone-pick { cursor:pointer; color:var(--ink); }
+#filter, #call-filter { padding-left:40px; background:var(--input) no-repeat 13px center / 17px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238592a6' stroke-width='2.3' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
+.downloads .btn { display:inline-flex; align-items:center; gap:var(--sp-2); }
+.downloads .btn::before { content:""; width:16px; height:16px; flex:none; background:currentColor;
+  -webkit-mask:var(--dl) center / contain no-repeat; mask:var(--dl) center / contain no-repeat;
+  --dl:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4v11m-5-5 5 5 5-5M5 20h14'/%3E%3C/svg%3E"); }
+@media (min-width: 701px) {
+  #leads-body .toolbar { background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg); padding:var(--sp-2);
+                         gap:var(--sp-2); box-shadow:var(--shadow-sm); margin:var(--sp-3) 0 var(--sp-4); }
+  #leads-body .toolbar input#filter, #leads-body .toolbar select { border-color:transparent; background-color:var(--bg); min-height:40px; }
+  #leads-body .toolbar input#filter:hover, #leads-body .toolbar select:hover { border-color:var(--line-strong); }
+  #leads-body .toolbar input#filter:focus, #leads-body .toolbar select:focus { border-color:var(--accent-2); background-color:var(--input); }
+  #leads-body .toolbar .phone-pick { padding:0 var(--sp-2); }
+  #leads-body .toolbar .downloads { margin-left:auto; gap:var(--sp-1); }
+  #leads-body .downloads .btn.quiet { border-color:transparent; background:transparent; box-shadow:none; color:var(--accent);
+                                     padding:var(--sp-2) var(--sp-3); }
+  #leads-body .downloads .btn.quiet:hover { background:var(--hover); border-color:var(--line); }
+}
+/* Hints read as quiet notes with an info mark, not loose lines of text. */
+.hint-line::before { content:"i"; display:inline-grid; place-items:center; width:18px; height:18px; margin-right:var(--sp-2);
+                     vertical-align:-3px; border-radius:50%; background:var(--accent-soft); color:var(--accent);
+                     font:italic 700 12px/1 Georgia, serif; }
+
+/* Laptops and desktops: each lead is a card in a column of cards, with its tier as a coloured
+   stripe and the score in large figures; the column headings float above them. */
+table.leads tr { --tier:var(--tier-d); }
+table.leads tr.A { --tier:var(--tier-a); } table.leads tr.B { --tier:var(--tier-b); }
+table.leads tr.C { --tier:var(--tier-c); }
+@media (min-width: 1100px) {
+  #leads-wrap.table-wrap { background:none; border:0; box-shadow:none; overflow:visible; border-radius:0; }
+  table.leads { border-spacing:0 10px; margin-top:-10px; }
+  table.leads th { background:var(--bg); border-bottom:0; box-shadow:none; padding:var(--sp-3) var(--sp-3) var(--sp-1);
+                   font-variant-caps:all-small-caps; letter-spacing:.06em; font-size:var(--fs-md); color:var(--muted); }
+  table.leads th button.sort { color:var(--muted); font-variant-caps:inherit; letter-spacing:inherit; }
+  table.leads th button.sort:not(:disabled):hover, table.leads th[aria-sort=ascending] button.sort,
+  table.leads th[aria-sort=descending] button.sort { color:var(--ink); }
+  table.leads tbody td { background:var(--card); border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+                         padding:var(--sp-4) var(--sp-3); transition:border-color .15s, background-color .15s; }
+  table.leads tbody td:first-child { border-left:1px solid var(--line); border-radius:var(--r-md) 0 0 var(--r-md);
+                                     box-shadow:inset 4px 0 0 var(--tier); padding-left:var(--sp-5); }
+  table.leads tbody td:last-child { border-right:1px solid var(--line); border-radius:0 var(--r-md) var(--r-md) 0; }
+  table.leads tbody tr:hover td { border-color:var(--line-strong); }
+  table.leads tbody tr td.score { padding-inline:var(--sp-2); background:var(--card); font-size:28px; font-weight:800; line-height:1.1;
+                                  letter-spacing:-.03em; color:var(--ink); }
+  table.leads tbody tr.competitor td, table.leads tbody tr.competitor td.score { background:color-mix(in srgb, var(--comp) 45%, var(--card)); }
+  table.leads tbody tr.just-marked td, table.leads tbody tr.just-marked td.score { background:var(--hover); }
+  td.score .tier-word { margin-top:2px; font-size:var(--fs-sm); font-weight:500; letter-spacing:0; line-height:1.3; color:var(--muted); }
+  table.leads td.c-name strong { font-size:var(--fs-md); letter-spacing:-.01em; }
+}
+/* Tablets and phones: the cards get the tier stripe too, along the top. */
+@media (max-width: 1099px) {
+  table.leads tr { border-top:4px solid var(--tier); }
+}
+
+/* The Calls list: the same floating rows on wider screens. */
+@media (min-width: 701px) {
+  #calls-wrap.table-wrap { background:none; border:0; box-shadow:none; border-radius:0; }
+  table.plain.calls { border-collapse:separate; border-spacing:0 8px; margin-top:-8px; }
+  table.plain.calls th { background:none; border-bottom:0; font-variant-caps:all-small-caps; letter-spacing:.06em;
+                         font-size:var(--fs-md); padding-bottom:var(--sp-1); }
+  table.plain.calls tbody td { background:var(--card); border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+                               padding:var(--sp-3); }
+  table.plain.calls tbody td:first-child { border-left:1px solid var(--line); border-radius:var(--r-md) 0 0 var(--r-md);
+                                           padding-left:var(--sp-4); }
+  table.plain.calls tbody td:last-child { border-right:1px solid var(--line); border-radius:0 var(--r-md) var(--r-md) 0; }
+  table.plain.calls tbody tr:hover td { background:var(--card); border-color:var(--line-strong); }
+  #calls-body .calls-tools input { min-height:42px; border-radius:var(--r-md); box-shadow:var(--shadow-sm); }
+}
+
+/* Links: a soft underline that firms up on hover. */
+a { text-underline-offset:3px; text-decoration-thickness:1px; text-decoration-color:color-mix(in srgb, currentColor 35%, transparent);
+    transition:text-decoration-color .15s; }
+a:hover { text-decoration-color:currentColor; }
+@media (min-width: 821px) { .brand strong { font-size:var(--fs-sm); } }
+
+/* ==== Find leads, Stats and Map: the same finish ===================================== */
+/* The search form: roomier fields, a status dot beside the day's note, a bold Find leads. */
+#form .form-grid input, #form .form-grid select { min-height:44px; padding-inline:var(--sp-3); }
+#form .form-grid label { gap:6px; }
+#form .warn, #phone-note { display:flex; gap:var(--sp-3); align-items:flex-start; padding:var(--sp-3) var(--sp-4); }
+#phone-note::before { content:"!"; flex:none; width:20px; height:20px; border-radius:50%; display:grid; place-items:center;
+                      background:var(--warn-line); color:var(--warn-ink); font-weight:800; font-size:var(--fs-xs); }
+.go-row { padding-top:var(--sp-4); border-top:1px solid var(--line); }
+.go-row button#go { padding-inline:var(--sp-6); font-size:var(--fs-md);
+  background-image:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0)); }
+#day-note::before { content:""; display:inline-block; width:8px; height:8px; margin-right:var(--sp-2); border-radius:50%;
+                    background:var(--tier-a); box-shadow:0 0 0 3px color-mix(in srgb, var(--tier-a) 22%, transparent);
+                    vertical-align:1px; }
+#form.closed #day-note::before { background:var(--tier-d); box-shadow:0 0 0 3px color-mix(in srgb, var(--tier-d) 22%, transparent); }
+.card > h2:first-child { display:flex; align-items:center; gap:var(--sp-2); }
+.step .dot { box-shadow:0 0 0 3px var(--card); }
+
+/* Stats: tiles with a gradient edge and big, tight figures; the tier table in small capitals. */
+.tile { border-top:1px solid var(--line); padding:var(--sp-5); }
+.tile::before { content:""; position:absolute; inset:0 0 auto 0; height:4px;
+                background:linear-gradient(90deg, var(--accent-2), var(--side-on)); }
+.tiles .tile:nth-child(2)::before { background:linear-gradient(90deg, var(--tier-a), var(--tier-b)); }
+.tiles .tile:nth-child(2) { border-top-color:var(--line); }
+.tile .label { font-variant-caps:all-small-caps; letter-spacing:.06em; font-size:var(--fs-md); font-weight:600; }
+.tile .value { font-size:44px; font-weight:800; line-height:1.1; letter-spacing:-.035em; margin-top:var(--sp-2); }
+#s-table th { background:none; font-variant-caps:all-small-caps; letter-spacing:.06em; font-size:var(--fs-md); }
+#s-table td:first-child { font-weight:700; }
+
+/* Map: the key in calmer cards, the area list as small tiles. */
+.map-side legend { font-variant-caps:all-small-caps; letter-spacing:.06em; color:var(--muted); }
+.map-side fieldset.card { padding-top:var(--sp-3); }
+.area-list li { padding:var(--sp-2) var(--sp-3); border:1px solid var(--line); border-radius:var(--r-sm); background:var(--bg); }
+
+/* The administrator's section and dialogs: matched corners and quieter rules. */
+.admin-body { border-style:solid; background:var(--card); box-shadow:var(--shadow-sm); }
+.dlg { padding:var(--sp-6) var(--sp-5) var(--sp-5); }
+.dlg textarea { border-radius:var(--r-md); }
+.tile .value small { letter-spacing:0; margin-left:var(--sp-1); }
