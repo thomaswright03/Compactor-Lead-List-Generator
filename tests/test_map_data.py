@@ -344,14 +344,41 @@ def test_the_map_data_alone_starts_the_bar_near_zero(monkeypatch):
 
 
 def test_the_missing_areas_are_named_by_their_towns():
-    parts = [(box, 1 / 9, 0) for box in osm._parts(40.76, -111.89, 30)]
-    assert osm.areas_text(parts[:1], 40.76, -111.89, 30) == "Salt Lake City"
-    named = osm.areas_text(parts, 40.76, -111.89, 30)
+    """The areas a search missed are counted and named area by area, as the Map page does:
+    the area the search's center is in by its town, even when only a quarter of it (with no
+    town's center inside) is missing, and in US spelling."""
+    from leadgen import area_map
+    boxes = osm._parts(40.76, -111.89, 30)
+    first = area_map.tally(40.76, -111.89, 30, [list(boxes[0])])
+    assert first == area_map.Tally(9, 8, ("Salt Lake City",))
+    assert first.text() == "8 of the 9 areas searched in full"
+    south, west, north, east = boxes[0]
+    quarter = [south, west, (south + north) / 2, (west + east) / 2]
+    assert area_map.tally(40.76, -111.89, 30, [quarter]).left == ("Salt Lake City",)
+    every = area_map.tally(40.76, -111.89, 30, [None])
+    assert every.searched == 0 and every.text() == "0 of the 9 areas searched in full"
+    named = area_map.names_text(every.left)
     assert named.startswith("Salt Lake City, ") and named.endswith(" and more")
-    # An area with no town in it is named by where it lies from the centre.
+    assert area_map.tally(40.76, -111.89, 30, []).text() == "all 9 areas searched"
+    # An area with no town in it is named by where it lies from the center.
     lake = (41.0, -112.6, 41.2, -112.4)
-    assert osm.areas_text([(lake, 0.1, 0)], 40.76, -111.89, 40) == "the area to the north-west"
-    assert osm.areas_text([], 40.76, -111.89, 30) == ""
+    assert osm.area_name(40.76, -111.89, 40, lake) == "the area to the northwest"
+    assert area_map.names_text(["The area to the west", "Layton"]) == "the area to the west and Layton"
+    assert area_map.names_text([]) == ""
+
+
+def test_area_names_an_earlier_version_saved_read_in_todays_words():
+    """Earlier versions named the area around a search's center "the area around the search's
+    centre" and wrote directions with a hyphen: shown now by the town the Map page names it
+    by, and in US spelling; the saved words themselves are left as they are."""
+    from leadgen import area_map
+    old = "the area around the search's centre, Layton and the area to the north-west"
+    record = {"center": [40.76, -111.89], "radius": 30}
+    assert area_map.plain_names(old, record) == "Salt Lake City, Layton and the area to the northwest"
+    # Without where the search was, the words only lose the British spelling.
+    assert area_map.plain_names(old, {}) == ("the area around the search's center, Layton and the area to the "
+                                             "northwest")
+    assert area_map.plain_names("", record) == ""
 
 
 # ---- building labels are left out; OSM-only searches say phones will be few

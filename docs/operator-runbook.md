@@ -55,10 +55,17 @@ links to, and take it off the README's "Still open for the owner" list.
    `curl -s https://compactor-lead-finder.onrender.com/login | grep -oE 'href="(tel|mailto):[^"]+"'`
    prints the contact's `tel:` or `mailto:` link (nothing printed: not set yet).
 3. **Delete the two old branches** (GitHub; **Done (2026-10-05)**):
-   `wip-yelp-cap-and-baler-marks` and `runbook-owner-steps-done` are gone; the repository
-   has only `main` and `claude-staging`. `claude-staging` is **kept on purpose**: it is the
-   staging route to the protected `main`, so don't delete it. *Check:* `git ls-remote --heads origin`
-   lists only `refs/heads/main` and `refs/heads/claude-staging`. See [Branches](#the-size-of-a-clone).
+   `wip-yelp-cap-and-baler-marks` and `runbook-owner-steps-done` are gone. The branches
+   that stay are `main` and `claude-staging`; `claude-staging` is **kept on purpose**: it is
+   the staging route to the protected `main`, so don't delete it. Another branch may come
+   and go (`ui-revamp`, checked 2026-10-06, is already merged into `main` and the owner will
+   delete it); one already merged into `main` is expected and harmless, as nothing deploys
+   from it. *Check:* `git ls-remote --heads origin` lists `refs/heads/main` and
+   `refs/heads/claude-staging`, and every other branch it lists is already merged into
+   `main` or has an open pull request: after `git fetch --prune origin`,
+   `git branch -r --no-merged origin/main` prints nothing, or only `origin/claude-staging`
+   while a review round's fixes wait for their checks, or a branch with an open pull
+   request. See [Branches](#the-size-of-a-clone).
 4. **Turn on the nightly backup** (GitHub; **Done (2026-10-03)**: first run green). So a copy older
    than Neon's 6-hour history exists. On GitHub open the repository → **Settings** →
    **Secrets and variables** → **Actions** → **New repository secret**, twice:
@@ -372,8 +379,8 @@ everyone's clones and the deploy link, so it is left there; it has no effect on
 the running site. `*.whl` files are now ignored so it can't happen again. Purge
 it only if the owner agrees to rewrite the history.
 
-**Branches** (checked 2026-10-05). `main` is the only branch the site runs from. The
-repository has two branches:
+**Branches** (checked 2026-10-06). `main` is the only branch the site runs from. Two
+branches stay:
 
 - `main`: what the site runs.
 - `claude-staging` (**kept on purpose**): the staging route to the protected `main`.
@@ -381,11 +388,21 @@ repository has two branches:
   moves up to it only once they are green; between rounds it points at a commit already
   on `main`. Nothing deploys from it. Don't delete it.
 
+Other branches come and go: a piece of work gets its own branch, is merged into `main`,
+and the branch can then be deleted (GitHub → the repository → **Branches** → the bin
+icon beside it). A branch already merged into `main` is expected and harmless: nothing
+deploys from it and everything on it is on `main`. On 2026-10-06 that is `ui-revamp`
+(the restyle, fully merged into `main`); the owner will delete it.
+
 The old branches `wip-yelp-cap-and-baler-marks` (an early draft of work that reached
 `main` as 54de1e5) and `runbook-owner-steps-done` (already part of `main`) were deleted by
-the owner on 2026-10-05. *Check:* `git ls-remote --heads origin` lists only
-`refs/heads/main` and `refs/heads/claude-staging` (plus a branch with an open pull
-request, if any).
+the owner on 2026-10-05. *Check:* `git ls-remote --heads origin` lists
+`refs/heads/main` and `refs/heads/claude-staging`; any other branch it lists must already
+be merged into `main` or have an open pull request. To see that, run
+`git fetch --prune origin` and then `git branch -r --no-merged origin/main`: it prints
+nothing, or only `origin/claude-staging` while a review round's fixes wait for their
+checks, or a branch with an open pull request. Anything else it prints is unmerged work:
+ask whoever made it before deleting it.
 
 ## The database (saved leads, marks, calls, the Yelp count)
 

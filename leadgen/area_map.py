@@ -9,7 +9,9 @@ town, osm.area_name). Each area is shaded by the latest search of AARCO's area t
 asked the map data, from what the day's record says about it: every area answered,
 the parts that didn't (web/finding.py map_areas, and while they are filled in the
 fill-in's "boxes", fillin.py), or, for a search recorded before those were kept, the
-towns its missing areas were named by. Nothing here writes anything.
+towns its missing areas were named by. The Find page counts and names a search's
+areas the same way (Tally, used by fillin.coverage), so the two pages never disagree
+about how much of the area was searched. Nothing here writes anything.
 """
 
 import json
@@ -61,7 +63,7 @@ FIELDS = ("key", "lat", "lon", "group", "name", "tier", "score", "phone", "verif
 @dataclass(frozen=True)
 class Area:
     n: int                     # its place in the order the search asks them (1 = the centre's)
-    name: str                  # "Salt Lake City", "The area to the north-west"
+    name: str                  # "Salt Lake City", "The area to the northwest"
     towns: tuple[str, ...]     # its biggest towns after the one it is named for
     box: Box
     outline: tuple[tuple[float, float], ...]   # the box cut to the circle
@@ -125,7 +127,7 @@ def _area_title(name: str) -> str:
     return name[:1].upper() + name[1:]
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=16)
 def areas(lat: float = config.SERVICE_CENTER[0], lon: float = config.SERVICE_CENTER[1],
           miles: float = config.SERVICE_AREA_MILES) -> tuple[Area, ...]:
     """The areas a search of `miles` around (lat, lon) asks the map data in (by default
@@ -146,6 +148,16 @@ def areas(lat: float = config.SERVICE_CENTER[0], lon: float = config.SERVICE_CEN
         found.append(Area(n, _area_title(name), tuple(t for t in towns if t != name)[:3], box,
                           tuple(outline), label))
     return tuple(found)
+
+
+def search_areas(lat: float, lon: float, miles: float) -> tuple[Area, ...]:
+    """The areas of a search of `miles` around (lat, lon), as the Map page draws and names
+    them: a search of AARCO's area (around its shop, the service area's miles) gets the
+    Map page's own areas, so the Find page counts and names exactly what the Map shows."""
+    if miles == config.SERVICE_AREA_MILES and \
+            haversine_miles(lat, lon, *config.SERVICE_CENTER) <= SAME_CENTRE_MILES:
+        return areas()
+    return areas(round(lat, 5), round(lon, 5), float(miles))
 
 
 def _point(p: tuple[float, float]) -> Point:
@@ -218,6 +230,110 @@ def _missing_boxes(record: dict[str, Any]) -> list[Box] | None:
     return boxes
 
 
+def _statuses(drawn: Sequence[Area], missing: Iterable[Box], missed: str = MISSED) -> list[str]:
+    """Each area's status (SEARCHED, PARTLY, or `missed`) from the parts still missing."""
+    missing = list(missing)
+    shares = [_missed_share(a.box, missing) for a in drawn]
+    return [SEARCHED if s <= SLIVER else missed if s >= WHOLE else PARTLY for s in shares]
+
+
+def in_sentence(name: str) -> str:
+    """An area's name as it reads inside a sentence ("the area to the northwest")."""
+    return name[:1].lower() + name[1:] if name.startswith("The area ") else name
+
+
+def names_text(names: Sequence[str], most: int = 4) -> str:
+    """Areas' names in words, in the order given: "Salt Lake City, Layton and the area to
+    the west" (at most `most`, then "and more"); "" for none."""
+    said = [in_sentence(n) for n in names]
+    if len(said) > most:
+        return ", ".join(said[:most]) + " and more"
+    return ", ".join(said[:-1]) + (" and " if len(said) > 1 else "") + (said[-1] if said else "")
+
+
+@dataclass(frozen=True)
+class Tally:
+    """How a search covered its areas, counted and named as the Map page does."""
+    areas: int                   # how many areas the search has
+    searched: int                # how many of them were searched in full
+    left: tuple[str, ...]        # the others' names, nearest the center first
+
+    def text(self) -> str:
+        """"6 of the 9 areas searched in full", or "all 9 areas searched"."""
+        if self.searched == self.areas:
+            return f"all {self.areas} areas searched"
+        return f"{self.searched} of the {self.areas} areas searched in full"
+
+
+def tally(lat: float, lon: float, miles: float, missing: Iterable[Any]) -> Tally:
+    """How a search of `miles` around (lat, lon) covered its areas, given the parts still
+    missing (boxes as the day's record keeps them, [south, west, north, east]; None for
+    the whole circle, asked as one part)."""
+    boxes: list[Box] = []
+    for box in missing:
+        if box is None:
+            boxes.append((-90.0, -180.0, 90.0, 180.0))
+        elif isinstance(box, list | tuple) and len(box) == 4:
+            boxes.append((float(box[0]), float(box[1]), float(box[2]), float(box[3])))
+    drawn = search_areas(lat, lon, miles)
+    statuses = _statuses(drawn, boxes)
+    return Tally(len(drawn), statuses.count(SEARCHED),
+                 tuple(a.name for a, status in zip(drawn, statuses, strict=True) if status != SEARCHED))
+
+
+def _search_place(record: dict[str, Any]) -> tuple[float, float, float] | None:
+    """The record's search center and radius (lat, lon, miles), or None when it doesn't
+    keep them."""
+    center, radius = record.get("center"), record.get("radius")
+    if not (isinstance(center, list) and len(center) == 2 and radius):
+        return None
+    try:
+        lat, lon, miles = float(center[0]), float(center[1]), float(radius)
+    except (TypeError, ValueError):
+        return None
+    ok = math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and 0 < miles <= 500
+    return (lat, lon, miles) if ok else None
+
+
+def record_tally(record: dict[str, Any]) -> Tally | None:
+    """How the day's search on record covered its areas (tally), from its center, radius
+    and the parts it (and its filling in) still missed; None for a record that doesn't
+    keep them (one saved by an earlier version)."""
+    where = _search_place(record)
+    if where is None:
+        return None
+    fill = _dict(record.get("fill"))
+    # The filling in's own list (it empties as areas answer), else the search's; a search
+    # that kept no missing part without filling in has none to count by.
+    kept = fill["boxes"] if "boxes" in fill else _dict(record.get("map_areas")).get("missing") or None
+    if not isinstance(kept, list):
+        return None
+    return tally(*where, kept)
+
+
+# What earlier versions called an area: the one a search's center is in when no town's
+# center is in it, and the directions with hyphens ("the area to the north-west").
+_OLD_CENTER = re.compile(r"\bthe area around the search's centre\b", re.I)
+_OLD_DIRECTION = re.compile(r"\b(north|south)-(east|west)\b", re.I)
+
+
+def plain_names(text: str, record: dict[str, Any] | None = None) -> str:
+    """Area names an earlier version saved, in the words the pages use now: the area a
+    search's center is in named by its town, as the Map page names it (when the record
+    says where the search was), and US spelling. The record itself is never changed."""
+    if not text:
+        return text
+    where = _search_place(record or {})
+    if where is not None and _OLD_CENTER.search(text):
+        lat, lon, miles = where
+        own = next((a for a in search_areas(lat, lon, miles)
+                    if a.box[0] <= lat <= a.box[2] and a.box[1] <= lon <= a.box[3]), None)
+        if own is not None:
+            text = _OLD_CENTER.sub(in_sentence(own.name), text)
+    text = _OLD_CENTER.sub(osm.CENTER_AREA, text)
+    return _OLD_DIRECTION.sub(lambda m: m.group(1) + m.group(2).lower(), text)
+
+
 # An incomplete search whose map data didn't answer at all ("Couldn't reach Google and
 # the map data service, so ...").
 _MAP_DATA_DOWN = re.compile(r"Couldn't reach [^,]*the map data service")
@@ -244,6 +360,7 @@ def _named_missing(record: dict[str, Any]) -> tuple[set[str], bool] | None:
         where, left = said.group(3), int(said.group(2)) - int(said.group(1))
     if not where:
         return None
+    where = plain_names(where, record)
     names = {_area_title(n.strip()) for chunk in where.removesuffix(" and more").split(", ")
              for n in chunk.split(" and ") if n.strip()}
     return names, not where.endswith(" and more") and len(names) == left
@@ -273,8 +390,7 @@ def coverage(record: dict[str, Any] | None, drawn: Sequence[Area]) -> Coverage:
     if missing is None and _MAP_DATA_DOWN.search(str(record.get("reason") or "")):
         missing = [(-90.0, -180.0, 90.0, 180.0)]
     if missing is not None:
-        shares = [_missed_share(a.box, missing) for a in drawn]
-        statuses = [SEARCHED if s <= SLIVER else missed if s >= WHOLE else PARTLY for s in shares]
+        statuses = _statuses(drawn, missing, missed)
     else:
         named = _named_missing(record)
         if named is None:
@@ -289,11 +405,10 @@ def coverage(record: dict[str, Any] | None, drawn: Sequence[Area]) -> Coverage:
         if not sure:
             return Coverage(statuses, f"{about}: the areas it names as missing are marked; whether the others "
                                       "were searched in full wasn't recorded then.", filling)
-    searched = statuses.count(SEARCHED)
-    if searched == len(drawn):
-        return Coverage(statuses, f"{about}: all {len(drawn)} areas searched.", filling)
-    still = ", the rest still being asked in the background" if filling else ""
-    return Coverage(statuses, f"{about}: {searched} of {len(drawn)} areas searched in full{still}.", filling)
+    # Counted in the same words as the Find page's status (fillin.coverage).
+    counted = Tally(len(drawn), statuses.count(SEARCHED), ())
+    still = ", the rest still being asked in the background" if filling and counted.searched < counted.areas else ""
+    return Coverage(statuses, f"{about}: {counted.text()}{still}.", filling)
 
 
 # ---- the pins

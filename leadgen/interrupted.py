@@ -12,14 +12,20 @@ history or starts a search (recover): its row says the server shut down (the
 process marks its runs when it exits), or it has not said it is alive for
 STALE_SECONDS (the process was killed). What it had found is merged, scored and
 saved like a search's own, and the day's search is given back at once, with a
-history row that says what happened ("Interrupted by a server restart: the 128
-businesses it had found were saved."). Nothing is searched again by itself:
+history row that says what happened ("The server restarted during the search; the
+128 businesses it had found were saved."). Nothing is searched again by itself:
 running the search again (and spending paid lookups on it) is the person's choice.
+
+Every page says it in the same neutral words (RESTARTED: a deploy, a crash and a
+manual restart all read the same, as the page can't tell them apart), and history
+rows saved by earlier versions are shown in those words too (plain_reason), without
+rewriting them.
 """
 
 import atexit
 import json
 import logging
+import re
 import threading
 import time
 import uuid
@@ -36,6 +42,10 @@ log = logging.getLogger(__name__)
 HEARTBEAT_SECONDS = 10.0
 # ...and one that has not for this long lost its server.
 STALE_SECONDS = 45.0
+
+# The one sentence every page uses for a search a server restart cut off (the Find page's
+# status, its progress card and the search history; find.js says it in the same words).
+RESTARTED = "The server restarted during the search"
 
 _FIELDS = {f.name for f in fields(Lead)}
 CLOSED = "CLOSED_PERMANENTLY"
@@ -166,12 +176,18 @@ def _stale(alive: float, now: float) -> bool:
     return alive <= 0 or now - alive > STALE_SECONDS
 
 
-def pending() -> bool:
-    """True while a search another server ran is still to be finished: its server is
-    shutting down or has just stopped, and it has not been finished yet."""
+def wait(now: float | None = None) -> float | None:
+    """While a search another server ran is still to be finished (its server is shutting
+    down or has just stopped, and it has not been finished yet): about how many seconds
+    until the last such one can be (its server shut down: now; it was killed: once its
+    heartbeat is STALE_SECONDS old), so the page can say when Find leads is available
+    again. None when none is."""
+    now = time.time() if now is None else now
     with store.connect() as db:
         rows = db.all("SELECT id, alive FROM search_runs")
-    return any(run_id not in _live for run_id, _ in rows)
+    waits = [0.0 if alive <= 0 else max(0.0, float(alive) + STALE_SECONDS - now)
+             for run_id, alive in rows if run_id not in _live]
+    return max(waits) if waits else None
 
 
 def recover() -> int:
@@ -226,11 +242,25 @@ def _finish(run_id: str, day: str, started: float, info: dict[str, Any]) -> None
 def reason(shown: int, found: bool) -> str:
     """The search history's line for a search a server restart cut off."""
     if shown:
-        return (f"Interrupted by a server restart (the site was updated or restarted): the "
-                f"{shown:,} business{'' if shown == 1 else 'es'} it had found "
+        return (f"{RESTARTED}; the {shown:,} business{'' if shown == 1 else 'es'} it had found "
                 f"{'was' if shown == 1 else 'were'} saved.")
     if found:
-        return ("Interrupted by a server restart (the site was updated or restarted): none of "
-                "the places it had found were within the radius and good enough to keep.")
-    return ("Interrupted by a server restart (the site was updated or restarted) before it "
-            "found any businesses.")
+        return (f"{RESTARTED}; none of the places it had found were within the radius and good "
+                "enough to keep.")
+    return f"{RESTARTED}, before it had found any businesses."
+
+
+# How earlier versions began that line: "Interrupted by a server restart (the site was
+# updated or restarted): the 2 businesses ..." or "... restarted) before it found any".
+_OLD_START = re.compile(r"^Interrupted by a server restart(?: \([^)]*\))?(?:(: )| before it found )")
+
+
+def plain_reason(text: str) -> str:
+    """A cut-off search's history line, as an earlier version saved it, in the words used
+    now (reason): the saved record itself is never changed."""
+    m = _OLD_START.match(text)
+    if m is None:
+        return text
+    if m.group(1):
+        return f"{RESTARTED}; {text[m.end():]}"
+    return f"{RESTARTED}, before it had found {text[m.end():]}"

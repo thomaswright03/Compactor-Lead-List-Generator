@@ -1419,7 +1419,7 @@ def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, 
     # can start now and that the rest appears on its own.
     expect(note).to_contain_text("Covered so far: about 5 of the 9 areas within 30 miles. Still filling in, "
                                  "in the background until about ")
-    expect(note).to_contain_text(": Layton, West Point, Coalville and the area to the north-west. The 512 "
+    expect(note).to_contain_text(": Layton, West Point, Coalville and the area to the northwest. The 512 "
                                  "businesses already found are on the Leads page, ready to call now; new ones "
                                  "from the rest of the area will appear there on their own.")
     expect(tab.locator("#history tbody").first).to_contain_text("Filling in")
@@ -1438,7 +1438,7 @@ def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, 
     tab.evaluate("loadSearches()")
     expect(note).to_have_text("Covered: about 7 of the 9 areas within 30 miles. Filling in stopped because "
                               "searching was paused, so these weren't searched today: Coalville and the area to "
-                              "the north-west. The 530 businesses already found are on the Leads page, ready to "
+                              "the northwest. The 530 businesses already found are on the Leads page, ready to "
                               "call now.")
     assert "never" not in tab.inner_text("#page-find")
     context.close()
@@ -1474,13 +1474,14 @@ def test_a_partly_answered_search_says_its_coverage_once(page, monkeypatch):
     page.click("#confirm-go")
     page.wait_for_selector("#done-card:not([hidden])", timeout=60000)
     note = page.locator("#coverage-note")
-    expect(note).to_contain_text("Covered so far: about 6 of the 9 areas within 30 miles. Still filling in")
+    expect(note).to_contain_text("Covered so far: 6 of the 9 areas within 30 miles searched in full. Still "
+                                 "filling in")
     expect(note).to_contain_text("ready to call now; new ones from the rest of the area will appear there on "
                                  "their own.")
     page.get_by_role("button", name="Details").first.click()
     said = page.evaluate(COVERAGE_SAID)
     assert len(said["notices"]) == 1 and said["notices"][0].startswith("Covered so far"), said
-    assert len(said["details"]) == 1 and "About 6 of 9 areas so far; filling in" in said["details"][0], said
+    assert len(said["details"]) == 1 and "6 of 9 areas searched in full so far; filling in" in said["details"][0], said
     assert set(said["figures"]) == {"6/9"} and not said["banned"], said
 
     # The rest comes in: the same one notice says so, and the Leads page has the new businesses.
@@ -1911,8 +1912,9 @@ def test_a_search_cut_off_by_a_restart_says_what_was_saved_and_frees_the_day(bro
         expect(tab.locator("#history .h-leads")).to_contain_text("2 Interrupted", timeout=15000)
         expect(tab.locator("#history")).to_contain_text(
             "the 2 businesses it had found were saved. It didn't use up the day's search.")
-        expect(tab.locator("#day-note")).to_contain_text(
-            "cut off by a server restart; the 2 businesses it had found were saved")
+        expect(tab.locator("#day-note")).to_have_text(
+            "The server restarted during the search; the 2 businesses it had found were saved. Today's search is "
+            "still available.")
         expect(tab.locator("#go")).to_be_enabled()
         assert sorted(l.name for l in saved.load()) == ["Costco", "Smith's Marketplace"]
     finally:
@@ -1936,13 +1938,14 @@ def test_the_find_page_and_the_history_agree_after_a_restart_that_saved_nothing(
     tab.goto(site + "#find")
     note = tab.locator("#day-note")
     history = tab.locator("#history tbody").first
+    # The Find page and the history say it in the same words.
     if found:
-        expect(note).to_contain_text("none of what it had found was close enough or scored high enough to keep")
-        expect(history).to_contain_text("none of the places it had found were within the radius")
+        said = ("The server restarted during the search; none of the places it had found were within the radius "
+                "and good enough to keep.")
     else:
-        expect(note).to_contain_text("cut off by a server restart before it had found anything, so nothing "
-                                     "was saved. Today's search is still available.")
-        expect(history).to_contain_text("before it found any businesses. It didn't use up the day's search.")
+        said = "The server restarted during the search, before it had found any businesses."
+    expect(note).to_have_text(f"{said} Today's search is still available.")
+    expect(history).to_contain_text(f"{said} It didn't use up the day's search.")
     assert "was saved (see" not in note.inner_text()
     expect(tab.locator("#go")).to_be_enabled()
     context.close()
@@ -2222,14 +2225,27 @@ def test_the_map_shows_aarco_its_area_the_areas_and_every_saved_business(page, s
     expect(page.locator("#map .area-name.missed small")).to_have_text("not searched")
     expect(page.locator("#map-areas li")).to_have_count(9)
     expect(page.locator("#map-areas li", has_text="Layton")).to_contain_text("Not searched")
-    expect(page.locator("#map-coverage")).to_contain_text("8 of 9 areas searched in full")
+    expect(page.locator("#map-coverage")).to_contain_text("8 of the 9 areas searched in full")
     # Without the street map (refused here, as offline) the page says so and draws the rest.
     expect(page.locator("#map-tiles-note")).to_be_visible()
-    # A pin for every saved business: three dots and the competitor's square, counted in the key.
-    assert page.evaluate("M.pins.map(p => p.group).sort()") == ["no", "unchecked", "yes"]
-    expect(page.locator("#map .pin-comp")).to_have_count(1)
+    # A pin for every saved business, counted in the key. Zoomed out, the four (about a mile
+    # apart) are one circle with their count; tapping it zooms in to three dots and the
+    # competitor's square.
+    assert page.evaluate("M.pins.map(p => p.group).sort()") == ["competitor", "no", "unchecked", "yes"]
     for group in ("yes", "no", "unchecked", "competitor"):
         expect(page.locator(f"#map-n-{group}")).to_have_text("(1)")
+    cluster = page.locator("#map .pin-cluster")
+    expect(cluster).to_have_count(1)
+    expect(cluster).to_have_text("4")
+    assert cluster.get_attribute("title") == ("4 businesses close together (1 not checked yet, 1 No, 1 Yes, "
+                                              "1 competitors or AARCO). Zoom in to see each one.")
+    expect(page.locator("#map .pin-comp")).to_have_count(0)
+    expect(page.locator("#map-cluster-note")).to_contain_text("Businesses close together show as one circle")
+    zoomed_out = page.evaluate("M.map.getZoom()")
+    cluster.click()
+    expect(cluster).to_have_count(0)
+    assert page.evaluate("M.map.getZoom()") > zoomed_out and page.evaluate("M.shown.size") == 4
+    expect(page.locator("#map .pin-comp")).to_have_count(1)
     # Each group can be hidden and shown again, and stays as chosen after a reload.
     yes_box = page.locator('#map-groups input[data-group="yes"]')
     yes_box.uncheck()
@@ -2241,9 +2257,13 @@ def test_the_map_shows_aarco_its_area_the_areas_and_every_saved_business(page, s
     expect(yes_box).not_to_be_checked()
     assert not page.evaluate("M.map.hasLayer(M.groups.yes)") and page.evaluate("M.map.hasLayer(M.groups.no)")
     expect(page.locator("#map .pin-comp")).to_have_count(0)
+    # A hidden group isn't counted in the circles either.
+    expect(page.locator("#map .pin-cluster")).to_have_text("2")
     yes_box.check()
     page.locator('#map-groups input[data-group="competitor"]').check()
     assert page.evaluate("M.map.hasLayer(M.groups.yes)")
+    expect(page.locator("#map .pin-cluster")).to_have_text("4")
+    page.locator("#map .pin-cluster").click()
     expect(page.locator("#map .pin-comp")).to_have_count(1)
     # The areas can be hidden too.
     page.locator("#map-show-areas").uncheck()
@@ -2661,3 +2681,206 @@ def test_a_tier_alone_that_matches_nothing_gives_no_spelling_advice(page):
     page.select_option("#tier", "")
     page.fill("#filter", "zzzz")
     expect(box).to_contain_text("Check the spelling")
+
+
+# ---- a server restart while the page follows a search
+
+@contextlib.contextmanager
+def _a_search_on_its_own_server(browser, monkeypatch):
+    """A site of its own whose search reports two businesses and then waits (the server is
+    about to stop): yields (the tab following the search, the app)."""
+    from werkzeug.serving import make_server
+
+    from leadgen.sources import report_found
+    found = [Lead(name=name, lat=40.66 + i * 0.01, lon=-111.89, source="osm", source_id=f"way/{i}",
+                  raw_categories=[tag])
+             for i, (name, tag) in enumerate([("Costco", "shop=wholesale"),
+                                              ("Smith's Marketplace", "shop=supermarket")])]
+    reported, gate = threading.Event(), threading.Event()
+
+    def run(params, progress):
+        report_found(list(found))
+        reported.set()
+        gate.wait(60)
+        raise RuntimeError("the old server's search ends with the test")
+    monkeypatch.setattr(web.finding, "run", run)
+    app = web.create_app()
+    server = make_server("127.0.0.1", 0, app, threaded=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    context = _context(browser, viewport={"width": 1280, "height": 900})
+    tab = context.new_page()
+    errors = []
+    tab.on("pageerror", lambda exc: errors.append(str(exc)))
+    try:
+        tab.goto(f"http://127.0.0.1:{server.server_port}/#find")
+        tab.wait_for_selector("text=Today's is available")
+        tab.fill("input[name=location]", "Murray")
+        tab.click("#go")
+        tab.click("#confirm-go")
+        tab.wait_for_selector("#progress-card:not([hidden])")
+        assert reported.wait(10)
+        expect(tab.locator("#progress-msg")).not_to_have_text("")
+        yield tab, app
+    finally:
+        gate.set()
+        context.close()
+        server.shutdown()
+    assert not errors
+
+
+def test_the_progress_card_says_it_is_reconnecting_and_its_timer_keeps_counting(browser, monkeypatch):
+    """The server stops answering mid-search: within 3 seconds of the status check that got no
+    answer the card says "Reconnecting…" and its timer goes on; when the server is back (it
+    restarted) every place says so in one sentence, and Find leads is available again."""
+    import time
+
+    from leadgen import interrupted
+    with _a_search_on_its_own_server(browser, monkeypatch) as (tab, app):
+        asked = []
+        tab.route("**/status/*", lambda route: asked.append((time.monotonic(), route)))   # no answer
+        msg = tab.locator("#progress-msg")
+        expect(msg).to_have_text("Reconnecting…", timeout=6000)
+        seen = time.monotonic()
+        assert asked and seen - asked[0][0] < 3.0, seen - asked[0][0]
+        expect(tab.locator("#slow-note")).to_contain_text("The server isn't answering just now. This page keeps "
+                                                          "trying")
+        before = tab.inner_text("#elapsed")
+        expect(tab.locator("#elapsed")).not_to_have_text(before, timeout=3000)       # the timer keeps counting
+        expect(tab.locator("#go")).to_be_disabled()
+        # The restart: the old process says its search ended; the new one has no jobs.
+        interrupted._shutting_down()
+        interrupted._live.clear()
+        app.extensions["leadgen"].jobs.clear()
+        tab.unroute("**/status/*")
+        for _, route in asked:
+            with contextlib.suppress(Exception):
+                route.abort()
+        said = "The server restarted during the search; the 2 businesses it had found were saved."
+        expect(tab.locator("#day-note")).to_have_text(f"{said} Today's search is still available.", timeout=20000)
+        expect(tab.locator("#progress-card")).to_be_hidden()
+        expect(tab.locator("#history tbody").first).to_contain_text(f"{said} It didn't use up the day's search.")
+        expect(tab.locator("#go")).to_be_enabled()
+        assert "site was updated" not in tab.inner_text("#page-find")
+
+
+def test_after_a_crash_find_leads_says_when_it_is_back_and_comes_back_by_itself(browser, monkeypatch):
+    """A killed server says no goodbye: its search is finished once its last sign of life is
+    old enough. Until then the page says what it is doing and when Find leads is available
+    again, and turns it back on by itself."""
+    from leadgen import interrupted, store
+    with _a_search_on_its_own_server(browser, monkeypatch) as (tab, app):
+        [run] = interrupted._live.values()
+        run.write()                      # its last heartbeat ...
+        run._stop.set()                  # ... and the process is killed
+        interrupted._live.clear()
+        app.extensions["leadgen"].jobs.clear()
+        with store.connect() as db:      # 15 seconds ago: about 30 seconds to go
+            db.run("UPDATE search_runs SET alive = alive - 15")
+        note = tab.locator("#day-note")
+        expect(note).to_contain_text("The server restarted during the search; what it had found is being saved. "
+                                     "Find leads is available again by ", timeout=20000)
+        expect(note).to_contain_text("(in about 30 seconds); this page updates by itself.")
+        assert re.search(r"available again by \d{1,2}:\d\d [AP]M \(", note.inner_text())
+        expect(tab.locator("#go")).to_be_disabled()
+        expect(tab.locator("#history tbody").first).to_contain_text(
+            "The server restarted during the search; what it had found is being saved.")
+        # Time passes: the page asks again by itself and Find leads comes back.
+        with store.connect() as db:
+            db.run("UPDATE search_runs SET alive = alive - ?", (interrupted.STALE_SECONDS,))
+        expect(tab.locator("#go")).to_be_enabled(timeout=12000)
+        expect(note).to_have_text("The server restarted during the search; the 2 businesses it had found were "
+                                  "saved. Today's search is still available.")
+
+
+# ---- the Map page with many businesses
+
+def _many_pins(n):
+    """A /map-data answer with `n` synthetic businesses spread over AARCO's area (and two at
+    one address), each group in turn."""
+    import math
+    import random
+
+    from leadgen import area_map
+    rng = random.Random(14)
+    body = area_map.page([], None)
+    lat0, lon0 = config.SERVICE_CENTER
+    groups = ["unchecked", "unchecked", "yes", "no", "competitor"]
+    pins = []
+    for i in range(n - 2):
+        r, a = 25 * math.sqrt(rng.random()), rng.random() * 2 * math.pi
+        lat = lat0 + r * math.cos(a) / 69.05
+        lon = lon0 + r * math.sin(a) / (69.05 * math.cos(math.radians(lat0)))
+        group = groups[i % len(groups)]
+        pins.append([f"k{i}", round(lat, 5), round(lon, 5), group, f"Business {i}", "B", 60, "(801) 555-0100", "",
+                     f"{i} Main St", "", "", False, "Competitor" if group == "competitor" else ""])
+    for i, name in enumerate(["Twin Suite A", "Twin Suite B"]):
+        pins.append([f"twin{i}", 40.9, -112.15, "yes", name, "A", 80, "", "", "1 Twin Rd", "", "", False, ""])
+    body.update(pins=pins, counts={g: sum(p[3] == g for p in pins) for g in area_map.GROUPS}, now=0)
+    return body
+
+
+def test_ten_thousand_businesses_are_grouped_and_split_as_the_map_zooms(browser, site):
+    """With 10,000 saved businesses the map stays quick: zoomed out they are circles with their
+    counts (not one solid mass), which split into single pins, in their colours, as the map
+    is zoomed in; a pin still opens its details, and businesses at one address open a list."""
+    import json
+    import time
+
+    body = _many_pins(10_000)
+    context = _context(browser, viewport={"width": 1280, "height": 900})
+    context.route("**/map-data", lambda route: route.fulfill(status=200, content_type="application/json",
+                                                             body=json.dumps(body)))
+    tab = context.new_page()
+    errors = []
+    tab.on("pageerror", lambda exc: errors.append(str(exc)))
+    tab.goto(site + "#find")
+    started = time.monotonic()
+    tab.click("nav a[data-page=map]")
+    tab.wait_for_function("M.loaded === true", timeout=20000)
+    took = time.monotonic() - started
+    assert took < 8, took
+    for group in ("yes", "no", "unchecked", "competitor"):
+        expect(tab.locator(f"#map-n-{group}")).to_have_text(f"({body['counts'][group]:,})")
+    # Zoomed out: a few dozen circles hold every business, and few single pins are drawn.
+    counted = tab.evaluate("""() => ({ circles: M.clustered.size, shown: M.shown.size,
+        held: [...M.clustered.values()].reduce((n, c) => n + c.members.length, 0) })""")
+    assert 5 <= counted["circles"] <= 400 and counted["shown"] < 100, counted
+    assert counted["held"] + counted["shown"] == 10_000, counted
+    expect(tab.locator("#map .pin-cluster")).to_have_count(counted["circles"])
+    # Each circle shows its count; the biggest hold hundreds.
+    assert tab.evaluate("Math.max(...[...M.clustered.values()].map((c) => c.members.length))") >= 100
+    # Regrouping at a new zoom, or as the map moves, takes a moment, not seconds.
+    ms = tab.evaluate("""() => { const t = performance.now();
+        M.map.setZoom(M.map.getZoom() + 1, { animate: false }); placePins(); return performance.now() - t; }""")
+    assert ms < 1000, ms
+    # A circle tapped zooms in to its businesses.
+    zoom = tab.evaluate("M.map.getZoom()")
+    tab.locator("#map .pin-cluster").first.click()
+    tab.wait_for_function(f"M.map.getZoom() > {zoom} && !M.map._animatingZoom")   # the zoom has ended
+    # Zoomed into a neighbourhood every business is a pin of its own, in its group's colour,
+    # and opens its details.
+    target = next(p for p in body["pins"] if p[3] == "yes")
+    tab.evaluate("([lat, lon]) => M.map.setView([lat, lon], 16, { animate: false })", target[1:3])
+    assert tab.evaluate("M.clustered.size") == 0 and tab.evaluate("M.shown.size") >= 1
+    colours = tab.evaluate("""() => [...M.shown].filter((p) => p.group === 'yes')
+        .map((p) => p.marker.options.fillColor)""")
+    yes = tab.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--pin-yes').trim()")
+    assert colours and set(colours) == {yes}
+    tab.mouse.click(*_on_screen(tab, target[1], target[2]))
+    expect(tab.locator("#map .pin-box")).to_contain_text(target[4])
+    # Two businesses at one address stay one circle however far in, and it lists them.
+    tab.evaluate("M.map.closePopup()")
+    expect(tab.locator("#map .pin-box")).to_have_count(0)            # it fades out
+    tab.evaluate("M.map.setView([40.9, -112.15], 18, { animate: false })")
+    twin = tab.locator("#map .pin-cluster")
+    expect(twin).to_have_count(1)
+    expect(twin).to_have_text("2")
+    twin.click()
+    box = tab.locator("#map .pin-box")
+    expect(box).to_contain_text("2 businesses at this spot")
+    box.get_by_role("button", name="Twin Suite B").click()
+    expect(box).to_contain_text("Has a baler or compactor: Yes")
+    box.get_by_role("button", name="Back to the list").click()
+    expect(box.get_by_role("button", name="Twin Suite A")).to_be_visible()
+    context.close()
+    assert not errors

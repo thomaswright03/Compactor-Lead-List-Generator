@@ -70,10 +70,12 @@ async function loadSearches() {
   $("paused-box").hidden = !body.paused;
   const today = body.current;
   if (body.running && !S.job) follow(body.running);
-  // Today's search was cut off by a server restart (an update) and is still being finished
-  // on the server (what it found is saved, the day given back): ask again in a moment.
+  // The server restarted during today's search, which is still being finished on the server
+  // (what it found is saved, the day given back): ask again when that should be done.
   clearTimeout(S.cutOffTimer);
-  if (body.cut_off && !S.job) S.cutOffTimer = setTimeout(loadSearches, 8000);
+  if (body.cut_off && !S.job) {
+    S.cutOffTimer = setTimeout(loadSearches, Math.min(8000, Math.max(2000, (body.cut_off_wait || 0) * 1000 + 1000)));
+  }
   const cutToday = !today && body.searches.find((s) => s.day === body.today && s.interrupted);
   // A refusal or failure stays in its own red line (showError, the failure box); this only says how the day stands.
   // Today's search, when it holds the day (it ran, or is running, or stopped short of finishing).
@@ -82,10 +84,8 @@ async function loadSearches() {
     ? "The next one can run tomorrow, from midnight Utah time." : "");
   if (S.job) setGo(false, "");
   else if (body.paused) setGo(false, "Searching is paused by the administrator.");
-  else if (body.cut_off) {
-    setGo(false, "Today's search was cut off by a server restart (the site was updated). What it had found is " +
-                 "being saved; this page updates by itself in a moment.");
-  } else if (used && used.leads === undefined && !body.running) {
+  else if (body.cut_off) setGo(false, `${RESTART_SAVING} ${availableAgain(body)}`);
+  else if (used && used.leads === undefined && !body.running) {
     setGo(false, `Today's search was interrupted before it finished. It can be run again after ${used.free_at}.`);
   } else if (used) {
     setGo(false, `Today's search ran at ${used.when.split(", ").pop()}. The next one can run tomorrow.`);
@@ -103,22 +103,28 @@ async function loadSearches() {
   if (body.admin && body.admin !== "open") showAdmin(false);   // locked again elsewhere
   if (body.switches) { S.switches = body.switches; renderSwitches(body.switches); }
 }
-// Today's search cut off by a server restart (interrupted.py), said as its history row says it:
-// how many businesses were saved, or that nothing had been found (or kept) yet.
+// A search a server restart cut off is said in one neutral sentence everywhere: here (beside
+// Find leads and on the progress card), in its history row and once it is finished (the server's
+// interrupted.RESTARTED and interrupted.reason, in the same words). The page can't tell a deploy
+// from a crash, so it never says which.
+const RESTARTED = "The server restarted during the search";
+const RESTART_SAVING = `${RESTARTED}; what it had found is being saved.`;
+// When Find leads can be used again while the server finishes the cut-off search: once the old
+// server's last sign of life is old enough (interrupted.STALE_SECONDS); the page asks again then.
+/** @param {SearchesAnswer} body */
+function availableAgain(body) {
+  const wait = body.cut_off_wait || 0;
+  if (wait <= 10 || !body.cut_off_until) {
+    return "Find leads is available again in a few seconds; this page updates by itself.";
+  }
+  return `Find leads is available again by ${body.cut_off_until} (in about ${Math.ceil(wait / 10) * 10} seconds); ` +
+    "this page updates by itself.";
+}
+// Today's search, once finished after the restart: its history row's own words (how many
+// businesses were saved, or that nothing had been found or kept), and that the day is free.
 /** @param {SearchRow} s */
 function cutOffText(s) {
-  const n = s.leads || 0;
-  if (n) {
-    return `Today's search was cut off by a server restart; the ${num(n)} business${n === 1 ? "" : "es"} it had ` +
-      `found ${n === 1 ? "was" : "were"} saved (see the search history). Today's search is still available.`;
-  }
-  const pairs = Array.isArray(s.details) ? s.details : Object.entries(s.details || {});
-  const found = pairs.some(([k, v]) => /^Businesses from/.test(String(k)) && Number(v) > 0);
-  return found
-    ? "Today's search was cut off by a server restart; none of what it had found was close enough or scored " +
-      "high enough to keep, so nothing was saved. Today's search is still available."
-    : "Today's search was cut off by a server restart before it had found anything, so nothing was saved. " +
-      "Today's search is still available.";
+  return `${s.reason || `${RESTARTED}.`} Today's search is still available.`;
 }
 // The emergency switches (web/finding.py flip_switch): each takes effect on the next request.
 /** @type {Record<string, () => boolean>} */
@@ -310,8 +316,8 @@ function renderHistory(searches, body) {
       const extra = el("tr");
       const why = el("td"); why.colSpan = 6; why.className = "sub h-why";
       why.textContent = body && body.cut_off
-        ? "Cut off by a server restart (the site was updated); what it had found is being saved…"
-        : "The server stopped during this search, before it finished; what it had found couldn't be kept.";
+        ? RESTART_SAVING
+        : `${RESTARTED}, before it finished; what it had found couldn't be kept.`;
       extra.append(why); tbody.append(extra);
     }
     if (s.stopped) {
@@ -403,24 +409,63 @@ function showNotes(note, warnings) {
   }
   box.append(div);
 }
+// Following a search: its progress is asked for every FOLLOW.everyMs. A question not answered
+// within FOLLOW.cueMs puts "Reconnecting…" on the progress card at once (its timer keeps counting
+// here), one not answered within FOLLOW.limitMs is given up and asked again, and the card keeps
+// saying so until the server answers. A server that answers but doesn't know the search has
+// restarted: interrupted.py keeps what the search found and gives the day back, and the page says so.
+const FOLLOW = { everyMs: 1500, cueMs: 2500, limitMs: 10000, retryMs: 2000, slowRetryMs: 5000, quickTries: 15,
+                 /** @type {string | null} */ job: null, elapsed: 0, at: 0, ticker: 0, reconnecting: false };
+// The slow-search note's own words, while the card borrows it to say why it is reconnecting.
+const SLOW_NOTE = $("slow-note").textContent;
+/** @param {string | null} jobId the search being followed; null: reconnected (or it ended) */
+function reconnecting(jobId) {
+  const on = jobId !== null;
+  clearTimeout(FOLLOW.ticker);
+  FOLLOW.reconnecting = on;
+  $("slow-note").textContent = on
+    ? "The server isn't answering just now. This page keeps trying; if the server restarted, what the search " +
+      "had found is kept and this page says so."
+    : SLOW_NOTE;
+  if (!on) return;
+  // Its time so far is counted on from its last answer (from now, if it never answered).
+  if (FOLLOW.job !== jobId) Object.assign(FOLLOW, { job: jobId, elapsed: 0, at: Date.now() });
+  $("progress-msg").textContent = "Reconnecting…";
+  $("slow-note").hidden = false;
+  $("progress-card").hidden = false;
+  const tick = () => {
+    $("elapsed").textContent = fmtTime(FOLLOW.elapsed + (Date.now() - FOLLOW.at) / 1000);
+    FOLLOW.ticker = setTimeout(tick, 1000);
+  };
+  tick();
+}
 /** @param {string} jobId @param {number} [misses] how many times in a row the server didn't answer */
 async function follow(jobId, misses = 0) {
   S.job = jobId;
   setGo(false, ""); $("done-card").hidden = true; $("search-failed").hidden = true;
+  const stop = new AbortController();
+  const cue = setTimeout(() => { if (S.job === jobId && !FOLLOW.reconnecting) reconnecting(jobId); }, FOLLOW.cueMs);
+  const limit = setTimeout(() => stop.abort(), FOLLOW.limitMs);
   /** @type {Job} */
   let job;
-  try { job = await api(`/status/${jobId}`); }
+  try { job = await api(`/status/${jobId}`, { signal: stop.signal }); }
   catch (err) {
-    if (/** @type {ApiError} */ (err).status !== 404 && misses < 5) {
-      setTimeout(() => follow(jobId, misses + 1), 3000); return;
+    if (/** @type {ApiError} */ (err).status !== 404) {
+      // No answer, or an error page while the server starts again: say so, and keep asking.
+      if (!FOLLOW.reconnecting) reconnecting(jobId);
+      setTimeout(() => follow(jobId, misses + 1), misses < FOLLOW.quickTries ? FOLLOW.retryMs : FOLLOW.slowRetryMs);
+      return;
     }
+    reconnecting(null);
     S.job = null; $("progress-card").hidden = true;
     // The server restarted mid-search: it keeps what the search found and gives the day back.
-    setGo(false, "The server restarted during the search (the site was updated). Checking what it had found…");
-    setTimeout(loadSearches, 2000); return;
-  }
+    setGo(false, `${RESTART_SAVING} Find leads is available again once that's done; this page updates by itself.`);
+    setTimeout(loadSearches, 1000); return;
+  } finally { clearTimeout(cue); clearTimeout(limit); }
+  if (FOLLOW.reconnecting) reconnecting(null);
+  Object.assign(FOLLOW, { job: jobId, elapsed: job.elapsed || 0, at: Date.now() });
   showProgress(job);
-  if (job.state === "running") { setTimeout(() => follow(jobId), 1500); return; }
+  if (job.state === "running") { setTimeout(() => follow(jobId), FOLLOW.everyMs); return; }
   S.job = null;
   $("progress-card").hidden = true;
   if (job.state === "error") {

@@ -1,8 +1,12 @@
 """A server restart in the middle of a search (a deploy) keeps what the search had found,
 saves it, and gives the day back at once, with a history line saying what happened."""
 
+import pathlib
+import re
 import threading
 import time
+
+import pytest
 
 from leadgen import config, daily, interrupted, saved, store, web
 from leadgen.models import Lead
@@ -58,7 +62,7 @@ def test_a_deploy_mid_search_saves_what_it_found_and_gives_the_day_back(monkeypa
         assert not body["used_today"] and body["current"] is None and not body["cut_off"]
         [row] = body["searches"]
         assert row["interrupted"] and row["failed"] and row["leads"] == 2 and row["new"] == 2
-        assert row["reason"].startswith("Interrupted by a server restart")
+        assert row["reason"].startswith(interrupted.RESTARTED + ";")
         assert "the 2 businesses it had found were saved" in row["reason"]
         assert row["place"] and row["details"]
         assert sorted(l.name for l in saved.load()) == ["Costco", "Smith's Marketplace"]
@@ -103,7 +107,7 @@ def test_a_restart_before_anything_was_found_frees_the_day_at_once(monkeypatch):
         assert not body["used_today"]
         [row] = body["searches"]
         assert row["interrupted"] and row["leads"] == 0
-        assert row["reason"].endswith("before it found any businesses.")
+        assert row["reason"] == "The server restarted during the search, before it had found any businesses."
         assert daily.claim({"location": "84101"})[0] == daily.today()
     finally:
         finish()
@@ -150,7 +154,7 @@ def test_a_search_that_ends_removes_its_working_rows(monkeypatch):
         time.sleep(0.02)
     with store.connect() as db:
         assert db.all("SELECT id FROM search_runs") == [] == db.all("SELECT id FROM search_found")
-    assert interrupted.recover() == 0 and not interrupted.pending()
+    assert interrupted.recover() == 0 and interrupted.wait() is None
 
 
 def test_a_run_whose_search_had_finished_is_only_tidied(monkeypatch):
@@ -201,3 +205,73 @@ class _NoCache:
 
     def put(self, key, value, ttl=None):
         pass
+
+
+# ---- one neutral sentence, and when Find leads is back
+
+def test_while_a_killed_servers_search_waits_the_page_says_when_find_leads_is_back(monkeypatch):
+    """A killed server's search can be finished once its heartbeat is STALE_SECONDS old:
+    until then /searches says how long that is (and the time then), and the page counts on it."""
+    _, finish = _start(monkeypatch)
+    try:
+        [run] = interrupted._live.values()
+        run.write()                       # its last heartbeat, then the process is killed
+        run._stop.set()
+        client = _new_server()
+        with store.connect() as db:
+            db.run("UPDATE search_runs SET alive = alive - 20")       # it was killed 20 s ago
+        body = client.get("/searches").get_json()
+        assert body["cut_off"]
+        assert interrupted.STALE_SECONDS - 22 <= body["cut_off_wait"] <= interrupted.STALE_SECONDS - 19
+        assert re.fullmatch(r"\d{1,2}:\d\d [AP]M", body["cut_off_until"])
+        assert interrupted.wait() == pytest.approx(interrupted.STALE_SECONDS - 20, abs=2)
+        # Its server said goodbye: no wait at all (it is finished by the same page).
+        interrupted._shutting_down()
+        with store.connect() as db:
+            db.run("UPDATE search_runs SET alive = 0")
+        body = client.get("/searches").get_json()
+        assert not body["cut_off"] and "cut_off_wait" not in body and interrupted.wait() is None
+    finally:
+        finish()
+
+
+def test_every_place_says_a_restart_in_the_same_neutral_words():
+    """The history's line (reason), the Find page's own words (find.js RESTARTED) and the
+    status while it is being saved start with one sentence, which never guesses why the
+    server restarted."""
+    sentence = interrupted.RESTARTED
+    assert sentence == "The server restarted during the search"
+    for shown, found in ((2, True), (1, True), (0, True), (0, False)):
+        line = interrupted.reason(shown, found)
+        assert line.startswith(sentence) and "updated" not in line and "deploy" not in line
+    assert interrupted.reason(1, True) == f"{sentence}; the 1 business it had found was saved."
+    script = (pathlib.Path(__file__).resolve().parent.parent / "leadgen" / "static" / "find.js").read_text()
+    assert f'const RESTARTED = "{sentence}";' in script
+    assert "const RESTART_SAVING = `${RESTARTED}; what it had found is being saved.`;" in script
+    assert "site was updated" not in script and "cut off by a server restart" not in script
+
+
+@pytest.mark.parametrize("old,now", [
+    ("Interrupted by a server restart (the site was updated or restarted): the 128 businesses it had found were "
+     "saved.", "The server restarted during the search; the 128 businesses it had found were saved."),
+    ("Interrupted by a server restart (the site was updated or restarted): none of the places it had found were "
+     "within the radius and good enough to keep.",
+     "The server restarted during the search; none of the places it had found were within the radius and good "
+     "enough to keep."),
+    ("Interrupted by a server restart (the site was updated or restarted) before it found any businesses.",
+     "The server restarted during the search, before it had found any businesses."),
+    ("Interrupted by a server restart: the 3 businesses it had found were saved.",
+     "The server restarted during the search; the 3 businesses it had found were saved."),
+])
+def test_a_history_row_an_earlier_version_saved_reads_in_the_same_words(old, now):
+    """Rows saved before the wording changed are shown in it, and are never rewritten."""
+    import json
+    day, _ = daily.claim({"location": "84101", "radius": 30})
+    daily.release(day, old, {"interrupted": True, "leads": 0, "new": 0})
+    [row] = web.create_app().test_client().get("/searches").get_json()["searches"]
+    assert row["reason"] == now
+    with store.connect() as db:
+        [(info,)] = db.all("SELECT info FROM search_failures")
+    assert json.loads(info)["reason"] == old
+    # Another search's reason that happens to look alike is left alone.
+    assert interrupted.plain_reason("Couldn't reach Google.") == "Couldn't reach Google."
