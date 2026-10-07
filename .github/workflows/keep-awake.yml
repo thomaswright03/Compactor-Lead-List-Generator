@@ -1,22 +1,13 @@
-# Render's free plan puts the site to sleep after 15 minutes with no visitors, and the
-# next visitor waits 20 to 60 seconds while it wakes. What keeps it awake during the
-# working day is an outside pinger, set up by the owner on 2026-10-05: a cron-job.org job
-# that opens /healthz every 10 minutes on weekdays in Utah working hours, with the
-# headers User-Agent: curl/8.0 and Accept: application/json (docs/operator-runbook.md,
-# "Keep the site awake"), and the site reports under Recent problems when it had gone
-# to sleep anyway (leadgen/awake.py).
-#
-# This job is the backup. GitHub starts scheduled jobs late and skips many (from
-# 2026-09-30 to 2026-10-03 it ran this one about every 4 hours instead of every 10
-# minutes), so each run that does start keeps the site awake for the next 50 minutes:
-# it opens /healthz every 5 minutes, and stops outside Utah working hours.
+# Not scheduled any more: since 2026-10-07 the site runs on Render's Starter plan, which
+# never sleeps. Kept to run by hand (Actions > Keep the site awake > Run workflow) if the
+# site is ever put back on the free plan, which sleeps after 15 minutes with no visitors;
+# then also put the schedule back:
+#   schedule:
+#     - cron: "7,22,37,52 12-23,0-3 * * *"   # every 15 minutes, 6 AM to 9 PM Utah time
+# Each run opens /healthz every 5 minutes for 50 minutes, during Utah working hours.
 name: Keep the site awake
 
 on:
-  schedule:
-    # Every 15 minutes, at minutes GitHub is less busy than on the hour, from 12:00 to
-    # 03:59 UTC (6 AM to 9 PM Utah time in summer and winter; the job checks Utah time).
-    - cron: "7,22,37,52 12-23,0-3 * * *"
   workflow_dispatch:
 
 # One run at a time: a run that starts while another is still pinging waits for it.

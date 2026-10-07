@@ -2,7 +2,9 @@ services:
   - type: web
     name: compactor-lead-finder
     runtime: python
-    plan: free
+    # Starter, not free: the free plan sleeps after 15 idle minutes and the next visit waits
+    # up to a minute (the owner's choice, 2026-10-07). Starter never sleeps.
+    plan: starter
     # Deploy a push to main only once its GitHub checks (lint, test (sqlite), test (postgres))
     # are green: Render's Settings > Auto-Deploy > "After CI Checks Pass" (the owner's choice,
     # 2026-09-30; it needs Render's GitHub app to have access to the repository, which it now has).

@@ -294,7 +294,7 @@ need it.
 - **"Starting up…" when you open the site:** nobody had used it for a while and it went
   to sleep. Wait; your leads appear by themselves, within a minute. If nothing appears
   within two minutes, reload the page. If you see it during the working day, tell whoever
-  looks after the site (the keep-awake pinger isn't reaching it).
+  looks after the site (it is meant to stay awake all the time).
 - A red or yellow box says what happened and what to do, often with a **Retry**
   button. Nothing you saved is lost. When Leads, Calls, Map or Stats can't show its
   data, the page also tries again by itself every 20 seconds or so (and when you come

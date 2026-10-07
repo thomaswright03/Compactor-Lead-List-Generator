@@ -1,5 +1,5 @@
-"""The live site notices when it went to sleep during Utah working hours (the keep-awake
-pinger stopped) and says so under Recent problems, once a day; each start gets the
+"""The live site notices when it went to sleep during Utah working hours (it should
+never sleep on Render's Starter plan) and says so under Recent problems, once a day; each start gets the
 first page ready in the background; /healthz says since when the site has been up."""
 
 import datetime as dt
@@ -29,9 +29,9 @@ def _problems():
 def test_a_start_in_working_hours_without_a_deploy_means_the_site_had_slept(reporting):
     assert awake.check_start("abc1234", _utah(5, 6, 1)) is None          # the first start on record
     assert awake.check_start("abc1234", _utah(5, 6, 15)) is None         # the morning's first ping woke it
-    said = awake.check_start("abc1234", _utah(5, 9, 32))                 # asleep after that: the pinger stopped
+    said = awake.check_start("abc1234", _utah(5, 9, 32))                 # asleep after that
     assert said and said.startswith("The site had gone to sleep and started again at Oct 5, 2026, 9:32 AM")
-    assert "keep-awake pinger" in said and _problems() == [said]
+    assert "Instance Type" in said and _problems() == [said]
     # Said once a Utah day; again the next day.
     assert awake.check_start("abc1234", _utah(5, 14, 0)) is None
     assert awake.check_start("abc1234", _utah(6, 10, 0))
@@ -101,7 +101,7 @@ def test_healthz_says_since_when_the_site_is_up():
 
 
 def test_a_start_at_the_weekend_or_in_the_evening_is_expected(reporting):
-    # The outside pinger only runs on working days, during working hours.
+    # Only a start during working hours on a working day is reported.
     awake.check_start("abc1234", _utah(9, 8))                              # Friday
     assert awake.check_start("abc1234", _utah(10, 11)) is None            # Saturday
     assert awake.check_start("abc1234", _utah(11, 15)) is None            # Sunday

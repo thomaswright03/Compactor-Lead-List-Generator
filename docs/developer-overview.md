@@ -220,17 +220,14 @@ but never the live site; branch protection on `main` (an owner setting, see
 `main` too. Every public function in
 `leadgen/` has parameter and return annotations (`strict = true` for mypy).
 
-**Sleeping and waking (`leadgen/awake.py`).** Render's free plan stops the site after 15
-idle minutes. An outside pinger (cron-job.org, set up by the owner on 2026-10-05; the
-runbook's [Keep the site awake](operator-runbook.md#keep-the-site-awake)) opens `/healthz`
-every 10 minutes on weekdays in Utah working hours, with the headers
-`User-Agent: curl/8.0` and `Accept: application/json` (Render answers a browser-like
-request to a sleeping site with its own loading page, which doesn't wake it);
-`.github/workflows/keep-awake.yml` is the backup (GitHub
-starts scheduled jobs late, so each run pings every 5 minutes for 50 minutes). `wsgi.py`
+**Sleeping and waking (`leadgen/awake.py`).** The site runs on Render's Starter plan
+(`plan: starter` in `render.yaml`, since 2026-10-07), which never sleeps. Before that,
+the free plan stopped it after 15 idle minutes and an outside pinger kept it awake (the
+runbook's [Keep the site awake](operator-runbook.md#keep-the-site-awake) keeps those
+steps, and `.github/workflows/keep-awake.yml` can still be run by hand). `wsgi.py`
 calls `awake.start(version)` once per process, in a `leadgen wake-up` thread:
 `check_start` records the start in the additive `site_starts` table (when, and the
-deployed commit, `RENDER_GIT_COMMIT`) and, for a start from 6:20 AM to 9 PM Utah time
+deployed commit, `RENDER_GIT_COMMIT`) and, for a start on a weekday from 7:20 AM to 7 PM Utah time
 with the same version as the start before (no deploy), reports "The site had gone to
 sleep …" under Recent problems, at most once a Utah day (it looks for that day's text in
 `problems`); `warm_up` reads the saved list once (`saved._parsing` makes overlapping

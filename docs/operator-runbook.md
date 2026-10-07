@@ -14,10 +14,10 @@ staff want the [sales guide](sales-guide.md); developers the
 | See what went wrong | **For the site administrator** lists the last 7 days' problems; Render → **Logs** has the detail | [Logs](#logs-and-rolling-back-a-bad-deploy) · [Alerts](#problems-the-webhook) |
 | Make a backup now | `python -m leadgen backup` with `DATABASE_URL` set, or GitHub → **Actions** → **Nightly backup** → **Run workflow** | [Backups](#backups-and-restoring) |
 | Get lost data back | Neon → **Branches** → **New branch** from past data (last 6 hours), or `python -m leadgen restore <copy>` (lists what it would add), then the same with `--apply` (adds only, never overwrites) | [Restoring](#restoring) |
-| Change the login password | Render → **Environment** → `APP_PASSWORD` → **Save Changes** (everyone logs in again) | [Login](#login-and-the-free-plan) |
+| Change the login password | Render → **Environment** → `APP_PASSWORD` → **Save Changes** (everyone logs in again) | [Login](#login-and-the-render-plan) |
 | Prove a nightly copy restores | GitHub → **Actions** → **Restore rehearsal** → **Run workflow** (prints only counts) | [Restore rehearsal](#restore-rehearsal) |
-| Keep the site awake while the team works | cron-job.org opens `https://compactor-lead-finder.onrender.com/healthz` every 10 minutes on weekdays in working hours (Utah time), with the headers `User-Agent: curl/8.0` and `Accept: application/json`; **For the site administrator** says "The site had gone to sleep" when it missed | [Keep the site awake](#keep-the-site-awake) |
-| Name the login page's help contact | Render → **Environment** → `LEADGEN_SUPPORT_CONTACT` = a name with a phone or email | [Login](#login-and-the-free-plan) |
+| Keep the site awake while the team works | Render's **Starter** plan (since 2026-10-07) never sleeps; **For the site administrator** says "The site had gone to sleep" if it ever does | [Keep the site awake](#keep-the-site-awake) |
+| Name the login page's help contact | Render → **Environment** → `LEADGEN_SUPPORT_CONTACT` = a name with a phone or email | [Login](#login-and-the-render-plan) |
 | Merge a business saved as two rows | `python -m leadgen merge-sites` (lists, changes nothing), then `--apply` | [The database](#the-database-saved-leads-marks-calls-the-yelp-count) |
 | Send the monthly scoring check | **For the site administrator** → **Scoring check** → download, send to the developer | [Monthly](#monthly-the-scoring-check) |
 
@@ -28,7 +28,7 @@ All sections:
 - [Alerts: the webhook](#problems-the-webhook)
 - [Settings](#settings-environment-variables) · [Put it online and the database](#put-it-online-render)
 - [Backups and restoring](#backups-and-restoring)
-- [Login](#login-and-the-free-plan) · [Keep the site awake](#keep-the-site-awake) · [Yelp limits](#yelp-notes) · [Google costs](#cost-notes-google)
+- [Login](#login-and-the-render-plan) · [Keep the site awake](#keep-the-site-awake) · [Yelp limits](#yelp-notes) · [Google costs](#cost-notes-google)
 - [Owner actions still open](#owner-actions-still-open)
 
 ## Owner actions still open
@@ -74,17 +74,15 @@ links to, and take it off the README's "Still open for the owner" list.
    manager (without it the copies can't be read, by anyone). Then **Actions** →
    **Nightly backup** → **Run workflow**. *Check:* the run is green and has an artifact
    `leadgen-backup-<date>`. Details: [Backups and restoring](#backups-and-restoring).
-5. **Set up the outside keep-awake pinger** (cron-job.org; **Done (2026-10-05), confirm
-   after the first full working day**). So nobody waits up to a minute for the site to
-   wake up during the working day: GitHub ran the keep-awake job only every 3 to 5
-   hours, and Render's free plan sleeps after 15 idle minutes. The owner's cron-job.org
-   job opens `/healthz` every 10 minutes on weekdays during working hours
-   (America/Denver), with the headers `User-Agent: curl/8.0` and
-   `Accept: application/json`. Steps: [Keep the site awake](#keep-the-site-awake).
-   *Check* (on the first full working day; then change this to plain **Done (the
-   date)**): the job's **History** on cron-job.org lists a 200 answer every 10 minutes,
-   and `curl -s https://compactor-lead-finder.onrender.com/healthz` shows the same
-   `up_since` at 7 AM, 10 AM, 1 PM and 5 PM.
+5. **Keep the site awake: Render Starter** (Render; **chosen 2026-10-07**). The free plan
+   slept after 15 idle minutes and the outside pinger didn't always reach it, so a visit in
+   the working day could wait up to a minute. Starter (about $7 a month) never sleeps.
+   Render → the **compactor-lead-finder** service → **Settings** → **Instance Type** →
+   **Starter** → **Save** (`render.yaml` says `plan: starter` too, so a Blueprint sync
+   keeps it). Then turn off the cron-job.org job (**Cronjobs** → `Lead Finder keep-awake`
+   → **Enable job** off); it is no longer needed. *Check:* the service's page in Render
+   shows **Starter**, and `curl -s https://compactor-lead-finder.onrender.com/healthz`
+   shows the same `up_since` at 7 AM and 5 PM. Then mark this item **Done (the date)**.
 6. **Rehearse a restore of the live data once** (GitHub; **Done (2026-10-05)**).
    GitHub → the repository → **Actions** → **Restore rehearsal** → **Run workflow** →
    **Run workflow**. It puts the newest nightly copy back into a throwaway database and
@@ -349,7 +347,7 @@ them in `.env` (see `.env.example`) or the shell.
 | `LEADGEN_GOOGLE_OFF` | No | off | `1` stops every Google call (no Google charges); searches use the other sources |
 | `LEADGEN_YELP_OFF` | No | off | `1` stops every Yelp call; searches use the other sources |
 | `LEADGEN_ALERT_WEBHOOK` | No (recommended on the live site) | none | An https incoming-webhook address (Slack, Microsoft Teams, Google Chat or Discord) that gets a message for every failed or incomplete search and server error; see "Problems: the webhook" above |
-| `LEADGEN_SUPPORT_CONTACT` | Yes on the live site (see "Login and the free plan") | "Ask the person who gave you your login, or Wright AI Solutions." | Whom the login page names for access or a forgotten password: a name plus a phone number or email, e.g. `Jane Doe at (801) 555-0100 or jane@example.com` (the number and email become tap-to-call and email links) |
+| `LEADGEN_SUPPORT_CONTACT` | Yes on the live site (see "Login and the Render plan") | "Ask the person who gave you your login, or Wright AI Solutions." | Whom the login page names for access or a forgotten password: a name plus a phone number or email, e.g. `Jane Doe at (801) 555-0100 or jane@example.com` (the number and email become tap-to-call and email links) |
 | `LEADGEN_ALLOWED_HOSTS` | No | `localhost` | Without a password, extra host names the page answers on (comma separated) |
 | `LEADGEN_CACHE_DIR` | No | `.cache` | Folder for the API response cache and the local SQLite database |
 | `RENDER`, `RENDER_GIT_COMMIT`, `PORT` | Set by Render | | Render's own; `/healthz` shows the deployed commit |
@@ -686,7 +684,7 @@ the result with its counts):
 | 2026-10-03 | By the developer, on a copy with test data: a SQLite database (6 leads, 2 marks, 2 calls, 1 search) backed up, restored into an empty Postgres 16 database, and the site started on it | The same counts on Leads, Calls, Stats and the search history as the original; every row identical (also checked by `tests/test_backup.py`, Postgres → SQLite → Postgres) |
 | 2026-10-05 | The live data: nightly copy `leadgen-backup-2026-10-05` (248 KB), by **Actions** → **Restore rehearsal**, [run 37359442271](https://github.com/thomaswright03/Compactor-Lead-List-Generator/actions/runs/37359442271) | Pass: every step green, so the restored database held at least the copy's own counts of saved leads, marks, calls and searches. The counts are in the run's **Summary** |
 
-## Login and the free plan
+## Login and the Render plan
 
 Always set `APP_PASSWORD` on a public site: every search can spend your API keys.
 Also set `LEADGEN_SUPPORT_CONTACT` to the person who hands out the login, with a
@@ -704,24 +702,30 @@ A login lasts 30 days on a device; changing the username or password logs everyo
 out. After 10 wrong passwords from one address, logins from it pause for 15 minutes.
 Without a password the page only answers on `localhost` or an IP address; to use
 another hostname, list it in `LEADGEN_ALLOWED_HOSTS`.
-The free plan sleeps after 15 idle minutes, so the first visit after that waits 20 to
-60 seconds, and its disk is wiped on each restart (which is why data lives in the
-database). What keeps it awake while the team works, and what the site says when it
-had to wake up anyway: [Keep the site awake](#keep-the-site-awake).
+The site runs on Render's Starter plan, which never sleeps (the free plan slept after
+15 idle minutes). Its disk is still wiped on each deploy or restart, which is why data
+lives in the database. More, and what the site says if it ever had to wake up:
+[Keep the site awake](#keep-the-site-awake).
 To run the production server yourself: `gunicorn wsgi:app --workers 1 --threads 8 --timeout 0`.
 
 ## Keep the site awake
 
-Render's free plan stops the site after 15 minutes with no visit; the next visit
+**Since 2026-10-07 the site runs on Render's Starter plan, which never sleeps**
+([owner action 5](#owner-actions-still-open)). Nothing has to ping it, and the GitHub
+job below is no longer scheduled. The site's own check (3 below) still reports a
+restart in working hours, so a slip back to the free plan shows.
+
+The rest of this section is for the free plan, if the site is ever put back on it.
+That plan stops the site after 15 minutes with no visit; the next visit
 starts it again and waits 20 to 60 seconds. While it waits, the Leads page says
 "Starting up… The Lead Finder sleeps when nobody has used it for a while, and the first
 visit can take up to a minute to wake it. Your leads appear here by themselves." (after
 45 seconds it adds "Still starting. If nothing appears within two minutes, reload the
-page."), and the list appears by itself. Three things keep that from happening during
+page."), and the list appears by itself. Three things kept that from happening during
 the working day:
 
-1. **An outside pinger** (the one that counts; [owner action 5](#owner-actions-still-open),
-   **set up 2026-10-05**). A free [cron-job.org](https://cron-job.org) job opens
+1. **An outside pinger** (the one that counted; set up 2026-10-05, turned off once the
+   site moved to Starter). A free [cron-job.org](https://cron-job.org) job opens
    `https://compactor-lead-finder.onrender.com/healthz` every 10 minutes on weekdays
    during working hours, Utah time (`/healthz` needs no login and holds no data). It
    sends two headers, `User-Agent: curl/8.0` and `Accept: application/json`: Render
@@ -757,7 +761,8 @@ the working day:
    the site to wake (the site's own check, 3 below, expects that and says nothing).
    UptimeRobot's free plan can't send these headers, so
    use cron-job.org.
-2. **The GitHub job, as a backup** (`.github/workflows/keep-awake.yml`). GitHub starts
+2. **The GitHub job, as a backup** (`.github/workflows/keep-awake.yml`; no longer
+   scheduled: put its `schedule` back, as its first lines say, to use it again). GitHub starts
    scheduled jobs late and skips many (from 2026-09-30 to 2026-10-03 it ran this one
    every 3 to 5 hours instead of every 10 minutes), so it can't be the only pinger. It is
    scheduled every 15 minutes from 6 AM to 9 PM Utah time, and each run that does start
@@ -772,12 +777,12 @@ the working day:
    to sleep, or Render restarted it, and it says so once a Utah day under **For the site
    administrator** → **Recent problems** (and on the webhook): "The site had gone to sleep and
    started again at … Utah time without a new version, so whoever opened it then waited
-   up to a minute. The keep-awake pinger isn't reaching the site every few minutes …".
-   When you see it, open the cron-job.org job's **History**. Each start also reaches the
+   up to a minute. On Render's Starter plan it shouldn't sleep: check the service's
+   Instance Type in Render …". When you see it, check that Render shows **Starter**. Each start also reaches the
    database and reads the saved list once, in the background, so the first page doesn't
    wait for either.
 
-**Check it is working** (on a weekday, once the pinger's hours have begun):
+**Check it is working** (on a weekday):
 
 - `curl -s https://compactor-lead-finder.onrender.com/healthz` prints `"ok": true` and
   `"up_since"`, the Utah time this start of the site began. The same `up_since` at 7 AM
@@ -786,7 +791,6 @@ the working day:
   prints well under 2 (seconds); 20 or more means it had been asleep.
 - **Recent problems** has no "The site had gone to sleep".
 
-Render's paid Starter plan never sleeps and doesn't need any of this.
 
 ## Yelp notes
 

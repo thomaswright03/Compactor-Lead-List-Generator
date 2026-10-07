@@ -1,17 +1,15 @@
 """Noticing that the live site went to sleep while the team works, and waking it ready.
 
-Render's free plan stops the site after 15 minutes with no visit and starts it again
-on the next one, which then waits 20 to 60 seconds. An outside pinger opens /healthz
-every few minutes on working days from before 7 AM to about 8 PM Utah time (the operator runbook's "Keep the
-site awake", an owner step), so that never happens while the team works. A GitHub
-Actions job does the same as a backup, but GitHub starts scheduled jobs late or not
-at all.
+The live site runs on Render's Starter plan (since 2026-10-07), which never sleeps. Until
+then it was on the free plan, which stops the site after 15 minutes with no visit and
+makes the next visitor wait 20 to 60 seconds; outside pingers kept it awake (the
+operator runbook's "Keep the site awake").
 
-If the pinging stops, the site notices: each start is recorded (when, and which
-version), and a start during working hours with the same version as the start
-before it (no deploy in between) means the site had been asleep, or was restarted on
-Render. That is reported under Recent problems and to the webhook, at most once a Utah
-day, so the owner can check the pinger.
+If the site stops anyway, it notices: each start is recorded (when, and which version),
+and a start during working hours with the same version as the start before it (no
+deploy in between) means the site had been asleep (back on the free plan) or was
+restarted on Render. That is reported under Recent problems and to the webhook, at most
+once a Utah day, so the owner can check the plan.
 
 Each start also gets the site ready for its first visitor, in the background: it
 reaches the database (a free Neon database sleeps too) and reads the saved list once,
@@ -27,13 +25,12 @@ from collections.abc import Callable
 from . import THREAD_PREFIX, alerts, saved, store
 from .localtime import date_time_text, utah
 
-# When the site should never have to wake up: Utah working hours on working days. The
-# outside pinger runs Monday to Friday from before 7 AM to about 8 PM (runbook, "Keep the
-# site awake"), so a start outside these (a weekend, an evening) is expected, not a problem.
+# When the team would notice a wait: Utah working hours on working days. A start outside
+# these (a weekend, an evening) bothers nobody, so it isn't reported.
 WORK_HOURS = (7, 19)
 WORK_DAYS = range(0, 5)           # Monday (0) to Friday (4)
-# The pinger's first ping of the day may be the one that wakes the site: a start in the
-# first minutes of the working day is expected.
+# Nor is a start in the first minutes of the working day (on the free plan, the morning's
+# first visit or ping is the one that wakes the site).
 FIRST_PING_MINUTES = 20
 # How the report starts (it is made at most once a Utah day).
 SLEPT = "The site had gone to sleep"
@@ -61,8 +58,8 @@ def check_start(version: str, at: float | None = None) -> str | None:
     if said and said[0]:
         return None                   # already said today
     text = (f"{SLEPT} and started again at {date_time_text(at)} Utah time without a new version, so "
-            "whoever opened it then waited up to a minute. The keep-awake pinger isn't reaching the site "
-            "every few minutes: check it (operator runbook, \"Keep the site awake\").")
+            "whoever opened it then waited up to a minute. On Render's Starter plan it shouldn't sleep: "
+            "check the service's Instance Type in Render (operator runbook, \"Keep the site awake\").")
     alerts.report("error", text)
     return text
 
