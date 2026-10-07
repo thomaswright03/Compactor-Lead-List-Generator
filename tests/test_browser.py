@@ -1436,10 +1436,10 @@ def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, 
     daily.finish(day, {"fill": {**fill, "state": "stopped", "why": "paused", "left": 2, "found": 18, "new": 18,
                                 "where": "Coalville and the area to the north-west"}})
     tab.evaluate("loadSearches()")
-    expect(note).to_have_text("Covered: about 7 of the 9 areas within 30 miles. Filling in stopped because "
-                              "searching was paused, so these weren't searched today: Coalville and the area to "
-                              "the northwest. The 530 businesses already found are on the Leads page, ready to "
-                              "call now.")
+    expect(note).to_have_text("Covered: about 7 of the 9 areas within 30 miles; not searched: Coalville and the "
+                              "area to the northwest. Filling in stopped because searching was paused, so the rest "
+                              "wasn't searched today. The 530 businesses already found are on the Leads page, ready "
+                              "to call now.")
     assert "never" not in tab.inner_text("#page-find")
     context.close()
 

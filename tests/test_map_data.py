@@ -197,8 +197,8 @@ def test_a_partial_map_result_is_saved_and_the_search_marked_incomplete(monkeypa
     assert "part of the area" not in " ".join(body["warnings"]) and body["note"] is None
     record = client.get("/searches").get_json()["searches"][0]
     assert record["partial"] and "only part of the area" in record["reason"]
-    assert record["coverage"]["text"].startswith("Covered: part of the 30-mile area. The rest of the area didn't "
-                                                 "come in today")
+    assert record["coverage"]["text"].startswith("Covered: part of the 30-mile area. The rest didn't come in from "
+                                                 "the free map data today")
     assert [l["name"] for l in client.get("/leads").get_json()["leads"]] == ["Costco"]
 
 
@@ -355,6 +355,9 @@ def test_the_missing_areas_are_named_by_their_towns():
     south, west, north, east = boxes[0]
     quarter = [south, west, (south + north) / 2, (west + east) / 2]
     assert area_map.tally(40.76, -111.89, 30, [quarter]).left == ("Salt Lake City",)
+    # A quarter missing leaves it partly searched (as the Map page shades it), not missed.
+    assert area_map.tally(40.76, -111.89, 30, [quarter]).partly == ("Salt Lake City",)
+    assert area_map.tally(40.76, -111.89, 30, [quarter]).missed == () and first.missed == ("Salt Lake City",)
     every = area_map.tally(40.76, -111.89, 30, [None])
     assert every.searched == 0 and every.text() == "0 of the 9 areas searched in full"
     named = area_map.names_text(every.left)
