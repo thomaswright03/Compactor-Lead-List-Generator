@@ -228,11 +228,9 @@ service → **Environment**, add `LEADGEN_SEARCH_PAUSED` = `1` and **Save Change
   the reasons for its score are always in view without scrolling sideways.
 - **A login** from `APP_USERNAME` / `APP_PASSWORD` in the environment, and a separate
   `ADMIN_PASSWORD` that unlocks the administrator's section. The login page's "Need
-  access or forgot the password?" line names the contact set in
-  `LEADGEN_SUPPORT_CONTACT` (a name with a phone number or email, which become
-  tap-to-call and email links); until it is set it says "Ask the person who gave you
-  your login, or Wright AI Solutions." Set it in Render's **Environment**, never in the
-  repository. When a login ends mid-task, the login page says what wasn't saved
+  access or forgot the password?" line names Thomas Wright at (801) 580-8630 (`SUPPORT_CONTACT` in
+  `leadgen/config.py`; the number is a tap-to-call link). `LEADGEN_SUPPORT_CONTACT` in
+  Render's **Environment** (a name with a phone number or email) replaces it. When a login ends mid-task, the login page says what wasn't saved
   ("Your Yes for Target wasn't saved.") and, after logging in, opens the same page and
   tab again (only a path on this site is accepted as the way back).
 
@@ -298,20 +296,16 @@ pushed to a branch first and reaches `main` (by a pull request, or `git push ori
 [runbook](docs/operator-runbook.md#deploying) has how it was set up, the classic-rule
 alternative and how to check it is on.
 
-**Still open for the owner** (each a few minutes, with exact steps and a check in the
-runbook's [Owner actions still open](docs/operator-runbook.md#owner-actions-still-open)):
-
-1. Set `LEADGEN_SUPPORT_CONTACT` in Render, so the login page names a real contact
-   (until then each start of the site logs that it is not set).
+**Still open for the owner** (steps and a check in the runbook's
+[Owner actions still open](docs/operator-runbook.md#owner-actions-still-open)): confirm
+Render shows the Starter plan, then turn off the cron-job.org pinger (owner action 5). The login page's contact is done: it is built
+in (runbook owner action 2).
 
 A restore of the live data was rehearsed on 2026-10-05 and passed (runbook owner action 6),
 and the two old branches were deleted the same day; `claude-staging` stays, as the staging
 route through CI to the protected `main`. Another branch already merged into `main` (on
 2026-10-06, `ui-revamp`; the owner will delete it) is expected and harmless.
 
-The site moves to Render's Starter plan, which never sleeps (the owner's choice,
-2026-10-07): switch the Instance Type in Render, then turn off the cron-job.org pinger
-(runbook owner action 5).
 
 ---
 

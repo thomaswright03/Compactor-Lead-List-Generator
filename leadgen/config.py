@@ -33,6 +33,10 @@ DEFAULT_MIN_SCORE = 20
 OWN_COMPANY = "AARCO Waste & Disposal"
 OWN_COMPANY_SHORT = "AARCO"
 SITE_NAME = f"{OWN_COMPANY} Lead Finder"
+# Whom the login page names for access or a forgotten password (the owner's choice,
+# 2026-10-07); the phone number becomes a tap-to-call link. LEADGEN_SUPPORT_CONTACT in
+# the environment replaces it.
+SUPPORT_CONTACT = "Thomas Wright at (801) 580-8630"
 
 # Competitors are flagged (never dropped) so the client can see who else is
 # servicing the area. Matching is done on a normalized name/website.

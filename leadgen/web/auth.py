@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, session
 from flask.typing import ResponseReturnValue
 
+from .. import config
 from .common import same_origin, state, wants_page
 
 LOGIN_DAYS = 30                 # how long a login lasts on a device
@@ -20,18 +21,19 @@ LOGIN_WINDOW = 15 * 60          # ... in this many seconds
 bp = Blueprint("auth", __name__)
 
 # Whom the login page tells people to ask for access or a forgotten password: the
-# LEADGEN_SUPPORT_CONTACT setting (a name with a phone number or email, set on Render),
-# or else this.
+# LEADGEN_SUPPORT_CONTACT setting if set, else config.SUPPORT_CONTACT, or this when both
+# are empty.
 SUPPORT_DEFAULT = "Ask the person who gave you your login, or Wright AI Solutions."
 _REACH = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"
                     r"|(?:\+?1[\s.-]?)?\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]\d{4}\b")
 
 
 def support_contact() -> list[tuple[str, str]]:
-    """The LEADGEN_SUPPORT_CONTACT text in (text, link) pieces, an email address linked
-    with mailto: and a phone number with tel: (so a phone offers to call it); [] when
-    the setting is empty."""
-    text = " ".join(os.environ.get("LEADGEN_SUPPORT_CONTACT", "").split()).rstrip(".")
+    """The login contact (LEADGEN_SUPPORT_CONTACT, else config.SUPPORT_CONTACT) in (text,
+    link) pieces, an email address linked with mailto: and a phone number with tel: (so a
+    phone offers to call it); [] when both are empty."""
+    text = os.environ.get("LEADGEN_SUPPORT_CONTACT", "").strip() or config.SUPPORT_CONTACT
+    text = " ".join(text.split()).rstrip(".")
     pieces, at = [], 0
     for found in _REACH.finditer(text):
         reach = found.group()

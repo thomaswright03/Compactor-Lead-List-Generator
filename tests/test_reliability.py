@@ -276,11 +276,14 @@ def test_logged_out_browsers_go_to_the_login_page():
 
 def test_login_page_says_what_it_is_and_whom_to_ask(monkeypatch):
     client = web.create_app(password="s3cret", username="Matt").test_client()
-    # Not set: the page still says whom to ask.
+    # Built in: the owner, his number ready to tap.
     page = client.get("/login").data.decode()
     assert "baler or compactor" in page
-    assert "Ask the person who gave you your login, or Wright AI Solutions." in page
-    # Set on Render: the named contact, the phone number and email ready to tap.
+    assert 'Contact Thomas Wright at <a href="tel:8015808630">(801) 580-8630</a>.</p>' in page
+    # Neither: the page still says whom to ask.
+    monkeypatch.setattr(web.auth.config, "SUPPORT_CONTACT", "")
+    assert "Ask the person who gave you your login, or Wright AI Solutions." in client.get("/login").data.decode()
+    # Set on Render: it replaces the built-in contact, with the named contact, the phone number and email ready to tap.
     monkeypatch.setenv("LEADGEN_SUPPORT_CONTACT", "Jane Doe at (801) 555-0100 or jane@example.com.")
     page = client.get("/login").data.decode()
     assert ('Contact Jane Doe at <a href="tel:8015550100">(801) 555-0100</a> or '
@@ -296,16 +299,20 @@ def test_login_page_says_what_it_is_and_whom_to_ask(monkeypatch):
 
 
 def test_a_site_without_a_login_contact_says_so_in_its_logs(monkeypatch, caplog):
-    """Until the owner sets LEADGEN_SUPPORT_CONTACT, every start says so in the logs."""
+    """With no login contact at all (none built in or set), every start says so in the logs."""
+    with caplog.at_level("WARNING", logger="leadgen.web"):
+        web.create_app(password="s3cret")              # the built-in contact
+    assert "No login contact" not in caplog.text
+    monkeypatch.setattr(web.auth.config, "SUPPORT_CONTACT", "")
     with caplog.at_level("WARNING", logger="leadgen.web"):
         web.create_app(password="s3cret")
-    assert "LEADGEN_SUPPORT_CONTACT is not set" in caplog.text
+    assert "No login contact" in caplog.text
     caplog.clear()
     monkeypatch.setenv("LEADGEN_SUPPORT_CONTACT", "Jane Doe at (801) 555-0100")
     with caplog.at_level("WARNING", logger="leadgen.web"):
         web.create_app(password="s3cret")
         web.create_app(password="")                 # a local copy without a login needs no contact
-    assert "LEADGEN_SUPPORT_CONTACT" not in caplog.text and "555-0100" not in caplog.text
+    assert "No login contact" not in caplog.text and "555-0100" not in caplog.text
 
 
 # ---- one database connection per page load

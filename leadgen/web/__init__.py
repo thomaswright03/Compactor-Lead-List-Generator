@@ -164,9 +164,9 @@ def create_app(password: str | None = None, username: str | None = None,
                       SEND_FILE_MAX_AGE_DEFAULT=7 * 24 * 3600)   # asset URLs carry a version
     admin_password = admin_password if admin_password is not None else os.environ.get("ADMIN_PASSWORD", "")
     if password and not auth.support_contact():
-        # Said in the logs on every start until it is set (an owner's step: operator runbook).
-        log.warning("LEADGEN_SUPPORT_CONTACT is not set, so the login page names no one to ask for access "
-                    "or a forgotten password. Set it in Render > Environment (docs/operator-runbook.md).")
+        # Said in the logs on every start while there is none.
+        log.warning("No login contact: config.SUPPORT_CONTACT and LEADGEN_SUPPORT_CONTACT are both empty, so "
+                    "the login page names no one to ask for access or a forgotten password.")
     app.extensions["leadgen"] = State(password, username, admin_password)
     for blueprint in (auth.bp, finding.bp, leads.bp, mapping.bp):
         app.register_blueprint(blueprint)

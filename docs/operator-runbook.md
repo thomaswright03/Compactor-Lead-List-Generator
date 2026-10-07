@@ -17,7 +17,7 @@ staff want the [sales guide](sales-guide.md); developers the
 | Change the login password | Render → **Environment** → `APP_PASSWORD` → **Save Changes** (everyone logs in again) | [Login](#login-and-the-render-plan) |
 | Prove a nightly copy restores | GitHub → **Actions** → **Restore rehearsal** → **Run workflow** (prints only counts) | [Restore rehearsal](#restore-rehearsal) |
 | Keep the site awake while the team works | Render's **Starter** plan (since 2026-10-07) never sleeps; **For the site administrator** says "The site had gone to sleep" if it ever does | [Keep the site awake](#keep-the-site-awake) |
-| Name the login page's help contact | Render → **Environment** → `LEADGEN_SUPPORT_CONTACT` = a name with a phone or email | [Login](#login-and-the-render-plan) |
+| Change the login page's help contact | Built in: `SUPPORT_CONTACT` in `leadgen/config.py` (Thomas Wright at (801) 580-8630); or Render → **Environment** → `LEADGEN_SUPPORT_CONTACT` = a name with a phone or email, which replaces it | [Login](#login-and-the-render-plan) |
 | Merge a business saved as two rows | `python -m leadgen merge-sites` (lists, changes nothing), then `--apply` | [The database](#the-database-saved-leads-marks-calls-the-yelp-count) |
 | Send the monthly scoring check | **For the site administrator** → **Scoring check** → download, send to the developer | [Monthly](#monthly-the-scoring-check) |
 
@@ -43,17 +43,15 @@ links to, and take it off the README's "Still open for the owner" list.
    (a ruleset that requires the checks `lint`, `test (sqlite)` and `test (postgres)`).
    *Check:* `gh api repos/thomaswright03/Compactor-Lead-List-Generator/branches/main --jq .protected`
    prints `true` (or the repository's **Branches** page shows `main` as protected).
-2. **Name a real contact on the login page** (Render; **Open**, checked 2026-10-03).
-   So someone locked out of the site knows whom to ask.
-   1. Render → the **compactor-lead-finder** service → **Environment** → **Add
-      Environment Variable**.
-   2. Key `LEADGEN_SUPPORT_CONTACT`; value a name with a phone number or email, for
-      example `Jane Doe at (801) 555-0100 or jane@example.com`.
-   3. **Save Changes** (the site restarts in about a minute).
-
-   Set it in Render only, never in this repository. *Check:*
+2. **Name a real contact on the login page** (**Done (2026-10-07)**: built in). So someone
+   locked out of the site knows whom to ask. The owner chose to have his own number in
+   the site itself: `SUPPORT_CONTACT` in `leadgen/config.py` is
+   "Thomas Wright at (801) 580-8630". To name someone else without a code change, set
+   `LEADGEN_SUPPORT_CONTACT` in Render (**Environment** → **Add Environment Variable**,
+   a name with a phone number or email, then **Save Changes**); it replaces the built-in
+   one. *Check:*
    `curl -s https://compactor-lead-finder.onrender.com/login | grep -oE 'href="(tel|mailto):[^"]+"'`
-   prints the contact's `tel:` or `mailto:` link (nothing printed: not set yet).
+   prints `href="tel:8015808630"` (or the link of the contact set in Render).
 3. **Delete the two old branches** (GitHub; **Done (2026-10-05)**):
    `wip-yelp-cap-and-baler-marks` and `runbook-owner-steps-done` are gone. The branches
    that stay are `main` and `claude-staging`; `claude-staging` is **kept on purpose**: it is
@@ -347,7 +345,7 @@ them in `.env` (see `.env.example`) or the shell.
 | `LEADGEN_GOOGLE_OFF` | No | off | `1` stops every Google call (no Google charges); searches use the other sources |
 | `LEADGEN_YELP_OFF` | No | off | `1` stops every Yelp call; searches use the other sources |
 | `LEADGEN_ALERT_WEBHOOK` | No (recommended on the live site) | none | An https incoming-webhook address (Slack, Microsoft Teams, Google Chat or Discord) that gets a message for every failed or incomplete search and server error; see "Problems: the webhook" above |
-| `LEADGEN_SUPPORT_CONTACT` | Yes on the live site (see "Login and the Render plan") | "Ask the person who gave you your login, or Wright AI Solutions." | Whom the login page names for access or a forgotten password: a name plus a phone number or email, e.g. `Jane Doe at (801) 555-0100 or jane@example.com` (the number and email become tap-to-call and email links) |
+| `LEADGEN_SUPPORT_CONTACT` | No | The built-in contact, `SUPPORT_CONTACT` in `leadgen/config.py` ("Thomas Wright at (801) 580-8630") | Whom the login page names for access or a forgotten password: a name plus a phone number or email, e.g. `Jane Doe at (801) 555-0100 or jane@example.com` (the number and email become tap-to-call and email links) |
 | `LEADGEN_ALLOWED_HOSTS` | No | `localhost` | Without a password, extra host names the page answers on (comma separated) |
 | `LEADGEN_CACHE_DIR` | No | `.cache` | Folder for the API response cache and the local SQLite database |
 | `RENDER`, `RENDER_GIT_COMMIT`, `PORT` | Set by Render | | Render's own; `/healthz` shows the deployed commit |
@@ -364,7 +362,7 @@ The repo includes `render.yaml`, so Render can set everything up:
 
 1. Sign in at https://render.com with GitHub.
 2. **New** > **Blueprint**, pick this repo, and click **Apply**.
-3. When asked, set **APP_USERNAME** and **APP_PASSWORD** (the login page asks for them; both are case-sensitive), **LEADGEN_SUPPORT_CONTACT** (whom the login page names for login help) and, optionally, **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
+3. When asked, set **APP_USERNAME** and **APP_PASSWORD** (the login page asks for them; both are case-sensitive), optionally **LEADGEN_SUPPORT_CONTACT** (to name someone other than the built-in login contact), and **GOOGLE_PLACES_API_KEY** and/or **YELP_API_KEY**.
 4. Open the `onrender.com` link Render shows.
 
 ## The size of a clone
@@ -687,17 +685,13 @@ the result with its counts):
 ## Login and the Render plan
 
 Always set `APP_PASSWORD` on a public site: every search can spend your API keys.
-Also set `LEADGEN_SUPPORT_CONTACT` to the person who hands out the login, with a
-phone number or email (Render → the service → **Environment** → **Add Environment
-Variable**, then **Save Changes**): the login page's "Need access or forgot the
-password?" line names them, and a salesperson locked out first thing in the morning
-can call or email straight from it. Without it the line says "Ask the person who
-gave you your login, or Wright AI Solutions." The contact details belong in Render
-only, never in this repository. **Status (2026-10-03): not set on the live site**
-(the owner, Thomas, chooses the contact and sets it); change this line when it is.
-Until then every start of the site logs "LEADGEN_SUPPORT_CONTACT is not set". To check
-it from anywhere: `curl -s https://compactor-lead-finder.onrender.com/login | grep -oE
-'href="(tel|mailto):[^"]+"'` prints the contact's link once it is set.
+The login page's "Need access or forgot the password?" line names Thomas Wright at
+(801) 580-8630, a tap-to-call link on a phone, so a salesperson locked out first thing in
+the morning can call straight from it. **Status (2026-10-07): built in** (`SUPPORT_CONTACT` in
+`leadgen/config.py`, the owner's choice). Setting `LEADGEN_SUPPORT_CONTACT`
+in Render (a name with a phone number or email) replaces it without a code change. To
+check it from anywhere: `curl -s https://compactor-lead-finder.onrender.com/login | grep -oE
+'href="(tel|mailto):[^"]+"'` prints the contact's link.
 A login lasts 30 days on a device; changing the username or password logs everyone
 out. After 10 wrong passwords from one address, logins from it pause for 15 minutes.
 Without a password the page only answers on `localhost` or an IP address; to use
