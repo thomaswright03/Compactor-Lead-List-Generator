@@ -40,11 +40,21 @@
   @font-face { font-family:"Fraunces Variable"; font-style:italic; font-weight:100 900; font-display:swap;
                src:url("/static/vendor/fonts/fraunces-latin-opsz-italic.woff2") format("woff2-variations"); }
   :root {
-    /* One scale for every page: spacing and radii, and six text sizes. Reading text is at
-       least 14px (--fs-sm); only badges and counts use --fs-xs. */
+    /* One scale for every page: spacing and radii, six text sizes and the display sizes. Reading
+       text is at least 14px (--fs-sm); only badges and counts use --fs-xs. The display sizes, for
+       serif names, titles and figures, are named for what they size; use them by name. */
     --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
     --r-sm:10px; --r-md:14px; --r-lg:22px; --r-pill:999px;
     --fs-xs:12px; --fs-sm:14px; --fs-base:15px; --fs-md:16px; --fs-lg:24px; --fs-xl:32px;
+    --fs-name-sm:17px;  /* the company in the sidebar, a business on the Calls page, a tier in Stats */
+    --fs-name:19px;     /* a business on its lead card */
+    --fs-title:20px;    /* a card's heading */
+    --fs-title-lg:22px; /* an empty list's heading */
+    --fs-dialog:26px;   /* a dialog's title */
+    --fs-score:34px;    /* a lead's score on a laptop */
+    --fs-h1:40px;       /* a page's title on a laptop */
+    --fs-figure:54px;   /* a Stats figure */
+    --fs-glyph:22px;    /* the map's close and zoom signs */
     /* "Ivory & Navy": warm ivory paper, AARCO's navy, thin brass lines. */
     color-scheme:light;
     --font:"Inter Variable",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
