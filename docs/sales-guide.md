@@ -108,8 +108,11 @@ Good to know:
 
 - Press **Yes** if the business has a baler or compactor, **No** if it doesn't.
   The row says "Saving Yes…" until the answer is saved, then "Saved. Moves to …".
-  If it couldn't be saved (no internet, say), the row itself says "Yes not saved"
-  in red, with the reason and a **Try again** button, and keeps saying so until the
+  If it couldn't be saved, the row itself says "Yes not saved" in red, with the
+  reason: "You're offline" when your device has no internet (the answer is kept on
+  the row), or "The Lead Finder isn't answering right now" when the site itself is
+  down (wait a minute, or tell the site's owner if it keeps happening). It has a
+  **Try again** button, and keeps saying so until the
   answer is saved or you press **Dismiss**: you can't miss it further down the list.
   Once you're back online, press **Try again**. On a weak connection the row adds
   "This is taking longer than usual. Still trying…" after 10 seconds, and after 30

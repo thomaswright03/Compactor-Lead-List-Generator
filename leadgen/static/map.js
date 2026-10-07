@@ -88,7 +88,7 @@ function loadLeaflet() {
     const js = el("script"); js.src = box.dataset.js;
     leafletLoading = Promise.all([added(css), added(js)]).then(() => undefined, () => {
       leafletLoading = null; css.remove(); js.remove();
-      throw Object.assign(new Error("The map couldn't be loaded. Check your internet connection and try again."),
+      throw Object.assign(new Error(`The map couldn't be loaded. ${noAnswer()}`),
                           { status: 0 });
     });
   }
@@ -529,7 +529,7 @@ function areaList(areas) {
     li.append(el("span", undefined, `sym area ${area.status === "asking" || area.status === "missed" ? "partly"
                                                  : area.status}`));
     const text = el("div");
-    text.append(el("strong", `${area.n}. ${area.name}`), " · ", el("span", area.status_text));
+    text.append(el("strong", `${area.n}. ${area.name}`), DOT, el("span", area.status_text));
     if (area.towns.length) text.append(el("div", `Also ${area.towns.join(", ")}`, "sub"));
     li.append(text);
     return li;
