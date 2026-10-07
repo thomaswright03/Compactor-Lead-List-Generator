@@ -85,3 +85,16 @@ def test_an_empty_name_marks_the_name_box_red(browser, site, page, theme):
     tab.evaluate("document.activeElement.blur()")
     _marked_wrong(tab, "#name-input")
     context.close()
+
+
+def test_explain_gets_the_same_focus_ring_as_every_control(page):
+    summary = page.locator("table.leads tbody tr details.explain summary").first
+    page.keyboard.press("Shift")                           # the keyboard is in use
+    summary.focus()
+    ring = summary.evaluate("(e) => { const cs = getComputedStyle(e); return [cs.outlineStyle, cs.outlineWidth]; }")
+    button = page.locator("table.leads tbody tr .mark button.yes").first
+    button.focus()
+    assert ring == ["solid", "3px"]
+    assert ring == button.evaluate("(e) => { const cs = getComputedStyle(e); "
+                                   "return [cs.outlineStyle, cs.outlineWidth]; }")
+

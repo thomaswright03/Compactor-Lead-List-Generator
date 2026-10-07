@@ -24,7 +24,7 @@ a { color:var(--accent); text-underline-offset:3px; text-decoration-thickness:1p
 a:hover { text-decoration-color:currentColor; }
 /* Every focusable control gets the same 3px ring from the keyboard. */
 button:focus-visible, .btn:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
-textarea:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
+textarea:focus-visible, summary:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
 /* Numbers line up in columns. */
 td { font-variant-numeric:tabular-nums; }
 /* A table's headings are whole words at every width, on every page: they wrap only between
