@@ -87,6 +87,53 @@ def test_an_empty_name_marks_the_name_box_red(browser, site, page, theme):
     context.close()
 
 
+def test_the_toast_leaves_the_next_row_free_on_a_laptop(page):
+    page.set_viewport_size({"width": 1440, "height": 900})
+    names = page.locator("table.leads tbody tr td.c-name strong").all_inner_texts()
+    first, second = names[0], names[1]
+    _row(page, first).locator(".mark button.yes").click()
+    expect_toast = page.locator("#toast")
+    expect_toast.wait_for(state="visible")
+    assert f"{first}: marked Yes." in expect_toast.inner_text()
+    row = _row(page, second)
+    controls = row.locator("a, button, summary")
+    assert controls.count() >= 5
+    # Wherever the window is scrolled to, the toast is never over the list.
+    for where in ("end", "center", "start"):
+        for i in range(controls.count()):
+            control = controls.nth(i)
+            if not control.is_visible():
+                continue
+            control.evaluate(f"(e) => e.scrollIntoView({{ block: '{where}' }})")
+            hit = control.evaluate("""(e) => { const r = e.getBoundingClientRect();
+                const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                return e === top || e.contains(top); }""")
+            assert hit, (where, control.inner_text())
+            control.click(trial=True, timeout=2000)        # Playwright's own "would the click land" check
+    assert expect_toast.is_visible()
+    toast = expect_toast.bounding_box()
+    main = page.locator("main").bounding_box()
+    assert toast["x"] + toast["width"] <= main["x"]        # in the sidebar, beside the list
+
+
+def test_the_toast_leaves_room_to_scroll_the_last_card_clear_on_a_phone(browser, site, page):
+    context = _context(browser, viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("table.leads")
+    tab.evaluate("toast(\"Smith's Marketplace: marked Yes.\", () => {})")
+    tab.wait_for_selector("#toast:not([hidden])")
+    tab.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+    tab.wait_for_timeout(100)
+    top = tab.locator("#toast").bounding_box()["y"]
+    last = tab.locator("table.leads tbody tr").last.locator("a, button, summary")
+    for i in range(last.count()):
+        box = last.nth(i).bounding_box()
+        if box:
+            assert box["y"] + box["height"] <= top, last.nth(i).inner_text()
+    context.close()
+
+
 def test_explain_gets_the_same_focus_ring_as_every_control(page):
     summary = page.locator("table.leads tbody tr details.explain summary").first
     page.keyboard.press("Shift")                           # the keyboard is in use
@@ -97,4 +144,3 @@ def test_explain_gets_the_same_focus_ring_as_every_control(page):
     assert ring == ["solid", "3px"]
     assert ring == button.evaluate("(e) => { const cs = getComputedStyle(e); "
                                    "return [cs.outlineStyle, cs.outlineWidth]; }")
-
