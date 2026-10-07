@@ -218,8 +218,10 @@ Open **Map** in the sidebar (in the bar at the top on a phone).
   **Open on the Leads page** shows just that business on Leads, ready to mark or log a
   call; **Show the whole list** there brings every business back.
 - Zoom with the **+** / **−** buttons, two fingers, or the mouse wheel. Where pins are
-  close together, zoom in to tap the one you want; some area names show only once
-  zoomed in.
+  close together, zoom in to tap the one you want. An area name moves to a clear spot
+  in its area so the circles never cover it; where there is no room (on a phone, around
+  Salt Lake City), it shows once zoomed in, and the list under the map always names
+  every area and how it stands.
 - A business with no map position isn't on the map (the line under the map says how
   many); it is on the Leads page as usual.
 - If the street map doesn't load (no internet, or the map tiles are blocked), the

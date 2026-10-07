@@ -2330,6 +2330,138 @@ def test_the_map_takes_the_dark_theme_and_fits_a_phone(browser, site, page):
     assert not errors
 
 
+# ---- the areas' names on a phone, among hundreds of businesses
+
+def _crowded_salt_lake(n):
+    """A /map-data answer with `n` businesses, most of them in and around Salt Lake City (as a
+    real search of AARCO's area finds them) and the rest spread over the area, with the
+    central area partly searched, Layton not searched and the others not known."""
+    import random
+
+    from leadgen import area_map
+    rng = random.Random(24)
+    body = area_map.page([], None)
+    groups = ["unchecked", "unchecked", "yes", "no", "competitor"]
+    pins = []
+    for i in range(n):
+        if i % 4:                                          # three in four around downtown
+            lat, lon = rng.gauss(40.72, 0.08), rng.gauss(-111.92, 0.08)
+        else:
+            lat, lon = rng.uniform(40.35, 41.15), rng.uniform(-112.3, -111.45)
+        group = groups[i % len(groups)]
+        pins.append([f"k{i}", round(lat, 5), round(lon, 5), group, f"Business {i}", "B", 60, "", "", "", "", "",
+                     False, "Competitor" if group == "competitor" else ""])
+    for area in body["areas"]:
+        area["status"] = {"Salt Lake City": "partly", "Layton": "missed"}.get(area["name"], "unknown")
+        area["status_text"] = area_map.STATUS_TEXT[area["status"]]
+    body.update(pins=pins, counts={g: sum(p[3] == g for p in pins) for g in area_map.GROUPS}, now=0)
+    return body
+
+
+# Each area name on the map: its box, whether it is shown, whether its middle is inside its
+# own area, and the boxes it must stay clear of (the circles with a count, competitors'
+# squares, AARCO's pin and name, the other names shown).
+AREA_NAMES = """() => {
+    const box = (node) => { const r = node.getBoundingClientRect();
+                            return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+    const map = box(document.getElementById('map'));
+    const inside = (p, ring) => { let odd = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [a, b] = [ring[i], ring[j]];
+        if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) odd = !odd;
+      }
+      return odd; };
+    const names = [...document.querySelectorAll('#map .area-name')].map((node, i) => {
+      const b = box(node), ring = M.shapes[i].shape.getLatLngs()[0].map((p) => M.map.latLngToContainerPoint(p));
+      const middle = { x: (b.left + b.right) / 2 - map.left, y: (b.top + b.bottom) / 2 - map.top };
+      const style = getComputedStyle(node);
+      return { name: node.textContent, box: b, shown: style.visibility !== 'hidden',
+               own: inside(middle, ring), size: parseFloat(style.fontSize), halo: style.textShadow !== 'none',
+               z: Number(getComputedStyle(node.parentElement).zIndex) };
+    });
+    const marks = [...document.querySelectorAll('#map .pin-cluster, #map .pin-comp, #map .aarco-mark svg, ' +
+                                                '#map .aarco-name')]
+      .map((node) => ({ box: box(node), z: Number(getComputedStyle(node.closest('.leaflet-marker-icon')).zIndex),
+                        cluster: node.matches('.pin-cluster') }))
+      .filter((m) => m.box.right > map.left && m.box.left < map.right && m.box.bottom > map.top &&
+                     m.box.top < map.bottom);
+    return { map, names, marks }; }"""
+
+
+def _overlap(a, b):
+    return a["left"] < b["right"] and b["left"] < a["right"] and a["top"] < b["bottom"] and b["top"] < a["bottom"]
+
+
+def _names_are_clear(tab):
+    """Every area name shown is whole inside the map and inside its own area, drawn above the
+    circles and written with a halo, and covers no circle, square, AARCO's pin or other name."""
+    seen = tab.evaluate(AREA_NAMES)
+    shown = [n for n in seen["names"] if n["shown"]]
+    for i, name in enumerate(shown):
+        b, edge = name["box"], seen["map"]
+        assert edge["left"] <= b["left"] and b["right"] <= edge["right"], name
+        assert edge["top"] <= b["top"] and b["bottom"] <= edge["bottom"], name
+        assert name["own"] and name["size"] >= 12 and name["halo"], name
+        for mark in seen["marks"]:
+            assert not _overlap(b, mark["box"]), (name, mark)
+            if mark["cluster"]:
+                assert name["z"] > mark["z"], (name, mark)
+        for other in shown[i + 1:]:
+            assert not _overlap(b, other["box"]), (name, other)
+    return seen
+
+
+@pytest.mark.parametrize("width", [320, 375])
+def test_the_areas_names_stay_readable_among_hundreds_of_businesses_on_a_phone(browser, site, width):
+    """On a phone, with several hundred businesses around Salt Lake City, no area name is hidden
+    under a circle with a count: each name and its status shown on the map sits in free space
+    inside its own area (moved there when circles cover its own spot), and one with no free
+    space at this zoom is left to the list under the map, which a note under the map points to.
+    Zooming in to Salt Lake City, its name and "partly searched" come into view."""
+    import json
+
+    body = _crowded_salt_lake(490)
+    context = _context(browser, viewport={"width": width, "height": 812}, has_touch=True, is_mobile=True)
+    context.route("**/map-data", lambda route: route.fulfill(status=200, content_type="application/json",
+                                                             body=json.dumps(body)))
+    phone = context.new_page()
+    errors = []
+    phone.on("pageerror", lambda exc: errors.append(str(exc)))
+    phone.goto(site + "#map")
+    phone.wait_for_function("M.loaded === true")
+    assert phone.evaluate("M.clustered.size") >= 10               # the circles are there to collide with
+    note = phone.locator("#map-names-note")
+    seen = _names_are_clear(phone)
+    shown = [n["name"] for n in seen["names"] if n["shown"]]
+    assert shown and len(shown) < 9, shown
+    expect(note).to_be_visible()
+    expect(note).to_contain_text("listed under Search areas below")
+    # Every area, shown on the map or not, is named with its status in the list under the map.
+    expect(phone.locator("#map-areas li")).to_have_count(9)
+    expect(phone.locator("#map-areas li", has_text="Salt Lake City")).to_contain_text("Partly searched")
+    expect(phone.locator("#map-areas li", has_text="Layton")).to_contain_text("Not searched")
+    # Zooming in step by step towards Salt Lake City, the names are placed again among the new
+    # circles each time, and the home area's name and status come into view.
+    home = next(a for a in body["areas"] if a["name"] == "Salt Lake City")
+    found = False
+    for _ in range(5):
+        phone.evaluate("(at) => M.map.setView(at, M.map.getZoom() + 1, { animate: false })", home["label"])
+        seen = _names_are_clear(phone)
+        if any(n["shown"] and n["name"] == "Salt Lake Citypartly searched" for n in seen["names"]):
+            found = True
+            break
+    assert found
+    # Moved, they are placed again.
+    phone.evaluate("M.map.panBy([60, -40], { animate: false })")
+    _names_are_clear(phone)
+    # With the areas switched off there are no names, and no note about them.
+    phone.locator("#map-show-areas").uncheck()
+    expect(phone.locator("#map .area-name")).to_have_count(0)
+    expect(note).to_be_hidden()
+    context.close()
+    assert not errors
+
+
 @pytest.mark.parametrize("width", [390, 1440])
 def test_a_slow_first_load_says_the_site_is_waking_up(browser, site, page, width):
     """The site sleeps after a quiet spell and its first answer then takes a while: the page
