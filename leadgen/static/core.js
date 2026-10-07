@@ -3,8 +3,8 @@
    the #address; these scripts load in order and share their top-level names. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, TIMING, S, el, link, phoneLink,
-   button, api, post, save, SLOW_SAVE, fmtTime, serverNow, leftOf, problem, loadingCue, themeChoice, applyTheme, myName,
-   withName, byWho, parseHash, readLeadView, route, writeHash, loggedOut */
+   button, DOT, api, noAnswer, post, save, SLOW_SAVE, fmtTime, serverNow, leftOf, problem, loadingCue, themeChoice,
+   applyTheme, myName, withName, byWho, parseHash, readLeadView, route, writeHash, loggedOut */
 // An element of the page by its id: an input, a dialog, a button... (typed `any`, as the page's
 // ids name every kind; the type check still catches a misspelt function or variable).
 /** @type {(id: string) => any} */
@@ -79,6 +79,9 @@ function phoneLink(phone) {
   const a = el("a", phone); a.href = `tel:${digits}`; a.className = "nowrap";
   return a;
 }
+// The "·" between items on one line, kept on the line of the item before it (a no-break space
+// before it, an ordinary one after), so a line that wraps never starts with it.
+const DOT = "\u00a0· ";
 /** @param {string} text @param {string} [cls] @param {(e: MouseEvent) => unknown} [onClick] */
 function button(text, cls, onClick) {
   const b = el("button", text, cls);
@@ -86,15 +89,22 @@ function button(text, cls, onClick) {
   if (onClick) b.addEventListener("click", onClick);
   return b;
 }
+// True when the browser says this device has no network at all (switched off, out of range).
+// It can't say the opposite for sure, so a request that got no answer while it is online is
+// put down to the site (stopped, restarting, overloaded), never to the person's internet.
+const isOffline = () => window.navigator.onLine === false;
+// Why a request got no answer at all, in the words a page shows (with its Try again or Retry).
+const noAnswer = () => isOffline() ? "You're offline. Try again when you're back online."
+  : "The Lead Finder isn't answering right now. Try again in a minute.";
 // The server's JSON answer (typed `any`: each caller names the answer it reads, LeadsPage...);
-// an answer that isn't OK throws an ApiError saying why.
+// an answer that isn't OK throws an ApiError saying why (no answer at all: status 0, and
+// `offline` when the browser says the device is offline).
 /** @param {string} path @param {RequestInit} [opts] @returns {Promise<any>} */
 async function api(path, opts) {
   let res;
   try { res = await fetch(path, opts); }
   catch (err) {
-    throw Object.assign(new Error("Can't reach the Lead Finder. Check your internet connection and try again."),
-                        { status: 0 });
+    throw Object.assign(new Error(noAnswer()), { status: 0, offline: isOffline() });
   }
   if (res.status === 401) {
     loggedOut(lostAction(path, opts));
@@ -256,6 +266,8 @@ function retryLater(now) {
   for (const [box, r] of [...retrying]) retryBox(box, r, !!now);
 }
 document.addEventListener("visibilitychange", () => retryLater(true));
+// Back online: each box on the page shown tries again straight away.
+window.addEventListener("online", () => retryLater(true));
 
 function themeChoice() { try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; } }
 /** @param {string} choice "light", "dark" or "system" */

@@ -129,10 +129,10 @@ const tabCount = (c, tab) => {
   const n = c ? c[tab || "unchecked"] : 0;
   return typeof n === "number" ? n : 0;
 };
-// Column sorts (done by the server) and the first direction a click picks.
 // What each tier means (the tier list's words).
 /** @type {Record<string, string>} */
 const TIER_WORDS = { A: "strong", B: "likely", C: "possible", D: "weak" };
+// Column sorts (done by the server) and the first direction a click picks.
 // "contact": the businesses that can be phoned first (a verified phone, then the listing's).
 /** @type {Record<string, {dir: string}>} */
 const SORTS = { score: { dir: "desc" }, name: { dir: "asc" }, city: { dir: "asc" }, contact: { dir: "asc" },
@@ -356,7 +356,10 @@ async function saveMark(lead, value) {
   } catch (err) {
     // The row itself says the answer wasn't saved, with Try again, until it is saved or dismissed
     // (the note at the bottom of the screen goes after a few seconds and is easy to miss).
-    const { status, message, body } = /** @type {ApiError} */ (err);
+    const { status, offline, body, message: why } = /** @type {ApiError} */ (err);
+    // Offline, the answer waits on the row (with Try again) until the device is back online.
+    const message = offline ? "You're offline. Your answer is kept here; press Try again when you're back online."
+      : why;
     changed = status === 409 && body && body.changed ? body.changed : null;
     if (changed) {
       // A colleague answered meanwhile (nothing was saved): show theirs, and ask as for any other.
@@ -508,10 +511,8 @@ function callBox(lead) {
                 el("span", lead.last_call + byWho(lead.last_call_by), "sub"));
     box.append(last);
   }
-  box.append(ctl(button("Just called", "", () => openCall(lead)), "call"));
-  if (lead.call_count) {
-    box.append(ctl(button(`History (${lead.call_count})`, "quiet", () => openHistory(lead)), "history"));
-  }
+  box.append(ctl(callButton(lead), "call"));
+  if (lead.call_count) box.append(ctl(historyButton(lead, `History (${lead.call_count})`), "history"));
   if (lead.undo_call && leftOf(lead.undo_call) > 0) {
     box.append(ctl(undoButton(lead.undo_call, "Undo call", () => undoCall(lead.key)), "undo-call"));
   }
@@ -552,7 +553,7 @@ function leadRow(l, withCall) {
   // worked out by the server), so same-named stores can be told apart.
   const addr = el("div");
   /** @type {(node: string | Node) => void} */
-  const add = (node) => addr.append(addr.childNodes.length ? " · " : "", node);
+  const add = (node) => addr.append(addr.childNodes.length ? DOT : "", node);
   if (!l.address) add(el("span", "No street address", "sub"));
   const place = [l.address, l.city, l.zip].filter(Boolean).join(", ");
   if (place) add(place);

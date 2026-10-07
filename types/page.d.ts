@@ -380,6 +380,8 @@ declare namespace L {
 /** An error from the server (core.js api): its HTTP status (0: no answer) and its body. */
 interface ApiError extends Error {
   status: number;
+  /** No answer (status 0) while the browser said the device was offline (core.js api). */
+  offline?: boolean;
   /** A save (core.js save) that got no answer within TIMING.saveLimit. */
   timedOut?: boolean;
   body?: { error?: string; field?: string; job_id?: string; confirm_far?: boolean; place?: Place;

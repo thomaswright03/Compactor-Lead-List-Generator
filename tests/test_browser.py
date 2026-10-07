@@ -1542,7 +1542,8 @@ def test_a_mark_that_was_not_saved_stays_on_the_row_with_try_again(page):
     row = _row(page, "Costco")
     row.locator(".mark button.yes").click()
     failed = row.locator(".mark-failed")
-    expect(failed).to_contain_text("Yes not saved. Can't reach the Lead Finder.")
+    expect(failed).to_contain_text("Yes not saved. You're offline. Your answer is kept here; press Try again when "
+                                   "you're back online.")
     page.evaluate("hideToast()")                       # as after its few seconds
     expect(failed).to_be_visible()
     assert not row.locator(".mark button.on").count()
@@ -2494,6 +2495,149 @@ def test_the_quiet_retries_stop_when_another_page_is_opened(browser, site, page)
     tab.click("nav a[data-page=stats]")                # back on the page: it loads (and works now)
     expect(tab.locator("#stats-body")).to_be_visible()
     expect(tab.locator("#stats-problem .problem")).to_have_count(0)
+    context.close()
+
+
+# ---- review round 24: offline or the site down, buttons named by business, separators
+
+NOT_ANSWERING = "The Lead Finder isn't answering right now. Try again in a minute."
+
+
+def test_a_stopped_site_is_named_not_the_persons_internet(browser, page):
+    """The site stops while the page is open and the device is online: a Yes says the Lead
+    Finder isn't answering (never "check your internet"), and so do the Leads, Calls, Map and
+    Stats boxes, each with Retry."""
+    from werkzeug.serving import make_server
+    # One request per connection (not threaded: no keep-alive), so once it is closed nothing answers.
+    server = make_server("127.0.0.1", 0, web.create_app(), threaded=False)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    context = _context(browser, viewport={"width": 1280, "height": 900})
+    tab = context.new_page()
+    try:
+        tab.goto(f"http://127.0.0.1:{server.server_port}/#map")
+        tab.wait_for_selector("#map .aarco-mark")                   # the map's library is loaded
+        tab.click("nav a[data-page=leads]")
+        tab.wait_for_selector("table.leads")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert tab.evaluate("navigator.onLine")
+    row = _row(tab, "Costco")
+    row.locator(".mark button.yes").click()
+    failed = row.locator(".mark-failed")
+    expect(failed).to_have_text(re.compile(r"^Yes not saved\. " + re.escape(NOT_ANSWERING)))
+    expect(failed.get_by_role("button", name="Try again to save Yes for Costco Wholesale")).to_be_visible()
+    for where, title in [("calls", "Can't show your calls right now"), ("map", "Can't show the map right now"),
+                         ("stats", "Can't show the stats right now"), ("leads", "")]:
+        tab.click(f"nav a[data-page={where}]")
+        if where == "leads":
+            tab.evaluate("loadLeads()")                             # its rows were shown: they stay
+            expect(tab.locator("#leads-note")).to_have_text(f"Couldn't show this view. {NOT_ANSWERING}")
+            continue
+        box = tab.locator(f"#{where}-problem .problem")
+        expect(box).to_contain_text(f"{title}{NOT_ANSWERING}")
+        expect(box.get_by_role("button", name="Retry")).to_be_visible()
+    assert "internet" not in tab.inner_text("body") and "offline" not in tab.inner_text("body")
+    context.close()
+
+
+def test_offline_the_page_says_so_and_loads_again_once_back_online(browser, site, page):
+    """The device goes offline (the site is fine): a Yes says the answer is kept and to press
+    Try again once back online; a page that couldn't load says it is offline, and loads by
+    itself the moment the device is back online (not at its next quiet try)."""
+    page.context.set_offline(True)
+    assert page.evaluate("navigator.onLine") is False
+    row = _row(page, "Costco")
+    row.locator(".mark button.yes").click()
+    expect(row.locator(".mark-failed")).to_contain_text(
+        "Yes not saved. You're offline. Your answer is kept here; press Try again when you're back online.")
+    page.click("nav a[data-page=stats]")
+    box = page.locator("#stats-problem .problem")
+    expect(box).to_contain_text("Can't show the stats right now"
+                                "You're offline. Try again when you're back online.")
+    assert "isn't answering" not in page.inner_text("body")
+    page.context.set_offline(False)                    # the quiet try is 20 seconds away
+    expect(page.locator("#stats-body")).to_be_visible(timeout=5000)
+    expect(box).to_have_count(0)
+    page.click("nav a[data-page=leads]")
+    row.locator(".mark-failed").get_by_role("button", name="Try again to save Yes for Costco Wholesale").click()
+    expect(row).to_contain_text("Saved. Moves to “Has baler or compactor”.")
+
+
+def test_just_called_and_history_say_which_business_they_are_for(page):
+    """Each "Just called" and "History" button, on Leads and on Calls, is named with its
+    business for a screen reader or voice control; the words shown stay as they were."""
+    from leadgen import calls
+    calls.log_call(_uid("Costco"), "Follow Up", "Ask about the baler.")
+    page.reload()
+    page.wait_for_selector("table.leads")
+    row = _row(page, "Costco")
+    called = row.get_by_role("button", name="Just called: Costco Wholesale", exact=True)
+    history = row.get_by_role("button", name="History (1 call): Costco Wholesale", exact=True)
+    expect(called).to_have_text("Just called")
+    expect(history).to_have_text("History (1)")
+    # Tabbing on from the row's No reaches them by name.
+    row.locator(".mark button.no").focus()
+    names = []
+    for _ in range(4):
+        page.keyboard.press("Tab")
+        names.append(page.evaluate("document.activeElement.getAttribute('aria-label') || "
+                                   "document.activeElement.textContent"))
+    assert "Just called: Costco Wholesale" in names and "History (1 call): Costco Wholesale" in names, names
+    expect(page.locator("*:focus")).not_to_have_accessible_name("Just called")
+    expect(_row(page, "Smith").get_by_role("button", name="Just called: Smith's Marketplace",
+                                           exact=True)).to_have_text("Just called")
+    page.click("nav a[data-page=calls]")
+    page.wait_for_selector("table.calls")
+    cell = page.locator("#calls-wrap tr", has_text="Costco Wholesale")
+    expect(cell.get_by_role("button", name="Just called: Costco Wholesale", exact=True)).to_have_text("Just called")
+    expect(cell.get_by_role("button", name="History (1 call): Costco Wholesale", exact=True)).to_have_text("History")
+
+
+# Every "·" in the boxes `selector` picks that starts a line (nothing before it on its line).
+DOT_STARTS_LINE = """(selector) => {
+  const bad = [];
+  let wrapped = 0;
+  for (const box of document.querySelectorAll(selector)) {
+    const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+    const chars = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      for (let i = 0; i < n.data.length; i++) if (n.data[i].trim()) chars.push([n, i]);
+    }
+    const rect = ([n, i]) => { const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + 1);
+                               return r.getClientRects()[0]; };
+    const tops = new Set(chars.map(rect).filter(Boolean).map((r) => Math.round(r.top)));
+    if (tops.size > 1) wrapped++;
+    chars.forEach((c, k) => {
+      if (c[0].data[c[1]] !== "·") return;
+      const me = rect(c), before = k ? rect(chars[k - 1]) : null;
+      if (me && (!before || before.bottom <= me.top + 1)) bad.push(box.innerText);
+    });
+  }
+  return { bad, wrapped };
+}"""
+
+
+@pytest.mark.parametrize("width", [1440, 1100])
+def test_a_separator_never_starts_a_line(browser, site, page, width):
+    """A verified phone and contact name too long for one line wrap after the "·", never
+    before it: on Leads (and in each address line) and on Calls."""
+    from leadgen import calls, contacts
+    uid = _uid("Costco")
+    contacts.save(uid, "801-555-0199", "Jane Doe, facilities manager at the north warehouse dock", "Tester")
+    calls.log_call(uid, "Follow Up", "Ask about the baler.")
+    context = _context(browser, viewport={"width": width, "height": 900})
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("table.leads")
+    expect(_row(tab, "Costco").locator(".verified")).to_contain_text("Verified (801) 555-0199 · Ask for Jane Doe")
+    said = tab.evaluate(DOT_STARTS_LINE, "table.leads .v-line, table.leads td.contact > div:first-child")
+    assert not said["bad"] and said["wrapped"], said
+    tab.click("nav a[data-page=calls]")
+    tab.wait_for_selector("table.calls")
+    said = tab.evaluate(DOT_STARTS_LINE, "table.calls .v-line, table.calls td.c-name .sub")
+    assert not said["bad"] and said["wrapped"], said
     context.close()
 
 

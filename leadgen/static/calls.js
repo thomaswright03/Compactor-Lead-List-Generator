@@ -1,6 +1,6 @@
 /* Part 3: the Calls page, the "Just called" box and call history. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
-/* exported emptyNote, loadCalled, renderCalls, openCall, openHistory, verifiedBox */
+/* exported emptyNote, loadCalled, renderCalls, openCall, openHistory, callButton, historyButton, verifiedBox */
 // An empty page that says how it fills up, with a link to where that happens.
 /** @param {string} title @param {string} text @param {string} href @param {string} label */
 function emptyNote(title, text, href, label) {
@@ -113,7 +113,7 @@ function renderCalls() {
     const tr = el("tr");
     const name = el("td", undefined, "c-name");
     name.append(el("strong", l.name),
-                el("div", [l.address || "No street address", l.city || l.near].filter(Boolean).join(" · "), "sub"));
+                el("div", [l.address || "No street address", l.city || l.near].filter(Boolean).join(DOT), "sub"));
     if (l.closed) name.append(el("div", "Closed for good", "flag"));
     tr.append(name);
     const phone = el("td", undefined, "c-phone");
@@ -126,8 +126,7 @@ function renderCalls() {
     tr.append(when);
     tr.append(notesCell(l));
     const act = el("td", undefined, "c-act"); const box = el("div", undefined, "call-cell");
-    box.append(button("Just called", "", () => openCall(l)));
-    box.append(button("History", "quiet", () => openHistory(l)));
+    box.append(callButton(l), historyButton(l, "History"));
     if (l.undo_call && leftOf(l.undo_call) > 0) box.append(undoButton(l.undo_call, "Undo call", () => undoCall(l.key)));
     act.append(box); tr.append(act);
     tbody.append(tr);
@@ -231,6 +230,21 @@ function saveDraft() {
 }
 /** @param {Lead} lead */
 function openCall(lead) { withName(() => openCallBox(lead)); }
+// A business's "Just called" and "History" buttons (Leads and Calls): the words shown stay
+// short, and the name a screen reader or voice control hears says which business they are for.
+/** @param {Lead} lead */
+function callButton(lead) {
+  const b = button("Just called", "", () => openCall(lead));
+  b.setAttribute("aria-label", `Just called: ${lead.name}`);
+  return b;
+}
+/** @param {Lead} lead @param {string} text the words shown, "History" or "History (2)" */
+function historyButton(lead, text) {
+  const b = button(text, "quiet", () => openHistory(lead));
+  const n = lead.call_count || 0;
+  b.setAttribute("aria-label", `History (${n} call${n === 1 ? "" : "s"}): ${lead.name}`);
+  return b;
+}
 /** @param {Lead} lead */
 function openCallBox(lead) {
   callLead = lead;
@@ -339,7 +353,7 @@ function verifiedBox(l) {
     const line = el("div", undefined, "v-line");
     line.append(el("span", "Verified", "badge v-tag"), " ");
     if (l.verified_phone) line.append(phoneLink(l.verified_phone));
-    if (l.verified_phone && l.contact_name) line.append(" · ");
+    if (l.verified_phone && l.contact_name) line.append(DOT);
     if (l.contact_name) line.append(el("span", `Ask for ${l.contact_name}`, "v-name"));
     box.append(line);
     if (l.contact_by) box.append(el("div", `Saved by ${l.contact_by}, ${l.contact_when}`, "sub"));
@@ -442,7 +456,7 @@ async function openHistory(lead) {
       list.append(el("h3", "Verified phone and contact", "hist-head"));
       for (const c of contacts) {
         const item = el("div", undefined, "item");
-        const what = [c.phone, c.contact && `ask for ${c.contact}`].filter(Boolean).join(" · ") || "Taken off";
+        const what = [c.phone, c.contact && `ask for ${c.contact}`].filter(Boolean).join(DOT) || "Taken off";
         item.append(el("span", what), el("span", `  ${c.when}${byWho(c.by)}`, "sub"));
         list.append(item);
       }
