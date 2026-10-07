@@ -1855,6 +1855,40 @@ def test_the_history_shows_todays_search_while_it_runs(page, monkeypatch):
     expect(page.locator("#history .h-leads")).not_to_contain_text("Running…")
 
 
+def test_the_line_beside_find_leads_says_a_search_is_running(page, monkeypatch):
+    """While today's search runs, the line beside the greyed-out Find leads button says so
+    in words (its dot never stands alone), here and after a reload."""
+    from leadgen.pipeline import RunResult
+    go = threading.Event()
+
+    def run(params, progress):
+        go.wait(20)
+        return RunResult([], params.center, params.place, [], {"leads kept": 0, "seconds": 1})
+    monkeypatch.setattr(web.finding, "run", run)
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    page.fill("input[name=location]", "Murray")
+    page.click("#go")
+    page.click("#confirm-go")
+    page.wait_for_selector("#progress-card:not([hidden])")
+    note = page.locator("#day-note")
+    try:
+        expect(note).to_have_text("Today's search is running; progress is below.")
+        expect(note).to_be_visible()
+        expect(page.locator("#go")).to_be_disabled()
+        page.reload()                                  # the page picks the running search up again
+        page.wait_for_selector("#progress-card:not([hidden])")
+        expect(note).to_have_text("Today's search is running; progress is below.")
+        expect(page.locator("#go")).to_be_disabled()
+    finally:
+        go.set()
+    page.wait_for_selector("#done-card:not([hidden])")
+    expect(note).to_contain_text("The next one can run tomorrow.")
+    # With no words the line is hidden, so the dot can't show on its own.
+    page.evaluate("setGo(false, '')")
+    expect(note).to_be_hidden()
+
+
 def test_saving_a_call_from_the_keyboard_keeps_the_focus_on_that_business(page):
     row = _row(page, "Hampton")
     key = row.get_attribute("data-key")
