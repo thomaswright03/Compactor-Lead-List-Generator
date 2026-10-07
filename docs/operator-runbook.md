@@ -4,6 +4,31 @@ For whoever looks after the live site (Render + a Postgres database). Sales
 staff want the [sales guide](sales-guide.md); developers the
 [developer overview](developer-overview.md).
 
+**In short.** The site is one Render web service on Render's Starter plan (since
+2026-10-07, so it never sleeps), with its data in a Neon Postgres database. A push to
+`main` goes live only once the GitHub checks pass; a bad deploy is rolled back in
+Render's **Events**. In an emergency, pause searching from **Find leads** → **For the
+site administrator**, or with `LEADGEN_SEARCH_PAUSED` = `1` in Render. The same section
+lists the last 7 days' problems, which can also go to a chat webhook. A nightly encrypted
+backup runs on GitHub, on top of Neon's 6 hours of history. What only the owner can
+still do is in [Owner actions still open](#owner-actions-still-open).
+
+**Contents**
+
+- [Common actions](#common-actions) · [Owner actions still open](#owner-actions-still-open)
+- [Emergency switches](#emergency-switches-stop-searches-or-paid-calls)
+- [Deploying](#deploying) · [Logs and rollback](#logs-and-rolling-back-a-bad-deploy) ·
+  [Alerts: the webhook](#problems-the-webhook)
+- [Monthly: the scoring check](#monthly-the-scoring-check) ·
+  [The one-search-a-day rule](#the-one-search-a-day-rule)
+- [Settings](#settings-environment-variables) · [Put it online (Render)](#put-it-online-render) ·
+  [The size of a clone (and branches)](#the-size-of-a-clone)
+- [The database](#the-database-saved-leads-marks-calls-the-yelp-count) ·
+  [Backups and restoring](#backups-and-restoring) ([Restoring](#restoring),
+  [Restore rehearsal](#restore-rehearsal))
+- [Login and the Render plan](#login-and-the-render-plan) · [Keep the site awake](#keep-the-site-awake) ·
+  [Yelp notes](#yelp-notes) · [Google costs](#cost-notes-google)
+
 ## Common actions
 
 | To | Do this | Details |
@@ -21,22 +46,16 @@ staff want the [sales guide](sales-guide.md); developers the
 | Merge a business saved as two rows | `python -m leadgen merge-sites` (lists, changes nothing), then `--apply` | [The database](#the-database-saved-leads-marks-calls-the-yelp-count) |
 | Send the monthly scoring check | **For the site administrator** → **Scoring check** → download, send to the developer | [Monthly](#monthly-the-scoring-check) |
 
-All sections:
-
-- [Emergency switches](#emergency-switches-stop-searches-or-paid-calls)
-- [Deploying](#deploying) · [Logs and rollback](#logs-and-rolling-back-a-bad-deploy)
-- [Alerts: the webhook](#problems-the-webhook)
-- [Settings](#settings-environment-variables) · [Put it online and the database](#put-it-online-render)
-- [Backups and restoring](#backups-and-restoring)
-- [Login](#login-and-the-render-plan) · [Keep the site awake](#keep-the-site-awake) · [Yelp limits](#yelp-notes) · [Google costs](#cost-notes-google)
-- [Owner actions still open](#owner-actions-still-open)
-
 ## Owner actions still open
 
 Steps only the owner (Thomas) can take, on GitHub, on Render and with the live data;
 the code can't take them, and nothing else is waiting on them. Each takes a few minutes. When
 one is done, change its **Open** to **Done (the date)** here and in the section it
-links to, and take it off the README's "Still open for the owner" list.
+links to. This list is the one place for the owner's dated status notes; the README
+only links here.
+
+**Still open:** item 5, confirm Render shows the Starter plan, then turn off the
+cron-job.org pinger. Everything else is done.
 
 1. **Protect `main`** (GitHub; **Done (2026-10-03)**: ruleset `Protect main`). So a commit with a
    failing check can't land on `main`. Steps: [Deploying → Protect `main`](#deploying)
@@ -55,8 +74,8 @@ links to, and take it off the README's "Still open for the owner" list.
 3. **Delete the two old branches** (GitHub; **Done (2026-10-05)**):
    `wip-yelp-cap-and-baler-marks` and `runbook-owner-steps-done` are gone. The branches
    that stay are `main` and `claude-staging`; `claude-staging` is **kept on purpose**: it is
-   the staging route to the protected `main`, so don't delete it. Another branch may come
-   and go (`ui-revamp`, checked 2026-10-06, is already merged into `main` and the owner will
+   the staging route through CI to the protected `main`, so don't delete it. Another branch
+   may come and go (`ui-revamp`, checked 2026-10-06, is already merged into `main` and the owner will
    delete it); one already merged into `main` is expected and harmless, as nothing deploys
    from it. *Check:* `git ls-remote --heads origin` lists `refs/heads/main` and
    `refs/heads/claude-staging`, and every other branch it lists is already merged into
@@ -72,8 +91,8 @@ links to, and take it off the README's "Still open for the owner" list.
    manager (without it the copies can't be read, by anyone). Then **Actions** →
    **Nightly backup** → **Run workflow**. *Check:* the run is green and has an artifact
    `leadgen-backup-<date>`. Details: [Backups and restoring](#backups-and-restoring).
-5. **Keep the site awake: Render Starter** (Render; **chosen 2026-10-07**). The free plan
-   slept after 15 idle minutes and the outside pinger didn't always reach it, so a visit in
+5. **Keep the site awake: Render Starter** (Render; **chosen 2026-10-07**; **Open**: confirm
+   Render shows Starter, then turn off the cron-job.org pinger). The free plan slept after 15 idle minutes and the outside pinger didn't always reach it, so a visit in
    the working day could wait up to a minute. Starter (about $7 a month) never sleeps.
    Render → the **compactor-lead-finder** service → **Settings** → **Instance Type** →
    **Starter** → **Save** (`render.yaml` says `plan: starter` too, so a Blueprint sync
@@ -81,7 +100,7 @@ links to, and take it off the README's "Still open for the owner" list.
    → **Enable job** off); it is no longer needed. *Check:* the service's page in Render
    shows **Starter**, and `curl -s https://compactor-lead-finder.onrender.com/healthz`
    shows the same `up_since` at 7 AM and 5 PM. Then mark this item **Done (the date)**.
-6. **Rehearse a restore of the live data once** (GitHub; **Done (2026-10-05)**).
+6. **Rehearse a restore of the live data once** (GitHub; **Done (2026-10-05)**: it passed).
    GitHub → the repository → **Actions** → **Restore rehearsal** → **Run workflow** →
    **Run workflow**. It puts the newest nightly copy back into a throwaway database and
    compares the counts with the copy's own and with the live database's. What a pass
