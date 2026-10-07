@@ -45,13 +45,23 @@ const SAME_SPOT_PX = 6;
 const VIEW_PAD = 0.5;
 // How far above the pins the area names are drawn (AARCO's pin is above both).
 const AREA_NAME_Z = 500;
+// Where an area's name may move to when circles cover its own spot: every NAME_STEP px up to
+// NAME_REACH px each way, nearest first (placeLabels), keeping NAME_GAP px clear of what it avoids.
+const NAME_STEP = 8, NAME_REACH = 160, NAME_GAP = 3;
+/** @type {L.Point[]} */
+const NAME_SPOTS = [];
+for (let dx = -NAME_REACH; dx <= NAME_REACH; dx += NAME_STEP) {
+  for (let dy = -NAME_REACH; dy <= NAME_REACH; dy += NAME_STEP) NAME_SPOTS.push([dx, dy]);
+}
+NAME_SPOTS.sort((a, b) => a[0] ** 2 + a[1] ** 2 - b[0] ** 2 - b[1] ** 2);
 
 /**
  * The map and what is drawn on it; null until the page first opens.
  * @typedef {{row: MapPinRow, group: string, x: number, y: number, marker: L.Layer | null}} Pin
  *   x, y: where it is on the whole world's map at zoom 0 (a zoom's pixels are these times 2^zoom)
  * @typedef {{marker: L.Marker, members: Pin[]}} Cluster
- * @typedef {{shape: L.Path, status: string}} AreaShape
+ * @typedef {{shape: L.Path, status: string, name: HTMLElement, outline: L.Point[]}} AreaShape
+ *   name: the area's name on the map; outline: its edge, as [lat, lon] points
  * @type {{map: L.Map | null, groups: Record<string, L.LayerGroup>, areas: L.LayerGroup | null,
  *         ring: L.Path | null, pins: Pin[], shown: Set<Pin>, clusters: L.LayerGroup | null,
  *         clustered: Map<string, Cluster>, dots: L.Renderer | null, styles: Record<string, L.PathOptions>,
@@ -172,12 +182,12 @@ function drawMap(data) {
   M.areas = L.layerGroup();
   for (const area of data.areas) {
     const shape = L.polygon(area.outline, { renderer: shapes, interactive: false, ...areaStyle(area.status) });
-    M.shapes.push({ shape, status: area.status });
     M.areas.addLayer(shape);
     const label = el("div", undefined, `area-name ${area.status}`);
     label.append(el("span", area.name));
     if (area.status !== "searched") label.append(el("small", area.status === "unknown" ? "not known" : area.status ===
       "partly" ? "partly searched" : area.status === "asking" ? "filling in" : "not searched"));
+    M.shapes.push({ shape, status: area.status, name: label, outline: area.outline });
     // Above the groups' circles (a tap goes through the name to them), under AARCO's pin.
     M.areas.addLayer(L.marker(area.label, { icon: L.divIcon({ className: "area-label", html: label, iconSize: null }),
                                              interactive: false, keyboard: false, zIndexOffset: AREA_NAME_Z }));
@@ -374,23 +384,54 @@ function spotList(members, box, changed) {
   box.replaceChildren(list);
 }
 
-// The area names that fit at this zoom: nearest the centre first, each one shown only where it
-// covers no name already shown and not AARCO's pin, and stays inside the map; the others wait
-// until the map is zoomed in (the list under the map names every area).
+// The area names, placed again whenever the map moves or its circles change: nearest the centre
+// first, each in free space inside its own area, so a circle with a count never covers a name and
+// its status. A name stays where it is drawn when that spot is clear, and otherwise moves to the
+// nearest clear spot (NAME_SPOTS) whose middle is still inside its area. Clear means whole inside
+// the map and covering no circle, competitor's square, AARCO's pin, map button or name already
+// placed. A name with no clear spot waits until the map is zoomed in (the list under the map
+// names every area with its status).
 function placeLabels() {
-  const edge = $("map").getBoundingClientRect();
-  if (!M.map || !edge.width) return;                  // the page is hidden: placed when shown
-  const taken = [...document.querySelectorAll("#map .aarco-mark svg, #map .aarco-name")]
+  const map = M.map, edge = $("map").getBoundingClientRect();
+  if (!map || !M.areas || !edge.width || !map.hasLayer(M.areas)) return;   // hidden: placed when shown
+  const zoom = map.getZoom(), origin = map.getPixelBounds().min;
+  /** @type {{left: number, right: number, top: number, bottom: number}[]} */
+  const taken = [...document.querySelectorAll("#map .pin-cluster, #map .pin-comp, #map .aarco-mark svg, " +
+                                              "#map .aarco-name, #map .leaflet-control")]
     .map((node) => node.getBoundingClientRect());
-  for (const name of document.querySelectorAll("#map .area-name")) {
+  for (const { name, outline } of M.shapes) {
     name.classList.remove("crowded");
+    name.style.left = name.style.top = "";
     const box = name.getBoundingClientRect();
-    const inside = box.left >= edge.left && box.right <= edge.right && box.top >= edge.top && box.bottom <= edge.bottom;
-    const clear = taken.every((t) => box.right <= t.left || box.left >= t.right || box.bottom <= t.top ||
-                                     box.top >= t.bottom);
-    if (inside && clear) taken.push(box);
-    else name.classList.add("crowded");
+    /** @type {L.Point[]} */
+    const ring = outline.map((at) => {
+      const p = map.project(at, zoom);
+      return [p.x - origin.x + edge.left, p.y - origin.y + edge.top];
+    });
+    const spot = NAME_SPOTS.find(([dx, dy]) => {
+      const left = box.left + dx, right = box.right + dx, top = box.top + dy, bottom = box.bottom + dy;
+      return left >= edge.left && right <= edge.right && top >= edge.top && bottom <= edge.bottom &&
+        taken.every((t) => right + NAME_GAP <= t.left || left - NAME_GAP >= t.right ||
+                           bottom + NAME_GAP <= t.top || top - NAME_GAP >= t.bottom) &&
+        within([(left + right) / 2, (top + bottom) / 2], ring);
+    });
+    if (!spot) { name.classList.add("crowded"); continue; }
+    name.style.left = `${spot[0]}px`;
+    name.style.top = `${spot[1]}px`;
+    taken.push({ left: box.left + spot[0], right: box.right + spot[0], top: box.top + spot[1],
+                 bottom: box.bottom + spot[1] });
   }
+  $("map-names-note").hidden = !M.shapes.some(({ name }) => name.classList.contains("crowded"));
+}
+
+/** True when the point is inside the polygon (in the same pixels). @param {L.Point} p @param {L.Point[]} ring */
+function within([x, y], ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [ax, ay] = ring[i], [bx, by] = ring[j];
+    if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax) inside = !inside;
+  }
+  return inside;
 }
 
 // The room a pin's details box has inside the map, beside the zoom buttons (POPUP's padding):
@@ -407,9 +448,9 @@ function fitPopups() {
 
 function makeMap() {
   const map = L.map($("map"), { preferCanvas: true, zoomSnap: 0.25, zoomDelta: 0.5, minZoom: 5, maxZoom: 18 });
-  map.on("zoomend resize", placeLabels);
   map.on("resize", fitPopups);
-  map.on("moveend resize", placePins);
+  // The circles first, then the area names among them.
+  map.on("moveend resize", () => { placePins(); placeLabels(); });
   map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
   const tiles = L.tileLayer(TILES, { attribution: TILE_CREDIT, maxZoom: 19 });
   // Without the street map (offline, or the tile servers blocked) the rest still shows, on a plain
@@ -508,10 +549,14 @@ $all("#map-groups input[data-group]").forEach((box) => box.addEventListener("cha
   const layer = M.groups[group];
   if (M.map && layer) { if (input.checked) M.map.addLayer(layer); else M.map.removeLayer(layer); }
   placePins();
+  placeLabels();
   const hidden = hiddenGroups().filter((g) => g !== group).concat(input.checked ? [] : [group]);
   try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(hidden)); } catch (e) { /* kept for this visit only */ }
 }));
 $("map-show-areas").addEventListener("change", () => {
   if (!M.map || !M.areas) return;
-  if ($("map-show-areas").checked) { M.map.addLayer(M.areas); placeLabels(); } else M.map.removeLayer(M.areas);
+  if ($("map-show-areas").checked) { M.map.addLayer(M.areas); placeLabels(); } else {
+    M.map.removeLayer(M.areas);
+    $("map-names-note").hidden = true;
+  }
 });

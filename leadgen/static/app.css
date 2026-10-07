@@ -955,7 +955,9 @@ dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturat
   :root:not([data-theme="light"]) #map .leaflet-tile-pane { filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9)
                                                             saturate(.5); }
 }
-/* The search areas' names, written over the map with a halo so they read on any background. */
+/* The search areas' names, written over the map with a halo so they read on any background, above
+   the pins and moved into free space clear of the circles with a count (placeLabels in map.js sets
+   left / top). */
 #map .area-label { width:0; height:0; }
 .area-name { position:absolute; transform:translate(-50%, -50%); width:max-content; max-width:9.5em; text-align:center;
              line-height:1.2; font-weight:700; font-size:var(--fs-sm); color:var(--ink); pointer-events:none;

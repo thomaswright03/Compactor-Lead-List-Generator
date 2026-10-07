@@ -669,8 +669,18 @@ the sidebar to the page's list (Leads, Calls) or heading.
   - The areas a search asks the free map data in (`osm.area_boxes`, the "N of 9 areas"
     of its progress), each cut to the circle and named by `osm.area_name` like
     elsewhere (its biggest town, else "The area to the northwest"), with up to three
-    more towns for the list under the map. An area name that would cover another, AARCO's
-    pin, or the map's edge waits until the map is zoomed in (`placeLabels`).
+    more towns for the list under the map. Each name (with its status: "partly
+    searched", "not searched", "not known") is drawn above the pins with a halo and is
+    placed again whenever the map moves or its circles change (`placeLabels`, after
+    `placePins`): it stays on its spot when that is clear, else moves to the nearest
+    clear spot (8 px steps, up to 160 px each way) whose middle is still inside its
+    area. Clear means whole inside the map and covering no circle with a count,
+    competitor's square, AARCO's pin, map button or name already placed. A name with no
+    clear spot waits until the map is zoomed in, and a note under the map
+    (`#map-names-note`) points to the list under it, which names every area and its
+    status. The browser test
+    `test_the_areas_names_stay_readable_among_hundreds_of_businesses_on_a_phone` checks
+    this at 320 and 375 px with 490 businesses around Salt Lake City.
   - The shading, from the latest search of AARCO's area (`area_map.latest_search`: the
     newest day's record that found leads, ran within 0.1 mile of the shop with the
     service area's miles, and used the map data). A search now records its center
