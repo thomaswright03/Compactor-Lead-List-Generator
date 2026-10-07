@@ -968,6 +968,13 @@ dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturat
 /* A competitor: a hollow square. AARCO: a pin of its own with its name beside it. */
 #map .pin-comp { box-sizing:border-box; border:3px solid var(--pin-comp); border-radius:2px; background:var(--pin-ring);
                  box-shadow:0 0 0 1.5px var(--pin-ring); }
+/* Pins close together at this zoom: one round group (map.js placePins), its ring split by Yes / No
+   / not checked / competitor (map.js draws that ring), the count in its middle. */
+.pin-cluster > div { width:100%; height:100%; border-radius:50%; display:grid; place-items:center; background:var(--pin-ring);
+                     box-shadow:0 0 0 1.5px var(--pin-ring), 0 1px 3px rgba(0,0,0,.35); }
+.pin-cluster span { display:grid; place-items:center; border-radius:50%; padding:0 var(--sp-1); background:var(--card); color:var(--ink);
+                    font-weight:800; font-size:var(--fs-xs); line-height:1; font-variant-numeric:tabular-nums; }
+#map .pin-cluster:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
 #map .aarco-pin { overflow:visible; }
 .aarco-mark { position:relative; width:32px; height:42px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
 .aarco-mark svg { display:block; }
