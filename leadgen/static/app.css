@@ -1,180 +1,396 @@
-/* The Lead Finder page's styles. Colours, spacing (--sp-1 to --sp-6), radii and the six text
-   sizes (--fs-xs to --fs-xl) come from templates/_theme.html; use those, not raw pixel values. */
+/* The Lead Finder page's styles, one set of rules per part of the page, each part's narrower-screen
+   rules right after it. "Ivory & Navy / Midnight & Brass": Fraunces for titles, names and big
+   numbers, Inter for the rest, AARCO's navy as the one accent with brass as its highlight.
+   Colours, spacing (--sp-1 to --sp-6), radii and every text size come from templates/_theme.html
+   (--fs-xs to --fs-xl for reading text, the named display sizes for titles and figures); use
+   those, not raw pixel values.
+   Text people type or sources supply (call notes, names, addresses, reasons) always wraps: the
+   boxes that hold it (cards, dialogs, notes, table cells, the toast) say overflow-wrap:anywhere,
+   so a pasted web address or email breaks inside its box instead of widening the page. */
+
+/* ==== Base ========================================================================= */
 * { box-sizing:border-box; }
 [hidden] { display:none !important; }
-body { margin:0; font:var(--fs-base)/1.45 var(--font); background:var(--bg); color:var(--ink);
-       -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
-a { color:var(--accent); }
-button, .btn { font:inherit; font-weight:600; border-radius:var(--r-sm); cursor:pointer; border:1px solid transparent;
-               padding:var(--sp-2) var(--sp-4); background:var(--btn); color:var(--btn-ink); text-decoration:none; display:inline-block; }
-button.quiet, .btn.quiet { background:var(--card); color:var(--ink); border-color:var(--line); }
-button:disabled, button[aria-disabled="true"] { opacity:.5; cursor:not-allowed; }
-.btn.busy { opacity:.7; cursor:progress; }
+/* Two soft glows and a faint paper grain behind every page. */
+body { margin:0; font:var(--fs-base)/1.45 var(--font); color:var(--ink);
+       -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+       background-color:var(--bg); background-attachment:fixed;
+       background-image:radial-gradient(900px 600px at 12% -8%, var(--glow), transparent 65%),
+                        radial-gradient(800px 600px at 100% 100%, var(--glow-2), transparent 60%),
+                        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.45 0 0 0 0 0.4 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+/* Links: a soft underline that firms up on hover. */
+a { color:var(--accent); text-underline-offset:3px; text-decoration-thickness:1px;
+    text-decoration-color:color-mix(in srgb, currentColor 35%, transparent); transition:text-decoration-color .15s; }
+a:hover { text-decoration-color:currentColor; }
+/* Every focusable control gets the same 3px ring from the keyboard. */
 button:focus-visible, .btn:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
-textarea:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
-/* Text people type or sources supply (call notes, names, addresses, reasons) always wraps:
-   a pasted web address or email breaks inside its card or cell instead of widening the page. */
-.card, .history, dialog, .warn, .recent, .toast, table.plain td, .notes { overflow-wrap:anywhere; }
-.tag, .badge { white-space:nowrap; }                /* short labels ("Incomplete") never break */
+textarea:focus-visible, summary:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
+/* Numbers line up in columns. */
+td { font-variant-numeric:tabular-nums; }
 /* A table's headings are whole words at every width, on every page: they wrap only between
    words (anywhere, inherited from the card, let a table squeeze them to "Chec / ked"). */
 th { overflow-wrap:normal; }
-/* The search history's numbers and Details link are whole words too; the place searched
-   wraps between words, and inside a long one only when it can't fit. */
-table.plain.hist td.h-when, table.plain.hist td.h-radius,
-table.plain.hist td.h-leads, table.plain.hist td.h-new, table.plain.hist td.h-act { overflow-wrap:normal; }
-table.plain.hist td.h-where { overflow-wrap:break-word; }
-input, select, textarea { font:inherit; font-weight:400; padding:var(--sp-2); border:1px solid var(--line-strong); border-radius:var(--r-sm); color:var(--ink); background:var(--input); }
+.muted { color:var(--muted); }
+.error { color:var(--bad-ink); font-weight:600; }
+.nowrap { white-space:nowrap; }
+.sub { color:var(--muted); font-size:var(--fs-sm); }
+.scroll-x { overflow-x:auto; }
+progress, meter { accent-color:var(--btn); }
 
-/* Layout: sidebar + pages */
+/* ==== Buttons ====================================================================== */
+/* Raised pills; the main ones a navy gradient with a glow, the quiet ones neutral. */
+button, .btn { font:inherit; font-weight:600; letter-spacing:.005em; border-radius:var(--r-pill); cursor:pointer;
+               border:1px solid transparent; padding:var(--sp-2) 18px; background:var(--btn); color:var(--btn-ink);
+               text-decoration:none; display:inline-block; box-shadow:var(--shadow-sm);
+               transition:background-color .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease),
+                          box-shadow .25s var(--ease), transform .2s var(--ease), filter .2s var(--ease); }
+/* Low specificity on purpose: any button with its own colours (quiet, tabs, Yes / No, the sidebar's)
+   keeps them. */
+:where(button:not(.quiet):not(.link):not(.undo):not(.danger), .btn:not(.quiet)) {
+  background-image:linear-gradient(180deg, var(--btn), var(--btn-2));
+  box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 1px 2px rgba(10,20,40,.2), 0 6px 16px -6px var(--accent-glow); }
+:where(button:not(:disabled), .btn):hover { background-color:var(--btn-hover); }
+:where(button:not(.quiet):not(.link):not(.undo):not(.danger):not(:disabled), .btn:not(.quiet)):hover {
+  transform:translateY(-1px); filter:brightness(1.06);
+  box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 2px 4px rgba(10,20,40,.2), 0 10px 22px -8px var(--accent-glow); }
+button:not(:disabled):active, .btn:active { transform:translateY(1px); }
+:where(button:not(:disabled), .btn):active { filter:brightness(.97); }
+button.quiet, .btn.quiet { background:var(--card); background-image:linear-gradient(180deg, var(--card), var(--surface-2));
+                           border-color:var(--line-strong); color:var(--ink); box-shadow:var(--shadow-sm), var(--highlight); }
+button.quiet:not(:disabled):hover, .btn.quiet:hover { background:var(--card); border-color:var(--gold); transform:translateY(-1px); }
+button.danger { background:linear-gradient(180deg, var(--bad), var(--bad-2)); color:#fff; border:0; }
+button.danger:not(:disabled):hover { background:var(--bad); filter:brightness(.92); }
+button:disabled, button[aria-disabled="true"] { opacity:.5; cursor:not-allowed; filter:saturate(.3); box-shadow:none; transform:none; }
+.btn.busy { opacity:.7; cursor:progress; }
+/* Text buttons (a link's look, and the Undo on a row): an accent underline, no lift. */
+button.link { background:none; border:0; padding:0; color:var(--accent); font-weight:600; font-size:var(--fs-sm); box-shadow:none;
+              text-decoration:underline; text-decoration-color:color-mix(in srgb, currentColor 40%, transparent); text-underline-offset:3px; }
+button.undo { background:none; border:0; padding:var(--sp-1) 0 0; color:var(--accent); font-size:var(--fs-sm); font-weight:600; box-shadow:none;
+              text-decoration:underline; text-decoration-color:color-mix(in srgb, currentColor 40%, transparent); text-underline-offset:3px; }
+button.link:not(:disabled):hover, button.undo:not(:disabled):hover { background:none; text-decoration:underline; }
+/* Buttons with colours of their own stay put on hover. */
+.side button:hover, .tabs button:hover, .mark button:hover, .outcomes button:hover,
+table.leads th button.sort:hover, .toast button:hover { transform:none; filter:none; }
+
+/* ==== Fields ======================================================================= */
+/* Every field's look has no specificity, so its states (hover, focus, a wrong value) and the
+   page's own fields below always win over it, whatever their order. */
+:where(input, select, textarea) { font:inherit; font-weight:400; padding:var(--sp-2); border:1px solid var(--line-strong);
+                                  border-radius:var(--r-sm); color:var(--ink); background:var(--input);
+                                  transition:border-color .15s, box-shadow .15s; }
+/* Text boxes and pickers: taller, soft corners, a drawn chevron on pickers. */
+:where(input:not([type=checkbox]):not([type=radio]), select, textarea) { border-radius:var(--r-md);
+                                  box-shadow:inset 0 1px 2px rgba(40,30,20,.04); }
+:where(input:not([type=checkbox]):not([type=radio]), select) { min-height:44px; padding-inline:var(--sp-3); }
+select { appearance:none; -webkit-appearance:none; padding-right:36px; background-repeat:no-repeat;
+  background-position:right 12px center; background-size:12px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%23888070' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m1 1.5 5 5 5-5'/%3E%3C/svg%3E"); }
+/* The states, in order: a clear edge on hover, a navy ring on focus, and a field with a wrong
+   value red, with a soft red ring, focused or not (find.js showError, core.js's name prompt). */
+:where(input, select, textarea):where(:not(:disabled)):hover { border-color:var(--muted); }
+:where(input, select, textarea):focus { border-color:var(--accent-2); box-shadow:0 0 0 4px var(--accent-soft); }
+:where(input, select, textarea)[aria-invalid="true"] { border-color:var(--bad);
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--bad) 14%, transparent); }
+:where(input, select, textarea)[aria-invalid="true"]:focus-visible { outline-color:var(--bad); outline-offset:4px; }
+label { display:flex; flex-direction:column; gap:var(--sp-1); font-weight:600; font-size:var(--fs-sm); color:var(--ink); }
+label .hint { font-weight:400; font-size:var(--fs-sm); color:var(--muted); }
+/* Why a field's value can't be used, under it: in the page's own words and case, at reading size,
+   with what was typed exactly as typed (never in the label's small capitals). */
+.field-error { color:var(--bad-ink); font-weight:600; font-size:var(--fs-base); font-variant-caps:normal; letter-spacing:0; }
+/* Tick boxes: a drawn box that fills navy with a white tick; a chip when it sits on its own. */
+input[type=checkbox], input[type=radio] { accent-color:var(--btn); }
+input[type=checkbox]:not(#has-phone) { appearance:none; -webkit-appearance:none; flex:none; width:18px; height:18px; margin:0;
+  border:1.5px solid var(--line-strong); border-radius:5px; background:var(--input) no-repeat center / 12px;
+  cursor:pointer; transition:background-color .15s var(--ease), border-color .15s var(--ease); }
+input[type=checkbox]:not(#has-phone):checked { background-color:var(--btn); border-color:var(--btn);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m1.5 5 3 3 6-6.5'/%3E%3C/svg%3E"); }
+input[type=checkbox]:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
+label.check { flex-direction:row; align-items:center; gap:var(--sp-2); }
+label.check:has(input:focus-visible) { outline:3px solid var(--accent-2); outline-offset:2px; }
+/* Narrow windows and touch screens: a tick box's label is a full-size target. */
+@media (pointer: coarse), (max-width: 820px) { label.check { min-height:44px; } }
+
+/* ==== Layout: the sidebar and the pages ============================================= */
 .app { display:grid; grid-template-columns:232px minmax(0,1fr); min-height:100vh; }
 /* "Skip to main content": off screen until a keyboard user reaches it. */
 .skip { position:absolute; left:var(--sp-3); top:-100px; z-index:60; }
 .skip:focus { top:var(--sp-3); }
-.side { background:var(--side); color:var(--side-ink); padding:var(--sp-5) var(--sp-4); display:flex; flex-direction:column; gap:var(--sp-5);
-        position:sticky; top:0; height:100vh; align-self:start; z-index:5; }
-.brand strong { display:block; color:#fff; font-size:var(--fs-md); }
-.brand span { font-size:var(--fs-sm); opacity:.85; }
-/* The company's full name; on a narrow phone, where it doesn't fit beside Menu, its short
-   form (config.OWN_COMPANY_SHORT). */
+main { padding:var(--sp-5) var(--sp-5) var(--sp-6); min-width:0; display:flex; flex-direction:column; }
+.wrap { width:100%; max-width:1500px; margin:0 auto; flex:1; display:flex; flex-direction:column; }
+footer.copy { margin-top:auto; padding-top:var(--sp-6); text-align:center; color:var(--muted); font-size:var(--fs-sm); }
+@media (max-width: 820px) {
+  .app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto 1fr; align-content:start; }
+  main { padding:var(--sp-4) var(--sp-4) var(--sp-6); }
+}
+@media (max-width: 700px) { main { padding-top:var(--sp-3); } }
+
+/* The sidebar: deep navy with a brass glow; the page you are on a raised pill with a brass bar.
+   Tablets: a bar at the top with the name, the pages and Menu in one row (two when the pages'
+   counts are long); the tutorial, your name, the Yelp count, the colours and logging out are
+   under Menu, as on phones, so the bar never takes three rows. Phones: one short bar (name and
+   Menu, then the pages). */
+.side { color:var(--side-ink); padding:var(--sp-5) var(--sp-4); display:flex; flex-direction:column; gap:var(--sp-5);
+        position:sticky; top:0; height:100vh; align-self:start; z-index:5;
+        background:radial-gradient(400px 300px at 0 0, rgba(214,177,106,.10), transparent 70%),
+                   linear-gradient(180deg, var(--side), var(--side-2));
+        box-shadow:inset -1px 0 0 rgba(255,255,255,.08); }
+.side-bottom { margin-top:auto; display:flex; flex-direction:column; gap:var(--sp-3); }
+.menu-btn { display:none; }
+@media (min-width: 821px) {
+  .side { padding:var(--sp-5) var(--sp-3); }
+  .side-bottom { padding:0 var(--sp-1); }
+  .side-bottom::before { content:""; display:block; height:1px; margin-bottom:var(--sp-2);
+    background:linear-gradient(90deg, transparent, rgba(214,177,106,.5), transparent); }
+}
+@media (max-width: 820px) {
+  .side { position:static; height:auto; display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center;
+          gap:var(--sp-2) var(--sp-3); padding:var(--sp-3) var(--sp-4);
+          box-shadow:0 1px 0 rgba(255,255,255,.06), 0 4px 16px rgba(0,0,0,.18); }
+  .menu-btn { display:inline-flex; align-items:center; justify-content:center; background:none; border:1px solid rgba(255,255,255,.18);
+              color:var(--side-ink); padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); min-height:44px; min-width:44px;
+              grid-column:3; grid-row:1; box-shadow:none; }
+  .side-bottom { margin-top:0; grid-column:1 / -1; display:none; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--sp-3); }
+  .side.open .side-bottom { display:flex; }
+}
+@media (max-width: 700px) {
+  .side { grid-template-columns:minmax(0,1fr) auto; gap:var(--sp-1) var(--sp-3); padding:var(--sp-2) var(--sp-4); }
+  .menu-btn { grid-column:auto; grid-row:auto; }
+  .side-bottom { padding:var(--sp-2) 0; }
+}
+.side .menu-btn:hover { background:rgba(255,255,255,.08); }
+
+/* The company's name (in serif) over "Lead Finder" in brass small capitals, beside the site's
+   mark on wider screens. On a narrow phone, where it doesn't fit beside Menu, its short form
+   (config.OWN_COMPANY_SHORT). */
+.brand strong { display:block; color:#fff; font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-name-sm);
+                font-weight:600; letter-spacing:-.005em; }
+.brand span { color:var(--side-on); font-variant-caps:all-small-caps; letter-spacing:.1em; font-size:var(--fs-md); }
 .brand .co-short { display:none; }
 @media (max-width: 519px) {
   .brand .co-full { display:none; }
   .brand .co-short { display:inline; }
 }
+@media (min-width: 821px) {
+  .brand { display:grid; grid-template-columns:36px minmax(0,1fr); column-gap:var(--sp-3); align-items:center; padding:0 var(--sp-1); }
+  .brand::before { content:""; grid-row:1 / span 2; width:36px; height:36px; border-radius:12px;
+                   background:url("favicon.svg") center / cover no-repeat;
+                   box-shadow:0 0 0 1px rgba(214,177,106,.45), 0 6px 16px rgba(0,0,0,.35); }
+  .brand > * { grid-column:2; }
+  .brand strong { line-height:1.25; }
+}
+@media (max-width: 700px) {
+  .brand { display:flex; gap:var(--sp-2); align-items:baseline; min-width:0; white-space:nowrap; overflow:hidden; }
+  .brand strong { display:inline; }
+}
+
+/* The pages' links, each with its count ("Leads 1,135 to check" stays on one line: the count is
+   a small badge that never wraps). */
 nav { display:flex; flex-direction:column; gap:var(--sp-1); }
-nav a { color:var(--side-ink); text-decoration:none; padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm); display:flex; gap:var(--sp-1) var(--sp-2);
-        justify-content:space-between; align-items:center; font-weight:600; flex-wrap:nowrap; }
+nav a { color:var(--side-ink); text-decoration:none; padding:var(--sp-2) var(--sp-3); border-radius:var(--r-pill); display:flex;
+        gap:var(--sp-1) var(--sp-2); justify-content:space-between; align-items:center; font-weight:600; flex-wrap:nowrap;
+        position:relative; transition:background-color .15s, color .15s; }
 nav a:hover { background:rgba(255,255,255,.08); }
-nav a.on { background:rgba(255,255,255,.16); color:#fff; }
-/* "Leads 1,135 to check" stays on one line: the count is a small badge that never wraps. */
-nav .count { font-size:var(--fs-xs); font-weight:600; background:rgba(255,255,255,.14); border-radius:var(--r-pill); padding:0 var(--sp-2); white-space:nowrap; }
+nav a.on { background:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.07)); color:#fff;
+           box-shadow:inset 0 1px 0 rgba(255,255,255,.12), 0 4px 12px -4px rgba(0,0,0,.4); }
+nav .count { font-size:var(--fs-xs); font-weight:600; background:rgba(255,255,255,.14); border-radius:var(--r-pill); padding:0 var(--sp-2);
+             white-space:nowrap; font-variant-numeric:tabular-nums; }
+nav a.on .count { background:var(--side-on); color:var(--side-2); }
+@media (min-width: 821px) {
+  nav { gap:2px; }
+  nav a { justify-content:flex-start; gap:var(--sp-3); padding:10px var(--sp-3) 10px var(--sp-4); }
+  nav a .count { margin-left:auto; }
+  nav a.on::after { content:""; position:absolute; left:6px; top:50%; width:3px; height:16px; margin-top:-8px;
+                    border-radius:3px; background:var(--side-on); }
+  /* Each page's icon (a mask in the text's colour). */
+  nav a::before { content:""; width:18px; height:18px; flex:none; background:currentColor; opacity:.85;
+                  -webkit-mask:var(--icon) center / contain no-repeat; mask:var(--icon) center / contain no-repeat; }
+  nav a.on::before { opacity:1; color:var(--side-on); }
+  nav a[data-page=find] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
+  nav a[data-page=leads] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M9 6h11M9 12h11M9 18h11'/%3E%3Ccircle cx='4.5' cy='6' r='1.2' fill='black'/%3E%3Ccircle cx='4.5' cy='12' r='1.2' fill='black'/%3E%3Ccircle cx='4.5' cy='18' r='1.2' fill='black'/%3E%3C/svg%3E"); }
+  nav a[data-page=calls] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.1' stroke-linejoin='round'%3E%3Cpath d='M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z'/%3E%3C/svg%3E"); }
+  nav a[data-page=map] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.1' stroke-linejoin='round'%3E%3Cpath d='M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.5'/%3E%3C/svg%3E"); }
+  nav a[data-page=stats] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M4 20h16M7 16v-5M12 16V6M17 16v-8'/%3E%3C/svg%3E"); }
+}
+@media (max-width: 820px) {
+  nav { flex-direction:row; flex-wrap:wrap; grid-column:2; grid-row:1; }
+  /* A page's count sits under its name (the words are in the link's title), so a link is as
+     wide as "Leads" or "99,999" and the five pages keep one row however large the counts grow. */
+  nav a { padding:var(--sp-1) var(--sp-3); flex-direction:column; justify-content:center; gap:0; line-height:1.25; }
+  nav .count { line-height:1.25; }
+  nav .count .cw { display:none; }
+}
+@media (max-width: 700px) {
+  /* Every page's link stays in view, in one row from 320 px up (narrower, they would wrap). */
+  nav { grid-column:1 / -1; grid-row:auto; gap:var(--sp-1); }
+  /* Each page's link is a full 44px tap target on a phone (touch screen or not). */
+  nav a { padding:var(--sp-1) 6px; flex:none; font-size:var(--fs-sm); min-height:44px; min-width:44px; justify-content:center; }
+  nav .count { padding:0 var(--sp-1); }
+}
+/* Small phones: the first page's link says "Find" (its name is still "Find leads"), so the
+   five pages fit one row from 320 px up, whatever their counts, each link still 44 px wide. */
+@media (max-width: 429px) { nav .lw { display:none; } nav a { padding-inline:var(--sp-1); } }
+
+/* The sidebar's foot: the tutorial, your name, the Yelp count, the colours and logging out. */
+.side .tour-btn { background:rgba(214,177,106,.12); color:#f3e3bf; border:1px solid rgba(214,177,106,.45); align-self:flex-start;
+                  border-radius:var(--r-pill); padding-inline:var(--sp-4); box-shadow:none; }
+.side .tour-btn:hover { background:rgba(214,177,106,.22); }
 .side .quota { font-size:var(--fs-sm); line-height:1.4; opacity:.95; }
+.side .quota.paused { color:#ffb4ab; }
 .side .me { font-size:var(--fs-sm); display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-1) var(--sp-2); }
 .side .me strong { color:#fff; overflow-wrap:anywhere; }
 .side .me button.link { color:var(--side-ink); text-decoration:underline; }
-.side .quota.paused { color:#ffb4ab; }
 .side .who { font-size:var(--fs-sm); display:flex; align-items:center; justify-content:space-between; gap:var(--sp-2);
-             border-top:1px solid rgba(255,255,255,.12); padding-top:var(--sp-3); }
-.side .who button { background:none; border:1px solid rgba(255,255,255,.3); color:var(--side-ink); padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); flex:none; white-space:nowrap; }
+             border-top:1px solid; border-color:rgba(255,255,255,.18); padding-top:var(--sp-3); }
+.side .who button { background:none; border:1px solid rgba(255,255,255,.18); color:var(--side-ink); padding:var(--sp-1) var(--sp-3);
+                    font-size:var(--fs-sm); flex:none; white-space:nowrap; box-shadow:none; }
 /* A long user name wraps (or breaks) instead of squeezing "Log out" onto two lines. */
 .side .who span { min-width:0; overflow-wrap:anywhere; }
-/* The colour switch keeps its natural width, so "System" is never cut off. */
-.theme { display:flex; flex:none; border:1px solid rgba(255,255,255,.25); border-radius:var(--r-sm); }
-.theme button { flex:1 0 auto; background:none; border:0; border-radius:0; color:var(--side-ink); font-size:var(--fs-sm);
-                padding:var(--sp-1) var(--sp-2); white-space:nowrap; }
-.theme button:first-child { border-radius:var(--r-sm) 0 0 var(--r-sm); }
-.theme button:last-child { border-radius:0 var(--r-sm) var(--r-sm) 0; }
-.theme button[aria-pressed="true"] { background:rgba(255,255,255,.2); color:#fff; }
-.menu-btn, .phone-only, .cards-only, button.why-toggle, .c-miles .unit { display:none; }
-.side-bottom { margin-top:auto; display:flex; flex-direction:column; gap:var(--sp-3); }
-main { padding:var(--sp-5) var(--sp-5) var(--sp-6); min-width:0; display:flex; flex-direction:column; }
-.wrap { width:100%; max-width:1500px; margin:0 auto; flex:1; display:flex; flex-direction:column; }
-footer.copy { margin-top:auto; padding-top:var(--sp-6); text-align:center; color:var(--muted); font-size:var(--fs-sm); }
-.page-head { margin:0 0 var(--sp-4); }
-.page-head h1 { margin:0; font-size:var(--fs-lg); }
-.page-head p { margin:var(--sp-1) 0 0; color:var(--muted); }
-.card { background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-4); margin-bottom:var(--sp-4); }
-.card h2 { margin:0 0 var(--sp-3); font-size:var(--fs-md); }
+@media (max-width: 820px) { .side .who { border-top-style:none; padding-top:0; } }
+/* The colour switch: a pill track; it keeps its natural width, so "System" is never cut off. */
+.theme { display:flex; flex:none; border:1px solid rgba(255,255,255,.18); border-radius:var(--r-pill); background:rgba(0,0,0,.15);
+         padding:2px; gap:2px; }
+.theme button { flex:1 0 auto; background:none; border:0; border-radius:var(--r-pill); color:var(--side-ink); font-size:var(--fs-sm);
+                padding:var(--sp-1) var(--sp-2); white-space:nowrap; box-shadow:none; }
+.theme button[aria-pressed="true"] { background:rgba(255,255,255,.92); color:var(--side); box-shadow:0 2px 6px rgba(0,0,0,.3); }
+.theme button:not([aria-pressed="true"]):hover, .side .who button:hover { background:rgba(255,255,255,.08); }
+
+/* ==== Page headings, cards and banners ============================================== */
+.page-head { margin:0 0 var(--sp-5); }
+.page-head h1 { margin:0; font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-lg); font-weight:560;
+                letter-spacing:-.02em; line-height:1.2; font-variation-settings:"SOFT" 30; }
+@media (min-width: 821px) { .page-head h1 { font-size:var(--fs-h1); line-height:1.1; } }
+.page-head h1::after { content:""; display:block; width:64px; height:2px; margin:var(--sp-3) 0 var(--sp-2);
+                       border-radius:2px; background:linear-gradient(90deg, var(--accent-2), var(--gold)); }
+.page-head p { margin:var(--sp-1) 0 0; color:var(--ink-2); max-width:72ch; }
+/* Ivory cards with a hairline, a lit top edge and tinted depth. */
+.card { background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg); padding:var(--sp-5); margin-bottom:var(--sp-4);
+        box-shadow:var(--shadow-sm), var(--highlight); overflow-wrap:anywhere; }
+.card h2 { margin:0 0 var(--sp-4); font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-title); font-weight:560;
+           letter-spacing:-.01em; }
+.card > h2:first-child { display:flex; align-items:center; gap:var(--sp-2); }
 .card h2 + .muted { margin-top:calc(-1 * var(--sp-2)); }
-.muted { color:var(--muted); }
-.error { color:var(--bad-ink); font-weight:600; }
-/* Find leads after today's search: a notice on top, the settings greyed out. */
-.form-closed { background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn-ink); border-radius:var(--r-sm);
-               padding:var(--sp-3); margin-bottom:var(--sp-4); }
-.form-closed strong { display:block; }
-#form.closed .form-grid, #form.closed details.advanced { opacity:.6; }
-#form.closed input:disabled, #form.closed select:disabled { cursor:not-allowed; }
-/* The call box's Save needs one of the six results: a quiet hint, then a clear ring when missed. */
-.need-note { font-weight:400; color:var(--muted); margin-left:var(--sp-2); }
-.outcomes.need button { border-color:var(--bad); box-shadow:0 0 0 1px var(--bad); }
-/* The Calls page's filter box. */
-.calls-tools { display:flex; margin-bottom:var(--sp-3); }
-.calls-tools input { flex:1; max-width:420px; min-width:0; }
-.warn { background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn-ink); padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm); margin:var(--sp-2) 0; }
+/* Notes and banners: tinted panels with a brass edge. */
+.warn { background:var(--warn-bg); border:1px solid var(--warn-line); border-left:3px solid var(--gold); color:var(--warn-ink);
+        border-radius:var(--r-md); padding:var(--sp-2) var(--sp-3); margin:var(--sp-2) 0; overflow-wrap:anywhere; }
 .warn .more-notes { margin-top:var(--sp-1); }
 .warn .more-notes summary { cursor:pointer; font-weight:600; min-height:24px; }
 .warn .more-notes p { margin:var(--sp-1) 0 0; }
-.problem { background:var(--card); border:1px solid var(--warn-line); border-left:5px solid var(--bad); border-radius:var(--r-md);
-           padding:var(--sp-4) var(--sp-5); display:flex; gap:var(--sp-4); align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:var(--sp-4); }
-.problem strong { display:block; font-size:var(--fs-md); margin-bottom:var(--sp-1); }
+/* Find leads after today's search: a notice on top, the settings greyed out. */
+.form-closed { background:var(--warn-bg); border:1px solid var(--warn-line); border-left:3px solid var(--gold); color:var(--warn-ink);
+               border-radius:var(--r-md); padding:var(--sp-3); margin-bottom:var(--sp-4); }
+.form-closed strong { display:block; }
+/* Something the team must know (searching paused): a card with a red edge. */
+.problem { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--bad); border-radius:var(--r-lg);
+           padding:var(--sp-4) var(--sp-5); display:flex; gap:var(--sp-4); align-items:center; justify-content:space-between; flex-wrap:wrap;
+           margin-bottom:var(--sp-4); box-shadow:var(--shadow-sm), var(--highlight); }
+.problem strong { display:block; font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-md); margin-bottom:var(--sp-1); }
+/* Hints read as quiet notes with an info mark, not loose lines of text. */
+.hint-line { margin:0 0 var(--sp-3); color:var(--muted); font-size:var(--fs-sm); }
+.hint-line::before { content:"i"; display:inline-grid; place-items:center; width:18px; height:18px; margin-right:var(--sp-2);
+                     vertical-align:-3px; border-radius:50%; background:var(--gold-soft); color:var(--gold-text);
+                     font:italic 700 var(--fs-xs)/1 Georgia, serif; }
+.hint-line button.link { font-size:var(--fs-sm); text-decoration:underline; }
+/* Empty states: a small ornament (a navy-to-brass ring) above the words. */
+.empty { padding:var(--sp-6); text-align:center; color:var(--muted); }
+.empty::before { content:""; display:block; width:44px; height:44px; margin:0 auto var(--sp-4); border-radius:50%;
+  background:conic-gradient(from 210deg, var(--accent-2), var(--gold), var(--accent-2));
+  -webkit-mask:radial-gradient(circle, transparent 15px, #000 16px); mask:radial-gradient(circle, transparent 15px, #000 16px); opacity:.85; }
+.empty strong { display:block; color:var(--ink); font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-title-lg);
+                font-weight:560; }
+.empty p { margin:var(--sp-2) 0 var(--sp-4); }
+#stats-empty .empty { padding:var(--sp-3); }
 
-/* Find leads */
+/* ==== Find leads =================================================================== */
+/* The hero: the search form, framed in a navy-to-brass border with a glow in its corners. */
+#form.card { position:relative; border:1px solid transparent; padding:var(--sp-6);
+  background:radial-gradient(420px 200px at 0 0, var(--accent-tint), transparent 70%) padding-box,
+             radial-gradient(420px 220px at 100% 100%, var(--gold-soft), transparent 70%) padding-box,
+             linear-gradient(var(--card), var(--card)) padding-box,
+             linear-gradient(135deg, color-mix(in srgb, var(--accent-2) 55%, transparent), var(--line) 40%, var(--line) 60%, color-mix(in srgb, var(--gold) 70%, transparent)) border-box;
+  box-shadow:var(--shadow-md), var(--highlight); }
+@media (max-width: 700px) { #form.card { padding:var(--sp-4); } }
+#form.closed .form-grid, #form.closed details.advanced { opacity:.6; }
+#form.closed input:disabled, #form.closed select:disabled { cursor:not-allowed; }
 .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:var(--sp-4); }
-label { display:flex; flex-direction:column; gap:var(--sp-1); font-weight:600; font-size:var(--fs-sm); color:var(--ink); }
-label .hint { font-weight:400; font-size:var(--fs-sm); color:var(--muted); }
-label.check { flex-direction:row; align-items:center; gap:var(--sp-2); }
+/* The form's labels in small capitals; what is typed, the hints and the errors in plain text. */
+#form .form-grid > label { gap:6px; font-variant-caps:all-small-caps; letter-spacing:.07em; font-size:var(--fs-md); color:var(--ink-2); }
+#form .form-grid > label > input, #form .form-grid > label > select { font-variant-caps:normal; letter-spacing:0;
+  font-size:var(--fs-base); color:var(--ink); }
+#form .form-grid > label > .hint { font-variant-caps:normal; letter-spacing:0; font-size:var(--fs-sm); }
+#form .form-grid input, #form .form-grid select { min-height:44px; padding-inline:var(--sp-3); }
+#form label.check { width:fit-content; padding:var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-3); border:1px solid var(--line-strong);
+  border-radius:var(--r-pill); background:var(--card); transition:background-color .2s var(--ease), border-color .2s var(--ease); }
+#form label.check:has(input:checked) { background:var(--accent-tint); border-color:var(--accent-2); }
 details.advanced { margin-top:var(--sp-4); }
-details.advanced summary { cursor:pointer; color:var(--accent); font-weight:600; }
+details.advanced summary { cursor:pointer; color:var(--accent); font-weight:600; width:max-content; max-width:100%; }
 details.advanced .form-grid { margin-top:var(--sp-3); }
-.go-row { display:flex; align-items:center; gap:var(--sp-4); flex-wrap:wrap; margin-top:var(--sp-4); }
-.go-row button { padding:var(--sp-3) var(--sp-5); font-size:var(--fs-md); min-height:44px; }
-#day-note { color:var(--muted); }                  /* how the day stands: never red */
-#go-error { margin-top:var(--sp-3); }               /* why a search can't start */
-.field-error { color:var(--bad-ink); font-weight:600; font-size:var(--fs-sm); }
-input[aria-invalid="true"], select[aria-invalid="true"] { border-color:var(--bad); }
+#form .warn, #phone-note { display:flex; gap:var(--sp-3); align-items:flex-start; padding:var(--sp-3) var(--sp-4); }
+#phone-note::before { content:"!"; flex:none; width:20px; height:20px; border-radius:50%; display:grid; place-items:center;
+                      background:var(--warn-line); color:var(--warn-ink); font-weight:800; font-size:var(--fs-xs); }
+/* The big button is the one thing to press; beside it, how the day stands (never red). */
+.go-row { display:flex; align-items:center; gap:var(--sp-4); flex-wrap:wrap; margin-top:var(--sp-4); padding-top:var(--sp-4);
+          border-top:1px solid var(--line); }
+.go-row button { padding:var(--sp-3) var(--sp-5); font-size:var(--fs-md); min-height:44px;
+                 box-shadow:0 1px 2px rgba(16,24,40,.12), 0 4px 12px color-mix(in srgb, var(--btn) 30%, transparent); }
+.go-row button#go { padding-inline:var(--sp-6); background-image:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0)); }
+#day-note { color:var(--muted); }
+#day-note::before { content:""; display:inline-block; width:8px; height:8px; margin-right:var(--sp-2); border-radius:50%;
+                    background:var(--good); box-shadow:0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); vertical-align:1px; }
+#form.closed #day-note::before { background:var(--tier-d); box-shadow:0 0 0 3px color-mix(in srgb, var(--tier-d) 22%, transparent); }
+#go-error { margin-top:var(--sp-3); }               /* why a search can't start (no field of its own) */
+/* Where a search actually ran (under what was typed), a far place, a stopped search. */
+.sub.far { color:var(--warn-ink); font-weight:600; }
+#confirm-far { margin:var(--sp-3) 0 0; }
+#progress-card.stopping #progress-msg, #done-card.stopped .big { color:var(--warn-ink); }
 
+/* A search's steps, with ringed dots. */
 .steps { display:flex; gap:var(--sp-2); margin:var(--sp-1) 0 var(--sp-4); flex-wrap:wrap; }
 .step { flex:1 1 130px; display:flex; align-items:center; gap:var(--sp-2); font-size:var(--fs-sm); color:var(--muted); }
 .step .dot { width:24px; height:24px; border-radius:50%; border:2px solid var(--line); display:grid; place-items:center;
-             font-size:var(--fs-sm); font-weight:700; flex:none; background:var(--card); }
-.step.done { color:var(--ink); } .step.done .dot { background:var(--good); border-color:var(--good); color:#fff; }
+             font-size:var(--fs-sm); font-weight:700; flex:none; background:var(--card); box-shadow:0 0 0 3px var(--card);
+             transition:background-color .2s, border-color .2s; }
+.step.done { color:var(--ink); }
+.step.done .dot { background:var(--btn); border-color:var(--btn); color:#fff; }
 .step.skip .dot { border-style:dashed; }
 .step .why { display:block; font-size:var(--fs-sm); }
 .step.now { color:var(--ink); font-weight:600; }
-.step.now .dot { border-color:var(--accent-2); border-top-color:transparent; animation:spin 1s linear infinite; }
+.step.now .dot { border-color:var(--gold); border-top-color:transparent; animation:spin 1s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
-/* The page's first load (start.js): shown only after a moment, so a quick load doesn't flash it. */
-.starting { display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-2) var(--sp-3); max-width:640px;
-            margin:var(--sp-6) auto; padding:var(--sp-4) var(--sp-5); background:var(--card); color:var(--ink);
-            border:1px solid var(--line); border-radius:var(--r-md); font-weight:600;
-            animation:starting-show .2s ease .4s both; }
-.starting[hidden] { display:none; }
-.starting #starting-text { flex:1 1 0; min-width:0; }
-.starting .slow { flex-basis:100%; font-weight:400; color:var(--muted); }
-@keyframes starting-show { from { opacity:0; } to { opacity:1; } }
-.bar { height:var(--sp-3); background:var(--th); border-radius:var(--r-pill); overflow:hidden; }
+/* Progress: a navy-to-brass bar. */
+.bar { height:10px; background:var(--surface-3); border-radius:var(--r-pill); overflow:hidden; }
 .bar > div { height:100%; width:0; border-radius:var(--r-pill); transition:width .8s ease;
-             background:linear-gradient(90deg,var(--btn),var(--accent-2)); position:relative; overflow:hidden; }
+             background:linear-gradient(90deg, var(--btn-2), var(--accent-2) 60%, var(--gold)); position:relative; overflow:hidden; }
 .bar > div::after { content:""; position:absolute; inset:0;
              background:repeating-linear-gradient(45deg,rgba(255,255,255,.18) 0 10px,transparent 10px 20px);
              animation:slide 1s linear infinite; }
 @keyframes slide { from { background-position:0 0; } to { background-position:28px 0; } }
-@media (prefers-reduced-motion: reduce) { .bar > div::after, .step.now .dot { animation:none; } }
-.bar-row { display:flex; justify-content:space-between; margin-top:var(--sp-2); font-size:var(--fs-sm); color:var(--muted); gap:var(--sp-3); }
+.bar-row { display:flex; justify-content:space-between; margin-top:var(--sp-2); font-size:var(--fs-sm); color:var(--muted); gap:var(--sp-3);
+           font-variant-numeric:tabular-nums; }
 .bar-row strong { color:var(--ink); }
 #slow-note { margin-top:var(--sp-3); }
+#done-card { border-left:4px solid var(--good); }
 .done-box { display:flex; align-items:center; gap:var(--sp-4); flex-wrap:wrap; }
-.done-box .big { font-size:var(--fs-lg); font-weight:700; }
+.done-box .big { font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-lg); font-weight:700; letter-spacing:-.015em; }
 
+/* The search history: plain tables with quiet headings and a hover row. */
 table.plain { border-collapse:collapse; width:100%; }
-table.plain th, table.plain td { text-align:left; padding:var(--sp-2) var(--sp-3); border-bottom:1px solid var(--line); vertical-align:top; }
-table.plain th { font-size:var(--fs-sm); color:var(--muted); }
-table.plain.calls { min-width:720px; }
-/* Laptops and desktops: a call's date and time, and "Undo call (m:ss)", each stay on one line. */
-@media (min-width: 1024px) {
-  table.plain.calls .when-at, table.plain.calls button.undo { white-space:nowrap; }
-}
-/* The administrator's section: quiet, closed by default, below everything the team uses. */
-details.admin { margin-top:var(--sp-5); border-top:1px solid var(--line); padding-top:var(--sp-3); color:var(--muted); }
-details.admin summary { cursor:pointer; font-size:var(--fs-sm); font-weight:600; }
-details.admin[open] { color:var(--ink); }
-.admin-body { margin-top:var(--sp-3); padding:var(--sp-4); border:1px dashed var(--line); border-radius:var(--r-md); }
-.admin-body h2 { font-size:var(--fs-md); margin:var(--sp-4) 0 var(--sp-2); }
-.admin-body h2:first-child { margin-top:0; }
-.admin-body > p { margin:var(--sp-2) 0; font-size:var(--fs-sm); }
-.problems { font-size:var(--fs-sm); }
-button.danger { background:var(--bad); color:#fff; }
-.switch-row { display:flex; justify-content:space-between; align-items:center; gap:var(--sp-3); padding:var(--sp-2) 0; border-top:1px solid var(--line); }
-.switch-row .sub { display:block; }
-.switch-row button { flex:none; }
-.problems ul { margin:var(--sp-2) 0; padding-left:var(--sp-5); }
-.scroll-x { overflow-x:auto; }
+table.plain th { text-align:left; padding:var(--sp-2) var(--sp-3); border-bottom:1px solid var(--line); vertical-align:top;
+                 font-size:var(--fs-sm); font-weight:600; background:var(--th); color:var(--ink-2); }
+table.plain td { text-align:left; padding:var(--sp-2) var(--sp-3); border-bottom:1px solid var(--line); vertical-align:top;
+                 overflow-wrap:anywhere; }
+table.plain tbody tr { transition:background-color .12s; }
+table.plain tbody tr:hover td { background:var(--hover); }
+/* The history's numbers and Details link are whole words; the place searched wraps between
+   words, and inside a long one only when it can't fit. */
+table.plain.hist td.h-when, table.plain.hist td.h-radius,
+table.plain.hist td.h-leads, table.plain.hist td.h-new, table.plain.hist td.h-act { overflow-wrap:normal; }
+table.plain.hist td.h-where { overflow-wrap:break-word; }
+td.h-where .sub { display:block; }
 .h-label { display:none; }                          /* the history's column names, phones only */
-button.link { background:none; border:0; padding:0; color:var(--accent); font-weight:600; font-size:var(--fs-sm); }
 tr.more-row td { background:var(--hover); }
 tr.failed td { color:var(--muted); }
-.tag { display:inline-block; font-size:var(--fs-xs); font-weight:700; border-radius:var(--r-pill); padding:0 var(--sp-2); background:var(--pts-neg); color:var(--bad-ink); }
+.tag { display:inline-block; font-size:var(--fs-xs); font-weight:700; border-radius:var(--r-pill); padding:0 var(--sp-2);
+       background:var(--pts-neg); color:var(--bad-ink); white-space:nowrap; }
 .tag.info { background:var(--warn-bg); color:var(--warn-ink); }
 .coverage-status.done { background:var(--pts); border-color:var(--line); color:var(--good-ink); }
 /* A search's Details: each label with its value beside it, in as many columns as fit (one on a
@@ -184,119 +400,207 @@ tr.failed td { color:var(--muted); }
 dl.details { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr)); gap:0 var(--sp-5); margin:var(--sp-2) 0; }
 dl.details div { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:0 var(--sp-3);
                  min-width:0; border-bottom:1px dashed var(--line); padding:var(--sp-1) 0; }
-dl.details dt, dl.details dd { overflow-wrap:break-word; min-width:0; }
-dl.details dt { color:var(--muted); flex:1 1 8em; }
-dl.details dd { margin:0 0 0 auto; font-weight:600; text-align:right; max-width:100%; }
-dl.details dd.num { white-space:nowrap; font-variant-numeric:tabular-nums; }
+dl.details dt { color:var(--muted); flex:1 1 8em; overflow-wrap:break-word; min-width:0; }
+dl.details dd { margin:0 0 0 auto; font-weight:600; text-align:right; max-width:100%; font-variant-numeric:tabular-nums;
+                overflow-wrap:break-word; min-width:0; }
+dl.details dd.num { white-space:nowrap; }
 dl.details div.wide { grid-column:1 / -1; display:block; }
 dl.details div.wide dd { margin:0; text-align:left; }
+@media (max-width: 700px) {
+  /* Phones: one stacked card per search, every field in view. */
+  table.plain.hist { display:block; }
+  table.plain.hist thead { display:none; }
+  table.plain.hist tbody { display:block; border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); margin-bottom:var(--sp-3); }
+  table.plain.hist tr { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--sp-1) var(--sp-3); }
+  table.plain.hist td { display:block; border:0; padding:0; min-width:0; }
+  table.plain.hist td.h-when { grid-column:1 / -1; font-weight:600; white-space:normal; }
+  table.plain.hist td.h-where, table.plain.hist td.h-act { grid-column:1 / -1; }
+  table.plain.hist td.h-act:empty { display:none; }
+  table.plain.hist .h-label { display:block; font-size:var(--fs-sm); color:var(--muted); }
+  table.plain.hist tr + tr { margin-top:var(--sp-2); }
+  table.plain.hist tr + tr > td { grid-column:1 / -1; }
+  table.plain.hist tr.more-row td { background:none; }
+  .scroll-x:has(table.plain.hist) { overflow:visible; }
+}
 
-/* Lead and call tables */
-.tabs { display:flex; gap:var(--sp-2); flex-wrap:wrap; margin-bottom:var(--sp-3); }
-.tabs button { background:var(--card); color:var(--ink); border-color:var(--line); }
-.tabs button.on { background:var(--btn); color:var(--btn-ink); border-color:var(--btn); }
-.toolbar { display:flex; gap:var(--sp-3); flex-wrap:wrap; align-items:center; margin-bottom:var(--sp-3); }
-.toolbar input { flex:1; min-width:200px; }
-.toolbar .picks, .toolbar .downloads { display:flex; gap:var(--sp-3); flex-wrap:wrap; align-items:center; }
-.toolbar .phone-pick { white-space:nowrap; }
-.toolbar .phone-pick input { flex:none; min-width:0; }
-.recent { background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3) var(--sp-4); margin-bottom:var(--sp-3); }
-.recent h2 { font-size:var(--fs-sm); margin:0 0 var(--sp-2); }
-.recent ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--sp-1); }
-.recent li { display:flex; gap:var(--sp-3); align-items:center; flex-wrap:wrap; font-size:var(--fs-sm); }
-/* Wide screens: the table fits, and its header sticks to the top of the window. */
-.table-wrap { background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); overflow:clip; transition:opacity .15s; }
-.table-wrap.stale { opacity:.55; }                 /* the next view is on its way */
-/* ...and when it takes a moment, "Loading…" over the dimmed rows (core.js loadingCue). Empty, the
-   cue takes no room but stays in place, so screen readers announce it when it fills. */
-.list-area { position:relative; }
-.loading-cue { position:absolute; top:var(--sp-4); left:50%; transform:translateX(-50%); z-index:3;
-               display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:var(--sp-1) var(--sp-2);
-               width:max-content; max-width:calc(100% - 2 * var(--sp-4)); padding:var(--sp-2) var(--sp-4);
-               background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:var(--r-md);
-               box-shadow:0 6px 20px var(--shadow); font-size:var(--fs-sm); font-weight:600; text-align:center; }
-.loading-cue:empty { padding:0; border:0; box-shadow:none; }
-.loading-cue .slow { flex-basis:100%; font-weight:400; color:var(--muted); }
-.spinner { width:16px; height:16px; flex:none; border:2px solid var(--line); border-top-color:var(--accent);
-           border-radius:50%; animation:spin .8s linear infinite; }
-@keyframes spin { to { transform:rotate(360deg); } }
+/* The administrator's section: quiet, closed by default, below everything the team uses, and
+   locked until its password is entered. */
+details.admin { margin-top:var(--sp-5); border-top:1px solid var(--line); padding-top:var(--sp-3); color:var(--muted); }
+details.admin summary { cursor:pointer; font-size:var(--fs-sm); font-weight:600; width:max-content; max-width:100%; }
+details.admin[open] { color:var(--ink); }
+.admin-body { margin-top:var(--sp-3); padding:var(--sp-4); border:1px solid var(--line); border-radius:var(--r-md);
+              background:var(--card); box-shadow:var(--shadow-sm), var(--highlight); }
+.admin-body h2 { font-size:var(--fs-md); margin:var(--sp-4) 0 var(--sp-2); }
+.admin-body h2:first-child { margin-top:0; }
+.admin-body > p { margin:var(--sp-2) 0; font-size:var(--fs-sm); }
+.problems { font-size:var(--fs-sm); }
+.problems ul { margin:var(--sp-2) 0; padding-left:var(--sp-5); }
+.switch-row { display:flex; justify-content:space-between; align-items:center; gap:var(--sp-3); padding:var(--sp-2) 0; border-top:1px solid var(--line); }
+.switch-row .sub { display:block; }
+.switch-row button { flex:none; }
+.admin-lock { display:flex; flex-direction:column; gap:var(--sp-3); }
+.admin-lock p { margin:0; }
+.admin-lock-row { display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--sp-3); }
+.admin-lock-row label { display:flex; flex-direction:column; gap:var(--sp-1); font-weight:600; }
+.admin-relock { margin:0 0 var(--sp-3); }
+
+/* ==== The page's first load and slow views ========================================== */
 /* The page's first load (start.js): shown only after a moment, so a quick load doesn't flash it. */
 .starting { display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-2) var(--sp-3); max-width:640px;
             margin:var(--sp-6) auto; padding:var(--sp-4) var(--sp-5); background:var(--card); color:var(--ink);
-            border:1px solid var(--line); border-radius:var(--r-md); font-weight:600;
+            border:1px solid var(--line); border-radius:var(--r-md); font-weight:600; box-shadow:var(--shadow-sm), var(--highlight);
             animation:starting-show .2s ease .4s both; }
 .starting[hidden] { display:none; }
 .starting #starting-text { flex:1 1 0; min-width:0; }
 .starting .slow { flex-basis:100%; font-weight:400; color:var(--muted); }
 @keyframes starting-show { from { opacity:0; } to { opacity:1; } }
-@media (prefers-reduced-motion: reduce) { .spinner { animation:none; } }
+/* When the next view takes a moment, "Loading…" over the dimmed rows (core.js loadingCue). Empty,
+   the cue takes no room but stays in place, so screen readers announce it when it fills. */
+.list-area { position:relative; }
+.loading-cue { position:absolute; top:var(--sp-4); left:50%; transform:translateX(-50%); z-index:3;
+               display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:var(--sp-1) var(--sp-2);
+               width:max-content; max-width:calc(100% - 2 * var(--sp-4)); padding:var(--sp-2) var(--sp-4);
+               background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:var(--r-md);
+               box-shadow:var(--shadow-sm), var(--highlight); font-size:var(--fs-sm); font-weight:600; text-align:center; }
+.loading-cue:empty { padding:0; border:0; box-shadow:none; }
+.loading-cue .slow { flex-basis:100%; font-weight:400; color:var(--muted); }
+.spinner { width:16px; height:16px; flex:none; border:2px solid var(--line); border-top-color:var(--accent);
+           border-radius:50%; animation:spin .8s linear infinite; }
+
+/* ==== Leads ======================================================================== */
+/* Tabs: a pill track; the open tab raised, its count in navy. */
+.tabs { display:flex; flex-wrap:wrap; width:fit-content; max-width:100%; gap:2px; padding:4px; margin-bottom:var(--sp-3);
+        background:var(--track); border:1px solid var(--line); border-radius:var(--r-pill); box-shadow:inset 0 1px 2px rgba(40,30,20,.06); }
+.tabs button { display:inline-block; background:transparent; border:0; box-shadow:none; color:var(--muted); padding:7px var(--sp-3);
+               border-radius:var(--r-pill); }
+.tabs button:not(.on):not(:disabled):hover { background:color-mix(in srgb, var(--card) 55%, transparent); color:var(--ink); }
+.tabs button.on, .tabs button.on:not(:disabled):hover { background:var(--card); color:var(--ink); border:0;
+                   box-shadow:var(--shadow-md), var(--highlight); }
+.tab-n { display:inline-block; margin-left:var(--sp-1); min-width:22px; padding:1px 7px; border-radius:var(--r-pill); background:var(--badge);
+         color:var(--muted); font-size:var(--fs-xs); font-weight:700; line-height:1.5; text-align:center;
+         font-variant-numeric:tabular-nums; }
+.tab-n .p { font-size:0; }                 /* the brackets stay in the text, unseen */
+.tabs button.on .tab-n { background:linear-gradient(180deg, var(--btn), var(--btn-2)); color:var(--btn-ink); }
+@media (max-width: 700px) { .tabs button { font-size:var(--fs-sm); } }
+
+/* The Leads tools: one bar holding the filter (with a search icon), the pickers, a Has phone
+   switch and the downloads at the far end. */
+.toolbar { display:flex; gap:var(--sp-3); flex-wrap:wrap; align-items:center; margin-bottom:var(--sp-3); }
+.toolbar input { flex:1; min-width:200px; }
+.toolbar .picks, .toolbar .downloads { display:flex; gap:var(--sp-3); flex-wrap:wrap; align-items:center; }
+.toolbar .phone-pick { white-space:nowrap; cursor:pointer; color:var(--ink); border:1px solid transparent; border-radius:var(--r-pill); }
+.toolbar .phone-pick:has(input:checked) { background:var(--accent-tint); border-color:var(--accent-2); }
+.toolbar .phone-pick input { flex:none; min-width:0; }
+#has-phone { appearance:none; -webkit-appearance:none; flex:none; width:38px; height:22px; margin:0; padding:0;
+             border:0; border-radius:var(--r-pill); background:var(--line-strong); position:relative; cursor:pointer;
+             transition:background-color .15s; }
+#has-phone::before { content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%;
+                     background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); transition:transform .15s; }
+#has-phone:checked { background:var(--btn); }
+#has-phone:checked::before { transform:translateX(16px); }
+#has-phone:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
+#filter, #call-filter { padding-left:40px; background:var(--input) no-repeat 13px center / 17px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238592a6' stroke-width='2.3' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
+.downloads .btn { display:inline-flex; align-items:center; gap:var(--sp-2); }
+.downloads .btn::before { content:""; width:16px; height:16px; flex:none; background:currentColor;
+  -webkit-mask:var(--dl) center / contain no-repeat; mask:var(--dl) center / contain no-repeat;
+  --dl:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4v11m-5-5 5 5 5-5M5 20h14'/%3E%3C/svg%3E"); }
+#leads-body .toolbar { border-radius:var(--r-pill); padding:6px; }
+#leads-body .toolbar input#filter, #leads-body .toolbar select { border-radius:var(--r-pill); }
+@media (min-width: 701px) {
+  #leads-body .toolbar { background:var(--card); border:1px solid var(--line); gap:var(--sp-2); box-shadow:var(--shadow-sm);
+                         margin:var(--sp-3) 0 var(--sp-4); }
+  #leads-body .toolbar input#filter, #leads-body .toolbar select { border-color:transparent; background-color:var(--bg); min-height:44px; }
+  #leads-body .toolbar input#filter:hover, #leads-body .toolbar select:hover { border-color:var(--line-strong); }
+  #leads-body .toolbar input#filter:focus, #leads-body .toolbar select:focus { border-color:var(--accent-2); background-color:var(--input); }
+  #leads-body .toolbar .phone-pick { padding:0 var(--sp-2); }
+  #leads-body .toolbar .downloads { margin-left:auto; gap:var(--sp-1); }
+  #leads-body .downloads .btn.quiet { border-color:transparent; background:transparent; box-shadow:none; color:var(--accent);
+                                     padding:var(--sp-2) var(--sp-3); }
+  #leads-body .downloads .btn.quiet:hover { background:var(--hover); border-color:var(--line); }
+}
+@media (max-width: 1099px) and (min-width: 701px) { #leads-body .toolbar { border-radius:var(--r-lg); } }
+
+/* Recent changes, with their Undo. */
+.recent { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--gold); border-radius:var(--r-lg);
+          padding:var(--sp-3) var(--sp-4); margin-bottom:var(--sp-3); box-shadow:var(--shadow-sm), var(--highlight);
+          overflow-wrap:anywhere; }
+.recent h2 { font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-sm); margin:0 0 var(--sp-2); }
+.recent ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--sp-1); }
+.recent li { display:flex; gap:var(--sp-3); align-items:center; flex-wrap:wrap; font-size:var(--fs-sm); }
+
+/* The list of leads. Laptops and desktops: each lead is a card in a column of cards, with its tier
+   as a coloured stripe and the score in large serif figures tinted by tier; the column headings
+   float above them and stick to the top of the window. */
+.table-wrap { background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); overflow:clip; transition:opacity .15s;
+              box-shadow:var(--shadow-sm); }
+.table-wrap.stale { opacity:.55; }                 /* the next view is on its way */
 table.leads { border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed; }
-table.leads th, table.leads td { text-align:left; padding:var(--sp-2); border-bottom:1px solid var(--line); vertical-align:top; }
-table.leads td { overflow-wrap:anywhere; }
-table.leads th { background:var(--th); position:sticky; top:0; font-size:var(--fs-sm); z-index:2; color:var(--ink); }
-table.leads th button.sort { background:none; border:0; padding:0; color:inherit; font:inherit; font-weight:700; display:inline-flex; gap:var(--sp-1); white-space:nowrap; }
+table.leads tr { --tier:var(--tier-d); }
+table.leads tr.A { --tier:var(--tier-a); } table.leads tr.B { --tier:var(--tier-b); }
+table.leads tr.C { --tier:var(--tier-c); }
+table.leads td { text-align:left; padding:var(--sp-2); border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
+table.leads tbody tr td { transition:background-color .12s; }
+table.leads th { text-align:left; padding:var(--sp-2); border-bottom:1px solid var(--line); vertical-align:top;
+                 background:var(--th); position:sticky; top:0; font-size:var(--fs-sm); font-weight:600; z-index:2; color:var(--muted);
+                 box-shadow:inset 0 -1px 0 var(--line); }
+table.leads th button.sort { background:none; border:0; padding:0; color:var(--ink); font:inherit; font-weight:700; display:inline-flex;
+                             gap:var(--sp-1); white-space:nowrap; box-shadow:none; }
+table.leads th button.sort:not(:disabled):hover { background:none; color:var(--accent); }
 table.leads th button.sort .arrow { color:var(--muted); }
 tr.A td.score { background:var(--a); } tr.B td.score { background:var(--b); }
 tr.C td.score { background:var(--c); } tr.D td.score { background:var(--d); }
+table.leads td.score { font-weight:700; font-variant-numeric:tabular-nums; }
+table.leads tr.A td.score { color:var(--tier-a-ink); } table.leads tr.B td.score { color:var(--tier-b-ink); }
+table.leads tr.C td.score, table.leads tr.D td.score { color:var(--tier-c-ink); }
 /* "B likely" under the score; the column fits "C possible", and a larger text size wraps it between words. */
 td.score .tier-word { display:block; font-size:var(--fs-sm); font-weight:400; white-space:normal; overflow-wrap:normal; }
+table.leads td.c-name strong { font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-name); font-weight:560;
+                               letter-spacing:-.01em; }
 tr.competitor td { background:var(--comp); }
-.nowrap { white-space:nowrap; }
-.flag { color:var(--bad-ink); font-weight:600; font-size:var(--fs-sm); }
-.sub { color:var(--muted); font-size:var(--fs-sm); }
-.not-asked { font-weight:600; }
-.contact > div { margin-bottom:var(--sp-1); }
-.contact .site { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.contact .near { font-style:italic; }
-#call-notes-count.limit { color:var(--warn-ink); font-weight:600; }
-.reasons { display:flex; flex-direction:column; gap:var(--sp-1); }
-.reason { display:flex; gap:var(--sp-2); align-items:baseline; font-size:var(--fs-sm); line-height:1.35; }
-.pts { flex:0 0 40px; text-align:center; font-weight:700; font-size:var(--fs-xs); border-radius:var(--r-pill); padding:0;
-       background:var(--pts); color:var(--good-ink); font-variant-numeric:tabular-nums; }
-.pts.neg { background:var(--pts-neg); color:var(--bad-ink); } .pts.zero { background:var(--pts-zero); color:var(--muted); }
-details.explain summary { cursor:pointer; color:var(--accent); font-size:var(--fs-sm); margin-top:var(--sp-1); }
-details.explain p { margin:var(--sp-1) 0 0; color:var(--muted); font-size:var(--fs-sm); }
-.mark { display:flex; gap:var(--sp-1); flex-wrap:wrap; }
-.mark button { padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); background:var(--card); color:var(--ink); border-color:var(--line); min-width:44px; }
-.mark button.yes.on { background:var(--good); border-color:var(--good); color:#fff; }
-.mark button.no.on { background:var(--bad); border-color:var(--bad); color:#fff; }
-button.undo { background:none; border:0; padding:var(--sp-1) 0 0; color:var(--accent); font-size:var(--fs-sm); font-weight:600; text-decoration:underline; }
-.call-cell { display:flex; flex-direction:column; gap:var(--sp-2); align-items:flex-start; }
-.c-mark .by { margin-top:var(--sp-1); }
-.mark + .call-cell, .mark ~ .call-cell { margin-top:var(--sp-2); }
-/* In the wide table a called lead stays short: the buttons sit side by side. */
-@media (min-width: 1100px) {
-  table.leads .call-cell { flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--sp-1) var(--sp-2); }
-  table.leads .call-cell .call-last { flex-basis:100%; }
-}
-.call-cell button:not(.undo) { padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); white-space:nowrap; }
-.badge { display:inline-block; font-size:var(--fs-xs); font-weight:700; border-radius:var(--r-pill); padding:0 var(--sp-2); background:var(--badge); color:var(--ink); }
-.notes { white-space:pre-wrap; font-size:var(--fs-sm); }
-.more { margin:var(--sp-3) auto 0; display:block; }
-.empty { padding:var(--sp-6); text-align:center; color:var(--muted); }
-.empty strong { display:block; color:var(--ink); font-size:var(--fs-md); }
-.empty p { margin:var(--sp-2) 0 var(--sp-4); }
-#stats-empty .empty { padding:var(--sp-3); }
-.hint-line { margin:0 0 var(--sp-3); color:var(--muted); font-size:var(--fs-sm); }
-.hint-line button.link { font-size:var(--fs-sm); text-decoration:underline; }
 tr.just-marked td { background:var(--hover); }
 tr.just-marked td:not(:first-child) { opacity:.6; }
-.moved { margin-top:var(--sp-1); font-weight:600; color:var(--good-ink); }
-.confirm-why { margin:0; }
-dl.confirm-list { grid-template-columns:minmax(0,1fr); margin:0; }
-dl.confirm-list dd { text-align:right; overflow-wrap:anywhere; }
+@media (min-width: 1100px) {
+  #leads-wrap.table-wrap { background:none; border:0; box-shadow:none; overflow:visible; border-radius:0; }
+  table.leads { border-spacing:0 12px; margin-top:-10px; }
+  table.leads th { background:color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter:saturate(1.6) blur(14px);
+                   -webkit-backdrop-filter:saturate(1.6) blur(14px); border-bottom:0; box-shadow:none;
+                   padding:var(--sp-3) var(--sp-3) var(--sp-1); font-variant-caps:all-small-caps; letter-spacing:.06em;
+                   font-size:var(--fs-md); color:var(--ink-2); }
+  table.leads th button.sort { color:var(--muted); font-variant-caps:inherit; letter-spacing:inherit; }
+  table.leads th button.sort:not(:disabled):hover, table.leads th[aria-sort=ascending] button.sort,
+  table.leads th[aria-sort=descending] button.sort { color:var(--ink); }
+  table.leads th[aria-sort=ascending] .arrow, table.leads th[aria-sort=descending] .arrow { color:var(--gold); }
+  table.leads tbody td { background:var(--card); border-top:1px solid; border-bottom:1px solid; border-color:var(--line);
+                         padding:var(--sp-4) var(--sp-3); }
+  table.leads tbody td:first-child { border-left:1px solid var(--line); border-radius:var(--r-lg) 0 0 var(--r-lg);
+                                     box-shadow:inset 4px 0 0 var(--tier); padding-left:var(--sp-5); }
+  table.leads tbody td:last-child { border-right:1px solid var(--line); border-radius:0 var(--r-lg) var(--r-lg) 0; }
+  table.leads tbody tr td.score { padding-inline:var(--sp-2); background:var(--card); font-family:var(--serif); font-size:var(--fs-score);
+                                  font-weight:500; line-height:1.1; letter-spacing:-.02em; color:var(--ink); }
+  table.leads tbody tr:hover td { background:var(--hover); border-color:var(--line-strong); }
+  table.leads tbody tr.competitor td, table.leads tbody tr.competitor td.score { background:color-mix(in srgb, var(--comp) 45%, var(--card)); }
+  table.leads tbody tr.just-marked td, table.leads tbody tr.just-marked td.score { background:var(--hover); }
+  td.score .tier-word { margin-top:2px; font-family:var(--font); font-size:var(--fs-sm); font-weight:500; letter-spacing:0; line-height:1.3;
+                        color:var(--muted); }
+}
+/* Tablets and small laptops (and phones, below): one card per lead, side by side where there
+   is room, with the tier stripe along the top, so the whole lead and why it scored as it did are
+   in view with no sideways scrolling. The table's column headers go, so the list sorts with its
+   own picker. */
+.phone-only, .cards-only, .c-miles .unit { display:none; }
+button.why-toggle { display:none; box-shadow:none; }
 @media (max-width: 1099px) {
-  /* Tablets and small laptops (and phones, below): one card per lead, side by side where there
-     is room, so the whole lead and why it scored as it did are in view with no sideways
-     scrolling. The table's column headers go, so the list sorts with its own picker. */
   .cards-only { display:inline-block; }
-  .table-wrap, .table-wrap.stale { overflow:visible; background:none; border:0; border-radius:0; }
+  .table-wrap { overflow:visible; background:none; border:0; border-radius:0; box-shadow:none; }
   table.leads { display:block; }
   table.leads colgroup, table.leads thead { display:none; }
   table.leads tbody { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:var(--sp-3); align-items:start; }
   table.leads tr { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--sp-2) var(--sp-3);
                    grid-template-areas:"name score" "mark mark" "contact miles" "why why";
-                   background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); }
+                   background:var(--card); border:1px solid var(--line); border-top:4px solid var(--tier); border-radius:var(--r-lg);
+                   padding:var(--sp-3); box-shadow:var(--shadow-sm), var(--highlight); transition:box-shadow .15s, border-color .15s; }
+  table.leads tr:hover { border-color:var(--line-strong); box-shadow:var(--shadow-md); }
   table.leads td { display:block; border:0; padding:0; min-width:0; }
   table.leads td.c-name { grid-area:name; }
   table.leads td.score { grid-area:score; align-self:start; border-radius:var(--r-pill); padding:0 var(--sp-2); font-weight:700; }
@@ -311,126 +615,103 @@ dl.confirm-list dd { text-align:right; overflow-wrap:anywhere; }
   tr.competitor td:not(.score), tr.just-marked td { background:none; }
   tr.just-marked { background:var(--hover) !important; }
 }
-
-.toast { position:fixed; left:50%; bottom:var(--sp-5); transform:translateX(-50%); z-index:50; display:flex; align-items:center;
-         gap:var(--sp-4); background:var(--toast); color:var(--toast-ink); padding:var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4); border-radius:var(--r-md);
-         box-shadow:0 10px 30px var(--shadow); max-width:calc(100vw - 32px); }
-.toast.bad { border-left:5px solid var(--bad); }
-.toast button { background:var(--toast-ink); color:var(--toast); padding:var(--sp-2) var(--sp-4); }
-@media (max-width: 600px) {
-  .toast { left:var(--sp-4); right:var(--sp-4); transform:none; justify-content:space-between; }
-  .toast button { flex:none; }
-}
-
-/* Dialogs */
-dialog { border:0; border-radius:var(--r-lg); padding:0; width:min(560px,94vw); box-shadow:0 20px 60px var(--shadow);
-         background:var(--card); color:var(--ink); }
-dialog::backdrop { background:var(--backdrop); }
-.dlg { padding:var(--sp-5); display:flex; flex-direction:column; gap:var(--sp-4); }
-.dlg h2 { margin:0; font-size:var(--fs-lg); }
-.dlg textarea { min-height:140px; resize:vertical; width:100%; }
-.dlg .ask { margin-bottom:var(--sp-2); font-weight:600; }
-.outcomes { display:flex; flex-wrap:wrap; gap:var(--sp-2); }
-.outcomes button { background:var(--card); color:var(--ink); border-color:var(--line); }
-.outcomes button.on { background:var(--btn); color:var(--btn-ink); border-color:var(--btn); }
-.dlg-actions { display:flex; justify-content:flex-end; gap:var(--sp-2); }
-.history { max-height:60vh; overflow:auto; display:flex; flex-direction:column; gap:var(--sp-3); }
-.history .item { border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); }
-.history .hist-head { font-size:var(--fs-sm); margin:var(--sp-2) 0 0; color:var(--muted); }
-#contact-form p { margin:0; }
-#contact-form .hint { font-size:var(--fs-sm); color:var(--muted); }
+.flag { color:var(--bad-ink); font-weight:600; font-size:var(--fs-sm); }
+.not-asked { font-weight:600; }
+.contact > div { margin-bottom:var(--sp-1); }
+.contact .site { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.contact .near { font-style:italic; }
 /* A verified phone and who to ask for (contacts.py), under the listing's own phone. */
 .verified { margin-top:var(--sp-1); }
 .verified .v-tag { background:var(--pts); color:var(--good-ink); }
+.verified .v-tag::before { background:var(--good); }
 .verified .v-name { font-weight:600; }
 .verified button.v-edit { text-align:left; }
-
-/* Stats */
-.tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:var(--sp-4); margin-bottom:var(--sp-4); }
-.tiles .card { margin-bottom:0; }
-.tile .label { color:var(--muted); font-size:var(--fs-sm); }
-.tile .value { font-size:var(--fs-xl); font-weight:700; margin-top:var(--sp-1); font-variant-numeric:tabular-nums; }
-.tile .value.says { font-size:var(--fs-md); font-weight:600; color:var(--muted); }
-.tile .value small { font-size:var(--fs-md); color:var(--muted); font-weight:600; }
-.viz { position:relative; }
-/* Wide screens: the chart and its table side by side, so the card has no empty half. */
-.stats-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:var(--sp-4); align-items:start; }
-@media (min-width: 1000px) { .stats-grid { grid-template-columns:minmax(0,3fr) minmax(280px,2fr); } }
-.viz svg { width:100%; height:auto; display:block; }
-.viz .tip { position:absolute; pointer-events:none; background:var(--toast); color:var(--toast-ink); font-size:var(--fs-sm); padding:var(--sp-2);
-            border-radius:var(--r-sm); white-space:nowrap; transform:translate(-50%,-110%); }
-.viz .tip strong { font-size:var(--fs-base); }
-.viz rect.col:hover { opacity:.8; }
-.viz rect.col:focus { outline:none; }
-/* A bar reached with the keyboard gets a clear ring (the same colour as every other focus ring). */
-.viz rect.col:focus-visible { stroke:var(--accent-2); stroke-width:3px; fill:var(--hover); fill-opacity:.35; }
-.stats-grid #s-table { margin-top:0; }
-/* The tier table's cells are the page's own words and numbers ("None checked yet"): whole
-   words, and on a small phone narrower padding, so all four columns fit without scrolling. */
-#s-table td { overflow-wrap:normal; }
-@media (max-width: 429px) { #s-table th, #s-table td { padding-inline:var(--sp-2); } }
-@media (max-width: 359px) { #s-table th, #s-table td { padding-inline:var(--sp-1); } }
-
-/* Touch screens: everything that can be tapped is at least 44px each way. */
-@media (pointer: coarse) {
-  button, .btn, nav a, select, input:not([type=checkbox]), summary { min-height:44px; }
-  button, .btn { min-width:44px; }
-  button.undo, button.link { display:inline-flex; align-items:center; padding:0 var(--sp-2); }
-  .theme button { min-height:44px; }
-  .side .who button { min-height:44px; padding:0 var(--sp-4); }
-  table.leads th button.sort { min-height:44px; align-items:center; }
-  /* Links in text keep a 44px tap area, but the negative margins stop it spreading the
-     lines apart (an address, its map link, the phone and website read as one block). */
-  table.leads td a, table.plain td a { display:inline-flex; align-items:center; min-height:44px; margin-block:-11px; }
-  .contact .site { display:flex; align-items:center; min-height:44px; margin-block:-11px; }
-  /* A link in a sentence (a banner or a note: "Your saved leads are on the Leads page"): its
-     padding makes the tap area 44px tall; an inline box's padding doesn't move the lines. */
-  :where(p, li, .form-closed, .warn, .problem, .muted, .hint, .notes, .tour-offer) a:not(.btn) { padding-block:14px; }
-  table.leads td a.map { min-width:44px; justify-content:center; }
-  details.explain summary, details.advanced summary { display:flex; align-items:center; }
-  label.check { min-height:44px; }
-  label.check input { width:24px; height:24px; }
+/* Why the score: each reason with its points. */
+.reasons { display:flex; flex-direction:column; gap:var(--sp-1); }
+.reason { display:flex; gap:var(--sp-2); align-items:baseline; font-size:var(--fs-sm); line-height:1.35; }
+.pts { flex:0 0 40px; text-align:center; font-weight:700; font-size:var(--fs-xs); border-radius:var(--r-pill); padding:0;
+       background:var(--pts); color:var(--good-ink); font-variant-numeric:tabular-nums; }
+.pts.neg { background:var(--pts-neg); color:var(--bad-ink); } .pts.zero { background:var(--pts-zero); color:var(--muted); }
+details.explain summary { cursor:pointer; color:var(--accent); font-size:var(--fs-sm); margin-top:var(--sp-1); }
+details.explain p { margin:var(--sp-1) 0 0; color:var(--muted); font-size:var(--fs-sm); }
+/* Yes / No: pills that fill green or red. */
+.mark { display:flex; gap:var(--sp-1); flex-wrap:wrap; }
+.mark button { padding:var(--sp-1) var(--sp-4); font-size:var(--fs-sm); background:var(--card); color:var(--ink); border-color:var(--line-strong);
+               border-radius:var(--r-pill); min-width:44px; box-shadow:none; }
+.mark button.yes.on { background:linear-gradient(180deg, #3a8a55, var(--good)); border-color:var(--good); color:#fff; }
+.mark button.no.on { background:linear-gradient(180deg, var(--bad), var(--bad-2)); border-color:var(--bad); color:#fff; }
+.mark button.yes:not(.on):not(:disabled):hover { border-color:var(--good); color:var(--good-ink); background:var(--pts); }
+.mark button.no:not(.on):not(:disabled):hover { border-color:var(--bad); color:var(--bad-ink); background:var(--pts-neg); }
+.mark button.yes.on:not(:disabled):hover { background:var(--good); }
+.mark button.no.on:not(:disabled):hover { background:var(--bad); }
+/* A Yes / No on its way to the server: the row says so until it is saved. */
+.mark button.sending { outline:2px dashed var(--accent); outline-offset:1px; }
+.c-mark .by { margin-top:var(--sp-1); }
+.c-mark .saving { margin-top:var(--sp-1); font-style:italic; }
+.slow-save:empty { display:none; }
+.moved { margin-top:var(--sp-1); font-weight:600; color:var(--good-ink); }
+/* A Yes / No that didn't reach the server: the row says so, with Try again, until it is saved. */
+.mark-failed { margin-top:var(--sp-2); padding:var(--sp-2); border:1px solid var(--bad); border-left-width:4px;
+               border-radius:var(--r-sm); background:var(--pts-neg); color:var(--ink); font-size:var(--fs-sm); }
+.mark-failed strong { color:var(--bad-ink); }
+.mark-failed-do { display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-1) var(--sp-3); margin-top:var(--sp-2); }
+.mark-failed-do button.quiet { padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); }
+/* Just called, History and the call's Undo (button.undo, with the buttons above). */
+.call-cell { display:flex; flex-direction:column; gap:var(--sp-2); align-items:flex-start; }
+.mark ~ .call-cell { margin-top:var(--sp-2); }
+.call-cell button:not(.undo) { padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); white-space:nowrap; }
+/* In the wide table a called lead stays short: the buttons sit side by side. */
+@media (min-width: 1100px) {
+  table.leads .call-cell { flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--sp-1) var(--sp-2); }
+  table.leads .call-cell .call-last { flex-basis:100%; }
 }
-@media (max-width: 820px) {
-  /* Narrow windows (touch or not): the tick box is a full-size target too. */
-  label.check { min-height:44px; }
-  label.check input { width:24px; height:24px; }
-  .app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto 1fr; align-content:start; }
-  /* Tablets: a bar at the top with the name, the pages and Menu in one row (two when the
-     pages' counts are long); the tutorial, your name, the Yelp count, the colours and
-     logging out are under Menu, as on phones, so the bar never takes three rows. */
-  .side { position:static; height:auto; display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center;
-          gap:var(--sp-2) var(--sp-3); padding:var(--sp-3) var(--sp-4); }
-  nav { flex-direction:row; flex-wrap:wrap; grid-column:2; grid-row:1; }
-  /* A page's count sits under its name (the words are in the link's title), so a link is as
-     wide as "Leads" or "99,999" and the five pages keep one row however large the counts grow. */
-  nav a { padding:var(--sp-1) var(--sp-3); flex-direction:column; justify-content:center; gap:0; line-height:1.25; }
-  nav .count { line-height:1.25; }
-  nav .count .cw { display:none; }
-  .menu-btn { display:inline-flex; align-items:center; justify-content:center; background:none; border:1px solid rgba(255,255,255,.3);
-              color:var(--side-ink); padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); min-height:44px; min-width:44px;
-              grid-column:3; grid-row:1; }
-  .side-bottom { margin-top:0; grid-column:1 / -1; display:none; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--sp-3); }
-  .side.open .side-bottom { display:flex; }
-  .side .who { border-top:0; padding-top:0; }
-  main { padding:var(--sp-4) var(--sp-4) var(--sp-6); }
+/* A call's result: a small badge with a brass dot. */
+.badge { display:inline-flex; align-items:center; gap:6px; font-size:var(--fs-xs); font-weight:700; letter-spacing:.01em;
+         border-radius:var(--r-pill); padding:1px 9px 1px 8px; background:var(--badge); color:var(--ink); border:1px solid var(--line);
+         white-space:nowrap; }
+.badge::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--gold); flex:none; }
+.notes { white-space:pre-wrap; font-size:var(--fs-sm); font-family:var(--font); overflow-wrap:anywhere; }
+#call-notes-count.limit { color:var(--warn-ink); font-weight:600; }
+.more { margin:var(--sp-3) auto 0; display:block; }
+/* The Leads page showing one business, opened from the Map page. */
+.only-one { display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-2) var(--sp-3); margin:var(--sp-2) 0;
+            padding:var(--sp-2) var(--sp-3); border:1px solid var(--line); border-left-width:4px;
+            border-radius:var(--r-sm); background:var(--card); box-shadow:var(--shadow-sm), var(--highlight); }
+/* The confirmation of a search: what will be searched, in a tinted panel. */
+.confirm-why { margin:0; }
+dl.confirm-list { grid-template-columns:minmax(0,1fr); margin:0; background:var(--surface-2); border:1px solid var(--line);
+                  border-radius:var(--r-md); padding:var(--sp-2) var(--sp-4); }
+dl.confirm-list dd { text-align:right; overflow-wrap:anywhere; }
+
+/* ==== Calls ======================================================================== */
+.calls-tools { display:flex; margin-bottom:var(--sp-3); }
+.calls-tools input { flex:1; max-width:420px; min-width:0; }
+table.plain.calls { min-width:720px; }
+table.plain.calls td.c-name strong { font-family:var(--serif); font-optical-sizing:auto; }
+table.plain.calls td.notes { font-family:var(--serif); font-style:italic; font-size:var(--fs-base); color:var(--ink-2);
+                             border-left:2px solid var(--gold-soft); padding-left:var(--sp-3); }
+/* Laptops and desktops: a call's date and time, and "Undo call (m:ss)", each stay on one line. */
+@media (min-width: 1024px) {
+  table.plain.calls .when-at, table.plain.calls button.undo { white-space:nowrap; }
 }
+/* Wider screens: the same floating rows as the leads. */
+@media (min-width: 701px) {
+  #calls-wrap.table-wrap { background:none; border:0; box-shadow:none; border-radius:0; }
+  table.plain.calls { border-collapse:separate; border-spacing:0 8px; margin-top:-8px; }
+  table.plain.calls th { background:none; border-bottom:0; font-variant-caps:all-small-caps; letter-spacing:.06em;
+                         font-size:var(--fs-md); padding-bottom:var(--sp-1); }
+  table.plain.calls tbody td { background:var(--card); border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+                               padding:var(--sp-3); }
+  table.plain.calls tbody td:first-child { border-left:1px solid var(--line); border-radius:var(--r-lg) 0 0 var(--r-lg);
+                                           padding-left:var(--sp-4); }
+  table.plain.calls tbody td:last-child { border-right:1px solid var(--line); border-radius:0 var(--r-lg) var(--r-lg) 0; }
+  table.plain.calls tbody tr:hover td { background:var(--hover); border-color:var(--line-strong); }
+  table.plain.calls td.c-name strong { font-size:var(--fs-name-sm); font-weight:560; }
+  #calls-body .calls-tools input { min-height:42px; border-radius:var(--r-md); box-shadow:var(--shadow-sm); }
+}
+
+/* ==== Phones: the Leads and Calls pages ============================================= */
 @media (max-width: 700px) {
-  /* Phones: one short bar at the top (name and Menu, then the pages); the rest is in the menu. */
-  .side { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:var(--sp-1) var(--sp-3);
-          padding:var(--sp-2) var(--sp-4); }
-  .brand { display:flex; gap:var(--sp-2); align-items:baseline; min-width:0; white-space:nowrap; overflow:hidden; }
-  .brand strong { display:inline; }
-  .menu-btn { grid-column:auto; grid-row:auto; }
-  /* Every page's link stays in view, in one row from 320 px up (narrower, they would wrap). */
-  nav { grid-column:1 / -1; grid-row:auto; flex-wrap:wrap; gap:var(--sp-1); }
-  /* Each page's link is a full 44px tap target on a phone (touch screen or not). */
-  nav a { padding:var(--sp-1) 6px; flex:none; font-size:var(--fs-sm); flex-wrap:nowrap; min-height:44px; min-width:44px; justify-content:center; }
-  nav .count { padding:0 var(--sp-1); }
-  .tabs button { font-size:var(--fs-sm); padding:var(--sp-1) var(--sp-3); }
-  .side-bottom { padding:var(--sp-2) 0; }
-  main { padding-top:var(--sp-3); }
-
   /* The Leads page: the first lead in view on opening. The tabs become one list, the tier
      and sort pickers share a row, Recent changes is one line, and the downloads and the
      call hint move below the list. Each lead is a card with its name right above its
@@ -439,14 +720,14 @@ dialog::backdrop { background:var(--backdrop); }
   #leads-body { display:flex; flex-direction:column; gap:var(--sp-2); }
   #leads-body .toolbar { display:contents; }
   #lead-tabs, #call-tabs { display:none; }
-  #tab-pick, #call-pick { display:block; width:100%; }
-  #call-pick { margin-bottom:var(--sp-3); }
+  #tab-pick { display:block; width:100%; }
+  #call-pick { display:block; width:100%; margin-bottom:var(--sp-3); }
   .toolbar input { min-width:0; }
   .toolbar .picks { flex-wrap:nowrap; gap:var(--sp-2); }
   .toolbar .picks select { flex:1 1 0; min-width:0; }
   #leads-body .hint-line, #leads-body .recent { margin:0; }
-  #downloads, #call-hint { order:1; }
-  #downloads { justify-content:center; margin-top:var(--sp-3); }
+  #downloads { order:1; justify-content:center; margin-top:var(--sp-3); }
+  #call-hint { order:1; }
   .recent { display:flex; align-items:center; gap:var(--sp-2); padding:var(--sp-1) var(--sp-3); }
   .recent h2 { display:none; }
   .recent ul { flex:1; min-width:0; }
@@ -462,7 +743,8 @@ dialog::backdrop { background:var(--backdrop); }
   table.plain.calls tbody { display:flex; flex-direction:column; gap:var(--sp-3); }
   table.plain.calls tr { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--sp-2) var(--sp-3);
                          grid-template-areas:"name when" "phone phone" "notes notes" "act act";
-                         background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); }
+                         background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg); padding:var(--sp-3);
+                         box-shadow:var(--shadow-sm); }
   table.plain.calls td { display:block; border:0; padding:0; min-width:0; }
   table.plain.calls td.c-name { grid-area:name; }
   table.plain.calls td.c-when { grid-area:when; text-align:right; }
@@ -471,86 +753,142 @@ dialog::backdrop { background:var(--backdrop); }
   table.plain.calls td.notes::before { content:"Conversation summary"; display:block; font-weight:600; color:var(--muted); }
   table.plain.calls td.c-act { grid-area:act; }
   table.plain.calls .call-cell { flex-direction:row; flex-wrap:wrap; align-items:center; }
-
-  /* Find leads' search history: one stacked card per search, every field in view. */
-  table.plain.hist { display:block; }
-  table.plain.hist thead { display:none; }
-  table.plain.hist tbody { display:block; border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); margin-bottom:var(--sp-3); }
-  table.plain.hist tr { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--sp-1) var(--sp-3); }
-  table.plain.hist td { display:block; border:0; padding:0; min-width:0; }
-  table.plain.hist td.h-when { grid-column:1 / -1; font-weight:600; white-space:normal; }
-  table.plain.hist td.h-where, table.plain.hist td.h-act { grid-column:1 / -1; }
-  table.plain.hist td.h-act:empty { display:none; }
-  table.plain.hist .h-label { display:block; font-size:var(--fs-sm); color:var(--muted); }
-  table.plain.hist tr + tr { margin-top:var(--sp-2); }
-  table.plain.hist tr + tr > td { grid-column:1 / -1; }
-  table.plain.hist tr.more-row td { background:none; }
-  .scroll-x:has(table.plain.hist) { overflow:visible; }
 }
-/* Small phones: the first page's link says "Find" (its name is still "Find leads"), so the
-   five pages fit one row from 320 px up, whatever their counts, each link still 44 px wide. */
-@media (max-width: 429px) { nav .lw { display:none; } nav a { padding-inline:var(--sp-1); } }
 
-/* The tutorial (tour.js): a dimmed page with one part cut out and a box explaining it. */
-.side .tour-btn { background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.3); align-self:flex-start; }
-.side .tour-btn:hover { background:rgba(255,255,255,.2); }
+/* ==== The toast: a short note after a click ========================================= */
+/* It never sits over the list being worked. Laptops and desktops: in the sidebar, between the
+   page links and the tools at its foot (over those tools only when the window is too short for
+   the note). Narrower windows, and browsers without anchor positioning: along the bottom, with
+   room kept under the page's end so the last row can always be scrolled clear of it, and
+   keyboard focus kept clear of it too. */
+.toast { position:fixed; left:50%; bottom:var(--sp-5); translate:-50% 0; z-index:50; display:flex; align-items:center;
+         gap:var(--sp-4); background:var(--toast); color:var(--toast-ink); padding:var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-5);
+         border-radius:var(--r-pill); box-shadow:var(--shadow-lg); max-width:calc(100vw - 32px); overflow-wrap:anywhere; }
+.toast:not([hidden]) { animation:rise .3s var(--ease); }
+.toast.bad { border-left:5px solid var(--bad); }
+.toast button { background:var(--toast-ink); color:var(--toast); padding:var(--sp-2) var(--sp-4); }
+.toast button:not(:disabled):hover { background:var(--toast-ink); filter:brightness(.92); }
+@media (max-width: 600px) {
+  .toast { left:var(--sp-4); right:var(--sp-4); translate:none; justify-content:space-between; }
+  .toast button { flex:none; }
+}
+@media (max-width: 820px) {
+  body:has(> .toast:not([hidden])) main { padding-bottom:calc(var(--sp-6) + var(--toast-room)); }
+  html:has(> body > .toast:not([hidden])) { scroll-padding-bottom:var(--toast-room); }
+}
+@supports not (anchor-name: --side-nav) {
+  body:has(> .toast:not([hidden])) main { padding-bottom:calc(var(--sp-6) + var(--toast-room)); }
+  html:has(> body > .toast:not([hidden])) { scroll-padding-bottom:var(--toast-room); }
+}
+@supports (anchor-name: --side-nav) {
+  @media (min-width: 821px) {
+    .side nav { anchor-name:--side-nav; }
+    .side-bottom { anchor-name:--side-tools; }
+    .toast { left:var(--sp-3); width:calc(232px - 2 * var(--sp-3)); max-width:none; translate:none;
+             top:calc(anchor(--side-nav bottom) + var(--sp-4)); bottom:calc(anchor(--side-tools top) + var(--sp-4));
+             align-self:end; flex-direction:column; align-items:stretch; gap:var(--sp-3);
+             padding:var(--sp-3) var(--sp-4); border-radius:var(--r-lg); position-try-fallbacks:--toast-over-tools; }
+  }
+}
+@position-try --toast-over-tools { top:auto; bottom:var(--sp-3); }
+
+/* ==== Dialogs ====================================================================== */
+/* A blurred, dimmed backdrop, a large radius, a serif title over a brass hairline. */
+dialog { border:1px solid var(--line); border-radius:var(--r-lg); padding:0; width:min(560px,94vw); background:var(--card); color:var(--ink);
+         box-shadow:var(--shadow-lg), var(--highlight); overflow-wrap:anywhere; }
+dialog[open] { animation:rise .35s var(--ease); }
+dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturate(1.2); }
+.dlg { padding:var(--sp-6) var(--sp-5) var(--sp-5); display:flex; flex-direction:column; gap:var(--sp-4); }
+.dlg h2 { margin:0; font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-dialog); font-weight:560; letter-spacing:-.015em; }
+.dlg h2::after { content:""; display:block; height:1px; margin-top:var(--sp-3);
+                 background:linear-gradient(90deg, transparent, var(--gold), transparent); opacity:.7; }
+.dlg textarea { min-height:140px; resize:vertical; width:100%; }
+.dlg .ask { margin-bottom:var(--sp-2); font-weight:600; }
+.dlg-actions { display:flex; justify-content:flex-end; gap:var(--sp-2); padding-top:var(--sp-2); }
+/* Just called: the six results as pills; Save needs one, with a quiet hint, then a clear ring when missed. */
+.outcomes { display:flex; flex-wrap:wrap; gap:var(--sp-2); }
+.outcomes.need button { border-color:var(--bad); box-shadow:0 0 0 1px var(--bad); }
+.outcomes button { background:var(--card); color:var(--ink); border-color:var(--line-strong); border-radius:var(--r-pill); box-shadow:none; }
+.outcomes button:not(.on):not(:disabled):hover { background:var(--hover); border-color:var(--line-strong); }
+.outcomes button.on, .outcomes button.on:not(:disabled):hover { background:linear-gradient(180deg, var(--btn), var(--btn-2));
+  border-color:var(--btn-2); color:var(--btn-ink); }
+.need-note { font-weight:400; color:var(--muted); margin-left:var(--sp-2); }
+/* A business's calls, marks and contacts, newest first. */
+.history { max-height:60vh; overflow:auto; display:flex; flex-direction:column; gap:var(--sp-3); overflow-wrap:anywhere; }
+.history .item { border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-3); background:var(--surface-2); }
+.history .hist-head { font-size:var(--fs-sm); margin:var(--sp-2) 0 0; color:var(--muted); }
+#contact-form p { margin:0; }
+#contact-form .hint { font-size:var(--fs-sm); color:var(--muted); }
+
+/* ==== Stats ======================================================================== */
+/* Tiles lit along the top in navy and brass, with big serif figures; the tier table in small capitals. */
+.tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:var(--sp-4); margin-bottom:var(--sp-4); }
+.tiles .card { margin-bottom:0; }
+.tile { position:relative; overflow:hidden; }
+.tile::before { content:""; position:absolute; inset:0 0 auto 0; height:3px; background:linear-gradient(90deg, var(--btn-2), var(--accent-2)); }
+.tiles .tile:nth-child(2)::before { background:linear-gradient(90deg, var(--gold-text), var(--gold)); }
+.tile .label { color:var(--muted); font-variant-caps:all-small-caps; letter-spacing:.06em; font-size:var(--fs-md); font-weight:600; }
+.tile .value { font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-figure); font-weight:500; line-height:1.1;
+               letter-spacing:-.03em; margin-top:var(--sp-2); font-variant-numeric:tabular-nums; }
+.tile .value.says { font-size:var(--fs-md); font-weight:600; color:var(--muted); }
+.tile .value small { font-family:var(--font); font-size:var(--fs-md); color:var(--muted); font-weight:600; letter-spacing:0; margin-left:var(--sp-1); }
+/* Wide screens: the chart and its table side by side, so the card has no empty half. */
+.stats-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:var(--sp-4); align-items:start; }
+@media (min-width: 1000px) { .stats-grid { grid-template-columns:minmax(0,3fr) minmax(280px,2fr); } }
+.viz { position:relative; }
+.viz svg { width:100%; height:auto; display:block; }
+.viz .tip { position:absolute; pointer-events:none; background:var(--toast); color:var(--toast-ink); font-size:var(--fs-sm); padding:var(--sp-2);
+            border-radius:var(--r-sm); white-space:nowrap; transform:translate(-50%,-110%); }
+.viz .tip strong { font-size:var(--fs-base); }
+.viz rect.col:hover { opacity:.8; }
+.viz rect.col:focus { outline:none; }
+/* A bar reached with the keyboard gets a clear ring (the same colour as every other focus ring). */
+.viz rect.col:focus-visible { stroke:var(--accent-2); stroke-width:3px; fill:var(--hover); fill-opacity:.35; }
+.stats-grid #s-table { margin-top:0; }
+/* The tier table's cells are the page's own words and numbers ("None checked yet"): whole
+   words, and on a small phone narrower padding, so all four columns fit without scrolling. */
+#s-table th { background:none; font-variant-caps:all-small-caps; letter-spacing:.06em; font-size:var(--fs-md); }
+#s-table td { overflow-wrap:normal; }
+#s-table td:first-child { font-family:var(--serif); font-size:var(--fs-name-sm); font-weight:700; }
+@media (max-width: 429px) { #s-table th, #s-table td { padding-inline:var(--sp-2); } }
+@media (max-width: 359px) { #s-table th, #s-table td { padding-inline:var(--sp-1); } }
+
+/* ==== The tutorial (tour.js): a dimmed page with one part cut out and a box explaining it == */
 .tour-shade { position:fixed; inset:0; z-index:70; background:transparent; }
 .tour-shade.dim { background:rgba(0,0,0,.55); }
-.tour-spot { position:fixed; z-index:71; border-radius:var(--r-sm); box-shadow:0 0 0 9999px rgba(0,0,0,.55), 0 0 0 3px var(--accent-2);
+.tour-spot { position:fixed; z-index:71; border-radius:var(--r-md); box-shadow:0 0 0 9999px rgba(8,12,20,.6), 0 0 0 3px var(--gold);
              pointer-events:none; transition:all .2s ease; }
 .tour-box { position:fixed; z-index:72; width:min(380px, calc(100vw - 24px)); background:var(--card); color:var(--ink);
-            border:1px solid var(--line); border-radius:var(--r-md, 10px); padding:var(--sp-4); box-shadow:0 8px 30px rgba(0,0,0,.35);
-            transition:opacity .15s ease; }
+            border:1px solid var(--line); border-top:0; border-radius:var(--r-lg); padding:var(--sp-4);
+            box-shadow:var(--shadow-sm), var(--highlight); transition:opacity .15s ease; }
+.tour-box::before { content:""; position:absolute; inset:0 24px auto; height:2px; border-radius:2px;
+                    background:linear-gradient(90deg, transparent, var(--gold), transparent); }
 .tour-box.moving { opacity:0; }
-.tour-box h2 { margin:0 0 var(--sp-2); font-size:var(--fs-md); }
+.tour-box h2 { margin:0 0 var(--sp-2); font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-md); }
 .tour-box p { margin:0 0 var(--sp-4); line-height:1.5; }
-.tour-count { font-size:var(--fs-sm); color:var(--muted); margin-bottom:var(--sp-1); }
+.tour-count { font-size:var(--fs-md); font-weight:600; color:var(--gold-text); font-variant-caps:all-small-caps; letter-spacing:.1em;
+              margin-bottom:var(--sp-1); }
 .tour-actions { display:flex; justify-content:space-between; align-items:center; gap:var(--sp-3); flex-wrap:wrap; }
 .tour-nav { display:flex; gap:var(--sp-2); }
 .tour-actions button { min-height:44px; }
-@media (prefers-reduced-motion: reduce) { .tour-spot, .tour-box { transition:none; } }
 /* The first visit's offer of the tour: a note in the bottom corner (along the bottom on a phone). */
 .tour-offer { position:fixed; z-index:45; right:var(--sp-5); bottom:var(--sp-5); width:min(360px, calc(100vw - 2 * var(--sp-4)));
-              background:var(--card); color:var(--ink); border:1px solid var(--line); border-left:5px solid var(--accent-2);
-              border-radius:var(--r-md, 10px); padding:var(--sp-4); box-shadow:0 8px 30px rgba(0,0,0,.25); }
+              background:var(--card); color:var(--ink); border:1px solid var(--line); border-left:3px solid var(--gold);
+              border-radius:var(--r-lg); padding:var(--sp-4); box-shadow:var(--shadow-sm), var(--highlight); }
 .tour-offer p { margin:0 0 var(--sp-3); line-height:1.5; }
 .tour-offer-actions { display:flex; justify-content:flex-end; gap:var(--sp-2); flex-wrap:wrap; }
 .tour-offer-actions button { min-height:44px; }
 @media (max-width: 600px) { .tour-offer { left:var(--sp-4); right:var(--sp-4); bottom:var(--sp-4); width:auto; } }
-/* The administrator's section is locked until its password is entered. */
-.admin-lock { display:flex; flex-direction:column; gap:var(--sp-3); }
-.admin-lock p { margin:0; }
-.admin-lock-row { display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--sp-3); }
-.admin-lock-row label { display:flex; flex-direction:column; gap:var(--sp-1); font-weight:600; }
-.admin-relock { margin:0 0 var(--sp-3); }
-/* Find leads: where a search actually ran (under what was typed), a far place, a stopped search. */
-td.h-where .sub { display:block; }
-.sub.far { color:var(--warn-ink); font-weight:600; }
-#confirm-far { margin:var(--sp-3) 0 0; }
-#progress-card.stopping #progress-msg, #done-card.stopped .big { color:var(--warn-ink); }
-/* A Yes / No on its way to the server: the row says so until it is saved. */
-.mark button.sending { outline:2px dashed var(--accent); outline-offset:1px; }
-.c-mark .saving { margin-top:var(--sp-1); font-style:italic; }
-.slow-save:empty { display:none; }
-/* A Yes / No that didn't reach the server: the row says so, with Try again, until it is saved. */
-.mark-failed { margin-top:var(--sp-2); padding:var(--sp-2); border:1px solid var(--bad); border-left-width:4px;
-               border-radius:var(--r-sm); background:var(--pts-neg); color:var(--ink); font-size:var(--fs-sm); }
-.mark-failed strong { color:var(--bad-ink); }
-.mark-failed-do { display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-1) var(--sp-3); margin-top:var(--sp-2); }
-.mark-failed-do button.quiet { padding:var(--sp-1) var(--sp-3); font-size:var(--fs-sm); }
-/* The Leads page showing one business, opened from the Map page. */
-.only-one { display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-2) var(--sp-3); margin:var(--sp-2) 0;
-            padding:var(--sp-2) var(--sp-3); border:1px solid var(--line); border-left:4px solid var(--accent-2);
-            border-radius:var(--r-sm); background:var(--card); }
 
-/* The Map page: the map with its toggles and key beside it (below it on narrower screens), then
-   the search areas in words. Leaflet's styles load after these, so its parts are styled from
-   #map (more specific than Leaflet's own rules). The map is its own stacking context, so
-   Leaflet's layers never cover the tutorial or a dialog. */
+/* ==== The Map page ================================================================= */
+/* The map with its toggles and key beside it (below it on narrower screens), then the search
+   areas in words. Leaflet's styles load after these, so its parts are styled from #map (more
+   specific than Leaflet's own rules). The map is its own stacking context, so Leaflet's layers
+   never cover the tutorial or a dialog. */
 .map-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:var(--sp-4); margin-bottom:var(--sp-4); }
 @media (min-width: 1000px) { .map-layout { grid-template-columns:minmax(0,1fr) 300px; align-items:start; } }
-.map-box { position:relative; isolation:isolate; border:1px solid var(--line); border-radius:var(--r-md); overflow:hidden;
-           background:var(--map-bg); }
+.map-box { position:relative; isolation:isolate; border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden;
+           background:var(--map-bg); box-shadow:var(--shadow-md); }
 #map { height:min(72vh, 760px); min-height:360px; background:var(--map-bg); }
 @media (max-width: 700px) { #map { height:56vh; min-height:300px; } }
 .map-loading { position:absolute; inset:0; display:grid; place-items:center; background:var(--map-bg); color:var(--muted);
@@ -558,9 +896,12 @@ td.h-where .sub { display:block; }
 .map-loading:empty { display:none; }
 .map-note { color:var(--muted); margin:var(--sp-2) 0 0; }
 #map-tiles-note { margin:var(--sp-2) 0 0; }
+/* The toggles and key in calmer cards, the area list as small tiles. */
 .map-side { display:flex; flex-direction:column; gap:var(--sp-4); min-width:0; }
-.map-side fieldset.card { margin:0; min-width:0; }
-.map-side legend { font-weight:700; font-size:var(--fs-md); padding:0 var(--sp-1); }
+.map-side fieldset.card { margin:0; min-width:0; padding-top:var(--sp-3); }
+.map-side legend { font-weight:700; font-size:var(--fs-md); padding:0 var(--sp-1); font-variant-caps:all-small-caps; letter-spacing:.06em;
+                   color:var(--muted); }
+.map-side legend + * strong { font-family:var(--serif); font-optical-sizing:auto; }
 .map-groups label.check { font-weight:400; font-size:var(--fs-base); align-items:center; }
 .map-groups label.check > span:last-child { min-width:0; }
 .map-groups .n { color:var(--muted); white-space:nowrap; }
@@ -584,29 +925,29 @@ td.h-where .sub { display:block; }
 .sym.area.unknown { border:2px dotted var(--area-unknown); }
 .area-list { margin:0; padding:0; list-style:none; display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
              gap:var(--sp-3) var(--sp-5); }
-.area-list li { display:flex; gap:var(--sp-2); align-items:flex-start; }
+.area-list li { display:flex; gap:var(--sp-2); align-items:flex-start; padding:var(--sp-2) var(--sp-3); border:1px solid var(--line);
+                border-radius:var(--r-md); background:var(--surface-2); }
 .area-list li .sym { margin-top:4px; }
 .area-list .sub { color:var(--muted); font-size:var(--fs-sm); }
 /* Leaflet's parts in the site's look, light and dark. */
 #map.leaflet-container { font:inherit; font-size:var(--fs-sm); background:var(--map-bg); }
-#map .leaflet-popup-content-wrapper, #map .leaflet-popup-tip { background:var(--card); color:var(--ink);
-                                                               box-shadow:0 3px 14px var(--shadow); }
-#map .leaflet-popup-content { margin:var(--sp-3) var(--sp-5) var(--sp-3) var(--sp-4); line-height:1.45; font-size:var(--fs-sm); }
+#map .leaflet-popup-content-wrapper { background:var(--card); color:var(--ink); box-shadow:0 3px 14px var(--shadow);
+                                      border-radius:var(--r-lg); }
+#map .leaflet-popup-tip { background:var(--card); color:var(--ink); box-shadow:0 3px 14px var(--shadow); }
 /* A pin's details box stays inside the map (map.js fitPopups sets the room it has): narrower on a
    phone, its lines wrap; taller than the map, it scrolls. */
-#map .leaflet-popup-content { max-width:var(--popup-w, 300px); max-height:var(--popup-h, none); overflow-y:auto;
-                              overflow-wrap:anywhere; }
-#map a.leaflet-popup-close-button { color:var(--muted); width:32px; height:32px; font:22px/32px system-ui, sans-serif; }
+#map .leaflet-popup-content { margin:var(--sp-3) var(--sp-5) var(--sp-3) var(--sp-4); line-height:1.45; font-size:var(--fs-sm);
+                              max-width:var(--popup-w, 300px); max-height:var(--popup-h, none); overflow-y:auto; overflow-wrap:anywhere; }
+#map a.leaflet-popup-close-button { color:var(--muted); width:32px; height:32px; font:var(--fs-glyph)/32px system-ui, sans-serif; }
+#map .leaflet-bar { border:1px solid var(--line); box-shadow:0 1px 4px var(--shadow); }
 #map .leaflet-bar a { background:var(--card); color:var(--ink); border-bottom-color:var(--line); }
 #map .leaflet-bar a:hover { background:var(--hover); }
-#map .leaflet-bar { border:1px solid var(--line); box-shadow:0 1px 4px var(--shadow); }
 #map .leaflet-control-attribution { background:color-mix(in srgb, var(--card) 88%, transparent); color:var(--muted);
                                     font-size:var(--fs-xs); }
 #map .leaflet-control-attribution a { color:var(--accent); }
 @media (pointer: coarse) {
-  #map .leaflet-bar a { width:44px; height:44px; line-height:44px; font-size:22px; }
+  #map .leaflet-bar a { width:44px; height:44px; line-height:44px; font-size:var(--fs-glyph); }
   #map a.leaflet-popup-close-button { width:44px; height:44px; line-height:44px; }
-  .pin-box a { display:inline-flex; align-items:center; min-height:44px; }
 }
 /* The dark theme dims and inverts the street map to match the page. */
 :root[data-theme="dark"] #map .leaflet-tile-pane { filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.5); }
@@ -621,12 +962,19 @@ td.h-where .sub { display:block; }
              text-shadow:0 0 2px var(--card), 0 0 3px var(--card), 0 0 6px var(--card), 0 0 10px var(--card); }
 /* A name with no room at this zoom (placeLabels in map.js): the list below the map has it. */
 .area-name.crowded { visibility:hidden; }
-.area-name span, .area-name small { display:block; }
-.area-name small { font-size:var(--fs-xs); font-weight:700; color:var(--area-miss); }
+.area-name span { display:block; }
+.area-name small { display:block; font-size:var(--fs-xs); font-weight:700; color:var(--area-miss); }
 .area-name.unknown small { color:var(--muted); }
 /* A competitor: a hollow square. AARCO: a pin of its own with its name beside it. */
 #map .pin-comp { box-sizing:border-box; border:3px solid var(--pin-comp); border-radius:2px; background:var(--pin-ring);
                  box-shadow:0 0 0 1.5px var(--pin-ring); }
+/* Pins close together at this zoom: one round group (map.js placePins), its ring split by Yes / No
+   / not checked / competitor (map.js draws that ring), the count in its middle. */
+.pin-cluster > div { width:100%; height:100%; border-radius:50%; display:grid; place-items:center; background:var(--pin-ring);
+                     box-shadow:0 0 0 1.5px var(--pin-ring), 0 1px 3px rgba(0,0,0,.35); }
+.pin-cluster span { display:grid; place-items:center; border-radius:50%; padding:0 var(--sp-1); background:var(--card); color:var(--ink);
+                    font-weight:800; font-size:var(--fs-xs); line-height:1; font-variant-numeric:tabular-nums; }
+#map .pin-cluster:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
 #map .aarco-pin { overflow:visible; }
 .aarco-mark { position:relative; width:32px; height:42px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
 .aarco-mark svg { display:block; }
@@ -635,526 +983,40 @@ td.h-where .sub { display:block; }
 .aarco-name { position:absolute; left:31px; top:3px; padding:1px var(--sp-2); border:1.5px solid var(--aarco-ink);
               border-radius:var(--sp-1); background:var(--aarco); color:var(--aarco-ink); font-weight:800;
               font-size:var(--fs-sm); letter-spacing:.04em; white-space:nowrap; }
-/* A business's details, opened from its pin. */
+/* A business's details, opened from its pin. The name stays clear of the close button (larger
+   on a touch screen). */
 .pin-box { display:flex; flex-direction:column; gap:2px; }
-/* The name stays clear of the close button (larger on a touch screen). */
-.pin-box strong:first-child { font-size:var(--fs-md); margin-right:var(--sp-2); }
-@media (pointer: coarse) { .pin-box strong:first-child { margin-right:var(--sp-5); } }
+.pin-box strong:first-child { font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-md); margin-right:var(--sp-2); }
 .pin-box .sub { color:var(--muted); }
 .pin-box .flag { color:var(--bad-ink); font-weight:600; }
 .pin-box .open-lead { margin-top:var(--sp-2); font-weight:600; }
 
-/* ==== The look (2026 refresh) ====================================================
-   Visual only: colours, depth, radii and motion on top of the layout above. Nothing here
-   changes what is shown or where; sizes that tests and tap targets rely on stay as set above. */
-
-/* Buttons: a soft lift, a darker hover, a press. */
-button, .btn { box-shadow:var(--shadow-sm); transition:background-color .15s, border-color .15s, color .15s, box-shadow .15s, transform .05s; }
-/* Low specificity on purpose: any button with its own colours (quiet, tabs, Yes / No, the sidebar's)
-   keeps them on hover. */
-:where(button:not(:disabled), .btn):hover { background-color:var(--btn-hover); }
-button:not(:disabled):active, .btn:active { transform:translateY(1px); }
-button.quiet:not(:disabled):hover, .btn.quiet:hover { background:var(--hover); border-color:var(--line-strong); }
-button.quiet, .btn.quiet { border-color:var(--line-strong); }
-button.link, button.undo, button.why-toggle, .theme button, .side .who button, .menu-btn, .side .tour-btn,
-table.leads th button.sort, .viz button { box-shadow:none; }
-button.link:not(:disabled):hover, button.undo:not(:disabled):hover { background:none; text-decoration:underline; }
-table.leads th button.sort:not(:disabled):hover { background:none; color:var(--accent); }
-button.danger:not(:disabled):hover { background:var(--bad); filter:brightness(.92); }
-
-/* Fields: a clear edge on hover, an accent ring on focus. */
-input, select, textarea { transition:border-color .15s, box-shadow .15s; }
-input:hover:not(:disabled), select:hover:not(:disabled), textarea:hover:not(:disabled) { border-color:var(--muted); }
-input:focus, select:focus, textarea:focus { border-color:var(--accent-2); box-shadow:0 0 0 4px var(--accent-soft); }
-input[type=checkbox], input[type=radio] { accent-color:var(--btn); }
-
-/* The sidebar: AARCO's navy with a soft fall of light, the page you are on marked with a bar. */
-.side { background:linear-gradient(180deg, var(--side) 0%, var(--side-2) 100%); background-color:var(--side);
-        box-shadow:inset -1px 0 0 rgba(255,255,255,.08); }
-.brand strong { letter-spacing:-.01em; }
-nav a { position:relative; transition:background-color .15s, color .15s; }
-nav a.on { background:rgba(255,255,255,.12); box-shadow:inset 3px 0 0 var(--side-on); }
-nav a.on .count { background:var(--side-on); color:var(--side); }
-.side .who, .theme, .side .who button, .menu-btn { border-color:rgba(255,255,255,.18); }
-.theme { background:rgba(0,0,0,.15); padding:2px; gap:2px; border-radius:var(--r-sm); }
-.theme button, .theme button:first-child, .theme button:last-child { border-radius:calc(var(--r-sm) - 3px); }
-.theme button[aria-pressed="true"] { background:rgba(255,255,255,.18); box-shadow:0 1px 2px rgba(0,0,0,.25); }
-.theme button:not([aria-pressed="true"]):hover, .side .who button:hover, .side .menu-btn:hover { background:rgba(255,255,255,.08); }
-.side .tour-btn:hover { background:rgba(255,255,255,.2); }
-.side .tour-btn { border-radius:var(--r-pill); padding-inline:var(--sp-4); }
-
-@media (min-width: 821px) {
-  .side { padding:var(--sp-5) var(--sp-3); }
-  .brand { display:grid; grid-template-columns:36px minmax(0,1fr); column-gap:var(--sp-3); align-items:center; padding:0 var(--sp-1); }
-  .brand::before { content:""; grid-row:1 / span 2; width:36px; height:36px; border-radius:var(--r-sm);
-                   background:url("favicon.svg") center / cover no-repeat; box-shadow:0 2px 8px rgba(0,0,0,.3); }
-  .brand > * { grid-column:2; }
-  .brand strong { line-height:1.25; }
-  nav { gap:2px; }
-  nav a { justify-content:flex-start; gap:var(--sp-3); padding:10px var(--sp-3); }
-  nav a .count { margin-left:auto; }
-  /* Each page's icon (a mask in the text's colour). */
-  nav a::before { content:""; width:18px; height:18px; flex:none; background:currentColor; opacity:.85;
-                  -webkit-mask:var(--icon) center / contain no-repeat; mask:var(--icon) center / contain no-repeat; }
-  nav a.on::before { opacity:1; color:var(--side-on); }
-  nav a[data-page=find] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
-  nav a[data-page=leads] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M9 6h11M9 12h11M9 18h11'/%3E%3Ccircle cx='4.5' cy='6' r='1.2' fill='black'/%3E%3Ccircle cx='4.5' cy='12' r='1.2' fill='black'/%3E%3Ccircle cx='4.5' cy='18' r='1.2' fill='black'/%3E%3C/svg%3E"); }
-  nav a[data-page=calls] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.1' stroke-linejoin='round'%3E%3Cpath d='M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z'/%3E%3C/svg%3E"); }
-  nav a[data-page=map] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.1' stroke-linejoin='round'%3E%3Cpath d='M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.5'/%3E%3C/svg%3E"); }
-  nav a[data-page=stats] { --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M4 20h16M7 16v-5M12 16V6M17 16v-8'/%3E%3C/svg%3E"); }
-  .side-bottom { padding:0 var(--sp-1); }
-}
-@media (max-width: 820px) {
-  .side { box-shadow:0 1px 0 rgba(255,255,255,.06), 0 4px 16px rgba(0,0,0,.18); }
-  nav a.on { box-shadow:inset 0 -3px 0 var(--side-on); }
+/* ==== Touch screens: everything that can be tapped is at least 44px each way ========== */
+@media (pointer: coarse) {
+  button, .btn { min-height:44px; min-width:44px; }
+  nav a, select, input:not([type=checkbox]), summary { min-height:44px; }
+  button.undo, button.link { display:inline-flex; align-items:center; padding:0 var(--sp-2); }
+  .side .who button { padding:0 var(--sp-4); }
+  table.leads th button.sort { min-height:44px; align-items:center; }
+  /* Links in text keep a 44px tap area, but the negative margins stop it spreading the
+     lines apart (an address, its map link, the phone and website read as one block). */
+  table.leads td a, table.plain td a { display:inline-flex; align-items:center; min-height:44px; margin-block:-11px; }
+  .contact .site { display:flex; align-items:center; min-height:44px; margin-block:-11px; }
+  /* A link in a sentence (a banner or a note: "Your saved leads are on the Leads page"): its
+     padding makes the tap area 44px tall; an inline box's padding doesn't move the lines. */
+  :where(p, li, .form-closed, .warn, .problem, .muted, .hint, .notes, .tour-offer) a:not(.btn) { padding-block:14px; }
+  table.leads td a.map { min-width:44px; justify-content:center; }
+  details.explain summary, details.advanced summary { display:flex; align-items:center; }
+  .pin-box a { display:inline-flex; align-items:center; min-height:44px; }
+  .pin-box strong:first-child { margin-right:var(--sp-5); }
 }
 
-/* Page headings and cards: a calmer, roomier read. */
-.page-head { margin-bottom:var(--sp-5); }
-.page-head h1 { letter-spacing:-.02em; line-height:1.2; }
-.page-head p { max-width:72ch; }
-.card { box-shadow:var(--shadow-sm); }
-.card h2 { letter-spacing:-.01em; }
-dialog { border:1px solid var(--line); box-shadow:var(--shadow-lg); }
-dialog::backdrop { backdrop-filter:blur(2px); }
-.dlg h2 { letter-spacing:-.015em; }
-.dlg-actions { padding-top:var(--sp-2); }
-.warn, .form-closed { border-left-width:4px; }
-.problem { box-shadow:var(--shadow-sm); }
-
-/* Find leads: the search box stands out; the big button is the one thing to press. */
-#form.card { padding:var(--sp-5); }
-details.advanced summary { width:max-content; max-width:100%; }
-.go-row button { box-shadow:0 1px 2px rgba(16,24,40,.12), 0 4px 12px color-mix(in srgb, var(--btn) 30%, transparent); }
-.step .dot { transition:background-color .2s, border-color .2s; }
-.done-box .big { letter-spacing:-.015em; }
-#done-card { border-left:4px solid var(--good); }
-details.admin summary { width:max-content; max-width:100%; }
-
-/* Tables: quiet headings, a hover row, a little air. */
-table.plain th { font-weight:600; background:var(--th); }
-table.plain tbody tr { transition:background-color .12s; }
-table.plain tbody tr:hover td { background:var(--hover); }
-table.leads th { font-weight:600; color:var(--muted); box-shadow:inset 0 -1px 0 var(--line); }
-table.leads th button.sort { color:var(--ink); }
-table.leads tbody tr td { transition:background-color .12s; }
-table.leads td.score { font-weight:700; font-variant-numeric:tabular-nums; }
-.table-wrap { box-shadow:var(--shadow-sm); }
-@media (max-width: 1099px) {
-  .table-wrap, .table-wrap.stale { box-shadow:none; }
-  table.leads tr { box-shadow:var(--shadow-sm); transition:box-shadow .15s, border-color .15s; }
-  table.leads tr:hover { border-color:var(--line-strong); box-shadow:var(--shadow-md); }
-}
-
-/* Tabs: a row of pills; the open one filled. */
-.recent { box-shadow:var(--shadow-sm); border-left:4px solid var(--accent-2); }
-.mark button { box-shadow:none; }
-.mark button.yes:not(.on):not(:disabled):hover { border-color:var(--good); color:var(--good-ink); background:var(--pts); }
-.mark button.no:not(.on):not(:disabled):hover { border-color:var(--bad); color:var(--bad-ink); background:var(--pts-neg); }
-.mark button.yes.on:not(:disabled):hover { background:var(--good); }
-.mark button.no.on:not(:disabled):hover { background:var(--bad); }
-.outcomes button { border-radius:var(--r-pill); box-shadow:none; }
-.outcomes button:not(.on):not(:disabled):hover { background:var(--hover); border-color:var(--line-strong); }
-.outcomes button.on:not(:disabled):hover { background:var(--btn-hover); }
-.badge { letter-spacing:.01em; }
-.history .item { background:var(--bg); }
-.only-one { box-shadow:var(--shadow-sm); }
-
-/* Stats: tiles with a coloured top edge, big tabular numbers. */
-.tile { position:relative; overflow:hidden; border-top:3px solid var(--accent-2); }
-.tile .value { letter-spacing:-.02em; }
-.tiles .tile:nth-child(2) { border-top-color:var(--good); }
-
-/* The map: a framed panel, its key in matching cards. */
-.map-box { box-shadow:var(--shadow-md); }
-#map .leaflet-popup-content-wrapper { border-radius:var(--r-md); }
-
-/* Toast, loading and the tutorial: the same depth as dialogs. */
-.toast { box-shadow:var(--shadow-lg); }
-.toast button:not(:disabled):hover { background:var(--toast-ink); filter:brightness(.92); }
-.loading-cue, .starting { box-shadow:var(--shadow-md); }
-.tour-box { border-radius:var(--r-md); box-shadow:var(--shadow-lg); border-top:4px solid var(--accent-2); }
-.tour-offer { border-radius:var(--r-md); box-shadow:var(--shadow-lg); }
-.tour-count { font-weight:600; letter-spacing:.02em; color:var(--accent); }
-.tour-spot { border-radius:var(--r-md); }
-
-@media (prefers-reduced-motion: reduce) {
-  button, .btn, input, select, textarea, nav a, table.leads tr, table.plain tbody tr, table.leads tbody tr td { transition:none; }
-  button:active, .btn:active { transform:none; }
-}
-
-/* ==== Lists that don't read like a spreadsheet ===================================== */
-main { background:radial-gradient(1100px 380px at 50% -160px, var(--glow), transparent 70%) no-repeat; }
-@media (min-width: 821px) {
-  .page-head h1 { font-size:30px; font-weight:750; letter-spacing:-.025em; }
-}
-
-/* Tabs: one segmented control; the open tab a raised chip, each count a small badge. */
-.tabs { display:flex; width:fit-content; max-width:100%; gap:2px; padding:4px; background:var(--track);
-        border:1px solid var(--line); border-radius:calc(var(--r-md) + 2px); }
-.tabs button { display:inline-block; background:transparent; border:0; box-shadow:none;
-               color:var(--muted); padding:7px var(--sp-3); border-radius:var(--r-sm); }
-.tabs button:not(.on):not(:disabled):hover { background:color-mix(in srgb, var(--card) 55%, transparent); color:var(--ink); }
-.tabs button.on, .tabs button.on:not(:disabled):hover { background:var(--card); color:var(--ink); border:0;
-                   box-shadow:0 1px 2px rgba(16,24,40,.08), 0 2px 8px rgba(16,24,40,.08); }
-.tab-n { display:inline-block; margin-left:var(--sp-1); min-width:22px; padding:1px 7px; border-radius:var(--r-pill); background:var(--badge);
-         color:var(--muted); font-size:var(--fs-xs); font-weight:700; line-height:1.5; text-align:center;
-         font-variant-numeric:tabular-nums; }
-.tab-n .p { font-size:0; }                 /* the brackets stay in the text, unseen */
-.tabs button.on .tab-n { background:var(--btn); color:var(--btn-ink); }
-
-/* The Leads tools: one bar holding the filter (with a search icon), the pickers, a Has phone
-   switch and the downloads at the far end. */
-#has-phone { appearance:none; -webkit-appearance:none; flex:none; width:38px; height:22px; margin:0; padding:0;
-             border:0; border-radius:var(--r-pill); background:var(--line-strong); position:relative; cursor:pointer;
-             transition:background-color .15s; }
-#has-phone::before { content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%;
-                     background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); transition:transform .15s; }
-#has-phone:checked { background:var(--btn); }
-#has-phone:checked::before { transform:translateX(16px); }
-#has-phone:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
-.toolbar .phone-pick { cursor:pointer; color:var(--ink); }
-#filter, #call-filter { padding-left:40px; background:var(--input) no-repeat 13px center / 17px;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238592a6' stroke-width='2.3' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
-.downloads .btn { display:inline-flex; align-items:center; gap:var(--sp-2); }
-.downloads .btn::before { content:""; width:16px; height:16px; flex:none; background:currentColor;
-  -webkit-mask:var(--dl) center / contain no-repeat; mask:var(--dl) center / contain no-repeat;
-  --dl:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4v11m-5-5 5 5 5-5M5 20h14'/%3E%3C/svg%3E"); }
-@media (min-width: 701px) {
-  #leads-body .toolbar { background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg); padding:var(--sp-2);
-                         gap:var(--sp-2); box-shadow:var(--shadow-sm); margin:var(--sp-3) 0 var(--sp-4); }
-  #leads-body .toolbar input#filter, #leads-body .toolbar select { border-color:transparent; background-color:var(--bg); min-height:44px; }
-  #leads-body .toolbar input#filter:hover, #leads-body .toolbar select:hover { border-color:var(--line-strong); }
-  #leads-body .toolbar input#filter:focus, #leads-body .toolbar select:focus { border-color:var(--accent-2); background-color:var(--input); }
-  #leads-body .toolbar .phone-pick { padding:0 var(--sp-2); }
-  #leads-body .toolbar .downloads { margin-left:auto; gap:var(--sp-1); }
-  #leads-body .downloads .btn.quiet { border-color:transparent; background:transparent; box-shadow:none; color:var(--accent);
-                                     padding:var(--sp-2) var(--sp-3); }
-  #leads-body .downloads .btn.quiet:hover { background:var(--hover); border-color:var(--line); }
-}
-/* Hints read as quiet notes with an info mark, not loose lines of text. */
-.hint-line::before { content:"i"; display:inline-grid; place-items:center; width:18px; height:18px; margin-right:var(--sp-2);
-                     vertical-align:-3px; border-radius:50%; background:var(--accent-soft); color:var(--accent);
-                     font:italic 700 12px/1 Georgia, serif; }
-
-/* Laptops and desktops: each lead is a card in a column of cards, with its tier as a coloured
-   stripe and the score in large figures; the column headings float above them. */
-table.leads tr { --tier:var(--tier-d); }
-table.leads tr.A { --tier:var(--tier-a); } table.leads tr.B { --tier:var(--tier-b); }
-table.leads tr.C { --tier:var(--tier-c); }
-@media (min-width: 1100px) {
-  #leads-wrap.table-wrap { background:none; border:0; box-shadow:none; overflow:visible; border-radius:0; }
-  table.leads { border-spacing:0 10px; margin-top:-10px; }
-  table.leads th { background:var(--bg); border-bottom:0; box-shadow:none; padding:var(--sp-3) var(--sp-3) var(--sp-1);
-                   font-variant-caps:all-small-caps; letter-spacing:.06em; font-size:var(--fs-md); color:var(--muted); }
-  table.leads th button.sort { color:var(--muted); font-variant-caps:inherit; letter-spacing:inherit; }
-  table.leads th button.sort:not(:disabled):hover, table.leads th[aria-sort=ascending] button.sort,
-  table.leads th[aria-sort=descending] button.sort { color:var(--ink); }
-  table.leads tbody td { background:var(--card); border-top:1px solid var(--line); border-bottom:1px solid var(--line);
-                         padding:var(--sp-4) var(--sp-3); transition:border-color .15s, background-color .15s; }
-  table.leads tbody td:first-child { border-left:1px solid var(--line); border-radius:var(--r-md) 0 0 var(--r-md);
-                                     box-shadow:inset 4px 0 0 var(--tier); padding-left:var(--sp-5); }
-  table.leads tbody td:last-child { border-right:1px solid var(--line); border-radius:0 var(--r-md) var(--r-md) 0; }
-  table.leads tbody tr:hover td { border-color:var(--line-strong); }
-  table.leads tbody tr td.score { padding-inline:var(--sp-2); background:var(--card); font-size:28px; font-weight:800; line-height:1.1;
-                                  letter-spacing:-.03em; color:var(--ink); }
-  table.leads tbody tr.competitor td, table.leads tbody tr.competitor td.score { background:color-mix(in srgb, var(--comp) 45%, var(--card)); }
-  table.leads tbody tr.just-marked td, table.leads tbody tr.just-marked td.score { background:var(--hover); }
-  td.score .tier-word { margin-top:2px; font-size:var(--fs-sm); font-weight:500; letter-spacing:0; line-height:1.3; color:var(--muted); }
-  table.leads td.c-name strong { font-size:var(--fs-md); letter-spacing:-.01em; }
-}
-/* Tablets and phones: the cards get the tier stripe too, along the top. */
-@media (max-width: 1099px) {
-  table.leads tr { border-top:4px solid var(--tier); }
-}
-
-/* The Calls list: the same floating rows on wider screens. */
-@media (min-width: 701px) {
-  #calls-wrap.table-wrap { background:none; border:0; box-shadow:none; border-radius:0; }
-  table.plain.calls { border-collapse:separate; border-spacing:0 8px; margin-top:-8px; }
-  table.plain.calls th { background:none; border-bottom:0; font-variant-caps:all-small-caps; letter-spacing:.06em;
-                         font-size:var(--fs-md); padding-bottom:var(--sp-1); }
-  table.plain.calls tbody td { background:var(--card); border-top:1px solid var(--line); border-bottom:1px solid var(--line);
-                               padding:var(--sp-3); }
-  table.plain.calls tbody td:first-child { border-left:1px solid var(--line); border-radius:var(--r-md) 0 0 var(--r-md);
-                                           padding-left:var(--sp-4); }
-  table.plain.calls tbody td:last-child { border-right:1px solid var(--line); border-radius:0 var(--r-md) var(--r-md) 0; }
-  table.plain.calls tbody tr:hover td { background:var(--card); border-color:var(--line-strong); }
-  #calls-body .calls-tools input { min-height:42px; border-radius:var(--r-md); box-shadow:var(--shadow-sm); }
-}
-
-/* Links: a soft underline that firms up on hover. */
-a { text-underline-offset:3px; text-decoration-thickness:1px; text-decoration-color:color-mix(in srgb, currentColor 35%, transparent);
-    transition:text-decoration-color .15s; }
-a:hover { text-decoration-color:currentColor; }
-@media (min-width: 821px) { .brand strong { font-size:var(--fs-sm); } }
-
-/* ==== Find leads, Stats and Map: the same finish ===================================== */
-/* The search form: roomier fields, a status dot beside the day's note, a bold Find leads. */
-#form .form-grid input, #form .form-grid select { min-height:44px; padding-inline:var(--sp-3); }
-#form .form-grid label { gap:6px; }
-#form .warn, #phone-note { display:flex; gap:var(--sp-3); align-items:flex-start; padding:var(--sp-3) var(--sp-4); }
-#phone-note::before { content:"!"; flex:none; width:20px; height:20px; border-radius:50%; display:grid; place-items:center;
-                      background:var(--warn-line); color:var(--warn-ink); font-weight:800; font-size:var(--fs-xs); }
-.go-row { padding-top:var(--sp-4); border-top:1px solid var(--line); }
-.go-row button#go { padding-inline:var(--sp-6); font-size:var(--fs-md);
-  background-image:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0)); }
-#day-note::before { content:""; display:inline-block; width:8px; height:8px; margin-right:var(--sp-2); border-radius:50%;
-                    background:var(--tier-a); box-shadow:0 0 0 3px color-mix(in srgb, var(--tier-a) 22%, transparent);
-                    vertical-align:1px; }
-#form.closed #day-note::before { background:var(--tier-d); box-shadow:0 0 0 3px color-mix(in srgb, var(--tier-d) 22%, transparent); }
-.card > h2:first-child { display:flex; align-items:center; gap:var(--sp-2); }
-.step .dot { box-shadow:0 0 0 3px var(--card); }
-
-/* Stats: tiles with a gradient edge and big, tight figures; the tier table in small capitals. */
-.tile { border-top:1px solid var(--line); padding:var(--sp-5); }
-.tile::before { content:""; position:absolute; inset:0 0 auto 0; height:4px;
-                background:linear-gradient(90deg, var(--accent-2), var(--side-on)); }
-.tiles .tile:nth-child(2)::before { background:linear-gradient(90deg, var(--tier-a), var(--tier-b)); }
-.tiles .tile:nth-child(2) { border-top-color:var(--line); }
-.tile .label { font-variant-caps:all-small-caps; letter-spacing:.06em; font-size:var(--fs-md); font-weight:600; }
-.tile .value { font-size:44px; font-weight:800; line-height:1.1; letter-spacing:-.035em; margin-top:var(--sp-2); }
-#s-table th { background:none; font-variant-caps:all-small-caps; letter-spacing:.06em; font-size:var(--fs-md); }
-#s-table td:first-child { font-weight:700; }
-
-/* Map: the key in calmer cards, the area list as small tiles. */
-.map-side legend { font-variant-caps:all-small-caps; letter-spacing:.06em; color:var(--muted); }
-.map-side fieldset.card { padding-top:var(--sp-3); }
-.area-list li { padding:var(--sp-2) var(--sp-3); border:1px solid var(--line); border-radius:var(--r-sm); background:var(--bg); }
-
-/* The administrator's section and dialogs: matched corners and quieter rules. */
-.admin-body { border-style:solid; background:var(--card); box-shadow:var(--shadow-sm); }
-.dlg { padding:var(--sp-6) var(--sp-5) var(--sp-5); }
-.dlg textarea { border-radius:var(--r-md); }
-.tile .value small { letter-spacing:0; margin-left:var(--sp-1); }
-
-/* ==== Ivory & Navy / Midnight & Brass ==============================================
-   The luxury layer: Fraunces for titles, names and big numbers, Inter for the rest, AARCO's
-   navy as the one accent with brass as its highlight. Tokens only (templates/_theme.html). */
-
-/* Atmosphere: two soft glows and a faint paper grain behind every page. */
-body { background-color:var(--bg);
-  background-image:radial-gradient(900px 600px at 12% -8%, var(--glow), transparent 65%),
-                   radial-gradient(800px 600px at 100% 100%, var(--glow-2), transparent 60%),
-                   url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.45 0 0 0 0 0.4 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-attachment:fixed; }
-main { background:none; }
-
-/* Type: serif display, tight and confident; numbers line up. */
-.page-head h1, .card h2, .dlg h2, .tour-box h2, .done-box .big, .tile .value, .recent h2,
-table.leads td.c-name strong, table.plain.calls td.c-name strong, .pin-box strong:first-child,
-.brand strong, .empty strong, .problem strong, .map-side legend + * strong {
-  font-family:var(--serif); font-optical-sizing:auto; }
-.page-head h1 { font-weight:560; letter-spacing:-.02em; font-variation-settings:"SOFT" 30; }
-@media (min-width: 821px) { .page-head h1 { font-size:40px; line-height:1.1; } }
-.page-head h1::after { content:""; display:block; width:64px; height:2px; margin:var(--sp-3) 0 var(--sp-2);
-                       border-radius:2px; background:linear-gradient(90deg, var(--accent-2), var(--gold)); }
-.page-head p { color:var(--ink-2); }
-.card h2 { font-size:20px; font-weight:560; letter-spacing:-.01em; }
-.dlg h2 { font-size:26px; font-weight:560; }
-td, .tile .value, .tab-n, nav .count, dl.details dd, #s-table td, .bar-row { font-variant-numeric:tabular-nums; }
-.muted, .sub, label .hint { color:var(--muted); }
-
-/* Surfaces: ivory cards with a hairline, a lit top edge and tinted depth. */
-.card, .recent, .problem, .only-one, .tour-offer, .tour-box, .loading-cue, .starting, .admin-body {
-  background:var(--card); border-color:var(--line); box-shadow:var(--shadow-sm), var(--highlight); }
-.card { border-radius:var(--r-lg); padding:var(--sp-5); }
-.card h2 { margin-bottom:var(--sp-4); }
-.hairline, .dlg h2::after { content:""; display:block; height:1px; margin-top:var(--sp-3);
-  background:linear-gradient(90deg, transparent, var(--gold), transparent); opacity:.7; }
-
-/* The hero: Find leads' search form, framed in a navy-to-brass border with a glow in its corners. */
-#form.card { position:relative; border:1px solid transparent; padding:var(--sp-6);
-  background:radial-gradient(420px 200px at 0 0, var(--accent-tint), transparent 70%) padding-box,
-             radial-gradient(420px 220px at 100% 100%, var(--gold-soft), transparent 70%) padding-box,
-             linear-gradient(var(--card), var(--card)) padding-box,
-             linear-gradient(135deg, color-mix(in srgb, var(--accent-2) 55%, transparent), var(--line) 40%, var(--line) 60%, color-mix(in srgb, var(--gold) 70%, transparent)) border-box;
-  box-shadow:var(--shadow-md), var(--highlight); }
-@media (max-width: 700px) { #form.card { padding:var(--sp-4); } }
-
-/* Buttons: the main one a navy gradient pill with a glow; the rest raised neutral pills. */
-button, .btn { border-radius:var(--r-pill); padding-inline:18px; letter-spacing:.005em;
-  transition:background-color .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease),
-             box-shadow .25s var(--ease), transform .2s var(--ease), filter .2s var(--ease); }
-:where(button:not(.quiet):not(.link):not(.undo):not(.danger), .btn:not(.quiet)) {
-  background-image:linear-gradient(180deg, var(--btn), var(--btn-2));
-  box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 1px 2px rgba(10,20,40,.2), 0 6px 16px -6px var(--accent-glow); }
-:where(button:not(.quiet):not(.link):not(.undo):not(.danger):not(:disabled), .btn:not(.quiet)):hover {
-  transform:translateY(-1px); filter:brightness(1.06);
-  box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 2px 4px rgba(10,20,40,.2), 0 10px 22px -8px var(--accent-glow); }
-:where(button:not(:disabled), .btn):active { transform:translateY(0); filter:brightness(.97); }
-button.quiet, .btn.quiet { background:var(--card); background-image:linear-gradient(180deg, var(--card), var(--surface-2));
-  border-color:var(--line-strong); color:var(--ink); box-shadow:var(--shadow-sm), var(--highlight); }
-button.quiet:not(:disabled):hover, .btn.quiet:hover { background:var(--card); border-color:var(--gold); transform:translateY(-1px); }
-button.danger { background:linear-gradient(180deg, var(--bad), var(--bad-2)); border:0; }
-button:disabled, button[aria-disabled="true"] { filter:saturate(.3); box-shadow:none; transform:none; }
-button.link, button.undo { color:var(--accent); background:none; text-decoration:underline;
-  text-decoration-color:color-mix(in srgb, currentColor 40%, transparent); text-underline-offset:3px; }
-/* The sidebar's controls and the tabs keep their own quiet look. */
-.side button, .tabs button, .mark button, .outcomes button, .theme button, .toast button,
-table.leads th button.sort { background-image:none; }
-.side button:hover, .tabs button:hover, .mark button:hover, .outcomes button:hover, .theme button:hover,
-table.leads th button.sort:hover, .toast button:hover { transform:none; filter:none; }
-.side .tour-btn { background:rgba(214,177,106,.12); border-color:rgba(214,177,106,.45); color:#f3e3bf; }
-.side .tour-btn:hover { background:rgba(214,177,106,.22); }
-
-/* Fields: taller, soft corners, a brass-free navy focus ring; a drawn chevron on pickers. */
-input:not([type=checkbox]):not([type=radio]), select, textarea { border-radius:var(--r-md); border-color:var(--line-strong);
-  background-color:var(--input); box-shadow:inset 0 1px 2px rgba(40,30,20,.04); }
-input:not([type=checkbox]):not([type=radio]), select { min-height:44px; padding-inline:var(--sp-3); }
-select { appearance:none; -webkit-appearance:none; padding-right:36px; background-repeat:no-repeat;
-  background-position:right 12px center; background-size:12px;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%23888070' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m1 1.5 5 5 5-5'/%3E%3C/svg%3E"); }
-input:focus, select:focus, textarea:focus { border-color:var(--accent-2); box-shadow:0 0 0 4px var(--accent-soft); }
-input[aria-invalid="true"], select[aria-invalid="true"] { border-color:var(--bad); box-shadow:0 0 0 4px color-mix(in srgb, var(--bad) 14%, transparent); }
-label { color:var(--ink); }
-#form .form-grid > label { font-variant-caps:all-small-caps; letter-spacing:.07em; font-size:var(--fs-md); color:var(--ink-2); }
-#form .form-grid > label > input, #form .form-grid > label > select, #form .form-grid > label > .hint {
-  font-variant-caps:normal; letter-spacing:0; font-size:var(--fs-sm); }
-#form .form-grid > label > input, #form .form-grid > label > select { font-size:var(--fs-base); color:var(--ink); }
-
-/* Tick boxes: a drawn box that fills navy with a white tick; a chip when it sits on its own. */
-input[type=checkbox]:not(#has-phone) { appearance:none; -webkit-appearance:none; flex:none; width:18px; height:18px; margin:0;
-  border:1.5px solid var(--line-strong); border-radius:5px; background:var(--input) no-repeat center / 12px;
-  cursor:pointer; transition:background-color .15s var(--ease), border-color .15s var(--ease); }
-input[type=checkbox]:not(#has-phone):checked { background-color:var(--btn); border-color:var(--btn);
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m1.5 5 3 3 6-6.5'/%3E%3C/svg%3E"); }
-input[type=checkbox]:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
-#form label.check { width:fit-content; padding:var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-3); border:1px solid var(--line-strong);
-  border-radius:var(--r-pill); background:var(--card); transition:background-color .2s var(--ease), border-color .2s var(--ease); }
-#form label.check:has(input:checked), .toolbar .phone-pick:has(input:checked) { background:var(--accent-tint); border-color:var(--accent-2); }
-.toolbar .phone-pick { border:1px solid transparent; border-radius:var(--r-pill); }
-label.check:has(input:focus-visible) { outline:3px solid var(--accent-2); outline-offset:2px; }
-
-/* The sidebar: deep navy with a brass bar on the page you are on, the page a raised pill. */
-.side { background:radial-gradient(400px 300px at 0 0, rgba(214,177,106,.10), transparent 70%),
-                   linear-gradient(180deg, var(--side), var(--side-2)); }
-.brand strong { font-size:17px; font-weight:600; letter-spacing:-.005em; color:#fff; }
-.brand span { color:var(--side-on); font-variant-caps:all-small-caps; letter-spacing:.1em; font-size:var(--fs-md); opacity:1; }
-nav a { border-radius:var(--r-pill); }
-nav a.on { background:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.07));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.12), 0 4px 12px -4px rgba(0,0,0,.4); }
-@media (min-width: 821px) {
-  nav a.on::after { content:""; position:absolute; left:6px; top:50%; width:3px; height:16px; margin-top:-8px;
-                    border-radius:3px; background:var(--side-on); }
-  nav a { padding-left:var(--sp-4); }
-  .brand::before { border-radius:12px; box-shadow:0 0 0 1px rgba(214,177,106,.45), 0 6px 16px rgba(0,0,0,.35); }
-  .side-bottom::before { content:""; display:block; height:1px; margin-bottom:var(--sp-2);
-    background:linear-gradient(90deg, transparent, rgba(214,177,106,.5), transparent); }
-}
-nav a.on .count { background:var(--side-on); color:var(--side-2); }
-.theme { border-radius:var(--r-pill); }
-.theme button, .theme button:first-child, .theme button:last-child { border-radius:var(--r-pill); }
-.theme button[aria-pressed="true"] { background:rgba(255,255,255,.92); color:var(--side); box-shadow:0 2px 6px rgba(0,0,0,.3); }
-
-/* Tabs: a pill track; the open tab raised, its count in navy. */
-.tabs { border-radius:var(--r-pill); background:var(--track); box-shadow:inset 0 1px 2px rgba(40,30,20,.06); }
-.tabs button { border-radius:var(--r-pill); }
-.tabs button.on, .tabs button.on:not(:disabled):hover { background:var(--card); box-shadow:var(--shadow-md), var(--highlight); }
-.tabs button.on .tab-n { background:linear-gradient(180deg, var(--btn), var(--btn-2)); }
-#leads-body .toolbar { border-radius:var(--r-pill); padding:6px; }
-#leads-body .toolbar input#filter, #leads-body .toolbar select { border-radius:var(--r-pill); }
-@media (max-width: 1099px) and (min-width: 701px) { #leads-body .toolbar { border-radius:var(--r-lg); } }
-
-/* The lead cards: serif names, the score in serif figures tinted by tier, a warm hover. */
-@media (min-width: 1100px) {
-  table.leads { border-spacing:0 12px; }
-  table.leads th { background:color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter:saturate(1.6) blur(14px);
-                   -webkit-backdrop-filter:saturate(1.6) blur(14px); color:var(--ink-2); }
-  table.leads th[aria-sort=ascending] .arrow, table.leads th[aria-sort=descending] .arrow { color:var(--gold); }
-  table.leads tbody td { border-color:var(--line); }
-  table.leads tbody td:first-child { border-radius:var(--r-lg) 0 0 var(--r-lg); }
-  table.leads tbody td:last-child { border-radius:0 var(--r-lg) var(--r-lg) 0; }
-  table.leads tbody tr:hover td { background:var(--hover); border-color:var(--line-strong); }
-  table.leads tbody tr td.score { font-family:var(--serif); font-size:34px; font-weight:500; letter-spacing:-.02em; }
-  table.leads tbody tr:hover td.score { background:var(--hover); }
-  td.score .tier-word { font-family:var(--font); }
-}
-table.leads tr.A td.score { color:var(--tier-a-ink); } table.leads tr.B td.score { color:var(--tier-b-ink); }
-table.leads tr.C td.score, table.leads tr.D td.score { color:var(--tier-c-ink); }
-table.leads td.c-name strong { font-size:19px; font-weight:560; letter-spacing:-.01em; }
-@media (max-width: 1099px) {
-  table.leads tr { border-radius:var(--r-lg); box-shadow:var(--shadow-sm), var(--highlight); }
-  table.leads td.score { border-radius:var(--r-pill); }
-  tr.A td.score { background:var(--a); } tr.B td.score { background:var(--b); }
-}
-.reason .pts { border-radius:var(--r-pill); }
-.badge { display:inline-flex; align-items:center; gap:6px; padding:1px 9px 1px 8px; background:var(--badge); color:var(--ink);
-         border:1px solid var(--line); }
-.badge::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--gold); flex:none; }
-.verified .v-tag::before { background:var(--good); }
-.mark button { border-radius:var(--r-pill); padding-inline:var(--sp-4); background:var(--card); border-color:var(--line-strong); }
-.mark button.yes.on { background:linear-gradient(180deg, #3a8a55, var(--good)); border-color:var(--good); }
-.mark button.no.on { background:linear-gradient(180deg, var(--bad), var(--bad-2)); border-color:var(--bad); }
-.outcomes button { background:var(--card); border-color:var(--line-strong); }
-.outcomes button.on, .outcomes button.on:not(:disabled):hover { background:linear-gradient(180deg, var(--btn), var(--btn-2)); border-color:var(--btn-2); color:var(--btn-ink); }
-.recent { border-left:3px solid var(--gold); border-radius:var(--r-lg); }
-.notes { font-family:var(--font); }
-table.plain.calls td.notes { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--ink-2);
-                             border-left:2px solid var(--gold-soft); padding-left:var(--sp-3); }
-@media (min-width: 701px) {
-  table.plain.calls tbody td:first-child { border-radius:var(--r-lg) 0 0 var(--r-lg); }
-  table.plain.calls tbody td:last-child { border-radius:0 var(--r-lg) var(--r-lg) 0; }
-  table.plain.calls tbody tr:hover td { background:var(--hover); }
-  table.plain.calls td.c-name strong { font-size:17px; font-weight:560; }
-}
-@media (max-width: 700px) { table.plain.calls tr { border-radius:var(--r-lg); box-shadow:var(--shadow-sm); } }
-table.plain th, #s-table th { color:var(--ink-2); }
-
-/* Notes and banners: tinted panels with a coloured edge. */
-.warn, .form-closed { background:var(--warn-bg); border:1px solid var(--warn-line); border-left:3px solid var(--gold); border-radius:var(--r-md); }
-.problem { border-left:3px solid var(--bad); border-radius:var(--r-lg); }
-.hint-line::before { background:var(--gold-soft); color:var(--gold-text); }
-#day-note::before { background:var(--good); box-shadow:0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
-
-/* Progress: a navy-to-brass bar, steps with ringed dots. */
-.bar { background:var(--surface-3); height:10px; }
-.bar > div { background:linear-gradient(90deg, var(--btn-2), var(--accent-2) 60%, var(--gold)); }
-.step.done .dot { background:var(--btn); border-color:var(--btn); }
-.step.now .dot { border-color:var(--gold); border-top-color:transparent; }
-progress, meter { accent-color:var(--btn); }
-
-/* Empty states: a small ornament (a navy-to-brass ring) above the words. */
-.empty::before { content:""; display:block; width:44px; height:44px; margin:0 auto var(--sp-4); border-radius:50%;
-  background:conic-gradient(from 210deg, var(--accent-2), var(--gold), var(--accent-2));
-  -webkit-mask:radial-gradient(circle, transparent 15px, #000 16px); mask:radial-gradient(circle, transparent 15px, #000 16px); opacity:.85; }
-.empty strong { font-size:22px; font-weight:560; }
-
-/* Stats: big serif figures; tiles lit along the top in navy and brass. */
-.tile .value { font-family:var(--serif); font-size:54px; font-weight:500; letter-spacing:-.03em; }
-.tile .value small { font-family:var(--font); }
-.tile::before { background:linear-gradient(90deg, var(--btn-2), var(--accent-2)); height:3px; }
-.tiles .tile:nth-child(2)::before { background:linear-gradient(90deg, var(--gold-text), var(--gold)); }
-#s-table td:first-child { font-family:var(--serif); font-size:17px; }
-
-/* Dialogs: a blurred, dimmed backdrop, a large radius, a serif title over a brass hairline. */
-dialog { border-radius:var(--r-lg); background:var(--card); box-shadow:var(--shadow-lg), var(--highlight); }
-dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturate(1.2); }
-dialog[open] { animation:rise .35s var(--ease); }
-dl.confirm-list { background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-2) var(--sp-4); }
-.history .item { background:var(--surface-2); border-color:var(--line); border-radius:var(--r-md); }
-
-/* Toast and the tutorial. */
-.toast { border-radius:var(--r-pill); padding-left:var(--sp-5); }
-.toast button { border-radius:var(--r-pill); }
-.tour-box { border-top:0; border-radius:var(--r-lg); }
-.tour-box::before { content:""; position:absolute; inset:0 24px auto; height:2px; border-radius:2px;
-                    background:linear-gradient(90deg, transparent, var(--gold), transparent); }
-.tour-count { color:var(--gold-text); font-variant-caps:all-small-caps; letter-spacing:.1em; font-size:var(--fs-md); }
-.tour-offer { border-left:3px solid var(--gold); border-radius:var(--r-lg); }
-.tour-spot { box-shadow:0 0 0 9999px rgba(8,12,20,.6), 0 0 0 3px var(--gold); border-radius:var(--r-md); }
-
-/* Map. */
-.map-box { border-radius:var(--r-lg); }
-#map .leaflet-popup-content-wrapper { border-radius:var(--r-lg); }
-.area-list li { border-radius:var(--r-md); background:var(--surface-2); }
-
-/* Motion: things rise into place; text is never faded in. */
+/* ==== Motion: things rise into place; text is never faded in ========================== */
 @keyframes rise { from { transform:translateY(12px); } to { transform:none; } }
 .page:not([hidden]) .page-head { animation:rise .4s var(--ease); }
-.toast:not([hidden]) { animation:rise .3s var(--ease); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation:none !important; transition:none !important; }
+  button:not(:disabled):active, .btn:active { transform:none; }
 }
 @media (forced-colors: active) {
   .card, .tabs, .toolbar, table.leads tbody td, dialog, .badge, .tile { border:1px solid CanvasText; }
