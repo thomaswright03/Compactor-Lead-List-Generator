@@ -1889,6 +1889,17 @@ def test_the_line_beside_find_leads_says_a_search_is_running(page, monkeypatch):
     expect(note).to_be_hidden()
 
 
+def test_a_pages_address_typed_in_the_address_bar_opens_that_page(page, site):
+    """/leads, /calls, /map, /stats and /find typed into the address bar open the app on
+    that page, never raw data or an error page."""
+    for name in ("leads", "calls", "map", "stats", "find"):
+        page.goto(f"{site}{name}")                     # the site's address ends in "/"
+        expect(page.locator(f"#page-{name}")).to_be_visible()
+        assert page.url == f"{site}#{name}", page.url
+        assert not page.inner_text("body").lstrip().startswith("{")
+        assert "isn't available" not in page.title() and "not found" not in page.title()
+
+
 def test_saving_a_call_from_the_keyboard_keeps_the_focus_on_that_business(page):
     row = _row(page, "Hampton")
     key = row.get_attribute("data-key")
