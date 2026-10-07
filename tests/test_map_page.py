@@ -351,10 +351,11 @@ def test_the_find_page_and_the_map_count_and_name_the_areas_alike():
     find = client.get("/searches").get_json()["current"]["coverage"]
     shown = _data(client)
     assert centre.name == "Salt Lake City"
-    assert find["text"].startswith("Covered so far: 7 of the 9 areas within 30 miles searched in full. Still filling "
-                                   "in, in the background")
+    assert find["text"].startswith("Covered so far: 7 of the 9 areas within 30 miles searched in full; partly "
+                                   "searched: Salt Lake City. Still filling in, in the background")
     assert ": Salt Lake City and Layton. " in find["text"]
-    assert find["short"].startswith("7 of 9 areas searched in full so far; filling in Salt Lake City and Layton")
+    assert find["short"].startswith("7 of 9 areas searched in full so far; partly searched: Salt Lake City; "
+                                    "filling in Salt Lake City and Layton")
     assert shown["coverage"].endswith(": 7 of the 9 areas searched in full, the rest still being asked in the "
                                       "background.")
     statuses = _statuses(shown)
@@ -362,6 +363,78 @@ def test_the_find_page_and_the_map_count_and_name_the_areas_alike():
     assert set(statuses.values()) == {"searched"}
     for text in (find["text"], find["short"], shown["coverage"], *(a["name"] for a in shown["areas"])):
         assert "centre" not in text and "north-west" not in text, text
+
+
+def _named(text, label):
+    """The area names a coverage text lists after `label` ("partly searched: ")."""
+    if label not in text:
+        return set()
+    said = text.split(label, 1)[1].split(".", 1)[0].split(";", 1)[0].split(" (", 1)[0]
+    return {_name.strip() for chunk in said.split(", ") for _name in chunk.split(" and ")}
+
+
+@pytest.mark.parametrize("state", ["stopped", "new search", "gave_up", "interrupted", "filling", "stopping"])
+def test_a_partly_searched_area_is_never_called_not_searched(state, monkeypatch):
+    """Three of the four quarters of the center's area (Salt Lake City) came in, and none
+    of Layton: in every state of the filling in, the Find page's status and its Details
+    line name Salt Lake City as partly searched and only Layton as not searched, as the
+    Map page shades them."""
+    centre, layton = next(a for a in area_map.areas() if a.n == 1), _areas()["Layton"]
+    south, west, north, east = centre.box
+    mid_lat, mid_lon = (south + north) / 2, (west + east) / 2
+    quarter = [mid_lat, mid_lon, north, east]         # the one quarter that didn't come in
+    missing = [quarter, list(layton.box)]
+    fill = {"state": "filling", "left": 2, "areas": 9, "boxes": missing, "found": 0, "new": 0, "rounds": 2,
+            "where": "Salt Lake City and Layton", "until": time.time() + 600}
+    if state in ("stopped", "new search"):
+        fill.update(state="stopped", why=fillin.PAUSED if state == "stopped" else fillin.NEW_SEARCH)
+    elif state == "gave_up":
+        fill["state"] = "gave_up"
+    elif state == "interrupted":                       # a restart cut it short (daily reads it so)
+        fill["until"] = time.time() - daily.FILL_GRACE_SECONDS - 5
+    elif state == "stopping":                          # searching was paused: it is stopping
+        monkeypatch.setenv(config.SEARCH_PAUSED_ENV, "1")
+    _today_of_aarcos_area(map_areas={"missing": missing}, fill=fill)
+    client = web.create_app().test_client()
+    current = client.get("/searches").get_json()["current"]
+    find = current["coverage"]
+    shown = _statuses(_data(client))
+    assert shown.pop("Salt Lake City") == "partly" and shown.pop("Layton") in ("missed", "asking")
+    assert set(shown.values()) == {"searched"}
+    for text in (find["text"], find["short"]):
+        assert _named(text, "partly searched: ") == {"Salt Lake City"}, text
+        assert "Salt Lake City didn't come in" not in text and "these weren't searched" not in text
+    assert find["text"].startswith("Covered so far: " if state in ("filling", "stopping") else "Covered: ")
+    assert find["text"].count("Salt Lake City") == (2 if state in ("filling", "stopping") else 1)
+    assert "7 of the 9 areas within 30 miles searched in full; partly searched: Salt Lake City" in find["text"]
+    if state in ("filling", "stopping"):
+        # Still being filled in: both are named among the areas being filled in, as the Map
+        # page says (partly searched, the rest still filling in; not searched yet).
+        assert find["filling"] and "Salt Lake City and Layton" in find["text"]
+    else:
+        assert find["state"] == ("stopped" if state == "new search" else state)
+        for text in (find["text"], find["short"]):
+            assert _named(text, "not searched: ") == {"Layton"}, text
+        statuses = _statuses(_data(client))
+        for name in _named(find["text"], "partly searched: "):
+            assert statuses[name] == area_map.PARTLY
+        for name in _named(find["text"], "not searched: "):
+            assert statuses[name] == area_map.MISSED
+    assert dict(current["details"])["Free map data: area covered"] == find["short"]
+
+
+def test_the_problem_report_never_calls_a_partly_searched_area_missing(monkeypatch):
+    """When the filling in gives up, the administrator's problem report says the areas
+    left came in only in part, or not at all, when some of them partly came in."""
+    from leadgen import alerts
+    sent: list[str] = []
+    monkeypatch.setattr(alerts, "report", lambda kind, text, **kw: sent.append(text))
+    day = _today_of_aarcos_area()
+    fill = {"state": "gave_up", "left": 2, "areas": 9, "where": "Salt Lake City and Layton"}
+    fillin._finish(day, fill, 0, area_map.Tally(9, 7, ("Salt Lake City", "Layton"), ("Salt Lake City",)))
+    assert sent == ["Today's search stayed incomplete: 2 of the 9 areas (around Salt Lake City and Layton) came in "
+                    "only in part, or not at all, from the free map data today, so businesses there are missing "
+                    "until the next search."]
 
 
 def test_a_record_an_earlier_version_saved_still_reads_alike_on_both_pages():
@@ -373,7 +446,8 @@ def test_a_record_an_earlier_version_saved_still_reads_alike_on_both_pages():
                                       "where": "the area around the search's centre and Layton"})
     client = web.create_app().test_client()
     find = client.get("/searches").get_json()["current"]["coverage"]
-    assert "Salt Lake City and Layton didn't come in today" in find["text"] and "centre" not in find["text"]
+    assert "; not searched: Salt Lake City and Layton. The rest didn't come in" in find["text"]
+    assert "centre" not in find["text"]
     statuses = _statuses(_data(client))
     assert statuses.pop("Salt Lake City") == statuses.pop(layton.name) == "missed"
     assert set(statuses.values()) == {"searched"}

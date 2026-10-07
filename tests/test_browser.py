@@ -1436,10 +1436,10 @@ def test_the_find_page_says_how_the_filling_in_of_missing_areas_stands(browser, 
     daily.finish(day, {"fill": {**fill, "state": "stopped", "why": "paused", "left": 2, "found": 18, "new": 18,
                                 "where": "Coalville and the area to the north-west"}})
     tab.evaluate("loadSearches()")
-    expect(note).to_have_text("Covered: about 7 of the 9 areas within 30 miles. Filling in stopped because "
-                              "searching was paused, so these weren't searched today: Coalville and the area to "
-                              "the northwest. The 530 businesses already found are on the Leads page, ready to "
-                              "call now.")
+    expect(note).to_have_text("Covered: about 7 of the 9 areas within 30 miles; not searched: Coalville and the "
+                              "area to the northwest. Filling in stopped because searching was paused, so the rest "
+                              "wasn't searched today. The 530 businesses already found are on the Leads page, ready "
+                              "to call now.")
     assert "never" not in tab.inner_text("#page-find")
     context.close()
 
@@ -1854,6 +1854,51 @@ def test_the_history_shows_todays_search_while_it_runs(page, monkeypatch):
     go.set()
     page.wait_for_selector("#done-card:not([hidden])")
     expect(page.locator("#history .h-leads")).not_to_contain_text("Running…")
+
+
+def test_the_line_beside_find_leads_says_a_search_is_running(page, monkeypatch):
+    """While today's search runs, the line beside the greyed-out Find leads button says so
+    in words (its dot never stands alone), here and after a reload."""
+    from leadgen.pipeline import RunResult
+    go = threading.Event()
+
+    def run(params, progress):
+        go.wait(20)
+        return RunResult([], params.center, params.place, [], {"leads kept": 0, "seconds": 1})
+    monkeypatch.setattr(web.finding, "run", run)
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    page.fill("input[name=location]", "Murray")
+    page.click("#go")
+    page.click("#confirm-go")
+    page.wait_for_selector("#progress-card:not([hidden])")
+    note = page.locator("#day-note")
+    try:
+        expect(note).to_have_text("Today's search is running; progress is below.")
+        expect(note).to_be_visible()
+        expect(page.locator("#go")).to_be_disabled()
+        page.reload()                                  # the page picks the running search up again
+        page.wait_for_selector("#progress-card:not([hidden])")
+        expect(note).to_have_text("Today's search is running; progress is below.")
+        expect(page.locator("#go")).to_be_disabled()
+    finally:
+        go.set()
+    page.wait_for_selector("#done-card:not([hidden])")
+    expect(note).to_contain_text("The next one can run tomorrow.")
+    # With no words the line is hidden, so the dot can't show on its own.
+    page.evaluate("setGo(false, '')")
+    expect(note).to_be_hidden()
+
+
+def test_a_pages_address_typed_in_the_address_bar_opens_that_page(page, site):
+    """/leads, /calls, /map, /stats and /find typed into the address bar open the app on
+    that page, never raw data or an error page."""
+    for name in ("leads", "calls", "map", "stats", "find"):
+        page.goto(f"{site}{name}")                     # the site's address ends in "/"
+        expect(page.locator(f"#page-{name}")).to_be_visible()
+        assert page.url == f"{site}#{name}", page.url
+        assert not page.inner_text("body").lstrip().startswith("{")
+        assert "isn't available" not in page.title() and "not found" not in page.title()
 
 
 def test_saving_a_call_from_the_keyboard_keeps_the_focus_on_that_business(page):

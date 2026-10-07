@@ -13,7 +13,7 @@ import os
 import time  # noqa: F401 - tests patch web.time.sleep
 from typing import Any
 
-from flask import Flask, jsonify, render_template, request, session
+from flask import Flask, jsonify, redirect, render_template, request, session
 from flask.typing import ResponseReturnValue
 from werkzeug.exceptions import HTTPException
 
@@ -56,6 +56,9 @@ ERROR_PAGES = {
     500: ("Something went wrong", "The problem has been logged. Try again in a minute."),
     503: ("Can't reach the saved data right now", "Nothing is lost. Try again in a minute."),
 }
+# The pages of the app, each at its "#" address (/#leads): opening /leads in the browser
+# lands there (_register_pages page_address).
+PAGES = ("find", "leads", "calls", "map", "stats")
 STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 
 
@@ -102,6 +105,14 @@ def _register_pages(app: Flask) -> None:
     @app.teardown_request
     def close_scope(exc: BaseException | None) -> None:
         store.end_scope()
+
+    # A page's address typed or bookmarked without its "#" (/leads, /map) opens the app on
+    # that page; the page's own data requests to the same addresses (/leads, /stats) still
+    # get their data. After the login check, which runs first.
+    @app.before_request
+    def page_address() -> ResponseReturnValue | None:
+        name = request.path.strip("/")
+        return redirect(f"/#{name}") if name in PAGES and wants_page() else None
 
     @app.errorhandler(HTTPException)
     def http_error(exc: HTTPException) -> ResponseReturnValue:

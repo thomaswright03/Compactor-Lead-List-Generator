@@ -2,12 +2,16 @@
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported setGo, loadSearches */
 // The note beside Find leads says how the day stands (in plain, muted text); a refusal or a
-// problem goes in the red line under it (showError) and stays until the form is edited.
+// problem goes in the red line under it (showError) and stays until the form is edited. With
+// no words it is hidden, so its dot never stands alone.
 /** @param {boolean} enabled @param {string} [note] */
 function setGo(enabled, note) {
   $("go").disabled = !enabled;
   if (note !== undefined) $("day-note").textContent = note;
+  $("day-note").hidden = !$("day-note").textContent;
 }
+// Beside the greyed-out button while today's search runs (its progress card is under it).
+const RUNNING_NOTE = "Today's search is running; progress is below.";
 // Once today's search is used, the form reads as closed: a notice at its top and its fields
 // greyed out, so nobody edits settings for a search that can't run until tomorrow.
 /** @param {string} note "" when the form is open */
@@ -82,7 +86,7 @@ async function loadSearches() {
   const used = body.used_today ? today : null;
   lockForm(!S.job && used && !body.running && used.leads !== undefined
     ? "The next one can run tomorrow, from midnight Utah time." : "");
-  if (S.job) setGo(false, "");
+  if (S.job) setGo(false, RUNNING_NOTE);
   else if (body.paused) setGo(false, "Searching is paused by the administrator.");
   else if (body.cut_off) setGo(false, `${RESTART_SAVING} ${availableAgain(body)}`);
   else if (used && used.leads === undefined && !body.running) {
@@ -442,7 +446,7 @@ function reconnecting(jobId) {
 /** @param {string} jobId @param {number} [misses] how many times in a row the server didn't answer */
 async function follow(jobId, misses = 0) {
   S.job = jobId;
-  setGo(false, ""); $("done-card").hidden = true; $("search-failed").hidden = true;
+  setGo(false, RUNNING_NOTE); $("done-card").hidden = true; $("search-failed").hidden = true;
   const stop = new AbortController();
   const cue = setTimeout(() => { if (S.job === jobId && !FOLLOW.reconnecting) reconnecting(jobId); }, FOLLOW.cueMs);
   const limit = setTimeout(() => stop.abort(), FOLLOW.limitMs);

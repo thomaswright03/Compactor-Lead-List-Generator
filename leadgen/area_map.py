@@ -257,6 +257,12 @@ class Tally:
     areas: int                   # how many areas the search has
     searched: int                # how many of them were searched in full
     left: tuple[str, ...]        # the others' names, nearest the center first
+    partly: tuple[str, ...] = ()  # those of them partly searched (the Map page's PARTLY)
+
+    @property
+    def missed(self) -> tuple[str, ...]:
+        """The names of the areas not searched at all (the Map page's "Not searched")."""
+        return tuple(n for n in self.left if n not in self.partly)
 
     def text(self) -> str:
         """"6 of the 9 areas searched in full", or "all 9 areas searched"."""
@@ -277,8 +283,9 @@ def tally(lat: float, lon: float, miles: float, missing: Iterable[Any]) -> Tally
             boxes.append((float(box[0]), float(box[1]), float(box[2]), float(box[3])))
     drawn = search_areas(lat, lon, miles)
     statuses = _statuses(drawn, boxes)
-    return Tally(len(drawn), statuses.count(SEARCHED),
-                 tuple(a.name for a, status in zip(drawn, statuses, strict=True) if status != SEARCHED))
+    named = list(zip(drawn, statuses, strict=True))
+    return Tally(len(drawn), statuses.count(SEARCHED), tuple(a.name for a, status in named if status != SEARCHED),
+                 tuple(a.name for a, status in named if status == PARTLY))
 
 
 def _search_place(record: dict[str, Any]) -> tuple[float, float, float] | None:

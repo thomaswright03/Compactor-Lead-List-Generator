@@ -274,6 +274,36 @@ def test_logged_out_browsers_go_to_the_login_page():
     assert missing.status_code == 302
 
 
+# What a browser sends when an address is typed, bookmarked or opened from a link.
+BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+
+
+@pytest.mark.parametrize("name", ["leads", "calls", "map", "stats", "find"])
+def test_a_pages_address_typed_in_the_browser_opens_that_page(name):
+    """/leads, /calls, /map, /stats and /find typed into the address bar open the app on
+    that page (/#leads), never raw data or an error page; the page's own data requests to
+    the same addresses still get their data."""
+    client = web.create_app().test_client()
+    for path in (f"/{name}", f"/{name}/"):
+        res = client.get(path, headers={"Accept": BROWSER_ACCEPT})
+        assert res.status_code == 302 and res.headers["Location"] == f"/#{name}", path
+    assert client.get(f"/{name}", headers={"Accept": BROWSER_ACCEPT}, follow_redirects=True).status_code == 200
+    # Logged out, the login page comes first, as for any page.
+    locked = web.create_app(password="s3cret", username="Matt").test_client()
+    res = locked.get(f"/{name}", headers={"Accept": BROWSER_ACCEPT})
+    assert res.status_code == 302 and res.headers["Location"].endswith("/login")
+
+
+def test_the_pages_own_data_requests_still_get_data():
+    client = web.create_app().test_client()
+    for path in ("/leads", "/stats"):
+        for accept in (None, "*/*", "application/json"):
+            res = client.get(path, headers={"Accept": accept} if accept else {})
+            assert res.status_code == 200 and res.mimetype == "application/json", (path, accept)
+    assert client.get("/map-data", headers={"Accept": BROWSER_ACCEPT}).mimetype == "application/json"
+    assert client.post("/calls", json={}).status_code != 302       # logging a call is never redirected
+
+
 def test_login_page_says_what_it_is_and_whom_to_ask(monkeypatch):
     client = web.create_app(password="s3cret", username="Matt").test_client()
     # Built in: the owner, his number ready to tap.

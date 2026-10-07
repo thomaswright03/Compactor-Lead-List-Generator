@@ -237,7 +237,10 @@ def _finish(day: str, fill: dict[str, Any], unsaved: int, counted: area_map.Tall
             left, areas = len(counted.left), counted.areas
         if left:
             missing = (f"{left} of the {areas} areas" if areas > 1 else "part of the area")
-            final = (f"{missing[:1].upper()}{missing[1:]}{_around(fill)} never came in from the free map "
+            # Areas some of which came in are not called missing as a whole (coverage()).
+            how = "came in only in part, or not at all," if counted is not None and counted.partly else \
+                "never came in"
+            final = (f"{missing[:1].upper()}{missing[1:]}{_around(fill)} {how} from the free map "
                      "data today, so businesses there are missing until the next search.")
         else:
             final = f"{unsaved:,} businesses found while filling in couldn't be saved."
@@ -256,11 +259,13 @@ def _around(fill: dict[str, Any]) -> str:
 # Find leads page (coverage()["text"]) and once, briefly, in its history's Details
 # (coverage()["short"]): how much of the area is covered, which towns are still being
 # filled in and until when, that the businesses found can be called now, and that the
-# rest appear on their own. The day's record keeps the numbers (its details' "osm areas
-# searched", the filling in's "areas", "left", "where" and state); the words are worked
-# out from them each time, so records saved by earlier versions read the same way and
-# nothing rewrites a record. Internal counts (how many parts were asked again) are never
-# shown.
+# rest appear on their own. Each area not searched in full is named as the Map page
+# shades it: partly searched (some of its businesses came in), or, once the filling in
+# has ended, not searched; never one as missing when part of it came in. The day's
+# record keeps the numbers (its details' "osm areas searched", the filling in's "areas",
+# "left", "boxes", "where" and state); the words are worked out from them each time, so
+# records saved by earlier versions read the same way and nothing rewrites a record.
+# Internal counts (how many parts were asked again) are never shown.
 
 # "about 2 of 9 areas" (the search's own figure), and the towns an incomplete search's
 # reason names as missing.
@@ -300,6 +305,9 @@ def coverage(record: dict[str, Any], paused: bool = False, earlier: bool = False
     if counted is not None and counted.areas > 1:
         areas, left = counted.areas, len(counted.left)
         towns = area_map.names_text(counted.left)
+        # Each area not searched in full named as the Map page names its status: partly
+        # searched (some of its businesses came in), or not searched at all.
+        some, none = area_map.names_text(counted.partly), area_map.names_text(counted.missed)
         covered = f"{areas - left} of the {areas} areas{within} searched in full"
         short = f"{areas - left} of {areas} areas searched in full"
         if not left and state == FILLING:
@@ -314,7 +322,10 @@ def coverage(record: dict[str, Any], paused: bool = False, earlier: bool = False
             left = areas - int(first.group(1)) if first else 1
             said = _NOT_YET.search(str(record.get("reason") or ""))
             towns = said.group(1) if said else ""
+        # A record an earlier version saved names only the areas missing, which the Map
+        # page reads as not searched (area_map._named_missing).
         towns = area_map.plain_names(towns, record)
+        some, none = "", towns
         covered = f"about {areas - left} of the {areas} areas{within}" if areas > 1 else f"part of the {area}"
         short = f"About {areas - left} of {areas} areas" if areas > 1 else "Part of the area"
     if not left:
@@ -323,6 +334,12 @@ def coverage(record: dict[str, Any], paused: bool = False, earlier: bool = False
     them = (f"The {leads:,} businesses already found are" if leads != 1 else "The business already found is")
     ready = f"{them} on the Leads page, ready to call now"
     rest = towns or "the rest of the area"
+    # "6 of the 9 areas searched in full; partly searched: Salt Lake City", and (once the
+    # filling in has ended) "; not searched: Layton and Park City".
+    in_part = f"; partly searched: {some}" if some else ""
+    so_far, short_so_far = covered + in_part, f"{short} so far{in_part}"
+    named = so_far + (f"; not searched: {none}" if none else "")
+    short_named = short + in_part + (f"; not searched: {none}" if none else "")
     if state == COMPLETE:
         later = f" ({found:,} more businesses, {new:,} new)" if found else ""
         text = (f"Covered: the whole {area}. The last areas came in later, in the background{later}. "
@@ -330,30 +347,30 @@ def coverage(record: dict[str, Any], paused: bool = False, earlier: bool = False
         short = (f"All {areas} areas" if areas > 1 else "The whole area") + \
             (f" ({found:,} businesses came in later, in the background)" if found else ", some later in the background")
     elif state == FILLING and paused:
-        text = (f"Covered so far: {covered}. Stopping the filling in of {rest}, because searching was paused… "
+        text = (f"Covered so far: {so_far}. Stopping the filling in of {rest}, because searching was paused… "
                 f"{ready}.")
-        short = f"{short} so far; stopping the filling in (searching was paused)"
+        short = f"{short_so_far}; stopping the filling in (searching was paused)"
     elif state == FILLING:
         until = f" until about {fill['until_text']}" if fill.get("until_text") else ""
-        text = (f"Covered so far: {covered}. Still filling in, in the background{until}: {rest}. {ready}; "
+        text = (f"Covered so far: {so_far}. Still filling in, in the background{until}: {rest}. {ready}; "
                 "new ones from the rest of the area will appear there on their own.")
-        short = f"{short} so far; filling in {rest}{until.replace(' about', '')}"
+        short = f"{short_so_far}; filling in {rest}{until.replace(' about', '')}"
         if earlier:
             text = f"The search of {record.get('when') or record.get('day')} is still filling in. {text} " \
                    "It stops when today's search starts."
     elif state == STOPPED:
         because = NEW_SEARCH_TEXT if fill.get("why") == NEW_SEARCH else "searching was paused"
-        text = (f"Covered: {covered}. Filling in stopped because {because}, so these weren't searched today: "
-                f"{rest}. {ready}.")
-        short = f"{short}; not searched: {rest} ({because})"
+        text = (f"Covered: {named}. Filling in stopped because {because}, so the rest wasn't searched today. "
+                f"{ready}.")
+        short = f"{short_named} ({because})"
     elif state == INTERRUPTED:
-        text = (f"Covered: {covered}. A server restart cut the filling in short, so businesses in {rest} are "
-                f"missing until the next search. {ready}.")
-        short = f"{short}; missing: {rest} (a server restart cut the filling in short)"
+        text = (f"Covered: {named}. A server restart cut the filling in short, so businesses in the rest of the "
+                f"area are missing until the next search. {ready}.")
+        short = f"{short_named} (a server restart cut the filling in short)"
     else:                                    # gave up, or never filled in
-        text = (f"Covered: {covered}. {_cap(rest)} didn't come in today, so businesses there are missing until "
-                f"the next search. {ready}.")
-        short = f"{short}; {rest} didn't come in"
+        text = (f"Covered: {named}. The rest didn't come in from the free map data today, so businesses there "
+                f"are missing until the next search. {ready}.")
+        short = f"{short_named} (the rest didn't come in)"
     return {"state": state, "text": text, "short": short, "filling": state == FILLING, "found": found}
 
 
