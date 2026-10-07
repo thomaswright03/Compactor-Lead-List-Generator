@@ -71,7 +71,7 @@ Good to know:
   ready to call now; new ones from the rest of the area will appear there on their
   own." **You can start calling straight away**: nothing has gone wrong, and the new
   businesses appear on the Leads page by themselves. The line then says "Covered:
-  the whole 30-mile area" (or which towns didn't come in today). It is still the
+  the whole 30-mile area" (or which areas were only partly searched and which weren't searched, the same as the Map page). It is still the
   day's one search. If it is still going at midnight, the line stays (naming the
   search it belongs to) until it ends, and it stops by itself when the next day's
   search starts.

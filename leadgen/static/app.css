@@ -337,6 +337,7 @@ details.advanced .form-grid { margin-top:var(--sp-3); }
 #day-note::before { content:""; display:inline-block; width:8px; height:8px; margin-right:var(--sp-2); border-radius:50%;
                     background:var(--good); box-shadow:0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); vertical-align:1px; }
 #form.closed #day-note::before { background:var(--tier-d); box-shadow:0 0 0 3px color-mix(in srgb, var(--tier-d) 22%, transparent); }
+#day-note:empty::before { display:none; }               /* never a dot without words */
 #go-error { margin-top:var(--sp-3); }               /* why a search can't start (no field of its own) */
 /* Where a search actually ran (under what was typed), a far place, a stopped search. */
 .sub.far { color:var(--warn-ink); font-weight:600; }

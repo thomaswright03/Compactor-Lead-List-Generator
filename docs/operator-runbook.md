@@ -130,7 +130,7 @@ found; its progress card says "Stopping: the administrator paused searching", it
 result and the search history say "Stopped by the administrator", and today's search
 stays used (one a day). The background filling in of map areas a search missed stops
 within a few seconds as well (no more map requests), and Find leads then says "Covered:
-… Filling in stopped because searching was paused, so these weren't searched today: …". A search stopped before it found anything gives the day back
+… searched in full; partly searched: …; not searched: …. Filling in stopped because searching was paused, so the rest wasn't searched today. …". A search stopped before it found anything gives the day back
 and is listed as "Stopped by the administrator", not as failed, and not under Recent
 problems or on the webhook (a deliberate stop is not a problem). If the switches can't
 be read while a search runs (the database stopped answering), a switch last seen on
@@ -268,16 +268,17 @@ for up to an hour, within that same search (not a second one). Find leads says h
 much of the area was covered in **one** status line, for example "Covered so far:
 about 6 of the 9 areas within 30 miles. Still filling in, in the background until
 about 1:36 PM: Kaysville and Centerville. The 418 businesses already found are on the
-Leads page, ready to call now; ...". It ends as "Covered: the whole 30-mile area", or
-names the towns that didn't come in today (that one is also reported under Recent
-problems and to the webhook). The search history's Details say it in one line ("Free
+Leads page, ready to call now; ...". It ends as "Covered: the whole 30-mile area", or,
+if some areas never came in, names the areas partly searched and the areas not searched,
+as the Map page labels them (that one is also reported under Recent problems and to the
+webhook). The search history's Details say it in one line ("Free
 map data: area covered"). No other note repeats it, and internal counts (how many
 areas were asked again) are not shown. The words are worked out from the record's
 numbers each time it is shown, so searches saved by earlier versions read the same
 way and no saved record is rewritten.
 
 Pausing searching stops the filling in too, within a few seconds (the line says
-"Stopping the filling in ...", then which towns weren't searched today), and so does
+"Stopping the filling in ...", then which areas were partly searched and which weren't searched), and so does
 the next day's search starting: a filling in that runs past midnight stays on Find
 leads until it ends. A restart or deploy during it cuts it short (the line then says
 so). Only a search that failed outright (an unknown place, nothing found, the leads

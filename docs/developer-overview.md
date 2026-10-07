@@ -432,8 +432,10 @@ AARCO's own show no score or tier.
   background until about 1:36 PM: Kaysville, Centerville and Morgan. The 418 businesses
   already found are on the Leads page, ready to call now; new ones from the rest of the
   area will appear there on their own." It then says "Covered: the whole 30-mile area",
-  or which towns didn't come in today (or, when searching was paused, which weren't
-  searched).
+  or, once the filling in has ended, names each area not searched in full as the Map
+  page does: partly searched (some of its businesses came in) or not searched. Typing
+  /find, /leads, /calls, /map or /stats in the browser opens that page of the app
+  (/#leads, …); the page's own data requests to /leads and /stats still return JSON.
 - **Said once.** The search history's Details say the same in one line ("Free map data:
   area covered"); no other note repeats it, and internal counts (how many areas were
   asked again) are never shown.

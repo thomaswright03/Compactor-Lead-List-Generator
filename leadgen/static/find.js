@@ -368,7 +368,7 @@ function whereCell(s) {
   const place = s.place || s.found_near;
   if (place && place.toLowerCase() !== (s.location || "").toLowerCase()) {
     const far = typeof s.miles === "number" && s.miles > CONFIG.area_miles;
-    const miles = typeof s.miles === "number" ? ` · ${milesText(s.miles)} from AARCO` : "";
+    const miles = typeof s.miles === "number" ? `${DOT}${milesText(s.miles)} from AARCO` : "";
     td.append(el("span", `Searched around ${place}${miles}`, `sub${far ? " far" : ""}`));
   } else if (typeof s.miles === "number" && s.miles > CONFIG.area_miles) {
     td.append(el("span", `${milesText(s.miles)} from AARCO`, "sub far"));
