@@ -186,7 +186,7 @@ The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
 `leadgen/saved.py`, `marks.py`, `calls.py` and `daily.py` keep the saved data
 (`store.py` is the database); `alerts.py` records problems and sends them to the
 webhook. The website is `leadgen/web/`: `auth.py` (login),
-`finding.py` (Find leads), `leads.py` (the saved list, marks, calls, stats,
+`finding.py` (Find leads: start and follow the search; beside it `search_form.py`, `place.py`, `search_progress.py`, `search_words.py`, `history.py` and `switch_routes.py`, one job each), `leads.py` (the saved list, marks, calls, stats,
 downloads), `mapping.py` (the Map page's data, `/map-data`, from `leadgen/area_map.py`)
 and `common.py`. `export.py` lays out the CSV and Excel files and
 `xlsx.py` writes the Excel format; `reference.py` copies the site's marks into
@@ -682,7 +682,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   score below 20", not matching the search words, over a lead limit), leads kept,
   competitors among them, the leads per tier A to D, then the paid lookups and how
   long it took. Before anything is spent, the page asks the server where the search will
-  run (`GET /place`, `web/finding.py`): the place found for what was typed (offline for
+  run (`GET /place`, `web/place.py`): the place found for what was typed (offline for
   AARCO's shop, typed as its address, "AARCO" or the old spelling "Arco", and the Salt
   Lake area's towns in `geo.UTAH_PLACES`, typed bare or with ", UT";
   online lookups ask in Utah first unless another state is named) and its distance from
@@ -733,7 +733,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   neutral sentence (`interrupted.RESTARTED`, `RESTARTED` in `find.js`; a test keeps
   them equal), as the page can't tell a deploy from a crash; rows saved by earlier
   versions ("Interrupted by a server restart (the site was updated or restarted): ...")
-  are shown in it too (`interrupted.plain_reason`, in `finding._for_page`), never
+  are shown in it too (`interrupted.plain_reason`, in `history._for_page`), never
   rewritten. Until the run is finished `/searches` says `cut_off`, with `cut_off_wait`
   (seconds until it can be: `interrupted.wait`, from the old server's last heartbeat)
   and `cut_off_until` (that time in Utah): Find leads says "...; what it had found is
@@ -793,7 +793,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   full (`where`: named as the Map page names them, each by its biggest town from the
   bundled places table, or its direction from the center, nearest first:
   `fillin.where`, `area_map.names_text`), businesses found and new). **How much of the area a search covered is said once**: `fillin.coverage(record)`
-  words it from the record's numbers each time `/searches` is read (`finding._for_page`),
+  words it from the record's numbers each time `/searches` is read (`history._for_page`),
   as `coverage.text` (the Find page's one status, `#coverage-note`, polled every 30
   seconds while filling) and `coverage.short` (the one Details line, "Free map data:
   area covered"); the history row tags "Filling in". `fillin.plain_notes` leaves the
@@ -817,7 +817,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   is) carrying its step (locate, Yelp and Google, map data, merge, save), done and
   total (calls made of the calls a paid source may make; map areas done of the
   search's areas), the paid source and a note ("split", "retry", "another",
-  "stopped"). `web/finding.py`'s `_Progress` words the page's message from those
+  "stopped"). `web/search_progress.py`'s `_Progress` words the page's message from those
   values (`plain_progress`) and draws the bar: each step has a share
   (`STEP_WEIGHTS`), a step the search skips has none, and once past Yelp and Google
   their share is the calls they really made, so a map-data-only search starts near

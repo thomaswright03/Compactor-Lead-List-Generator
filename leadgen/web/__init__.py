@@ -1,8 +1,10 @@
 """The website: find leads, work the saved list, log calls, see stats, download.
 
-The routes live by page: auth.py (login), finding.py (Find leads), leads.py
-(the saved list, marks, calls, stats, downloads). The page's script and styles
-are in leadgen/static/.
+The routes live by page: auth.py (login); Find leads in finding.py (start and follow
+today's search), place.py (where it will run), history.py (the search history) and
+switch_routes.py (the emergency switches); leads.py (the saved list, marks, calls,
+stats, downloads); mapping.py (the map); admin.py (the administrator's checks). The
+page's script and styles are in leadgen/static/.
 """
 
 import datetime as dt
@@ -21,7 +23,7 @@ from .. import alerts, awake, calls, config, health, localtime, marks, store
 from ..localtime import date_time_text
 from ..pipeline import SearchParams
 from ..scoring import PARENT_FLAG
-from . import admin, auth, finding, leads, mapping
+from . import admin, auth, finding, history, leads, mapping, place, switch_routes
 from .auth import LOGIN_DAYS, LOGIN_TRIES, LOGIN_WINDOW
 from .common import (
     DB_DOWN,
@@ -209,7 +211,8 @@ def create_app(password: str | None = None, username: str | None = None,
         log.warning("No login contact: config.SUPPORT_CONTACT and LEADGEN_SUPPORT_CONTACT are both empty, so "
                     "the login page names no one to ask for access or a forgotten password.")
     app.extensions["leadgen"] = State(password, username, admin_password)
-    for blueprint in (auth.bp, finding.bp, leads.bp, mapping.bp, admin.bp):
+    for blueprint in (auth.bp, finding.bp, place.bp, history.bp, switch_routes.bp, leads.bp, mapping.bp,
+                      admin.bp):
         app.register_blueprint(blueprint)
     _register_pages(app)
     return app

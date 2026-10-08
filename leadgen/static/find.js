@@ -144,7 +144,7 @@ function availableAgain(body) {
 function cutOffText(s) {
   return `${s.reason || `${RESTARTED}.`} Today's search is still available.`;
 }
-// The emergency switches (web/finding.py flip_switch): each takes effect on the next request.
+// The emergency switches (web/switch_routes.py flip_switch): each takes effect on the next request.
 /** @type {Record<string, () => boolean>} */
 const SWITCH_SHOWN = { search_paused: () => true, google_off: () => CONFIG.google_on,
                        yelp_off: () => CONFIG.yelp_on };
@@ -635,7 +635,7 @@ function checkForm(form) {
                         `“${long.slice(0, 20)}…” has ${long.length}. Separate words with ` +
                         "commas."];
   }
-  // The same words as the server's (web/finding.py parse_form): the field's own label.
+  // The same words as the server's (web/search_form.py parse_form): the field's own label.
   /** @type {[string, string, number, number, boolean, string?, boolean?][]} */
   const fields = [["radius", "How far", 1, 100, false, " miles", true],
                   ["min_score", "The score to leave out weak leads below", 0, 100, true, "", true],
@@ -646,7 +646,7 @@ function checkForm(form) {
   }
   return null;
 }
-// Before anything is spent the server finds the place typed (web/finding.py place): the
+// Before anything is spent the server finds the place typed (web/place.py place): the
 // confirmation names it and how far it is from AARCO's shop. A place outside AARCO's area needs a
 // second, explicit yes (farDialog) that names it again.
 /** @type {(p: Place) => string} */

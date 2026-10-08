@@ -209,7 +209,7 @@ interface SearchRow {
   free_at?: string;
 }
 
-/** An emergency switch (web/finding.py _switch_list). */
+/** An emergency switch (web/switch_routes.py _switch_list). */
 interface SiteSwitch { on: boolean; env?: boolean; site?: boolean; when?: string; by?: string; unread?: boolean }
 
 /** The site's problems in the last 7 days (alerts.py recent). */

@@ -69,7 +69,7 @@ class SearchParams:
     api_key: str = ""          # Google Places
     yelp_api_key: str = ""
     skip_yelp: bool = False    # the command line without the site's database (cli.py)
-    # Where the place was already found (web/finding.py locates it before the day is
+    # Where the place was already found (web/place.py locates it before the day is
     # claimed, so the person sees it first): (lat, lon), and its label. None: run()
     # looks the location up itself.
     center: tuple[float, float] | None = None
