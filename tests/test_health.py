@@ -101,7 +101,8 @@ def test_healthz_says_what_is_set_up_and_when_each_source_answered(monkeypatch):
                            "failure_reason": "places.googleapis.com returned HTTP 403 after 0.2s: key=REDACTED denied"}
     assert s["google"]["last_failure"]
     assert s["osm"]["set_up"] and s["geocoding"]["set_up"]
-    assert s["database"]["ok"] and s["database"]["kind"] == "sqlite" and s["database"]["last_ok"]
+    kind = "postgres" if store.database_url() else "sqlite"         # the database this run uses
+    assert s["database"]["ok"] and s["database"]["kind"] == kind and s["database"]["last_ok"]
     assert s["alerts"]["set_up"] and s["alerts"]["last_ok"] is None
     text = res.get_data(as_text=True)
     assert YELP_KEY not in text and "secret-path" not in text and "hooks.example.com" not in text
