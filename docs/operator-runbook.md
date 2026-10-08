@@ -363,11 +363,13 @@ shows when a message last reached the webhook (next section).
 Three ways to see that the outside sources answer, none of which needs a key in hand:
 
 **`/healthz`** (`https://compactor-lead-finder.onrender.com/healthz`, no login, holds
-no saved data and never a key) says, besides `ok`, `version` (the deployed commit) and
-`up_since`:
+no saved data and never a key) says:
 
 | Field | Meaning |
 | --- | --- |
+| `ok` | `true` (HTTP 200): the site can do its work: the database (saved leads, Yes / No marks, calls) answered just now. `false` (HTTP 503): the database didn't answer, so the team can't work; `sources.database` says why. A paid or free source that fails (Yelp, Google, the map data, the webhook) doesn't make it `false`: searches carry on without it, and its own entry shows the failure. Render's health check opens `/healthz` (`healthCheckPath` in `render.yaml`), so while `ok` is `false` the service shows as unhealthy in the Render dashboard, and a deploy whose new start can't reach the database isn't switched to (the running one keeps serving) |
+| `version` | The deployed commit (its first seven characters) |
+| `up_since` | When this start of the site began (Utah time) |
 | `scoring_version` | The scoring rules' version (`SCORING_VERSION` in `leadgen/config.py`; docs/scoring-evaluation.md) |
 | `sources.yelp`, `sources.google` | `set_up`: the key is set (yes / no, never the key); `switched_off`: the administrator's switch is on; `last_ok`: when it last answered (Utah time); `last_failure` and `failure_reason`: the last failed call and its one-line reason (an HTTP status, a timeout...); for Yelp `calls_24h` and `calls_limit`: the calls made in the last 24 hours against the 50 allowed |
 | `sources.osm`, `sources.geocoding` | The free map data (Overpass) and the place lookup: always set up; the same `last_ok` / `last_failure` / `failure_reason` |
@@ -581,7 +583,7 @@ There are three copies, each reaching further back:
 | Copy | How far back | Where it is | Who sets it up |
 |---|---|---|---|
 | Neon's history | The last **6 hours** on Neon's free plan (up to 7 days on Launch, 30 on Scale) | In Neon | Nothing to do; check it under **Settings** → **Postgres** → **History window** |
-| Nightly copy | Every night for the last **90 days** | GitHub → **Actions** → **Nightly backup** → a run → **Artifacts** (encrypted) | The owner, once: add two secrets ([Owner actions](#owner-actions-still-open), item 4) |
+| Nightly copy | Once a day (GitHub usually starts it by late morning, Utah time) for the last **90 days** | GitHub → **Actions** → **Nightly backup** → a run → **Artifacts** (encrypted) | The owner, once: add two secrets ([Owner actions](#owner-actions-still-open), item 4) |
 | On-request copy | Whenever someone makes one (keep one a month for good) | A file on the owner's computer or private drive | Anyone with the code and `DATABASE_URL` |
 
 **What a copy holds.** `python -m leadgen backup` writes every row of every table that
@@ -604,7 +606,13 @@ DATABASE_URL='postgresql://...' python -m leadgen backup
 # Windows (PowerShell): $env:DATABASE_URL='postgresql://...'; python -m leadgen backup
 ```
 
-**The nightly copy** (`.github/workflows/backup.yml`) runs at about 3 AM Utah time, makes
+**The nightly copy** (`.github/workflows/backup.yml`) runs once a day. It is asked for at
+3:15 AM Utah time, but GitHub often starts it hours late, usually by late morning Utah
+time (from 2026-10-03 to 2026-10-08 it started between 8:19 AM and 12:29 PM), so a copy
+can hold part of that working morning's marks and calls. When deciding what a restore
+would lose, go by the copy's real time, not 3 AM: the run's step **Copy the database**
+prints it ("Backup written: … Oct 8, 2026, 10:12 AM (Utah time)"), and the copy keeps it
+(`made`). The artifact's `<date>` is the Utah day the run started. It makes
 the same copy, encrypts it with the owner's passphrase (AES-256, gpg; the repository is
 public, so it is never stored unencrypted) and keeps it for 90 days as the run's artifact
 `leadgen-backup-<date>`. It needs the two secrets `BACKUP_DATABASE_URL` and
@@ -831,7 +839,8 @@ the working day:
    opens `/healthz` every 5 minutes for the next 50 minutes (one run at a time; a run
    that starts while another is pinging waits for it), retrying a ping the site didn't
    answer. A run turns red, and GitHub emails the owner, only if the site never answered
-   during it. GitHub turns scheduled jobs off after 60 days with no commits: re-enable it
+   during it. A 503 with `"ok": false` counts as answered (the site is awake; its database
+   isn't), with a warning on the run. GitHub turns scheduled jobs off after 60 days with no commits: re-enable it
    under **Actions** → **Keep the site awake** → **Enable workflow** if so.
 3. **The site's own check.** Each start of the site is recorded (the additive
    `site_starts` table: when, and which version). A start on a weekday between 7:20 AM and 7 PM
@@ -849,6 +858,8 @@ the working day:
 - `curl -s https://compactor-lead-finder.onrender.com/healthz` prints `"ok": true` and
   `"up_since"`, the Utah time this start of the site began. The same `up_since` at 7 AM
   and at 5 PM means it never slept in between (a deploy changes it, and `"version"` too).
+  `"ok": false` means the site is awake but its database isn't answering
+  ([Checking the sources](#checking-the-sources-and-the-alerts)).
 - `curl -s -o /dev/null -w "%{time_total}\n" https://compactor-lead-finder.onrender.com/healthz`
   prints well under 2 (seconds); 20 or more means it had been asleep.
 - **Recent problems** has no "The site had gone to sleep".

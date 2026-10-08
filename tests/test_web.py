@@ -221,3 +221,24 @@ def test_logging_in_never_sends_anyone_to_another_site(monkeypatch):
         assert res.status_code == 302 and res.headers["Location"] == "/", target
     for target in ("/", "/#leads", "/#leads?tab=competitors&tier=A", "/#find"):
         assert web.auth.return_to(target) == target
+
+
+def test_the_find_leads_server_side_is_split_by_job_and_every_old_name_still_imports():
+    """web/finding.py was one 842-line module (2026-10-08); it is now one module per job, none
+    over 500 lines, and every name it had is still importable from it."""
+    import pathlib
+
+    from leadgen.web import finding
+    folder = pathlib.Path(finding.__file__).parent
+    for name in ("finding", "place", "history", "switch_routes", "search_form", "search_progress",
+                 "search_words"):
+        lines = len((folder / f"{name}.py").read_text(encoding="utf-8").splitlines())
+        assert lines <= 500, (name, lines)
+    for name in ("MAX_JOBS", "STEPS", "SLOW_SECONDS", "DETAIL_LABELS", "FormError", "parse_form", "plain_warning",
+                 "plain_details", "plain_progress", "_Progress", "skipped_steps", "map_areas", "_when_reused",
+                 "where", "far_message", "confirmed", "place", "search", "searches", "_for_page", "flip_switch",
+                 "_switch_list", "status", "bp", "run", "daily", "time"):
+        assert hasattr(finding, name), name
+    # Every route is still there.
+    rules = {r.rule for r in web.create_app().url_map.iter_rules()}
+    assert {"/search", "/status/<job_id>", "/place", "/searches", "/switches"} <= rules

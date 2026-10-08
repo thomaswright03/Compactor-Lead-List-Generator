@@ -91,7 +91,7 @@ def test_healthz_says_what_is_set_up_and_when_each_source_answered(monkeypatch):
     client = web.create_app(password="secret").test_client()
     res = client.get("/healthz")
     body = res.get_json()
-    assert res.status_code == 200 and body["ok"] and body["scoring_version"] == config.SCORING_VERSION
+    assert res.status_code == 200 and body["ok"] is True and body["scoring_version"] == config.SCORING_VERSION
     s = body["sources"]
     assert set(s) == set(health.SOURCES)
     assert s["yelp"]["set_up"] and s["yelp"]["last_ok"] and s["yelp"]["last_failure"] is None
@@ -114,9 +114,14 @@ def test_healthz_says_when_the_database_is_down(monkeypatch):
         raise store.Unavailable("the database could not be reached")
     monkeypatch.setattr(store, "open_db", down)
     monkeypatch.setattr(store, "last_failure", None)
-    body = web.create_app().test_client().get("/healthz").get_json()
+    res = web.create_app().test_client().get("/healthz")
+    body = res.get_json()
     db = body["sources"]["database"]
-    assert body["ok"] and not db["ok"] and db["last_ok"] is None
+    # Not ok, and a 503 that Render's health check and any uptime monitor see; every
+    # source is still listed with its details.
+    assert res.status_code == 503 and body["ok"] is False
+    assert set(body["sources"]) == set(health.SOURCES)
+    assert not db["ok"] and db["last_ok"] is None
     assert db["last_failure"] and db["failure_reason"] == "OperationalError: connection refused"
     assert body["sources"]["yelp"]["last_ok"] is None
 

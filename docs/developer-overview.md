@@ -179,7 +179,9 @@ notes live in the `source_status` table (one row per source and outcome, replace
 place, an unchanged outcome written at most once a minute) and the public `/healthz`
 shows them through `health.status()`: set up or not (never a key), last answered, last
 failure and its one-line reason, Yelp's calls in the last 24 hours, the database's
-standing and the scoring rules' version. `checks.py` is `python -m leadgen check-sources`
+standing and the scoring rules' version. Its top-level `ok` is the database's (`false`
+with HTTP 503 while the database doesn't answer, which Render's `healthCheckPath` sees);
+a failing outside source never makes it `false`. `checks.py` is `python -m leadgen check-sources`
 and the administrator's **Check sources** button (`web/admin.py`, a plain form whose
 answer is `templates/admin_check.html`): one cheapest real call per source. With
 `--recorded`, `recorded.py` starts a local stand-in on `127.0.0.1` that serves the
@@ -206,7 +208,7 @@ The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
 `leadgen/saved.py`, `marks.py`, `calls.py` and `daily.py` keep the saved data
 (`store.py` is the database); `alerts.py` records problems and sends them to the
 webhook. The website is `leadgen/web/`: `auth.py` (login),
-`finding.py` (Find leads), `leads.py` (the saved list, marks, calls, stats,
+`finding.py` (Find leads: start and follow the search; beside it `search_form.py`, `place.py`, `search_progress.py`, `search_words.py`, `history.py` and `switch_routes.py`, one job each), `leads.py` (the saved list, marks, calls, stats,
 downloads), `mapping.py` (the Map page's data, `/map-data`, from `leadgen/area_map.py`)
 and `common.py`. `export.py` lays out the CSV and Excel files and
 `xlsx.py` writes the Excel format; `reference.py` copies the site's marks into
@@ -703,7 +705,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   score below 20", not matching the search words, over a lead limit), leads kept,
   competitors among them, the leads per tier A to D, then the paid lookups and how
   long it took. Before anything is spent, the page asks the server where the search will
-  run (`GET /place`, `web/finding.py`): the place found for what was typed (offline for
+  run (`GET /place`, `web/place.py`): the place found for what was typed (offline for
   AARCO's shop, typed as its address, "AARCO" or the old spelling "Arco", and the Salt
   Lake area's towns in `geo.UTAH_PLACES`, typed bare or with ", UT";
   online lookups ask in Utah first unless another state is named) and its distance from
@@ -711,7 +713,18 @@ the sidebar to the page's list (Leads, Calls) or heading.
   `config.SERVICE_AREA_MILES` (30) away needs a second confirmation (`#far-dlg`, its safe
   button focused); `POST /search` refuses such a place with 409 `confirm_far` unless
   `confirm_place` names that same place (within a mile), and it looks the place up before
-  the day is claimed, so an unknown or unconfirmed place spends nothing. The search then
+  the day is claimed, so an unknown or unconfirmed place spends nothing. **A doubtful
+  match is asked about too**: text with no letter that isn't a ZIP code (a date, a bare
+  number), or five digits the ZIP lookup doesn't know, is never looked up and gets "Could
+  not find the place"; a match that is only a road, a trail, a park or a business (the
+  geocoder's own fields: Nominatim's `class` / `type` with `addressdetails`, Google's
+  `types`) comes back as a `geo.Place` whose `doubt` says what was found ("We found a road
+  called Springfield Road in Salt Lake City. Is that what you meant?"). `/place` returns it
+  as `uncertain`, the confirmation shows it with **Go back and edit** focused and the
+  button reading "Yes, search there", and `POST /search` refuses it with 409
+  `confirm_uncertain` unless `confirm_place` names that place. A town, a ZIP code, a
+  street address (a match with the house number typed) or a place known offline is never
+  doubted. The search then
   runs around exactly that point (`SearchParams.center` / `place`, no second lookup), and
   the day's record keeps `place` and `miles`, which the history shows under what was
   typed. Pausing searching stops a running search within seconds: `osm.search` takes a
@@ -754,7 +767,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   neutral sentence (`interrupted.RESTARTED`, `RESTARTED` in `find.js`; a test keeps
   them equal), as the page can't tell a deploy from a crash; rows saved by earlier
   versions ("Interrupted by a server restart (the site was updated or restarted): ...")
-  are shown in it too (`interrupted.plain_reason`, in `finding._for_page`), never
+  are shown in it too (`interrupted.plain_reason`, in `history._for_page`), never
   rewritten. Until the run is finished `/searches` says `cut_off`, with `cut_off_wait`
   (seconds until it can be: `interrupted.wait`, from the old server's last heartbeat)
   and `cut_off_until` (that time in Utah): Find leads says "...; what it had found is
@@ -814,7 +827,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   full (`where`: named as the Map page names them, each by its biggest town from the
   bundled places table, or its direction from the center, nearest first:
   `fillin.where`, `area_map.names_text`), businesses found and new). **How much of the area a search covered is said once**: `fillin.coverage(record)`
-  words it from the record's numbers each time `/searches` is read (`finding._for_page`),
+  words it from the record's numbers each time `/searches` is read (`history._for_page`),
   as `coverage.text` (the Find page's one status, `#coverage-note`, polled every 30
   seconds while filling) and `coverage.short` (the one Details line, "Free map data:
   area covered"); the history row tags "Filling in". `fillin.plain_notes` leaves the
@@ -838,7 +851,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   is) carrying its step (locate, Yelp and Google, map data, merge, save), done and
   total (calls made of the calls a paid source may make; map areas done of the
   search's areas), the paid source and a note ("split", "retry", "another",
-  "stopped"). `web/finding.py`'s `_Progress` words the page's message from those
+  "stopped"). `web/search_progress.py`'s `_Progress` words the page's message from those
   values (`plain_progress`) and draws the bar: each step has a share
   (`STEP_WEIGHTS`), a step the search skips has none, and once past Yelp and Google
   their share is the calls they really made, so a map-data-only search starts near

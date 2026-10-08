@@ -1862,6 +1862,42 @@ def test_the_place_found_is_named_before_a_search_in_the_area(page, monkeypatch)
     assert not page.locator("#confirm-dlg").is_visible()
 
 
+def test_a_road_found_for_what_was_typed_is_named_and_needs_its_own_yes(page, monkeypatch):
+    """"Springfield" finds only Springfield Road: the confirmation says so, with the safe
+    choice in focus, and the search starts only on "Yes, search there". "1900-01-01" is
+    refused at the field without being looked up. (The lookup is a stand-in.)"""
+    from leadgen import geo
+    from leadgen.pipeline import RunResult
+    road = {"lat": "40.7801", "lon": "-111.9795", "class": "highway", "type": "residential",
+            "name": "Springfield Road", "display_name": "Springfield Road, Salt Lake City, Utah",
+            "address": {"road": "Springfield Road", "city": "Salt Lake City", "state": "Utah"}}
+    monkeypatch.setattr(geo, "request_json", lambda *a, **k: [road])
+    monkeypatch.setattr(web.finding, "run", lambda params, progress: RunResult(
+        [], params.center, params.place, [], {"leads kept": 0, "seconds": 2.0}))
+    sent = _posts(page, "/search")
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    page.fill("input[name=location]", "1900-01-01")
+    page.click("#go")
+    expect(page.locator("#err-location")).to_contain_text("Could not find the place '1900-01-01'")
+    assert not page.locator("#confirm-dlg").is_visible() and not sent
+    page.fill("input[name=location]", "Springfield")
+    page.click("#go")
+    expect(page.locator("#confirm-dlg")).to_be_visible()
+    expect(page.locator("#confirm-far")).to_contain_text(
+        "We found a road called Springfield Road in Salt Lake City. Is that what you meant? If not, go "
+        "back and type a ZIP code, a town or a street address.")
+    assert page.inner_text("#confirm-go") == "Yes, search there"
+    assert page.evaluate("document.activeElement.id") == "confirm-back"   # the safe choice
+    page.click("#confirm-back")
+    assert not page.locator("#confirm-dlg").is_visible() and not sent
+    page.click("#go")
+    expect(page.locator("#confirm-dlg")).to_be_visible()
+    page.click("#confirm-go")
+    page.wait_for_selector("#done-card:not([hidden])")
+    assert len(sent) == 1
+
+
 def test_show_more_fetches_the_next_page_only(browser, site, page):
     extra = []
     for i in range(130):

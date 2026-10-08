@@ -2,7 +2,7 @@
 
 A search reports its progress as messages: plain text, which the command line
 prints as it is. Each is a Step, which also carries the values the web page's
-progress bar is drawn from (web/finding.py), so the bar never depends on how a
+progress bar is drawn from (web/search_progress.py), so the bar never depends on how a
 message is worded: which step of the search it is about, and how far that step is
 (done of total: Yelp or Google calls made of the calls it may make, map areas
 answered of the areas asked, ...).
