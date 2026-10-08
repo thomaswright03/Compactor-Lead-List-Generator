@@ -399,8 +399,10 @@ class names, never request data or settings. Reporting runs in the background an
 slows or breaks a page; if a channel can't be reached, that is only logged.
 
 The GitHub workflows (the checks, the nightly backup, the restore rehearsal) email the
-owner too when they fail: each ends with a job, `email-on-failure`, that runs only after a
-failed job and sends "Lead Finder: CI failed on main" (or the backup's or rehearsal's
+owner too when they fail. In the checks (CI) each job's last step, **Email the owner**,
+runs only when that job failed (a step rather than a job of its own, because Render deploys
+only when every check passed and would count a skipped job against it); the backup and the
+rehearsal end with a job, `email-on-failure`, that runs only after a failed job. Each sends "Lead Finder: CI failed on main" (or the backup's or rehearsal's
 name) with the commit, who started it and a link to the run. It uses the repository
 secrets `LEADGEN_SMTP_USER` and `LEADGEN_SMTP_PASSWORD`; without them it prints a notice
 and sends nothing.

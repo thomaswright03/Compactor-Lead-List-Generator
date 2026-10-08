@@ -240,15 +240,7 @@ def _jobs(workflow):
     return dict(zip(parts[1::2], parts[2::2]))
 
 
-@pytest.mark.parametrize("name", ["ci.yml", "backup.yml", "restore-rehearsal.yml"])
-def test_each_workflow_emails_the_owner_when_it_fails(name):
-    jobs = _jobs((ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8"))
-    notice = jobs.pop("email-on-failure")
-    needs = re.search(r"^    needs: \[([^\]]+)\]$", notice, re.M).group(1)
-    assert sorted(n.strip() for n in needs.split(",")) == sorted(jobs)
-    assert re.search(r"^    if: failure\(\)$", notice, re.M)
-    assert "- uses: actions/checkout@v4" in notice
-    assert re.findall(r"uses: (\S+)", notice) == ["actions/checkout@v4"]       # nothing third-party
+def _check_notice(notice):
     assert "LEADGEN_SMTP_USER: ${{ secrets.LEADGEN_SMTP_USER }}" in notice
     assert "LEADGEN_SMTP_PASSWORD: ${{ secrets.LEADGEN_SMTP_PASSWORD }}" in notice
     assert 'python3 leadgen/mail.py --subject "Lead Finder: $WORKFLOW failed on $BRANCH"' in notice
@@ -257,6 +249,29 @@ def test_each_workflow_emails_the_owner_when_it_fails(name):
     # Nothing a pusher controls is pasted into the script itself, only passed in env.
     script = notice.split("run: |", 1)[1]
     assert "${{" not in script
+
+
+@pytest.mark.parametrize("name", ["backup.yml", "restore-rehearsal.yml"])
+def test_each_workflow_emails_the_owner_when_it_fails(name):
+    jobs = _jobs((ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8"))
+    notice = jobs.pop("email-on-failure")
+    needs = re.search(r"^    needs: \[([^\]]+)\]$", notice, re.M).group(1)
+    assert sorted(n.strip() for n in needs.split(",")) == sorted(jobs)
+    assert re.search(r"^    if: failure\(\)$", notice, re.M)
+    assert re.findall(r"uses: (\S+)", notice) == ["actions/checkout@v4"]       # nothing third-party
+    _check_notice(notice)
+
+
+def test_ci_emails_the_owner_from_a_last_step_so_a_green_run_skips_no_check():
+    """Render deploys only when every check passed; a skipped notice job held a deploy back
+    (2026-10-08), so in CI the email is each job's last step instead."""
+    jobs = _jobs((ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    assert sorted(jobs) == ["lint", "test"]
+    for name, job in jobs.items():
+        last = job.split("\n      - ")[-1]
+        assert last.startswith("name: Email the owner\n        if: failure()\n"), name
+        assert "uses:" not in last
+        _check_notice(last)
 
 
 def test_the_email_settings_are_in_render_and_the_example_file():

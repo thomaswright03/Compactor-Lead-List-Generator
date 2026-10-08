@@ -209,7 +209,7 @@ The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
 `leadgen/saved.py`, `marks.py`, `calls.py` and `daily.py` keep the saved data
 (`store.py` is the database); `alerts.py` records problems and sends them by email
 (`mail.py`, standard library only and nothing from `leadgen`, so the GitHub workflows'
-`email-on-failure` job runs it as `python3 leadgen/mail.py --subject ... body` without
+failure step or job runs it as `python3 leadgen/mail.py --subject ... body` without
 installing anything; at most 10 alert emails an hour) and to the webhook, each channel
 on its own. The website is `leadgen/web/`: `auth.py` (login),
 `finding.py` (Find leads: start and follow the search; beside it `search_form.py`, `place.py`, `search_progress.py`, `search_words.py`, `history.py` and `switch_routes.py`, one job each), `leads.py` (the saved list, marks, calls, stats,
