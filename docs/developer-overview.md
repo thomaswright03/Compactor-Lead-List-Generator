@@ -7,8 +7,8 @@ How the code fits together, how to run it, and how it is tested. See also the
 **In short.** A Flask site (`leadgen/web/`) with one page of plain scripts
 (`leadgen/static/`). Find leads runs one search a Utah day (`pipeline.py`) over Google
 Places, Yelp and the free OpenStreetMap data (`leadgen/sources/`); the results are
-merged, scored (`dedupe.py`, `scoring.py`, rules in `config.py`) and saved into one
-list, one row per business (`saved.py`, in Postgres or SQLite through `store.py`).
+merged, scored (`dedupe.py`, `scoring.py`, rules in `config.py`, each with the modules
+beside it listed below) and saved into one list, one row per business (`saved.py`, in Postgres or SQLite through `store.py`).
 Leads, Calls, Map and Stats read that list; Yes / No marks, calls and verified contacts
 are kept in their own tables and never change the saved row. Every push runs ruff,
 vulture, mypy, ESLint, TypeScript's check and the tests (with browser tests) on SQLite
@@ -68,6 +68,28 @@ how that search covered them) and a pin for every saved lead. The street map beh
 is OpenStreetMap tiles that each browser loads straight from tile.openstreetmap.org
 (`TILES` in `map.js`; Leaflet is served from `leadgen/static/vendor/leaflet/`), never
 through the server. Problems go to `alerts.py`.
+
+The longest parts are split by job, and each still answers for every name it had (they
+are imported from it), so `scoring.score_lead`, `config.CATEGORIES` or `osm.parse_element`
+work wherever they are written:
+
+- `scoring.py`: the score and its points (brand, busy site, footprint, keywords,
+  penalties); `scoring_categories.py` classifies a business (`RULES`, `VETOES`, see
+  [How a business gets its category](#how-a-business-gets-its-category));
+  `scoring_names.py` says what a name and tags say a place is (self-storage, a clinic,
+  only a building...); `scoring_flags.py` recognises AARCO's own, its parent company's
+  and the competitors' listings; `scoring_explain.py` writes the explanation a
+  salesperson reads (`plain_reasons`); `scoring_text.py` holds the text helpers they share.
+- `config.py`: the defaults, the company's names, the sources' settings and switches; it
+  takes in `config_categories.py` (`CATEGORIES` and their weights), `config_names.py`
+  (the words and map tags the classifying rules read) and `config_brands.py`
+  (`HIGH_VOLUME_BRANDS`, `REVIEW_BONUS`), all read as `config.X`.
+- `sources/osm.py`: asks the map servers and runs a search's rounds; `osm_query.py`
+  builds the Overpass query, `osm_parse.py` reads a map element as a business and
+  `osm_areas.py` cuts the circle into areas and names them.
+- `dedupe.py`: whether two listings are one business, merging them and grouping a
+  search's listings; `dedupe_names.py` compares names and phone numbers, and
+  `dedupe_sites.py` finds the parts of one site (outlines, `same_site`, `SiteIndex`).
 
 ## The search, step by step
 
@@ -414,7 +436,8 @@ explanation, and `--source auto` leaves Yelp out and says so.
 
 ## Tuning after vetting
 
-Everything adjustable is in `leadgen/config.py`:
+Everything adjustable is in `leadgen/config.py` and the three modules it takes in
+(`config_categories.py`, `config_names.py`, `config_brands.py`), all read as `config.X`:
 - `CATEGORIES`: business types, their weights, and the Google types / Yelp categories / OSM tags / name words that identify them.
 - `HIGH_VOLUME_BRANDS`: chains that almost always have a baler or compactor.
 - `GOOGLE_QUERIES`: the search phrases sent to Google.
@@ -763,7 +786,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   **in parts**: a grid of areas up to 20 miles wide (`OVERPASS_PART_MILES`; a
   30-mile search is 9 areas), two at a time, **nearest the center first** (the area
   the search's center is in, then outwards; a failed area's quarters take their place
-  in that order, `osm._distance`), each starting at a different map server (the
+  in that order, `osm_areas._distance`), each starting at a different map server (the
   progress text says "3 of 9 areas done": the search's areas, fixed for the whole
   search, an area asked in quarters counting once all four answered; the count only
   moves forward and stays in the text through the catch-up round). An area no server answers is
@@ -1066,7 +1089,7 @@ addresses and server errors show a branded page with a link back.
 
 ## How a business gets its category
 
-`scoring.classify` reads a business's facts once (`Facts`: its name, Google types,
+`scoring.classify` (written in `scoring_categories.py`) reads a business's facts once (`Facts`: its name, Google types,
 Yelp aliases and map tags, and the categories they match) and then asks the rules
 in `scoring.RULES` in order; the first rule that decides gives the category. The
 lead's stored explanation (`lead.reasons`, the scoring's own record) names it for
@@ -1105,7 +1128,7 @@ reference file's **needs_name** list and its round-21 **not_prospect** and
 ## AARCO's own listings and its parent company's
 
 AARCO is a division of ACE Recycling & Disposal. A listing is AARCO's own when its
-names or website hold one of `config.SELF_ALIASES` (`scoring._is_self`, flag
+names or website hold one of `config.SELF_ALIASES` (`scoring_flags._is_self`, flag
 `scoring.OWN_FLAG`), a competitor's when they hold one of `config.COMPETITORS`, and its
 parent company's (`scoring.parent_company`, flag `scoring.PARENT_FLAG`, "OWN
 COMPANY: AARCO's parent company (ACE Recycling & Disposal)") when its name or another
@@ -1114,7 +1137,7 @@ one of `config.PARENT_DOMAINS`, or its street address starts with one of
 `config.PARENT_ADDRESSES` (street words written short, "South Road" = "S Rd"; a listing
 that names another town is not). A bare "Ace" never matches: "Ace Hardware", "Ace Auto
 Parts" and "Grace Recycling" are ordinary businesses. All three lists match the same
-way (`scoring._holds_alias`): as whole words, or written as one word opening the name or a
+way (`scoring_flags._holds_alias`): as whole words, or written as one word opening the name or a
 part of the website ("ProBaler", "probaler.com"), never inside another word, so "Marco
 Compactor Repair", "Repro Balers" and "Transaction Compaction" are ordinary businesses
 too (rules version 2, `docs/scoring-evaluation.md`); rows flagged under version 1 show as

@@ -3,268 +3,88 @@
 Score (0-100) = category weight + brand bonus + size bonus (reviews, footprint) + keyword bonus.
 Every point is explained in `lead.reasons` so the client can see why a lead
 ranked where it did and tell us which rules to adjust.
+
+The parts live beside this module, and every name they had here is still imported from
+here: scoring_categories.py (classifying a lead: RULES, VETOES), scoring_names.py (what
+a listing's name and tags say it is), scoring_flags.py (AARCO's own, its parent
+company's and the competitors' listings), scoring_explain.py (the explanation as a
+salesperson reads it) and scoring_text.py (the text helpers they share).
 """
 
-import functools
 import re
-from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
-from functools import lru_cache
-from typing import NamedTuple
+from collections.abc import Iterable
 
-from . import config, places
+from . import config
 from .models import Lead
+from .scoring_categories import (
+    GOOGLE,
+    NAME,
+    NO_MATCH,
+    QUERY,
+    RETAIL_BRAND,
+    RULES,
+    TAG,
+    TAGGED,
+    VETOES,
+    YELP,
+    Classified,
+    Decision,
+    Facts,
+    Match,
+    Rule,
+    Veto,
+    classify,
+)
+from .scoring_explain import PLAIN_HOW, plain_reasons
+from .scoring_flags import (
+    COMPETITOR_FLAG_START,
+    INDUSTRY_FLAG,
+    OWN_FLAG,
+    OWN_FLAG_START,
+    OWN_TYPE,
+    PARENT_FLAG,
+    PROSPECT_TYPE,
+    _type_flags,
+    current_own_flag,
+    current_type_flags,
+    mark_parent_company,
+    parent_company,
+)
+from .scoring_names import (
+    _building_name,
+    _is_non_prospect,
+    clinic,
+    generic_name,
+    is_non_prospect_tag,
+    needs_name,
+    non_prospect_name,
+    parcel_station,
+    self_storage,
+    service_plant,
+    utility_structure,
+    vehicle_wash,
+)
+from .scoring_text import (
+    _contains_term,
+    _split_hyphens,
+    _term_pattern,
+    compact,
+    google_types,
+    normalize,
+    yelp_categories,
+)
 
-# A matched category and how it matched ("Google category", "name", ...).
-Match = tuple[config.Category, str]
+# Re-exported: callers import these from scoring, wherever they are written.
+__all__ = ["COMPETITOR_FLAG_START", "GOOGLE", "INDUSTRY_FLAG", "NAME", "NO_MATCH", "OWN_FLAG", "OWN_FLAG_START",
+           "OWN_TYPE", "PARENT_FLAG", "PLAIN_HOW", "PROSPECT_TYPE", "QUERY", "RETAIL_BRAND", "RULES", "TAG",
+           "TAGGED", "VETOES", "YELP", "Classified", "Decision", "Facts", "Match", "Rule", "Veto", "classify",
+           "clinic", "compact", "current_own_flag", "current_type_flags", "generic_name", "google_types",
+           "is_non_prospect_tag", "mark_parent_company", "needs_name", "non_prospect_name", "normalize",
+           "parcel_station", "parent_company", "plain_reasons", "self_storage", "service_plant",
+           "utility_structure", "vehicle_wash", "yelp_categories"]
 
 TIERS = [(60, "A"), (40, "B"), (20, "C"), (0, "D")]
 TIER_LABELS = {"A": "A - strong", "B": "B - likely", "C": "C - possible", "D": "D - weak"}
-# The flag on AARCO's own listing and on its parent company's (config.PARENT_*); rows
-# saved under an earlier name show it as it is now (current_own_flag, saved.py).
-OWN_FLAG_START = "OWN COMPANY: "
-OWN_FLAG = OWN_FLAG_START + config.OWN_COMPANY
-PARENT_FLAG = f"{OWN_FLAG_START}AARCO's parent company ({config.PARENT_COMPANY})"
-OWN_TYPE = "Own company"
-PROSPECT_TYPE = "Prospect"
-# The flag on a competitor's listing (config.COMPETITORS): "COMPETITOR: Pro Baler".
-COMPETITOR_FLAG_START = "COMPETITOR: "
-INDUSTRY_FLAG = "Possible competitor or partner (equipment / hauler)"
-
-
-@lru_cache(maxsize=65536)
-def normalize(text: str) -> str:
-    s = re.sub(r"[^a-z0-9 ]+", "", (text or "").lower().replace("&", " and "))
-    return re.sub(r"\s+", " ", s).strip()
-
-
-def compact(text: str) -> str:
-    return normalize(text).replace(" ", "")
-
-
-@lru_cache(maxsize=4096)
-def _term_pattern(term: str, whole: bool) -> re.Pattern[str]:
-    end = r"(?![a-z0-9])" if whole else ""
-    return re.compile(rf"(?<![a-z0-9]){re.escape(term)}{end}")
-
-
-def _contains_term(haystack: str, term: str, whole: bool = False) -> bool:
-    """Match at a word start so 'ups' never matches 'supplies'.
-
-    Prefix matches are allowed by default (user keyword 'recycl' matches
-    'recycling'); whole=True also requires a word end ('mall' does not match
-    'Mallard').
-    """
-    term = normalize(term)
-    if not term:
-        return False
-    return _term_pattern(term, whole).search(haystack) is not None
-
-
-def yelp_categories(lead: Lead) -> set[str]:
-    """Yelp category aliases on a lead (stored as "yelp:alias")."""
-    return {c[5:] for c in lead.raw_categories if c.startswith("yelp:")}
-
-
-def google_types(lead: Lead) -> set[str]:
-    """Google types on a lead: anything that is not an OSM "k=v" tag or a Yelp category."""
-    return {c for c in lead.raw_categories if "=" not in c and not c.startswith("yelp:")}
-
-
-def _osm_tag_matches(lead: Lead, key: str, value: str | None) -> bool:
-    for c in lead.raw_categories:
-        k, _, v = c.partition("=")
-        if k == key and (value is None or value in v.split(";")):
-            return True
-    return False
-
-
-def _only_generic_tags(lead: Lead, cat: config.Category) -> bool:
-    """True if the category matched only through catch-all tags like industrial=*."""
-    if set(lead.raw_categories) & set(cat.google_types):
-        return False
-    if yelp_categories(lead) & set(cat.yelp_categories):
-        return False
-    specific = [(k, v) for k, v in cat.osm_tags if (k, v) not in config.GENERIC_OSM_TAGS]
-    return not any(_osm_tag_matches(lead, k, v) for k, v in specific)
-
-
-def _is_non_prospect(lead: Lead, types: set[str]) -> bool:
-    return (bool(types & config.NON_PROSPECT_GOOGLE_TYPES)
-            or bool(yelp_categories(lead) & config.NON_PROSPECT_YELP_CATEGORIES)
-            or any(_osm_tag_matches(lead, k, v) for k, v in config.NON_PROSPECT_OSM_TAGS))
-
-
-def is_non_prospect_tag(tag: str) -> bool:
-    """True for a single Google type, Yelp category or OSM tag that marks a non-prospect place."""
-    if tag in config.NON_PROSPECT_GOOGLE_TYPES:
-        return True
-    if tag.startswith("yelp:"):
-        return tag[5:] in config.NON_PROSPECT_YELP_CATEGORIES
-    k, sep, v = tag.partition("=")
-    return bool(sep) and any(k == nk and (nv is None or nv in v.split(";"))
-                             for nk, nv in config.NON_PROSPECT_OSM_TAGS)
-
-
-def _not_campus(name: str) -> bool:
-    """True for a name that is a campus's unit or neighbour, not the campus (config.NOT_CAMPUS_WORDS)."""
-    if any(_contains_term(name, w, whole=True) for w in config.NOT_CAMPUS_WORDS):
-        return True
-    return any(m.start() > 0 for w in config.NOT_CAMPUS_INNER
-               for m in _term_pattern(normalize(w), True).finditer(name))
-
-
-def non_prospect_name(lead: Lead) -> bool:
-    """True when the name says the place is not a prospect (config.NON_PROSPECT_NAME_WORDS:
-    police, fire, impound, trailer yards, parcel lockers...), unless a specific tag says
-    it is a recycling site or transfer station."""
-    name = normalize(lead.name)
-    if not any(_contains_term(name, w, whole=True) for w in config.NON_PROSPECT_NAME_WORDS):
-        return False
-    rescued = (any(_osm_tag_matches(lead, k, v) for k, v in config.NAME_BLOCK_RESCUE_TAGS)
-               or bool(google_types(lead) & config.NAME_BLOCK_RESCUE_GOOGLE_TYPES))
-    return not rescued
-
-
-def utility_structure(lead: Lead) -> bool:
-    """True for a pumping station, water well, substation or similar (config.UTILITY_OSM_TAGS),
-    unless a specific tag says it is a recycling site or transfer station."""
-    if not any(_osm_tag_matches(lead, k, v) for k, v in config.UTILITY_OSM_TAGS):
-        return False
-    return not any(_osm_tag_matches(lead, k, v) for k, v in config.NAME_BLOCK_RESCUE_TAGS)
-
-
-def _utility_named(lead: Lead) -> bool:
-    """True when the name or operator tag says a catch-all industrial building belongs to
-    a utility, a city or a transit agency (config.UTILITY_NAME_WORDS / _OPERATOR_WORDS)."""
-    name = normalize(lead.name)
-    if any(_contains_term(name, w, whole=True) for w in config.UTILITY_NAME_WORDS):
-        return True
-    operators = normalize(" ".join(c.split("=", 1)[1] for c in lead.raw_categories
-                                   if c.startswith("operator=")))
-    return any(_contains_term(operators, w, whole=True) for w in config.UTILITY_OPERATOR_WORDS)
-
-
-def _small_generic_building(lead: Lead) -> bool:
-    """True for a building known only as building=industrial / landuse=industrial (no
-    industrial=* use tag) whose footprint is under config.SMALL_GENERIC_BUILDING_SQFT."""
-    if not lead.footprint_sqft or lead.footprint_sqft >= config.SMALL_GENERIC_BUILDING_SQFT:
-        return False
-    return not any(c.startswith(("industrial=", "man_made=works")) for c in lead.raw_categories)
-
-
-def _shop_named(lead: Lead, name: str) -> bool:
-    """True when the name or the map says the place is a shop (config.NOT_MANUFACTURING_NAME_WORDS,
-    config.RETAIL_OSM_TAGS), so a manufacturing word in its name says nothing."""
-    return (any(_contains_term(name, w, whole=True) for w in config.NOT_MANUFACTURING_NAME_WORDS)
-            or any(_osm_tag_matches(lead, k, v) for k, v in config.RETAIL_OSM_TAGS))
-
-
-def self_storage(lead: Lead) -> bool:
-    """True for a self-storage place (units rented to the public), by its tag, Google
-    type or name (config.SELF_STORAGE_*), unless a specific tag says it is a recycling
-    site or transfer station. A cold store or a logistics firm's storage is not."""
-    if any(_osm_tag_matches(lead, k, v) for k, v in config.NAME_BLOCK_RESCUE_TAGS):
-        return False
-    if (any(_osm_tag_matches(lead, k, v) for k, v in config.SELF_STORAGE_OSM_TAGS)
-            or google_types(lead) & config.SELF_STORAGE_GOOGLE_TYPES):
-        return True
-    name = normalize(lead.name)
-    if any(_contains_term(name, w, whole=True) for w in config.SELF_STORAGE_NAME_WORDS):
-        return True
-    return (_contains_term(name, "storage", whole=True)
-            and not any(_contains_term(name, w, whole=True)
-                        for w in config.COLD_STORAGE_WORDS + config.LOGISTICS_NAME_WORDS))
-
-
-def parcel_station(lead: Lead) -> bool:
-    """True for a parcel carrier's delivery station or home-delivery hub, by its name and
-    its operator / brand tags: a carrier (config.PARCEL_CARRIERS) and a station word
-    (config.PARCEL_STATION_WORDS), "FedEx Home Delivery" operated by FedEx, say."""
-    tags = " ".join(c.split("=", 1)[1] for c in lead.raw_categories if c.startswith(("operator=", "brand=")))
-    text = f"{normalize(lead.name)} {normalize(tags)}"
-    return (any(_contains_term(text, c, whole=True) for c in config.PARCEL_CARRIERS)
-            and any(_contains_term(text, w, whole=True) for w in config.PARCEL_STATION_WORDS))
-
-
-def _not_plant_named(name: str) -> bool:
-    """True when the name says a catch-all industrial building is a data centre, a career
-    centre or a city's shops (config.NOT_PLANT_NAME_WORDS)."""
-    return any(_contains_term(name, w, whole=True) for w in config.NOT_PLANT_NAME_WORDS)
-
-
-def _retail_brand(lead: Lead) -> config.Category | None:
-    """The retail category of a chain whose name holds a warehouse word ("Harbor
-    Freight"; config.RETAIL_NAME_BRANDS), from its name or its map brand tag."""
-    brand_tags = normalize(" ".join(c.split("=", 1)[1] for c in lead.raw_categories
-                                    if c.startswith("brand=")))
-    for text in (normalize(lead.name), brand_tags):
-        for brand, key in config.RETAIL_NAME_BRANDS.items():
-            if _contains_term(text, brand, whole=True):
-                return config.CATEGORY_BY_KEY[key]
-    return None
-
-
-def _shop_mapped_as_mall(lead: Lead, name: str) -> bool:
-    """True when a shop is mapped as a mall (a furniture store tagged shop=mall): the
-    only venue tag is shop=mall, its name says shop (or it has another shop tag) and
-    nothing in the name says shopping centre (config.MALL_NAME_WORDS)."""
-    venue = config.CATEGORY_BY_KEY["venue"]
-    tags = [(k, v) for k, v in venue.osm_tags if _osm_tag_matches(lead, k, v)]
-    if tags != [("shop", "mall")]:
-        return False
-    if any(_contains_term(name, w, whole=True) for w in config.MALL_NAME_WORDS):
-        return False
-    other_shop = any(v != "mall" for c in lead.raw_categories if c.startswith("shop=")
-                     for v in c.split("=", 1)[1].split(";"))
-    return other_shop or any(_contains_term(name, w, whole=True) for w in config.SHOP_NAME_WORDS)
-
-
-def _named(lead: Lead, words: Iterable[str]) -> bool:
-    name = normalize(lead.name)
-    return any(_contains_term(name, w, whole=True) for w in words)
-
-
-def clinic(lead: Lead) -> bool:
-    """True when the name says the place is a clinic or an outpatient centre, not a
-    hospital (config.CLINIC_NAME_WORDS, and no "hospital" in the name)."""
-    return _named(lead, config.CLINIC_NAME_WORDS) and not _named(lead, ["hospital", "hospitals"])
-
-
-def service_plant(lead: Lead) -> bool:
-    """True when the name says the place is a power, heating or cooling plant, a utility
-    building, usually another organisation's ("Hospital Generation Plant";
-    config.SERVICE_PLANT_NAME_WORDS)."""
-    return _named(lead, config.SERVICE_PLANT_NAME_WORDS)
-
-
-def vehicle_wash(lead: Lead) -> bool:
-    """True for a car or truck wash, by its name or its map tag (config.VEHICLE_WASH_*)."""
-    return (_named(lead, config.VEHICLE_WASH_NAME_WORDS)
-            or any(_osm_tag_matches(lead, k, v) for k, v in config.VEHICLE_WASH_OSM_TAGS))
-
-
-def _building_name(name: str) -> bool:
-    """True when a name only describes a building ("Office and Warehouse, West":
-    config.BUILDING_KIND_WORDS and BUILDING_FILLER_WORDS, numbers, single letters)."""
-    words = normalize(name).split()
-    kinds, fillers = set(config.BUILDING_KIND_WORDS), set(config.BUILDING_FILLER_WORDS)
-    return (any(w in kinds for w in words)
-            and all(w in kinds or w in fillers or w.isdigit() or len(w) == 1 for w in words))
-
-
-# A generic name made descriptive by its street ("Recycling at 1200 W 500 S", osm._descriptive).
-_AT_STREET = re.compile(r"\s(?:at|near)\s", re.I)
-
-
-def needs_name(lead: Lead) -> bool:
-    """True when the listing's name only describes a building (_building_name) or is only
-    a generic word, alone or with its town ("Recycling", "Recycling, Magna": generic_name,
-    not "Recycling at 1200 W 500 S"), and it gives no address, phone or website: there is
-    no business to look up or call until someone finds out who is there."""
-    if lead.address or lead.phone or lead.website:
-        return False
-    return _building_name(lead.name) or (generic_name(lead.name) and not _AT_STREET.search(lead.name))
 
 
 def tier_of(score: int) -> str:
@@ -287,317 +107,6 @@ def mark_needs_name(lead: Lead) -> Lead:
     lead.tier = tier_of(lead.score)
     lead.flags = [*lead.flags, config.NEEDS_NAME_FLAG]
     return lead
-
-
-def generic_name(name: str) -> bool:
-    """True when a name is only a generic word ("Recycling", "Junkyard"), alone or made
-    descriptive only by its street or city ("Recycling at 1200 W 500 S")."""
-    base = re.split(r"\s+(?:at|near)\s+|,", name.strip(), maxsplit=1)[0]
-    return normalize(base) in {normalize(g) for g in config.GENERIC_NAMES}
-
-
-# ---- classifying a lead: an ordered list of named rules
-#
-# A lead's category is decided in two steps, both tables below. First every category
-# that matches it is found, the strongest way first (MATCH_ORDER: its Google category,
-# Yelp category, map tag, a word of its name, or the search phrase that found a
-# generically typed Google result), less the matches a VETOES entry says mean nothing
-# ("University Heights Condominiums" is not a campus). Then RULES are tried in order:
-# the first that applies decides the category (or that there is none), and the lead's
-# explanation names it. To handle a new kind of misclassification, add an entry to the
-# table where it belongs and a test with its example (tests/test_classify_rules.py).
-
-# The ways a category can match a lead, strongest first.
-GOOGLE, YELP, TAG, NAME, QUERY = "Google category", "Yelp category", "map tag", "name", "search query"
-TAGGED = (GOOGLE, YELP, TAG)
-# A retail chain's name decided the category (the rule "retail chain").
-RETAIL_BRAND = "retail brand name"
-
-
-class Facts:
-    """What the rules look at, worked out once per lead."""
-
-    def __init__(self, lead: Lead) -> None:
-        self.lead = lead
-        self.name = normalize(lead.name)
-        self.types = set(lead.raw_categories)
-        self.gtypes = google_types(lead)
-        self.yelp = yelp_categories(lead)
-        self.retail_brand = _retail_brand(lead)
-        # A generically typed Google result: the phrase that found it says what it is.
-        self.use_hint = not (self.gtypes - config.GENERIC_GOOGLE_TYPES) and not self.yelp
-        # Every category that matched, and how (VETOES applied).
-        self.matched: list[Match] = [m for m in map(self._match, config.CATEGORIES) if m]
-        self.tagged = [m for m in self.matched if m[1] in TAGGED]
-        self.by_name = [m for m in self.matched if m[1] == NAME]
-        # A catch-all industrial tag describes the building, not the business.
-        specific = [m for m in self.tagged if not _only_generic_tags(lead, m[0])]
-        # A retail chain's name decides over a warehouse building it is mapped as (which
-        # then isn't offered as "also looks like" either).
-        self.kept = ([m for m in self.matched if m[0].key not in ("distribution", "manufacturing")]
-                     if self.retail_brand else self.matched)
-        self.specific = [m for m in specific if m in self.kept]
-
-    def _match(self, cat: config.Category) -> Match | None:
-        how = self._how(cat)
-        if how and any(cat.key in v.categories and (not v.hows or how in v.hows) and v.test(self)
-                       for v in VETOES):
-            return None
-        return (cat, how) if how else None
-
-    def _how(self, cat: config.Category) -> str | None:
-        if self.gtypes.intersection(cat.google_types):
-            return GOOGLE
-        if self.yelp.intersection(cat.yelp_categories):
-            return YELP
-        if any(_osm_tag_matches(self.lead, k, v) for k, v in cat.osm_tags):
-            return TAG
-        if any(_contains_term(self.name, kw, whole=True) for kw in cat.name_keywords):
-            return NAME
-        if cat.key == "distribution" and parcel_station(self.lead):
-            return NAME                  # a carrier's delivery station (config.PARCEL_CARRIERS)
-        if self.use_hint and any(config.QUERY_CATEGORY.get(t) == cat.key for t in self.lead.search_terms):
-            return QUERY
-        return None
-
-    @functools.cached_property
-    def non_prospect_type(self) -> bool:
-        """Its own Google type, Yelp category or map tag says it is a vet, clinic, park..."""
-        return _is_non_prospect(self.lead, self.types)
-
-
-@dataclass(frozen=True)
-class Veto:
-    """A match that says nothing: `categories` matched (in one of `hows`; any way when
-    empty), but `test` says the lead is something else (the example beside each)."""
-
-    name: str
-    categories: frozenset[str]
-    hows: frozenset[str]
-    test: Callable[[Facts], bool]
-
-
-def _words(name: str, words: Iterable[str]) -> bool:
-    return any(_contains_term(name, w, whole=True) for w in words)
-
-
-VETOES = (
-    # "University Heights Condominiums", "University of Utah Press"
-    Veto("not the campus itself", frozenset({"education"}), frozenset(), lambda f: _not_campus(f.name)),
-    # "Day Dairy Barn" is a small shop, not a plant
-    Veto("a small food shop", frozenset({"food_production"}), frozenset({NAME}),
-         lambda f: _words(f.name, config.NOT_PRODUCTION_NAME_WORDS)),
-    # "Deseret Industries Thrift Store" is a shop, not a plant
-    Veto("a shop named like a plant", frozenset({"manufacturing"}), frozenset({NAME}),
-         lambda f: _shop_named(f.lead, f.name)),
-    # "Liddiard Furniture" mapped as a mall (shop=mall) is a furniture shop
-    Veto("a shop mapped as a shopping centre", frozenset({"venue"}), frozenset({TAG}),
-         lambda f: _shop_mapped_as_mall(f.lead, f.name)),
-    # "Harbor Freight" sells tools: "freight" says nothing
-    Veto("a retail chain's name", frozenset({"distribution", "manufacturing"}), frozenset({NAME}),
-         lambda f: f.retail_brand is not None),
-)
-
-# What a rule decides: (the category and how it matched, or None for no category; every
-# category that matched, offered as "also looks like").
-Decision = tuple[Match | None, list[Match]]
-
-
-@dataclass(frozen=True)
-class Rule:
-    """One step of classifying: `decide` gives the decision when the rule applies, else
-    None (the next rule is tried). `name` and `says` are for whoever maintains the
-    rules (the stored explanation keeps them: "category rule (name): says"); `note` is
-    what a salesperson reads about it on the Leads page and in the downloads
-    (plain_reasons), or "" when the category's own line says it all."""
-
-    name: str
-    says: str
-    decide: Callable[[Facts], Decision | None]
-    note: str = ""
-
-
-def _best(options: list[Match]) -> Match:
-    return max(options, key=lambda m: m[0].weight)
-
-
-def _equipment_name(f: Facts) -> Decision | None:
-    named = next((m for m in f.matched if m[0].key == "equipment" and m[1] == NAME), None)
-    return (named, f.matched) if named else None
-
-
-def _no_category_if(test: Callable[[Lead], bool]) -> Callable[[Facts], Decision | None]:
-    return lambda f: (None, f.matched) if test(f.lead) else None
-
-
-def _nothing_if(test: Callable[[Lead], bool]) -> Callable[[Facts], Decision | None]:
-    """No category, and nothing offered as "also looks like" (a truck wash on an
-    industrial building doesn't also look like a plant)."""
-    return lambda f: (None, []) if test(f.lead) else None
-
-
-def _clinic(f: Facts) -> Decision | None:
-    if not clinic(f.lead) or not any(cat.key == "healthcare" for cat, _ in f.matched):
-        return None
-    return None, [m for m in f.kept if m[0].key != "healthcare"]
-
-
-def _retail_chain(f: Facts) -> Decision | None:
-    if not f.retail_brand or f.specific:
-        return None
-    brand = (f.retail_brand, RETAIL_BRAND)
-    return brand, f.kept + [brand]
-
-
-def _production_food(f: Facts) -> Decision | None:
-    if not f.specific or _best(f.specific)[0].key != "food_service":
-        return None
-    production = (f.gtypes & config.PRODUCTION_GOOGLE_TYPES) or (f.yelp & config.YELP_PRODUCTION)
-    service = (f.gtypes & config.SERVICE_GOOGLE_TYPES) or (f.yelp & config.YELP_SERVICE)
-    made = [m for m in f.kept if m[0].key == "food_production"]
-    return (made[0], f.kept) if production and not service and made else None
-
-
-def _resort_named(name: str) -> bool:
-    """The name says the place is a resort, and not one of its shops ("Solitude Mountain
-    Resort Store")."""
-    words = name.split()
-    resort = (bool(words) and words[-1] in ("resort", "resorts")) or _words(name, config.RESORT_NAME_WORDS)
-    return resort and not _words(name, config.SHOP_NAME_WORDS)
-
-
-def _resort_or_mall(f: Facts) -> Decision | None:
-    """A resort's or shopping mall's name decides over the shop or the homes its building
-    is mapped as (config.RESORT_NAME_WORDS, config.MALL_OWN_NAME_WORDS), when no Google
-    or Yelp listing says what it is and the name doesn't also say apartments."""
-    if any(how != TAG for _, how in f.tagged):
-        return None
-    tagged = {cat.key for cat, _ in f.tagged}
-    shop = any(c.startswith("shop=") for c in f.lead.raw_categories)
-    if shop and tagged <= {"specialty_retail", "retail"} and _resort_named(f.name):
-        key = "hospitality"
-    elif (tagged == {"multifamily"} and _words(f.name, config.MALL_OWN_NAME_WORDS)
-          and not _words(f.name, config.CATEGORY_BY_KEY["multifamily"].name_keywords)):
-        key = "venue"
-    else:
-        return None
-    named = (config.CATEGORY_BY_KEY[key], NAME)
-    return named, f.kept if named in f.kept else f.kept + [named]
-
-
-def _specific(f: Facts) -> Decision | None:
-    return (_best(f.specific), f.kept) if f.specific else None
-
-
-def _name_beats_type(f: Facts) -> Decision | None:
-    if not f.non_prospect_type:
-        return None
-    blockers = f.gtypes & config.NON_PROSPECT_GOOGLE_TYPES
-    allowed = (set.intersection(*(config.NAME_BEATS_GOOGLE_TYPE.get(t, set()) for t in blockers))
-               if blockers else set())
-    other_blocked = (bool(f.yelp & config.NON_PROSPECT_YELP_CATEGORIES) or any(
-        _osm_tag_matches(f.lead, k, v) for k, v in config.NON_PROSPECT_OSM_TAGS))
-    rescued = [m for m in f.by_name if m[0].key in allowed]
-    return (_best(rescued), f.kept) if rescued and not other_blocked else None
-
-
-def _non_prospect_type(f: Facts) -> Decision | None:
-    return (None, f.kept) if f.non_prospect_type else None
-
-
-def _shop(f: Facts) -> Decision | None:
-    if not (any(c.startswith("shop=") for c in f.lead.raw_categories) or "store" in f.types):
-        return None
-    retail = (config.CATEGORY_BY_KEY["retail"], GOOGLE if "store" in f.gtypes else TAG)
-    return retail, f.kept + [retail]
-
-
-def _not_a_plant(f: Facts) -> Decision | None:
-    telling_name = f.by_name or any(_contains_term(f.name, kw, whole=True)
-                                    for cat, _ in f.tagged for kw in cat.name_keywords)
-    if f.tagged and not telling_name and (_small_generic_building(f.lead) or _utility_named(f.lead)
-                                          or _not_plant_named(f.name)):
-        return None, f.kept
-    return None
-
-
-def _catch_all(f: Facts) -> Decision | None:
-    return (_best(f.tagged + f.by_name), f.kept) if f.tagged or f.by_name else None
-
-
-def _anything(f: Facts) -> Decision | None:
-    return (_best(f.kept), f.kept) if f.kept else None
-
-
-RULES = (
-    Rule("equipment name", "an equipment dealer's or hauler's name decides", _equipment_name),
-    Rule("not-a-prospect name", "its name says it is not a prospect (police, fire, an impound or trailer "
-         "yard, parcel lockers)", _no_category_if(non_prospect_name),
-         "Its name says it isn't a business that would use a compactor or baler (police, fire, an impound "
-         "or trailer yard, parcel lockers)"),
-    Rule("utility structure", "a pumping station, well or substation has no waste stream to compact",
-         _no_category_if(utility_structure),
-         "It's a pumping station, well or substation, which has no rubbish to compact"),
-    Rule("utility plant", "a power, heating or cooling plant is a utility building, usually another "
-         "organisation's", _nothing_if(service_plant),
-         "Its name says it's a power, heating or cooling plant, a utility building with little rubbish to "
-         "compact"),
-    Rule("vehicle wash", "a car or truck wash is a service, not a plant", _nothing_if(vehicle_wash),
-         "It's a car or truck wash, which has little rubbish to compact"),
-    Rule("clinic", "a clinic or outpatient centre listed as a hospital is not one", _clinic,
-         "Its name says it's a clinic or outpatient center, not a hospital, so it has little rubbish to "
-         "compact"),
-    Rule("self-storage", "self-storage: the tenants take their rubbish home", _no_category_if(self_storage),
-         "It's self-storage: tenants take their own rubbish home, so there is little to compact on site"),
-    Rule("retail chain", "a retail chain's name decides over the building it is mapped as", _retail_chain,
-         "It's a known store chain, so it counts as a store even where the map shows a warehouse building"),
-    Rule("production listing", "a brewery's or bakery's production listing decides over its taproom or cafe "
-         "label", _production_food,
-         "It's listed as a brewery or bakery that makes its products there, not only a taproom or café"),
-    Rule("resort or mall name", "a resort's or shopping mall's name decides over the shop or homes its "
-         "building is mapped as", _resort_or_mall,
-         "Its name says it's a resort or a shopping mall, although the map shows a shop or homes there"),
-    Rule("own category", "its own Google category, Yelp category or map tag decides", _specific),
-    Rule("name beats type", "its name decides over a listing type that is usually not a prospect",
-         _name_beats_type,
-         "Its name says what it does, although its listing is a kind of place that usually isn't a prospect"),
-    Rule("not-a-prospect type", "its listing type says it is not a prospect (a vet, clinic, park, gas "
-         "station...)", _non_prospect_type,
-         "Its listing says it's a kind of place that rarely needs a compactor or baler (a vet, clinic, park, "
-         "gas station…)"),
-    Rule("shop", "a shop counts as retail, whatever its name says", _shop,
-         "It's listed as a shop, so it counts as a store whatever its name says"),
-    Rule("not a plant", "only a catch-all industrial tag, on a small building, a utility's structure, a data "
-         "centre or a career centre", _not_a_plant,
-         "The map shows only an industrial building, and it's small or belongs to a utility, a data center, a "
-         "job center or a city yard, so it's unlikely to need a compactor or baler"),
-    Rule("catch-all tag or name", "only a catch-all industrial tag or words in its name say what it is",
-         _catch_all,
-         "Only the building type or the business name suggests what it does — confirm before calling"),
-    Rule("search phrase", "the search phrase that found it says what it is", _anything,
-         "Only the search that found it suggests what it does — confirm before calling"),
-)
-NO_MATCH = Rule("nothing matched", "nothing on the high-volume list matched", lambda f: (None, []))
-
-
-class Classified(NamedTuple):
-    best: Match | None            # the category and how it matched, or None
-    matched: list[Match]          # every category that matched ("also looks like")
-    rule: Rule                    # the rule that decided
-
-
-def classify(lead: Lead) -> Classified:
-    """The lead's category: the first of RULES that applies decides (see above)."""
-    facts = Facts(lead)
-    for rule in RULES:
-        decided = rule.decide(facts)
-        if decided is not None:
-            return Classified(*decided, rule)
-    return Classified(None, [], NO_MATCH)
-
-
-def _split_hyphens(text: str) -> str:
-    return normalize(re.sub(r"[-/]", " ", text or ""))
 
 
 def _name_is_brand(raw_name: str, brand: str, own_brand: str) -> bool:
@@ -649,162 +158,6 @@ def _brand_bonus(lead: Lead) -> str | None:
             if not rest or lead.category_key not in ("retail", "specialty_retail"):
                 return brand
     return None
-
-
-# ---- AARCO's parent company (config.PARENT_*): its listings are AARCO's own
-
-# Street words written short, so "1240 South Wallace Road" = "1240 S Wallace Rd".
-_STREET_SHORT = {"north": "n", "south": "s", "east": "e", "west": "w", "road": "rd", "street": "st",
-                 "avenue": "ave", "av": "ave", "drive": "dr", "boulevard": "blvd", "lane": "ln",
-                 "court": "ct", "circle": "cir", "highway": "hwy", "parkway": "pkwy", "place": "pl"}
-
-
-def _street_words(street: str) -> list[str]:
-    return [_STREET_SHORT.get(w, w) for w in normalize(street).split()]
-
-
-@lru_cache(maxsize=4)
-def _parent_facilities(addresses: tuple[str, ...]) -> tuple[tuple[list[str], str], ...]:
-    """config.PARENT_ADDRESSES as (street words, town as places.tidy_town writes it)."""
-    out = []
-    for address in addresses:
-        street, _, town = address.partition(",")
-        if _street_words(street):
-            out.append((_street_words(street), places.tidy_town(town)))
-    return tuple(out)
-
-
-@lru_cache(maxsize=16)
-def _alias_patterns(aliases: tuple[str, ...]) -> tuple[re.Pattern[str], re.Pattern[str]]:
-    """(any alias as whole words, an "s" after it allowed; any alias written as one word
-    opening the text)."""
-    words = "|".join(re.escape(normalize(a)) for a in aliases if normalize(a))
-    joined = "|".join(re.escape(compact(a)) for a in aliases if compact(a))
-    return re.compile(rf"(?<![a-z0-9])(?:{words})s?(?![a-z0-9])"), re.compile(rf"^(?:{joined})")
-
-
-def _alias_named(name: str, aliases: Sequence[str]) -> bool:
-    """True when a name holds one of aliases as whole words ("Pro Baler Inc", "Pro-Baler",
-    "AARCO Compactors & Balers") or written as one word opening it ("ProBaler",
-    "AarcoWaste"), never inside another word ("Repro Balers", "Marco Compactor Repair")."""
-    if not aliases:
-        return False
-    words, joined = _alias_patterns(tuple(aliases))
-    plain = normalize(name)
-    return bool(words.search(plain) or joined.search(plain.replace(" ", ""))
-                or (("-" in name or "/" in name) and words.search(_split_hyphens(name))))
-
-
-def _alias_site(website: str, aliases: Sequence[str]) -> bool:
-    """True when a website's address holds one of aliases as whole words between its dots,
-    dashes and slashes ("pro-baler.com"), or a part of it opens with one written as one
-    word ("probaler.com", "aarcowastedisposal.com"), never inside another ("reprobalers.com")."""
-    if not aliases:
-        return False
-    words, joined = _alias_patterns(tuple(aliases))
-    parts = re.split(r"[^a-z0-9]+", re.sub(r"^(https?://)?(www\d?\.)?", "", website.strip().lower()))
-    return bool(words.search(" ".join(parts)) or any(joined.match(p) for p in parts if p))
-
-
-def _holds_alias(lead: Lead, aliases: Sequence[str]) -> bool:
-    """True when the lead's name, website or another name it goes by holds one of aliases
-    (_alias_named, _alias_site)."""
-    return (any(_alias_named(x, aliases) for x in [lead.name, *lead.alt_names] if x)
-            or any(_alias_site(x, aliases) for x in [lead.website, *lead.alt_names] if x))
-
-
-def _competitor(lead: Lead) -> str | None:
-    """The competitor (config.COMPETITORS) whose name or website the lead holds, or None."""
-    return next((name for name, aliases in config.COMPETITORS.items() if _holds_alias(lead, aliases)), None)
-
-
-def _is_self(lead: Lead) -> bool:
-    """True for AARCO's own listing: its names or website hold one of config.SELF_ALIASES."""
-    return _holds_alias(lead, config.SELF_ALIASES)
-
-
-def _parent_named(name: str) -> bool:
-    """True when a name holds one of config.PARENT_ALIASES as whole words ("Ace
-    Intermountain Recycling Center", "ACE-Disposal", "AceDisposal"), never inside other
-    words or as a bare "Ace" ("Ace Hardware", "Grace Recycling")."""
-    return _alias_named(name, config.PARENT_ALIASES)
-
-
-def _parent_site(website: str) -> bool:
-    if not any(d in website.lower() for d in config.PARENT_DOMAINS):
-        return False
-    host = re.sub(r"^(https?://)?(www\d?\.)?", "", website.strip().lower()).split("/")[0].split(":")[0]
-    return any(host == d or host.endswith("." + d) for d in config.PARENT_DOMAINS)
-
-
-def _parent_address(lead: Lead) -> bool:
-    """True when the lead's street address is one of config.PARENT_ADDRESSES (a suite or
-    unit after it allowed) and the town it lists, if any, is that address's town."""
-    facilities = _parent_facilities(tuple(config.PARENT_ADDRESSES))
-    if not lead.address or not any(lead.address.lstrip().lower().startswith(street[0]) for street, _ in facilities):
-        return False            # not even its house number: most listings stop here
-    words = _street_words(lead.address)
-    towns = [where for street, where in facilities if words[:len(street)] == street]
-    if not towns:
-        return False
-    town = places.listed_town(lead)
-    return not town or any(not where or town == where for where in towns)
-
-
-def parent_company(lead: Lead) -> bool:
-    """True for a listing of AARCO's parent company (config.PARENT_*): by its name or
-    another name it goes by, its website, or one of its facilities' addresses."""
-    return (any(_parent_named(x) for x in [lead.name, *lead.alt_names] if x)
-            or any(_parent_site(x) for x in [lead.website, *lead.alt_names] if x)
-            or _parent_address(lead))
-
-
-def mark_parent_company(lead: Lead) -> Lead:
-    """A listing of AARCO's parent company is AARCO's own: never a prospect, flagged
-    PARENT_FLAG. score_lead does it, and so does showing a row saved before the parent
-    company was recognised (saved.py; the saved row is unchanged). A competitor, or a
-    listing already marked as AARCO's own, is left as it is."""
-    if lead.lead_type in ("Competitor", OWN_TYPE) or not parent_company(lead):
-        return lead
-    lead.lead_type = OWN_TYPE
-    lead.flags = [*(f for f in lead.flags if f != INDUSTRY_FLAG), PARENT_FLAG]
-    return lead
-
-
-def current_own_flag(flag: str) -> str:
-    """An own-company flag as it reads now: one saved under an earlier name of AARCO
-    ("OWN COMPANY: AARCO Compactors & Balers", "OWN COMPANY: AARCO Compactor",
-    "OWN COMPANY: Arco Compactor") or of the parent
-    company reads with the names config has now; any other flag is returned as it is."""
-    if not flag.startswith(OWN_FLAG_START):
-        return flag
-    return PARENT_FLAG if "parent company" in flag.lower() else OWN_FLAG
-
-
-def current_type_flags(lead: Lead) -> Lead:
-    """A saved competitor's or own-company flag (OWN_FLAG, not the parent company's) as
-    the names match now: a row flagged before the names had to match as whole words
-    (SCORING_VERSION 1: "Marco Compactor Repair" read as AARCO's own, "Repro Balers" as
-    Pro Baler) is shown with the type its category gives and without the flag, as a
-    search now scores it. saved.py does it after current_own_flag; the saved row is
-    unchanged."""
-    old = {f for f in lead.flags if f == OWN_FLAG or f.startswith(COMPETITOR_FLAG_START)}
-    if not old:
-        return lead
-    now = _own_or_competitor(lead)
-    if now and now[1] in old:
-        return lead
-    if now:
-        lead.lead_type, flag = now
-        flags = [flag]
-    else:
-        category = config.CATEGORY_BY_KEY.get(lead.category_key)
-        lead.lead_type = category.lead_type if category else PROSPECT_TYPE
-        flags = [INDUSTRY_FLAG] if lead.lead_type.startswith("Industry") else []
-    at = next(i for i, f in enumerate(lead.flags) if f in old)
-    kept = [f for f in lead.flags if f not in old]
-    lead.flags = [*kept[:at], *flags, *kept[at:]]
-    return lead
 
 
 def keyword_hits(lead: Lead, keywords: Iterable[str]) -> list[str]:
@@ -901,31 +254,6 @@ def _also_like(best: Match | None, matched: list[Match]) -> list[str]:
     return ["also looks like: " + "; ".join(others)] if others else []
 
 
-def _own_or_competitor(lead: Lead) -> tuple[str, str] | None:
-    """(type, flag) for a competitor's listing or AARCO's own, else None."""
-    competitor = _competitor(lead)
-    if competitor:
-        return "Competitor", COMPETITOR_FLAG_START + competitor
-    if _is_self(lead):
-        return OWN_TYPE, OWN_FLAG
-    return None
-
-
-def _type_flags(lead: Lead) -> list[str]:
-    """A competitor's, AARCO's own (its parent company's) or an industry listing's flag,
-    with the lead's type set to match."""
-    own_or_competitor = _own_or_competitor(lead)
-    if own_or_competitor:
-        lead.lead_type, flag = own_or_competitor
-        return [flag]
-    if parent_company(lead):
-        lead.lead_type = OWN_TYPE
-        return [PARENT_FLAG]
-    if lead.lead_type.startswith("Industry"):
-        return [INDUSTRY_FLAG]
-    return []
-
-
 def _penalties(lead: Lead, flags: list[str]) -> Points:
     """Points taken off: a map name that is only a word, and a temporary closure (flagged)."""
     points, reasons = 0, []
@@ -961,51 +289,3 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
     lead.reasons = reasons
     lead.flags = flags
     return mark_needs_name(lead)
-
-
-# ---- the explanation as a salesperson reads it
-#
-# lead.reasons is the scoring's own record, saved with each lead: "+35 Grocery /
-# supermarket (by map tag): ...", and "category rule (own category): ..." naming the
-# rule that decided, for whoever maintains the rules. The Leads page and the downloads
-# show plain_reasons() of it instead, which also reads the explanations saved by earlier
-# versions (saved leads are never rewritten).
-
-# How a category matched, in a salesperson's words.
-PLAIN_HOW = {GOOGLE: "from the Google listing", YELP: "from the Yelp listing", TAG: "from the map listing",
-             NAME: "from its name", QUERY: "from the search that found it",
-             RETAIL_BRAND: "from the store chain's name"}
-_RULE_LINE = re.compile(r"category rule \(([^)]*)\)")
-_HOW_PART = re.compile(r" \(by ([^)]+)\)")
-_POINTS = re.compile(r"[+-]\d+ ")
-# Lines of the record that read differently on the page and in the downloads.
-_PLAIN_LINES = {"+0 category not on the high-volume list":
-                "+0 not a kind of business that usually runs a compactor or baler"}
-_PLAIN_WORDS = (("matches keyword(s): ", "matches the search words: "),)
-
-
-def plain_reasons(reasons: Iterable[str]) -> list[str]:
-    """A lead's explanation as the Leads page and the downloads show it: the points
-    first ("+35 Grocery / supermarket (from the map listing): ..."), then the notes,
-    starting with what the rule that decided its category means for a salesperson
-    (Rule.note: "Only the building type or the business name suggests what it does —
-    confirm before calling"), never the rule's name or the map's own terms."""
-    notes_of = {rule.name: rule.note for rule in RULES}
-    points: list[str] = []
-    notes: list[str] = []
-    for reason in reasons:
-        rule = _RULE_LINE.match(reason)
-        if rule:
-            note = notes_of.get(rule.group(1), "")
-            if note:
-                notes.append(note)
-            continue
-        reason = _HOW_PART.sub(lambda m: f" ({PLAIN_HOW.get(m.group(1), 'from its listing')})", reason, count=1)
-        reason = _PLAIN_LINES.get(reason, reason)
-        for old, new in _PLAIN_WORDS:
-            reason = reason.replace(old, new)
-        if _POINTS.match(reason):
-            points.append(reason)
-        else:
-            notes.append(reason[:1].upper() + reason[1:])
-    return points + notes

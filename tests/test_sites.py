@@ -482,7 +482,7 @@ def test_a_later_search_adds_a_campus_building_to_the_saved_campus():
 def test_a_map_area_keeps_its_outline():
     import pytest
 
-    from leadgen.sources import osm
+    from leadgen.sources import osm, osm_parse
 
     bounds = {"minlat": 41.0626145, "minlon": -111.9878035, "maxlat": 41.0707216,
               "maxlon": -111.9784123}
@@ -492,8 +492,8 @@ def test_a_map_area_keeps_its_outline():
     node = osm.parse_element({"type": "node", "id": 1, "lat": 41.06, "lon": -111.98,
                               "tags": {"name": "Smith's Marketplace", "shop": "supermarket"}})
     assert node.outline is None
-    assert osm._outline({"minlat": 41.1, "minlon": -111.9}) is None
-    assert osm._outline(None) is None
+    assert osm_parse._outline({"minlat": 41.1, "minlon": -111.9}) is None
+    assert osm_parse._outline(None) is None
 
 
 # The round-21 review's pair from a real 30-mile search around AARCO: the hospital's own
