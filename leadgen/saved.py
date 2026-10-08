@@ -30,7 +30,7 @@ from . import config, places, store
 from .dedupe import Site, SiteIndex, duplicate_groups, is_duplicate, merge, same_site, site_of, snapshot
 from .geo import haversine_miles
 from .models import Lead
-from .scoring import current_own_flag, mark_needs_name, mark_parent_company, score_lead
+from .scoring import current_own_flag, current_type_flags, mark_needs_name, mark_parent_company, score_lead
 
 _FIELDS = {f.name for f in fields(Lead)}
 CLOSED = "CLOSED_PERMANENTLY"
@@ -458,6 +458,9 @@ def _ready(row: _Row) -> Lead | None:
     # COMPANY: AARCO Compactor"): shown with the name it has now. Only what is shown
     # changes; the saved row keeps its text.
     lead.flags = [current_own_flag(f) for f in lead.flags]
+    # Flagged as AARCO's own or a competitor's when the names matched inside other words
+    # ("Marco Compactor Repair"): shown as a search now scores it (the saved row is unchanged).
+    current_type_flags(lead)
     # A listing of AARCO's parent company saved before it was recognised: shown as AARCO's
     # own (flagged, not a prospect), as a search now scores it (the saved row is unchanged).
     mark_parent_company(lead)

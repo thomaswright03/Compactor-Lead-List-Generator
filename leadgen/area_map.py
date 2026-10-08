@@ -75,7 +75,7 @@ class Area:
 
 def _circle(lat: float, lon: float, miles: float, points: int = CIRCLE_POINTS) -> list[tuple[float, float]]:
     """The circle of `miles` around (lat, lon) as points, on the same flat reckoning as
-    the search's areas (osm._square), so the two meet exactly."""
+    the search's areas (osm_areas._square), so the two meet exactly."""
     dlat = miles / osm.MILES_PER_DEGREE_LAT
     dlon = dlat / max(0.01, math.cos(math.radians(lat)))
     return [(lat + dlat * math.cos(2 * math.pi * i / points), lon + dlon * math.sin(2 * math.pi * i / points))

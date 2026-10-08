@@ -1,7 +1,8 @@
 # Scoring evaluation
 
-How well the rule-based scorer (`leadgen/scoring.py`, with the categories, weights,
-brands and name words in `leadgen/config.py`) ranks businesses, measured on the
+How well the rule-based scorer (`leadgen/scoring.py` and the `scoring_*.py` modules
+beside it, with the categories, weights, brands and name words in `leadgen/config.py` and
+the `config_*.py` modules it takes in) ranks businesses, measured on the
 reference set `tests/fixtures/scoring_reference.json`. Run it any time with:
 
 ```bash
@@ -14,7 +15,7 @@ public `/healthz` page both show it, so a saved score can be matched to the rule
 made it. Calibration against the real Yes / No outcomes is out of scope by the owner's
 decision; the checks below are what the scoring is held to.
 
-## Current numbers (rules version 1, 2026-10-08)
+## Current numbers (rules version 2, 2026-10-08)
 
 ```
 Typical listings (45, with whether each runs a baler or compactor)
@@ -29,8 +30,23 @@ Lowest score with equipment: 30; highest without: 23 (the tests need the first a
 Businesses AARCO's staff marked Yes / No on the site (0)
 None yet: the site's Yes / No marks haven't been copied in (operator runbook, "Monthly: the scoring check").
 
-Also held to by the tests: not_campus (8), not_production (5), name_traps (11), generic_names (2), needs_name (4), own_company (15)
+Also held to by the tests: not_campus (8), not_production (5), name_traps (11), generic_names (2), needs_name (4), own_company (18)
 ```
+
+## Rules versions
+
+- **1**: the rules as first versioned.
+- **2** (2026-10-08): AARCO's own names and the competitors' (`config.SELF_ALIASES`,
+  `config.COMPETITORS`) match only as whole words, or written as one word opening the
+  name or a part of the website, as the parent company's names already did
+  (`scoring_flags._holds_alias`). Under version 1 they matched inside other words, so "Marco
+  Compactor Repair" was flagged as AARCO's own and "Repro Balers" as Pro Baler; such a
+  listing now gets the type and flag its category gives. Scores and tiers don't move;
+  only those listings' type and flag do. Saved rows are not rewritten: a row flagged
+  under version 1 is shown as version 2 reads it (`scoring.current_type_flags` in
+  `saved._ready`), and the next search that finds it saves it that way. The reference
+  file's `own_company` list gained "Arco Compactor" and the two names that must not
+  match, "Marco Compactor Repair" and "Monarco Compactor".
 
 ## What the numbers mean
 
@@ -84,7 +100,8 @@ scores raises `SCORING_VERSION`.
 
 ## Changing the rules
 
-1. Change the rule or weight in `leadgen/config.py` or `leadgen/scoring.py`.
+1. Change the rule or weight in `leadgen/config.py` (or the `config_*.py` it takes in) or
+   `leadgen/scoring.py` (or the `scoring_*.py` beside it).
 2. Run `python -m leadgen scoring-report` and `python -m pytest tests/test_scoring.py
    tests/test_classify_rules.py`.
 3. Raise `SCORING_VERSION` when scores or tiers moved, update the numbers on this

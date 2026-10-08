@@ -3,58 +3,53 @@
 Coverage is thinner than Google (fewer phone numbers and websites) but it
 often includes warehouses and industrial buildings that Google lists poorly,
 and building outlines give a rough size signal.
+
+This module asks the map servers and runs a search's rounds; the query is built in
+osm_query.py, the answers are read in osm_parse.py and the areas a search is cut into
+are in osm_areas.py. Every name they had here is still imported from here.
 """
 
 import logging
-import math
 import queue
-import re
 import threading
 import time
 from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import Any
 
-from .. import THREAD_PREFIX, config, places
-from ..geo import METERS_PER_MILE, haversine_miles
+from .. import THREAD_PREFIX, config
 from ..http import HttpError, cache_get, cache_put, request_json
 from ..models import Lead
 from ..progress import MAP, Step
-from ..scoring import generic_name
 from . import SourceError, report_found
+from .osm_areas import (
+    CENTER_AREA,
+    MILES_PER_DEGREE_LAT,
+    Box,
+    Part,
+    _distance,
+    _parts,
+    _quarters,
+    area_boxes,
+    area_name,
+    areas_left,
+    part_boxes,
+)
+from .osm_parse import CATEGORY_KEYS, MAX_BUILDING_SQFT, SQFT_PER_M2, is_part_label, parse_element
+from .osm_query import build_query
+
+# Re-exported: callers import these from osm, wherever they are written.
+__all__ = ["CATEGORY_KEYS", "CENTER_AREA", "MAX_BUILDING_SQFT", "MILES_PER_DEGREE_LAT", "SQFT_PER_M2", "Box",
+           "Part", "SourceError", "area_boxes", "area_name", "areas_left", "build_query", "is_part_label",
+           "parse_element", "part_boxes"]
 
 log = logging.getLogger(__name__)
 
-# Tag keys copied onto each lead so the scorer can classify it.
-CATEGORY_KEYS = ["shop", "amenity", "building", "industrial", "craft", "man_made", "office",
-                 "tourism", "leisure", "aeroway", "healthcare", "landuse", "military"]
-# Area-type landuse tags produce huge, mostly unnamed polygons; only landfills are queried.
-_SKIP_QUERY = {("landuse", "industrial"), ("landuse", "residential"), ("landuse", "military"),
-               ("landuse", "logistics")}
-_NAME_TERMS = [
-    "compactor", "compaction", "baler", "baling", "recycl", "waste", "disposal", "sanitation",
-    "distribution", "warehouse", "logistics", "fulfillment", "cold storage", "freight",
-    "manufactur", "industries", "fabrication", "packaging", "printing", "corrugated",
-    "foods", "meats", "dairy", "bottling", "brewing", "hospital", "medical center",
-    "university", "college", "apartments",
-]
-SQFT_PER_M2 = 10.7639
-_NOT_PLACES = ["highway", "waterway", "railway", "route", "boundary", "natural",
-               "public_transport", "place", "power"]
-MAX_BUILDING_SQFT = 3_000_000   # bigger bounding boxes are campuses/resorts, not buildings
 # A mirror is only asked when at least this many seconds of the map-data time are left.
 MIN_SECONDS_LEFT = 5
 # While the map data is being asked, the administrator's pause (config.stop_reason) is
 # looked at this often (seconds): a paused search stops within a few seconds.
 STOP_CHECK_SECONDS = 2.0
-# An area to search, as Overpass writes it: (south, west, north, east) in degrees.
-Box = tuple[float, float, float, float]
-MILES_PER_DEGREE_LAT = 69.05
-
-
-# One part of the area still to ask: (its box, or None for the whole circle; its
-# share of the area; how many times it has been split into quarters).
-Part = tuple[Box | None, float, int]
 
 
 class PartialResult(SourceError):
@@ -80,249 +75,6 @@ class Stopped(SourceError):
     def __init__(self, reason: str, leads: list[Lead], warnings: list[str]) -> None:
         super().__init__(f"Stopped: {reason}")
         self.reason, self.leads, self.warnings = reason, leads, warnings
-
-
-def _tag_filters() -> tuple[dict[str, set[str]], set[str]]:
-    """Group category tags into Overpass filters: {key: [values]} and bare keys."""
-    by_key: dict[str, set[str]] = {}
-    any_value: set[str] = set()
-    for cat in config.CATEGORIES:
-        if not cat.query_osm:
-            continue
-        for key, value in cat.osm_tags:
-            if (key, value) in _SKIP_QUERY:
-                continue
-            if value is None:
-                any_value.add(key)
-            else:
-                by_key.setdefault(key, set()).add(value)
-    return by_key, any_value
-
-
-def _ql_string(text: str) -> str:
-    return (text.replace("\\", "\\\\").replace('"', '\\"')
-            .replace("\n", "\\n").replace("\t", "\\t"))
-
-
-def build_query(lat: float, lon: float, radius_miles: float, keywords: Sequence[str] = (),
-                timeout: int | None = None, box: Box | None = None) -> str:
-    """The Overpass query for the circle, or (with box) for the part of it inside the box."""
-    r = int(radius_miles * METERS_PER_MILE)
-    around = f"(around:{r},{lat:.6f},{lon:.6f})"
-    if box is not None:
-        around += "({:.6f},{:.6f},{:.6f},{:.6f})".format(*box)
-    by_key, any_value = _tag_filters()
-    parts = []
-    for key in sorted(by_key):
-        values = "|".join(sorted(by_key[key]))
-        parts.append(f'nwr["{key}"~"^({values})$"]["name"]{around};')
-    for key in sorted(any_value):
-        parts.append(f'nwr["{key}"]["name"]{around};')
-    terms = list(_NAME_TERMS) + [k.lower() for k in keywords if k.strip()]
-    # Escape twice: once for the regex, once for the Overpass QL string literal
-    # (which would otherwise eat the regex backslashes).
-    regex = "|".join(sorted({_ql_string(re.escape(t)) for t in terms}))
-    # Name matches skip roads, canals, routes etc. ("University Pkwy", "Waste Ditch").
-    not_places = "".join(f'[!"{k}"]' for k in _NOT_PLACES)
-    parts.append(f'nwr["name"~"{regex}",i]{not_places}{around};')
-    body = "\n  ".join(parts)
-    timeout = int(timeout or config.OVERPASS_PART_SECONDS)
-    return (f"[out:json][timeout:{timeout}];\n(\n  {body}\n)->.all;\n"
-            "node.all->.n;\n.n out body;\n"
-            "(way.all; relation.all;)->.w;\n.w out tags bb;")
-
-
-def _footprint_sqft(bounds: dict[str, float] | None) -> int | None:
-    if not bounds:
-        return None
-    dlat = (bounds["maxlat"] - bounds["minlat"]) * 111320
-    mid = math.radians((bounds["maxlat"] + bounds["minlat"]) / 2)
-    dlon = (bounds["maxlon"] - bounds["minlon"]) * 111320 * math.cos(mid)
-    area = dlat * dlon * SQFT_PER_M2
-    return int(round(area, -2)) if area > 0 else None
-
-
-def _outline(bounds: dict[str, float] | None) -> list[float] | None:
-    """A map area's bounding box as [south, west, north, east] (dedupe.py joins the
-    listings of one site that lie inside it), or None without usable bounds."""
-    try:
-        box = [round(float(bounds[k]), 6) for k in ("minlat", "minlon", "maxlat", "maxlon")]  # type: ignore[index]
-    except (KeyError, TypeError, ValueError):
-        return None
-    return box if box[0] <= box[2] and box[1] <= box[3] else None
-
-
-def _pretty(tag_value: str) -> str:
-    return tag_value.replace("_", " ").replace(";", ", ").title()
-
-
-_LIFECYCLE = ("disused:", "abandoned:", "was:", "demolished:")
-_USE_KEYS = [k for k in CATEGORY_KEYS if k != "building"]
-
-
-def _only_former_use(tags: dict[str, str]) -> bool:
-    """True when a lifecycle prefix (disused:shop=...) records the only use left."""
-    former = any(k.startswith(_LIFECYCLE) and k.split(":", 1)[1] in _USE_KEYS for k in tags)
-    return former and not any(k in tags for k in _USE_KEYS)
-
-
-def _fetched_by_tag(tags: dict[str, str]) -> bool:
-    by_key, any_value = _tag_filters()
-    return (any(v in values for k, values in by_key.items() for v in tags.get(k, "").split(";"))
-            or any(k in tags for k in any_value))
-
-
-# Labels for one part of a complex ("Building B", "Bldg 3", "Tower 2", "C Building"):
-# not a business, and the complex itself is its own element when it is mapped.
-_PART_LABEL = re.compile(
-    r"^(?:(?:building|bldg\.?|block|wing|tower|unit|suite|ste\.?|phase|annex|hall)\s*[#-]?\s*"
-    r"[0-9a-z]{1,4}|[0-9a-z]{1,3}\s*[-]?\s*(?:building|bldg\.?|wing|tower))$", re.I)
-
-
-def is_part_label(name: str) -> bool:
-    """True for a name that only labels part of a complex, like "Building B"."""
-    return bool(_PART_LABEL.match(name.strip()))
-
-
-def _not_a_business(name: str, tags: dict[str, str]) -> bool:
-    """True for a map element that is no business to call: unnamed, a label of part of
-    a complex, no longer operating, or a road, river or place label."""
-    # Skip unnamed features and per-building labels like "B", "12" or "Building B"
-    # inside a complex (but keep brands like "3M").
-    if len(name) < 2 or not any(ch.isalpha() for ch in name) or is_part_label(name):
-        return True
-    # Places that no longer operate.
-    if "(historical)" in name.lower() or _only_former_use(tags) or any(
-            tags.get(k) == "yes" for k in ("disused", "abandoned", "demolished")):
-        return True
-    # Roads, rivers, place labels etc. only slip in through the name query; an
-    # element a category-tag query fetched (a rail depot, an apartment node) stays.
-    return any(k in tags for k in _NOT_PLACES) and not _fetched_by_tag(tags)
-
-
-def _position(el: dict[str, Any]) -> tuple[float, float] | None:
-    """The element's (lat, lon): a node's own, or the middle of a way's bounds."""
-    if "lat" in el and "lon" in el:
-        return el["lat"], el["lon"]
-    if "bounds" in el:
-        b = el["bounds"]
-        return (b["minlat"] + b["maxlat"]) / 2, (b["minlon"] + b["maxlon"]) / 2
-    return None
-
-
-def _categories(tags: dict[str, str]) -> tuple[list[str], str]:
-    """The element's category tags (and brand or operator) as "key=value" strings for
-    the scorer, and its first real category, prettied, as the primary one."""
-    raw = [f"{k}={tags[k]}" for k in CATEGORY_KEYS if k in tags]
-    for k in ("brand", "operator"):
-        if k in tags:
-            raw.append(f"{k}={tags[k]}")
-    primary = ""
-    for k in CATEGORY_KEYS:
-        if k in tags and tags[k] not in ("yes",):
-            primary = _pretty(tags[k])
-            break
-    return raw, primary
-
-
-def _footprint(el: dict[str, Any], tags: dict[str, str], etype: str) -> int | None:
-    """A building's rough size from its bounds (sq ft), when it is a building."""
-    if etype not in ("way", "relation") or not ("building" in tags or "shop" in tags):
-        return None
-    footprint = _footprint_sqft(el.get("bounds"))
-    return None if footprint and footprint > MAX_BUILDING_SQFT else footprint
-
-
-def parse_element(el: dict[str, Any]) -> Lead | None:
-    """A business from one Overpass element (a node, way or relation), or None when it
-    is no business or has no position."""
-    tags = el.get("tags", {})
-    name = tags.get("name", "").strip()
-    if _not_a_business(name, tags):
-        return None
-    at = _position(el)
-    if at is None:
-        return None
-    lat, lon = at
-    raw, primary = _categories(tags)
-    street = " ".join(x for x in [tags.get("addr:housenumber", ""), tags.get("addr:street", "")] if x)
-    if generic_name(name):
-        name = _descriptive(name, tags, street)
-    etype = el.get("type", "node")
-    outline = _outline(el.get("bounds")) if etype in ("way", "relation") else None
-    return Lead(
-        name=name,
-        lat=lat,
-        lon=lon,
-        source="osm",
-        source_id=f"{etype}/{el.get('id')}",
-        address=street,
-        city=tags.get("addr:city", ""),
-        state=tags.get("addr:state", ""),
-        zip=tags.get("addr:postcode", ""),
-        phone=tags.get("phone", tags.get("contact:phone", "")),
-        website=tags.get("website", tags.get("contact:website", "")),
-        raw_categories=raw,
-        primary_category=primary,
-        footprint_sqft=_footprint(el, tags, etype),
-        outline=outline,
-        business_status="CLOSED_PERMANENTLY" if tags.get("disused") == "yes" else "",
-        map_url=f"https://www.openstreetmap.org/{etype}/{el.get('id')}",
-    )
-
-
-def _descriptive(name: str, tags: dict[str, str], street: str) -> str:
-    """A generic map name ("Recycling") made into something a salesperson can look up:
-    with its operator or brand ("Recycling (Salt Lake County)"), else its street
-    ("Recycling at 1200 W 500 S"), else its city ("Recycling, Magna")."""
-    who = (tags.get("operator") or tags.get("brand") or "").strip()
-    if who and not generic_name(who):
-        return f"{name} ({who})"
-    if street:
-        return f"{name} at {street}"
-    city = tags.get("addr:city", "").strip()
-    return f"{name}, {city}" if city else name
-
-
-def _square(lat: float, lon: float, radius_miles: float) -> Box:
-    """The search circle's bounding square."""
-    dlat = radius_miles / MILES_PER_DEGREE_LAT
-    dlon = dlat / max(0.01, math.cos(math.radians(lat)))
-    return (lat - dlat, lon - dlon, lat + dlat, lon + dlon)
-
-
-def _distance(lat: float, lon: float, box: Box | None) -> tuple[float, float]:
-    """How far a part lies from the search centre, for asking the nearest first: miles
-    to its nearest point (0 for the part the centre is in), then to its middle."""
-    if box is None:
-        return 0.0, 0.0
-    near = haversine_miles(lat, lon, min(max(lat, box[0]), box[2]), min(max(lon, box[1]), box[3]))
-    return near, haversine_miles(lat, lon, (box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
-
-
-def _parts(lat: float, lon: float, radius_miles: float) -> list[Box]:
-    """The search circle's bounding square cut into a grid of boxes no wider than
-    config.OVERPASS_PART_MILES, keeping only the boxes that reach into the circle,
-    nearest the centre first (the part the centre is in, then outwards)."""
-    n = max(1, math.ceil(2 * radius_miles / config.OVERPASS_PART_MILES))
-    south, west, north, east = _square(lat, lon, radius_miles)
-    step_lat, step_lon = (north - south) / n, (east - west) / n
-    boxes = []
-    for i in range(n):
-        for j in range(n):
-            box = (south + i * step_lat, west + j * step_lon,
-                   south + (i + 1) * step_lat, west + (j + 1) * step_lon)
-            # The box's point nearest the centre is inside the circle.
-            if _distance(lat, lon, box)[0] <= radius_miles:
-                boxes.append(box)
-    return sorted(boxes, key=lambda box: _distance(lat, lon, box))
-
-
-def _quarters(box: Box) -> list[Box]:
-    s, w, n, e = box
-    mid_lat, mid_lon = (s + n) / 2, (w + e) / 2
-    return [(s, w, mid_lat, mid_lon), (s, mid_lon, mid_lat, e),
-            (mid_lat, w, n, mid_lon), (mid_lat, mid_lon, n, e)]
 
 
 def _answer_key(query: str) -> str:
@@ -698,52 +450,6 @@ def _result(run: _Parts) -> tuple[list[Lead], list[str]]:
             + " | ".join(run.errors[-5:]), leads, run.warnings, coverage,
             missing=run.missing, areas=n_boxes)
     return leads, run.warnings
-
-
-def area_boxes(lat: float, lon: float, radius_miles: float) -> list[Box]:
-    """The areas a search around (lat, lon) asks the map data in, nearest the centre
-    first: the "N of 9 areas" of its progress and history (the Map page draws them)."""
-    return _parts(lat, lon, radius_miles)
-
-
-def area_name(lat: float, lon: float, radius_miles: float, box: Box) -> str:
-    """An area of a search in words, as the pages name it ("Salt Lake City", "the
-    area to the northwest"): area_map.py names every area with it."""
-    return _area_name(lat, lon, radius_miles, box)
-
-
-def part_boxes(parts: Sequence[Part]) -> list[list[float] | None]:
-    """The parts' boxes as the day's record keeps them ([south, west, north, east],
-    rounded; None for a search asked whole): which areas a search missed, for the Map
-    page."""
-    return [None if box is None else [round(x, 6) for x in box] for box, _, _ in parts]
-
-
-def areas_left(parts: Sequence[Part], areas: int) -> int:
-    """How many of a search's `areas` the missing parts make up (at least 1 while any
-    part is missing), for the page's "still filling in N areas"."""
-    share = sum(part[1] for part in parts)
-    return max(1, round(share * areas)) if share > 0.001 else 0
-
-
-_DIRECTIONS = ("north", "northeast", "east", "southeast", "south", "southwest", "west",
-               "northwest")
-# The words for the area a search's center is in when no town's center is in it.
-CENTER_AREA = "the area around the search's center"
-
-
-def _area_name(lat: float, lon: float, radius_miles: float, box: Box) -> str:
-    """A part of a search's area in words: its biggest town ("Salt Lake City"), or
-    where it lies from the center ("the area to the northwest") when it has none."""
-    town = places.biggest_town(box, (lat, lon), radius_miles)
-    if town:
-        return town
-    mid_lat, mid_lon = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
-    if box[0] <= lat <= box[2] and box[1] <= lon <= box[3]:
-        return CENTER_AREA
-    east = (mid_lon - lon) * math.cos(math.radians(lat))
-    bearing = math.degrees(math.atan2(east, mid_lat - lat)) % 360
-    return f"the area to the {_DIRECTIONS[round(bearing / 45) % 8]}"
 
 
 def fill_in(lat: float, lon: float, radius_miles: float, keywords: Sequence[str],
