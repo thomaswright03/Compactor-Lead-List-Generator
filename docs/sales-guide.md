@@ -34,7 +34,9 @@ only looks around and never changes anything.
    (1 to 100 miles; it can't be left blank).
    **Extra search words** starts empty: the standard words (compactor, baler,
    waste, recycling) are always searched, and anything you type is searched as
-   well. Extra settings are under **More options**.
+   well (up to 20 words, separated by commas). Each field has a one-line hint;
+   **More about these fields** under them says the rest, and extra settings are
+   under **More options**.
 3. Press **Find leads** and check the summary. **Searches around** names the place
    the search will actually run around, and **From AARCO's shop** how far that is.
    A town name on its own ("Murray", "Sandy") means the Utah one. If the place is

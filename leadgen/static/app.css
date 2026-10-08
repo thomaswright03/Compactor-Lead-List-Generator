@@ -324,6 +324,12 @@ nav a.on .count { background:var(--side-on); color:var(--side-2); }
 details.advanced { margin-top:var(--sp-4); }
 details.advanced summary { cursor:pointer; color:var(--accent); font-weight:600; width:max-content; max-width:100%; }
 details.advanced .form-grid { margin-top:var(--sp-3); }
+/* The longer word about the fields (what a town name alone means, the word limits): one quiet
+   line until opened, then a short list in the hints' size. */
+details.more-about { margin-top:var(--sp-3); font-size:var(--fs-sm); color:var(--muted); }
+details.more-about summary { cursor:pointer; color:var(--accent); font-weight:600; width:max-content; max-width:100%; }
+details.more-about ul { margin:var(--sp-1) 0 0; padding-left:var(--sp-5); display:flex; flex-direction:column; gap:var(--sp-1); }
+details.more-about strong { color:var(--ink-2); font-weight:600; }
 #form .warn, #phone-note { display:flex; gap:var(--sp-3); align-items:flex-start; padding:var(--sp-3) var(--sp-4); }
 #phone-note::before { content:"!"; flex:none; width:20px; height:20px; border-radius:50%; display:grid; place-items:center;
                       background:var(--warn-line); color:var(--warn-ink); font-weight:800; font-size:var(--fs-xs); }
@@ -590,7 +596,7 @@ tr.just-marked td:not(:first-child) { opacity:.6; }
    in view with no sideways scrolling. The table's column headers go, so the list sorts with its
    own picker. */
 .phone-only, .cards-only, .c-miles .unit { display:none; }
-button.why-toggle { display:none; box-shadow:none; }
+table.leads button.why-toggle { display:none; box-shadow:none; }   /* phones only (below) */
 @media (max-width: 1099px) {
   .cards-only { display:inline-block; }
   .table-wrap { overflow:visible; background:none; border:0; border-radius:0; box-shadow:none; }
@@ -633,6 +639,12 @@ button.why-toggle { display:none; box-shadow:none; }
 .pts { flex:0 0 40px; text-align:center; font-weight:700; font-size:var(--fs-xs); border-radius:var(--r-pill); padding:0;
        background:var(--pts); color:var(--good-ink); font-variant-numeric:tabular-nums; }
 .pts.neg { background:var(--pts-neg); color:var(--bad-ink); } .pts.zero { background:var(--pts-zero); color:var(--muted); }
+/* Small laptops (1100 to 1279px): the Why column is narrow, so the points badge is slimmer and
+   closer to its words, and a long word ("supermarket") stays whole on its line. */
+@media (min-width: 1100px) and (max-width: 1279px) {
+  .pts { flex-basis:34px; }
+  .reason { gap:var(--sp-1); }
+}
 details.explain summary { cursor:pointer; color:var(--accent); font-size:var(--fs-sm); margin-top:var(--sp-1); }
 details.explain p { margin:var(--sp-1) 0 0; color:var(--muted); font-size:var(--fs-sm); }
 /* Yes / No: pills that fill green or red. */
@@ -708,6 +720,10 @@ table.plain.calls td.notes { font-family:var(--serif); font-style:italic; font-s
   table.plain.calls tbody td:last-child { border-right:1px solid var(--line); border-radius:0 var(--r-lg) var(--r-lg) 0; }
   table.plain.calls tbody tr:hover td { background:var(--hover); border-color:var(--line-strong); }
   table.plain.calls td.c-name strong { font-size:var(--fs-name-sm); font-weight:560; }
+  /* A business's name breaks between its words, never inside one ("Supercente / r" on a tablet):
+     the column is at least as wide as its longest word. "Undo call (4:47)" stays one line too. */
+  table.plain.calls td.c-name strong { overflow-wrap:break-word; }
+  table.plain.calls button.undo { white-space:nowrap; }
   #calls-body .calls-tools input { min-height:42px; border-radius:var(--r-md); box-shadow:var(--shadow-sm); }
 }
 
@@ -734,7 +750,7 @@ table.plain.calls td.notes { font-family:var(--serif); font-style:italic; font-s
   .recent ul { flex:1; min-width:0; }
   table.leads tbody { grid-template-columns:minmax(0,1fr); }
   table.leads td.c-why { padding-top:var(--sp-1); }
-  button.why-toggle { display:inline-flex; }
+  table.leads button.why-toggle { display:inline-flex; }
   td.c-why:not(.open) .reasons, td.c-why:not(.open) details.explain { display:none; }
   td.c-why.open .reasons { margin-top:var(--sp-2); }
 
@@ -994,22 +1010,40 @@ dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturat
 .pin-box .flag { color:var(--bad-ink); font-weight:600; }
 .pin-box .open-lead { margin-top:var(--sp-2); font-weight:600; }
 
-/* ==== Touch screens: everything that can be tapped is at least 44px each way ========== */
+/* ==== A business's row: everything on it is a 44px target, mouse or finger ============== */
+/* Yes / No, Just called, History, the Undos, Try again, the verified-contact and Why this score
+   buttons, the column sorts, Explain and the row's links, in every window width and with every
+   pointer (a narrow mouse window is as hard to hit as a phone). */
+table.leads button, table.plain button, .recent button { min-height:44px; min-width:44px; }
+table.leads button.undo, table.leads button.link, table.plain button.undo, table.plain button.link, .recent button {
+  display:inline-flex; align-items:center; padding:0 var(--sp-2); margin-inline:calc(-1 * var(--sp-2)); }
+/* Recent changes: each line's Undo is as tall, without the lines spreading apart. */
+.recent button { margin:calc(-1 * var(--sp-1)) 0; }
+/* The column headings and the search history's rows stay slim: the sort button's and the
+   Details link's taller targets overlap the padding around them (they share a line with nothing). */
+table.leads th button.sort { min-height:44px; align-items:center; margin-block:calc(-1 * var(--sp-2)); }
+table.plain.hist button.link { margin-block:calc(-1 * var(--sp-2)); }
+/* Links in text keep a 44px tap area, but the negative margins stop it spreading the
+   lines apart (an address, its map link, the phone and website read as one block). */
+table.leads td a, table.plain td a { display:inline-flex; align-items:center; min-height:44px; margin-block:-11px; }
+.contact .site { display:flex; align-items:center; min-height:44px; margin-block:-11px; }
+table.leads td a.map { min-width:44px; justify-content:center; }
+/* The verified phone stays an ordinary inline link (its padding makes the target 44px tall): a
+   box of its own would let the line break before the "·" that joins it to who to ask for. */
+table.leads .v-line a, table.plain .v-line a { display:inline; min-height:0; margin-block:0; padding-block:13px; }
+/* Explain keeps its triangle (a list item, not a flex box); its padding makes the target 44px tall. */
+details.explain summary { padding-block:var(--sp-3); margin-block:calc(-1 * var(--sp-2)); }
+
+/* ==== Touch screens: everything else that can be tapped is at least 44px each way ========== */
 @media (pointer: coarse) {
   button, .btn { min-height:44px; min-width:44px; }
   nav a, select, input:not([type=checkbox]), summary { min-height:44px; }
   button.undo, button.link { display:inline-flex; align-items:center; padding:0 var(--sp-2); }
   .side .who button { padding:0 var(--sp-4); }
-  table.leads th button.sort { min-height:44px; align-items:center; }
-  /* Links in text keep a 44px tap area, but the negative margins stop it spreading the
-     lines apart (an address, its map link, the phone and website read as one block). */
-  table.leads td a, table.plain td a { display:inline-flex; align-items:center; min-height:44px; margin-block:-11px; }
-  .contact .site { display:flex; align-items:center; min-height:44px; margin-block:-11px; }
   /* A link in a sentence (a banner or a note: "Your saved leads are on the Leads page"): its
      padding makes the tap area 44px tall; an inline box's padding doesn't move the lines. */
   :where(p, li, .form-closed, .warn, .problem, .muted, .hint, .notes, .tour-offer) a:not(.btn) { padding-block:14px; }
-  table.leads td a.map { min-width:44px; justify-content:center; }
-  details.explain summary, details.advanced summary { display:flex; align-items:center; }
+  details.advanced summary { display:flex; align-items:center; }
   .pin-box a { display:inline-flex; align-items:center; min-height:44px; }
   .pin-box strong:first-child { margin-right:var(--sp-5); }
 }
