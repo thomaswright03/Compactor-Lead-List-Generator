@@ -59,8 +59,7 @@ links to. This list is the one place for the owner's dated status notes; the REA
 only links here.
 
 **Still open:** item 5, turn off the cron-job.org pinger (Render shows Starter since
-2026-10-08); item 7, set up the alert emails (an app password in Render and GitHub); item 9, one
-press of **Check sources**. Everything else is done or decided.
+2026-10-08); item 9, one press of **Check sources**. Everything else is done or decided.
 
 1. **Protect `main`** (GitHub; **Done (2026-10-03)**: ruleset `Protect main`). So a commit with a
    failing check can't land on `main`. Steps: [Deploying → Protect `main`](#deploying)
@@ -111,8 +110,8 @@ press of **Check sources**. Everything else is done or decided.
    compares the counts with the copy's own and with the live database's. What a pass
    looks like: [Restore rehearsal](#restore-rehearsal). *Check:* the run is green; write
    its row in the rehearsals table there, then mark this item **Done (the date)**.
-7. **Set up the alert emails** (Render and GitHub; **Open**: the owner asked for them on
-   2026-10-08). So the owner is emailed when something isn't working, instead of it
+7. **Set up the alert emails** (Render and GitHub; **Done (2026-10-08)**: the test alert
+   arrived). So the owner is emailed when something isn't working, instead of it
    showing only on the site. What is sent: every failed or incomplete search and every
    error the site logs (from Render), and every failed GitHub run: the checks (CI), the
    nightly backup and the restore rehearsal. To whom: `t@thomasewright.com`, built in
