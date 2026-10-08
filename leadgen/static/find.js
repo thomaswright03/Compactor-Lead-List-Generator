@@ -20,7 +20,9 @@ function lockForm(note) {
   $("form-closed").hidden = !locked;
   if (locked) $("form-closed-text").textContent = note;
   $("form").classList.toggle("closed", locked);
-  $("form").querySelectorAll("input, select").forEach((/** @type {HTMLInputElement} */ x) => { x.disabled = locked; });
+  $("form").querySelectorAll("input, select").forEach((/** @type {HTMLInputElement} */ x) => {
+    x.disabled = locked;
+  });
 }
 function clearErrors() {
   S.error = "";
@@ -53,6 +55,32 @@ $("form").addEventListener("input", () => { if (S.error) clearErrors(); });
 $("form").addEventListener("change", (/** @type {Event} */ e) => {
   if (S.error && eventEl(e).matches("select, input[type=checkbox]")) clearErrors();
 });
+// How the day stands, beside Find leads, and whether the form is open or closed. A refusal or
+// failure stays in its own red line (showError, the failure box); this only says how the day
+// stands.
+/** @param {SearchesAnswer} body */
+function sayDayState(body) {
+  const today = body.current;
+  const cutToday = !today && body.searches.find((s) => s.day === body.today && s.interrupted);
+  // Today's search, when it holds the day (it ran, or is running, or stopped short of finishing).
+  const used = body.used_today ? today : null;
+  lockForm(!S.job && used && !body.running && used.leads !== undefined
+    ? "The next one can run tomorrow, from midnight Utah time." : "");
+  if (S.job) setGo(false, RUNNING_NOTE);
+  else if (body.paused) setGo(false, "Searching is paused by the administrator.");
+  else if (body.cut_off) setGo(false, `${RESTART_SAVING} ${availableAgain(body)}`);
+  else if (used && used.leads === undefined && !body.running) {
+    setGo(false, "Today's search was interrupted before it finished. It can be run again after " +
+          `${used.free_at}.`);
+  } else if (used) {
+    setGo(false, `Today's search ran at ${used.when.split(", ").pop()}. The next one can run ` +
+          "tomorrow.");
+  } else if (today) {
+    setGo(true, "Today's search didn't finish, so it can be run again.");
+  } else if (cutToday) {
+    setGo(true, cutOffText(cutToday));
+  } else setGo(true, "One search a day. Today's is available.");
+}
 async function loadSearches() {
   /** @type {SearchesAnswer} */
   let body;
@@ -64,7 +92,9 @@ async function loadSearches() {
       $("history").replaceChildren(el("div", "Loading...", "muted")); loadSearches();
     });
     if (!$("admin-content").hidden) adminUnread();
-    if (!S.job) setGo(false, "Find leads is off until the saved data can be reached. Use Retry below.");
+    if (!S.job) {
+      setGo(false, "Find leads is off until the saved data can be reached. Use Retry below.");
+    }
     return;
   }
   if (body.yelp && $("yelp-quota")) {
@@ -78,29 +108,13 @@ async function loadSearches() {
   // (what it found is saved, the day given back): ask again when that should be done.
   clearTimeout(S.cutOffTimer);
   if (body.cut_off && !S.job) {
-    S.cutOffTimer = setTimeout(loadSearches, Math.min(8000, Math.max(2000, (body.cut_off_wait || 0) * 1000 + 1000)));
+    const wait = Math.min(8000, Math.max(2000, (body.cut_off_wait || 0) * 1000 + 1000));
+    S.cutOffTimer = setTimeout(loadSearches, wait);
   }
-  const cutToday = !today && body.searches.find((s) => s.day === body.today && s.interrupted);
-  // A refusal or failure stays in its own red line (showError, the failure box); this only says how the day stands.
-  // Today's search, when it holds the day (it ran, or is running, or stopped short of finishing).
-  const used = body.used_today ? today : null;
-  lockForm(!S.job && used && !body.running && used.leads !== undefined
-    ? "The next one can run tomorrow, from midnight Utah time." : "");
-  if (S.job) setGo(false, RUNNING_NOTE);
-  else if (body.paused) setGo(false, "Searching is paused by the administrator.");
-  else if (body.cut_off) setGo(false, `${RESTART_SAVING} ${availableAgain(body)}`);
-  else if (used && used.leads === undefined && !body.running) {
-    setGo(false, `Today's search was interrupted before it finished. It can be run again after ${used.free_at}.`);
-  } else if (used) {
-    setGo(false, `Today's search ran at ${used.when.split(", ").pop()}. The next one can run tomorrow.`);
-  } else if (today) {
-    setGo(true, "Today's search didn't finish, so it can be run again.");
-  } else if (cutToday) {
-    setGo(true, cutOffText(cutToday));
-  } else setGo(true, "One search a day. Today's is available.");
+  sayDayState(body);
   renderHistory(body.searches, body);
-  // A search still filling in from an earlier day (a late search runs on past midnight) stays in view
-  // until it ends; today's own coverage otherwise.
+  // A search still filling in from an earlier day (a late search runs on past midnight) stays
+  // in view until it ends; today's own coverage otherwise.
   const earlier = body.filling && (!today || body.filling.day !== today.day) ? body.filling : null;
   showCoverage(earlier ? earlier.coverage : today && today.coverage, Boolean(body.paused));
   renderProblems(body.problems, body.problems_unread);
@@ -121,8 +135,8 @@ function availableAgain(body) {
   if (wait <= 10 || !body.cut_off_until) {
     return "Find leads is available again in a few seconds; this page updates by itself.";
   }
-  return `Find leads is available again by ${body.cut_off_until} (in about ${Math.ceil(wait / 10) * 10} seconds); ` +
-    "this page updates by itself.";
+  return `Find leads is available again by ${body.cut_off_until} (in about ` +
+    `${Math.ceil(wait / 10) * 10} seconds); this page updates by itself.`;
 }
 // Today's search, once finished after the restart: its history row's own words (how many
 // businesses were saved, or that nothing had been found or kept), and that the day is free.
@@ -132,21 +146,26 @@ function cutOffText(s) {
 }
 // The emergency switches (web/finding.py flip_switch): each takes effect on the next request.
 /** @type {Record<string, () => boolean>} */
-const SWITCH_SHOWN = { search_paused: () => true, google_off: () => CONFIG.google_on, yelp_off: () => CONFIG.yelp_on };
+const SWITCH_SHOWN = { search_paused: () => true, google_off: () => CONFIG.google_on,
+                       yelp_off: () => CONFIG.yelp_on };
 // What turning each switch on or off does, for the confirmation: [question, effect, button].
 /** @type {Record<string, [string, string, string][]>} */
 const SWITCH_ASK = {
   search_paused: [["Pause all searching for everyone?",
-                   "Find leads will refuse to start, for everyone, until this is turned off. A search running now " +
-                   "(or still filling in missing areas) stops within a few seconds; what it already found is " +
-                   "saved. Saved leads, marks and calls keep working.", "Pause searching"],
-                  ["Let everyone search again?", "Find leads works again for everyone straight away.",
+                   "Find leads will refuse to start, for everyone, until this is turned off. A " +
+                   "search running now (or still filling in missing areas) stops within a few " +
+                   "seconds; what it already found is saved. Saved leads, marks and calls keep " +
+                   "working.", "Pause searching"],
+                  ["Let everyone search again?",
+                   "Find leads works again for everyone straight away.",
                    "Turn searching back on"]],
   google_off: [["Stop using Google for everyone?",
-                "Searches will skip Google (no paid Google lookups) until this is turned off.", "Stop using Google"],
+                "Searches will skip Google (no paid Google lookups) until this is turned off.",
+                "Stop using Google"],
                ["Use Google again?", "Searches will use Google (paid lookups) again straight away.",
                 "Use Google again"]],
-  yelp_off: [["Stop using Yelp for everyone?", "Searches will skip Yelp until this is turned off.", "Stop using Yelp"],
+  yelp_off: [["Stop using Yelp for everyone?", "Searches will skip Yelp until this is turned off.",
+              "Stop using Yelp"],
              ["Use Yelp again?", "Searches will use Yelp again straight away.", "Use Yelp again"]],
 };
 /** @type {(() => void) | null} */
@@ -154,7 +173,8 @@ let switchThen = null;
 /** @param {string} key @param {boolean} on @param {() => void} then */
 function askSwitch(key, on, then) {
   const [title, why, label] = SWITCH_ASK[key][on ? 0 : 1];
-  $("switch-title").textContent = title; $("switch-why").textContent = why; $("switch-go").textContent = label;
+  $("switch-title").textContent = title; $("switch-why").textContent = why;
+  $("switch-go").textContent = label;
   $("switch-go").className = on ? "danger" : "";
   switchThen = then;
   $("switch-dlg").showModal();
@@ -179,7 +199,8 @@ const SWITCH_TEXT = {
 /** @param {Record<string, SiteSwitch>} list */
 function renderSwitches(list) {
   const box = $("switch-list");
-  // A switch the database didn't answer for can be neither shown nor flipped: say so, never an empty list.
+  // A switch the database didn't answer for can be neither shown nor flipped: say so, never an
+  // empty list.
   if (Object.values(list).some((s) => s.unread)) {
     problem(box, "Couldn't load the site switches", ADMIN_UNREAD, adminRetry);
     return;
@@ -197,12 +218,14 @@ function renderSwitches(list) {
     }
     row.append(text);
     if (!s.env) {
-      const b = button(s.on ? turnOff : turnOn, s.on ? "" : "quiet", () => askSwitch(key, !s.on, async () => {
-        b.disabled = true;
-        try { await post("/switches", { key, on: !s.on, by: myName() }); }
-        catch (err) { box.append(el("div", /** @type {Error} */ (err).message, "error")); }
-        loadSearches();
-      }));
+      const b = button(s.on ? turnOff : turnOn, s.on ? "" : "quiet", () => {
+        askSwitch(key, !s.on, async () => {
+          b.disabled = true;
+          try { await post("/switches", { key, on: !s.on, by: myName() }); }
+          catch (err) { box.append(el("div", /** @type {Error} */ (err).message, "error")); }
+          loadSearches();
+        });
+      });
 
       row.append(b);
     }
@@ -211,8 +234,8 @@ function renderSwitches(list) {
 }
 // When the saved data doesn't answer, the administrator's section says so (with the way to stop
 // searches without it), instead of an all-clear or an empty list of switches.
-const ADMIN_UNREAD = "The saved data isn't answering. Try again in a minute. If you need to stop searches now, " +
-  "set LEADGEN_SEARCH_PAUSED to 1 in Render → Environment.";
+const ADMIN_UNREAD = "The saved data isn't answering. Try again in a minute. If you need to " +
+  "stop searches now, set LEADGEN_SEARCH_PAUSED to 1 in Render → Environment.";
 function adminRetry() {
   renderProblems(null);
   $("switch-list").replaceChildren(el("p", "Loading...", "muted"));
@@ -228,21 +251,26 @@ function adminUnread() {
 /** @param {Problems | null} p @param {boolean} [unread] */
 function renderProblems(p, unread) {
   const box = $("problems");
-  if (unread) { problem(box, "Couldn't load recent problems", ADMIN_UNREAD, adminRetry); return; }
+  if (unread) {
+    problem(box, "Couldn't load recent problems", ADMIN_UNREAD, adminRetry); return;
+  }
   if (!p) { box.replaceChildren(el("p", "Loading...", "muted")); return; }
-  if (!p.count) { box.replaceChildren(el("p", "Nothing went wrong in the last 7 days.", "muted")); return; }
+  if (!p.count) {
+    box.replaceChildren(el("p", "Nothing went wrong in the last 7 days.", "muted")); return;
+  }
   const list = el("ul");
   for (const x of p.latest) {
     const li = el("li"); li.append(el("span", x.when, "sub"), ` ${x.text}`); list.append(li);
   }
-  box.replaceChildren(el("p", `${p.count.toLocaleString()} in the last 7 days (the latest first):`), list,
-                      el("p", "If these keep happening, tell whoever looks after the site.", "sub"));
+  box.replaceChildren(el("p", `${p.count.toLocaleString()} in the last 7 days (the latest first):`),
+                      list, el("p", "If these keep happening, tell whoever looks after the site.",
+                               "sub"));
 }
-// How much of its area today's search covered, said once (the server words it: fillin.py coverage):
-// which towns are still being filled in and until when, and that the businesses found can be
-// called now. While the rest is filled in the page looks again every half minute (every few
-// seconds once searching is paused: the filling in then ends within seconds, and this says so),
-// and new businesses that arrive are added to the Leads page.
+// How much of its area today's search covered, said once (the server words it: fillin.py
+// coverage): which towns are still being filled in and until when, and that the businesses found
+// can be called now. While the rest is filled in the page looks again every half minute (every
+// few seconds once searching is paused: the filling in then ends within seconds, and this says
+// so), and new businesses that arrive are added to the Leads page.
 /** @param {Coverage | null | undefined} c @param {boolean} paused */
 function showCoverage(c, paused) {
   const box = $("coverage-note");
@@ -260,8 +288,110 @@ function showCoverage(c, paused) {
 const num = (v) => typeof v === "number" ? v.toLocaleString() : v ?? "-";
 // A Details value longer than this (characters) is written under its label, across the panel.
 const DETAIL_WIDE = 32;
-// Each search is its own <tbody> (its row, then its reason or details), so on a phone
-// each becomes one stacked card with every field in view (app.css, table.plain.hist).
+// A history cell. On a phone each value gets its column's name above it (the table's header is
+// hidden there).
+/** @type {(text: string | undefined, cls: string, label?: string) => HTMLTableCellElement} */
+function histCell(text, cls, label) {
+  const td = el("td", undefined, cls);
+  if (label) td.append(el("span", label, "h-label"));
+  if (text !== undefined) td.append(text);
+  return td;
+}
+// A search's Leads cell: its count, or (with it) how it ended when it didn't finish in full.
+/** @param {SearchRow} s @param {boolean} unfinished @param {boolean} running */
+function leadsCell(s, unfinished, running) {
+  const td = histCell(undefined, "h-leads", "Leads");
+  // Today's search while it runs: its row is there from the start, marked running.
+  if (running) td.append(el("span", "Running…", "tag info"));
+  else if (unfinished) td.append(el("span", "Interrupted", "tag"));
+  else if (s.failed && s.stopped) td.append(el("span", "Stopped by the administrator", "tag"));
+  else if (s.interrupted) {
+    td.append(s.leads ? `${num(s.leads)} ` : "", el("span", "Interrupted", "tag"));
+  }
+  // An incomplete search (a source failed) saved what the others found, and gave the day back.
+  else if (s.stopped) td.append(`${num(s.leads)} `, el("span", "Stopped", "tag"));
+  else if (s.fill && s.fill.state === "filling") {
+    td.append(`${num(s.leads)} `, el("span", "Filling in", "tag info"));
+  }
+  else if (s.partial) td.append(`${num(s.leads)} `, el("span", "Incomplete", "tag"));
+  else if (s.failed) td.append(el("span", "Failed", "tag"));
+  else td.append(num(s.leads));
+  return td;
+}
+// A line under a search's row saying why it ended as it did.
+/** @param {string} text @param {string} [cls] */
+function whyRow(text, cls) {
+  const extra = el("tr", undefined, cls);
+  const why = el("td"); why.colSpan = 6; why.className = "sub h-why";
+  why.textContent = text;
+  extra.append(why);
+  return extra;
+}
+// A search's details (its funnel's figures and its warnings), hidden behind a Details button.
+/** @param {SearchRow} s @param {HTMLTableCellElement} td where the button goes */
+function detailsRow(s, td) {
+  const extra = el("tr", undefined, "more-row"); extra.hidden = true;
+  const more = el("td"); more.colSpan = 6;
+  const dl = el("dl", undefined, "details");
+  // [label, value] pairs in funnel order (older answers were an object).
+  const pairs = Array.isArray(s.details) ? s.details : Object.entries(s.details || {});
+  for (const [k, v] of pairs) {
+    const row = el("div"), dd = el("dd", num(v));
+    // A count ("795", "3 seconds") stays on one line; a long value gets the whole width (app.css).
+    if (typeof v === "number" || /^[\d,.]+( \w+)?$/.test(String(v))) dd.className = "num";
+    else if (String(v).length > DETAIL_WIDE) row.className = "wide";
+    row.append(el("dt", k), dd); dl.append(row);
+  }
+  more.append(dl);
+  for (const w of s.warnings || []) more.append(el("div", w, "warn"));
+  extra.append(more);
+  const toggle = button("Details", "link", () => {
+    extra.hidden = !extra.hidden;
+    toggle.textContent = extra.hidden ? "Details" : "Hide details";
+    toggle.setAttribute("aria-expanded", String(!extra.hidden));
+  });
+  toggle.setAttribute("aria-expanded", "false");
+  td.append(toggle);
+  return extra;
+}
+// One search in the history: its own <tbody> (its row, then its reason or details), so on a
+// phone each becomes one stacked card with every field in view (app.css, table.plain.hist).
+/** @param {SearchRow} s @param {SearchesAnswer} body */
+function historyRows(s, body) {
+  // A search the administrator stopped before it found anything reads as stopped, not failed;
+  // one a server restart cut off kept what it found.
+  const failed = s.failed && !s.stopped && !s.interrupted;
+  const tbody = el("tbody", undefined, failed ? "failed" : "");
+  const tr = el("tr", undefined, failed ? "failed" : "");
+  const unfinished = !s.failed && s.leads === undefined;
+  const running = unfinished && body && s.day === body.today && (body.running || S.job);
+  tr.append(histCell(s.when, "nowrap h-when"), whereCell(s),
+            histCell(s.radius ? `${s.radius} mi` : "", "h-radius", "Radius"),
+            leadsCell(s, unfinished, Boolean(running)),
+            histCell((s.failed && !s.partial && !s.interrupted) || unfinished ? "" : num(s.new),
+                     "h-new", "New"));
+  const td = histCell(undefined, "h-act");
+  tr.append(td); tbody.append(tr);
+  if (s.failed) {
+    tbody.append(whyRow(s.stopped
+      ? `Stopped by the administrator (${s.stopped}) before it found anything. It didn't use up ` +
+        "the day's search."
+      : `${s.reason || "The search didn't finish."} It didn't use up the day's search.`,
+      s.interrupted ? "" : "failed"));
+    if (!s.interrupted) return tbody;
+  }
+  if (unfinished && !running) {
+    tbody.append(whyRow(body && body.cut_off
+      ? RESTART_SAVING
+      : `${RESTARTED}, before it finished; what it had found couldn't be kept.`));
+  }
+  if (s.stopped) {
+    tbody.append(whyRow(`Stopped by the administrator (${s.stopped}); the businesses found ` +
+                        "before then were saved."));
+  }
+  if (s.details || (s.warnings || []).length) tbody.append(detailsRow(s, td));
+  return tbody;
+}
 /** @param {SearchRow[]} searches @param {SearchesAnswer} body */
 function renderHistory(searches, body) {
   const box = $("history");
@@ -271,90 +401,7 @@ function renderHistory(searches, body) {
   for (const t of ["When", "Location", "Radius", "Leads", "New", ""]) head.append(el("th", t));
   const thead = el("thead"); thead.append(head);
   table.append(thead);
-  // On a phone each value gets its column's name above it (the table's header is hidden there).
-  /** @type {(text: string | undefined, cls: string, label?: string) => HTMLTableCellElement} */
-  const cell = (text, cls, label) => {
-    const td = el("td", undefined, cls);
-    if (label) td.append(el("span", label, "h-label"));
-    if (text !== undefined) td.append(text);
-    return td;
-  };
-  for (const s of searches) {
-    // A search the administrator stopped before it found anything reads as stopped, not failed;
-    // one a server restart cut off kept what it found.
-    const failed = s.failed && !s.stopped && !s.interrupted;
-    const tbody = el("tbody", undefined, failed ? "failed" : "");
-    const tr = el("tr", undefined, failed ? "failed" : "");
-    const leadsCell = cell(undefined, "h-leads", "Leads");
-    // Today's search while it runs: its row is there from the start, marked running.
-    const unfinished = !s.failed && s.leads === undefined;
-    const running = unfinished && body && s.day === body.today && (body.running || S.job);
-    if (running) leadsCell.append(el("span", "Running…", "tag info"));
-    else if (unfinished) leadsCell.append(el("span", "Interrupted", "tag"));
-    else if (s.failed && s.stopped) leadsCell.append(el("span", "Stopped by the administrator", "tag"));
-    else if (s.interrupted) leadsCell.append(s.leads ? `${num(s.leads)} ` : "", el("span", "Interrupted", "tag"));
-    // An incomplete search (a source failed) saved what the others found, and gave the day back.
-    else if (s.stopped) leadsCell.append(`${num(s.leads)} `, el("span", "Stopped", "tag"));
-    else if (s.fill && s.fill.state === "filling") {
-      leadsCell.append(`${num(s.leads)} `, el("span", "Filling in", "tag info"));
-    }
-    else if (s.partial) leadsCell.append(`${num(s.leads)} `, el("span", "Incomplete", "tag"));
-    else if (s.failed) leadsCell.append(el("span", "Failed", "tag"));
-    else leadsCell.append(num(s.leads));
-    tr.append(cell(s.when, "nowrap h-when"), whereCell(s),
-              cell(s.radius ? `${s.radius} mi` : "", "h-radius", "Radius"),
-              leadsCell,
-              cell((s.failed && !s.partial && !s.interrupted) || unfinished ? "" : num(s.new), "h-new", "New"));
-    const td = cell(undefined, "h-act");
-    tr.append(td); tbody.append(tr); table.append(tbody);
-    if (s.failed) {
-      const extra = el("tr", undefined, s.interrupted ? "" : "failed");
-      const why = el("td"); why.colSpan = 6; why.className = "sub h-why";
-      why.textContent = s.stopped
-        ? `Stopped by the administrator (${s.stopped}) before it found anything. It didn't use up the day's search.`
-        : `${s.reason || "The search didn't finish."} It didn't use up the day's search.`;
-      extra.append(why); tbody.append(extra);
-      if (!s.interrupted) continue;
-    }
-    if (unfinished && !running) {
-      const extra = el("tr");
-      const why = el("td"); why.colSpan = 6; why.className = "sub h-why";
-      why.textContent = body && body.cut_off
-        ? RESTART_SAVING
-        : `${RESTARTED}, before it finished; what it had found couldn't be kept.`;
-      extra.append(why); tbody.append(extra);
-    }
-    if (s.stopped) {
-      const extra = el("tr");
-      const why = el("td"); why.colSpan = 6; why.className = "sub h-why";
-      why.textContent = `Stopped by the administrator (${s.stopped}); the businesses found before then were saved.`;
-      extra.append(why); tbody.append(extra);
-    }
-    if (s.details || (s.warnings || []).length) {
-      const extra = el("tr", undefined, "more-row"); extra.hidden = true;
-      const more = el("td"); more.colSpan = 6;
-      const dl = el("dl", undefined, "details");
-      // [label, value] pairs in funnel order (older answers were an object).
-      const pairs = Array.isArray(s.details) ? s.details : Object.entries(s.details || {});
-      for (const [k, v] of pairs) {
-        const row = el("div"), dd = el("dd", num(v));
-        // A count ("795", "3 seconds") stays on one line; a long value gets the whole width (app.css).
-        if (typeof v === "number" || /^[\d,.]+( \w+)?$/.test(String(v))) dd.className = "num";
-        else if (String(v).length > DETAIL_WIDE) row.className = "wide";
-        row.append(el("dt", k), dd); dl.append(row);
-      }
-      more.append(dl);
-      for (const w of s.warnings || []) more.append(el("div", w, "warn"));
-      extra.append(more); tbody.append(extra);
-      const toggle = button("Details", "link", () => {
-        extra.hidden = !extra.hidden;
-        toggle.textContent = extra.hidden ? "Details" : "Hide details";
-        toggle.setAttribute("aria-expanded", String(!extra.hidden));
-      });
-      toggle.setAttribute("aria-expanded", "false");
-      td.append(toggle);
-    }
-  }
+  for (const s of searches) table.append(historyRows(s, body));
   const wrap = el("div", undefined, "scroll-x"); wrap.append(table);
   box.replaceChildren(wrap);
 }
@@ -385,7 +432,8 @@ function showProgress(job) {
   const skipped = job.skipped || [];
   job.steps.forEach((name, i) => {
     const skip = skipped.includes(i);
-    const s = el("div", undefined, "step" + (skip ? " skip" : i < job.step ? " done" : i === job.step ? " now" : ""));
+    const state = skip ? " skip" : i < job.step ? " done" : i === job.step ? " now" : "";
+    const s = el("div", undefined, "step" + state);
     const label = el("span", name);
     if (skip) label.append(el("span", i === 1 ? "Skipped: not set up" : "Skipped", "why"));
     s.append(el("span", skip ? "–" : i < job.step ? "✓" : "", "dot"), label);
@@ -399,7 +447,8 @@ function showProgress(job) {
   $("progress-card").classList.toggle("stopping", Boolean(job.stopping));
   $("slow-note").hidden = !job.slow;
 }
-// One short note (an incomplete search's summary, or the first warning); the details behind "More".
+// One short note (an incomplete search's summary, or the first warning); the details behind
+// "More".
 /** @param {string | null} note @param {string[]} warnings */
 function showNotes(note, warnings) {
   const box = $("done-warnings"); box.replaceChildren();
@@ -417,9 +466,12 @@ function showNotes(note, warnings) {
 // within FOLLOW.cueMs puts "Reconnecting…" on the progress card at once (its timer keeps counting
 // here), one not answered within FOLLOW.limitMs is given up and asked again, and the card keeps
 // saying so until the server answers. A server that answers but doesn't know the search has
-// restarted: interrupted.py keeps what the search found and gives the day back, and the page says so.
-const FOLLOW = { everyMs: 1500, cueMs: 2500, limitMs: 10000, retryMs: 2000, slowRetryMs: 5000, quickTries: 15,
-                 /** @type {string | null} */ job: null, elapsed: 0, at: 0, ticker: 0, reconnecting: false };
+// restarted: interrupted.py keeps what the search found and gives the day back, and the page
+// says so.
+const FOLLOW = { everyMs: 1500, cueMs: 2500, limitMs: 10000, retryMs: 2000, slowRetryMs: 5000,
+                 quickTries: 15,
+                 /** @type {string | null} */ job: null, elapsed: 0, at: 0, ticker: 0,
+                 reconnecting: false };
 // The slow-search note's own words, while the card borrows it to say why it is reconnecting.
 const SLOW_NOTE = $("slow-note").textContent;
 /** @param {string | null} jobId the search being followed; null: reconnected (or it ended) */
@@ -428,8 +480,8 @@ function reconnecting(jobId) {
   clearTimeout(FOLLOW.ticker);
   FOLLOW.reconnecting = on;
   $("slow-note").textContent = on
-    ? "The server isn't answering just now. This page keeps trying; if the server restarted, what the search " +
-      "had found is kept and this page says so."
+    ? "The server isn't answering just now. This page keeps trying; if the server restarted, " +
+      "what the search had found is kept and this page says so."
     : SLOW_NOTE;
   if (!on) return;
   // Its time so far is counted on from its last answer (from now, if it never answered).
@@ -443,51 +495,73 @@ function reconnecting(jobId) {
   };
   tick();
 }
-/** @param {string} jobId @param {number} [misses] how many times in a row the server didn't answer */
-async function follow(jobId, misses = 0) {
-  S.job = jobId;
-  setGo(false, RUNNING_NOTE); $("done-card").hidden = true; $("search-failed").hidden = true;
+// The search's progress, asked for once; null when the server didn't answer (or answered with
+// an error page while it starts again), and the page keeps asking. A 404 means the server
+// restarted mid-search: it keeps what the search found and gives the day back, and this says so.
+/** @param {string} jobId @param {number} misses how many times in a row the server didn't answer
+    @returns {Promise<Job | null>} */
+async function askProgress(jobId, misses) {
   const stop = new AbortController();
-  const cue = setTimeout(() => { if (S.job === jobId && !FOLLOW.reconnecting) reconnecting(jobId); }, FOLLOW.cueMs);
+  const cue = setTimeout(() => {
+    if (S.job === jobId && !FOLLOW.reconnecting) reconnecting(jobId);
+  }, FOLLOW.cueMs);
   const limit = setTimeout(() => stop.abort(), FOLLOW.limitMs);
-  /** @type {Job} */
-  let job;
-  try { job = await api(`/status/${jobId}`, { signal: stop.signal }); }
+  try { return await api(`/status/${jobId}`, { signal: stop.signal }); }
   catch (err) {
     if (/** @type {ApiError} */ (err).status !== 404) {
       // No answer, or an error page while the server starts again: say so, and keep asking.
       if (!FOLLOW.reconnecting) reconnecting(jobId);
-      setTimeout(() => follow(jobId, misses + 1), misses < FOLLOW.quickTries ? FOLLOW.retryMs : FOLLOW.slowRetryMs);
-      return;
+      setTimeout(() => follow(jobId, misses + 1),
+                 misses < FOLLOW.quickTries ? FOLLOW.retryMs : FOLLOW.slowRetryMs);
+      return null;
     }
     reconnecting(null);
     S.job = null; $("progress-card").hidden = true;
-    // The server restarted mid-search: it keeps what the search found and gives the day back.
-    setGo(false, `${RESTART_SAVING} Find leads is available again once that's done; this page updates by itself.`);
-    setTimeout(loadSearches, 1000); return;
+    setGo(false, `${RESTART_SAVING} Find leads is available again once that's done; this page ` +
+          "updates by itself.");
+    setTimeout(loadSearches, 1000);
+    return null;
   } finally { clearTimeout(cue); clearTimeout(limit); }
-  if (FOLLOW.reconnecting) reconnecting(null);
-  Object.assign(FOLLOW, { job: jobId, elapsed: job.elapsed || 0, at: Date.now() });
-  showProgress(job);
-  if (job.state === "running") { setTimeout(() => follow(jobId), FOLLOW.everyMs); return; }
+}
+// The search's card once it has ended: what it found and saved, or why it didn't finish.
+/** @param {Job} job */
+function showEnded(job) {
   S.job = null;
   $("progress-card").hidden = true;
   if (job.state === "error") {
-    $("search-failed-title").textContent = job.stopped ? "Stopped by the administrator" : "The search didn't finish";
+    $("search-failed-title").textContent = job.stopped ? "Stopped by the administrator"
+      : "The search didn't finish";
     $("search-failed-msg").textContent = job.message;
     $("search-failed").hidden = false;
-    loadSearches();
     return;
   }
   $("done-card").hidden = false;
   $("done-card").classList.toggle("stopped", Boolean(job.stopped));
   $("done-big").textContent = (job.stopped ? "Stopped by the administrator: " : "")
-    + (job.saved ? `${job.new_leads.toLocaleString()} new leads` : `${job.found.toLocaleString()} leads found`);
+    + (job.saved ? `${job.new_leads.toLocaleString()} new leads`
+      : `${job.found.toLocaleString()} leads found`);
   $("done-sub").textContent = !job.saved ? `near ${job.location} (not saved)`
     : job.saved_count == null ? `near ${job.location}`
     : `${job.saved_count.toLocaleString()} saved leads in all, near ${job.location}`;
   showNotes(job.note, job.warnings);
   if (job.yelp && $("yelp-quota")) $("yelp-quota").textContent = job.yelp.text;
+}
+/** @param {string} jobId @param {number} [misses] how many times in a row the server didn't
+    answer */
+async function follow(jobId, misses = 0) {
+  S.job = jobId;
+  setGo(false, RUNNING_NOTE); $("done-card").hidden = true; $("search-failed").hidden = true;
+  const job = await askProgress(jobId, misses);
+  if (!job) return;
+  if (FOLLOW.reconnecting) reconnecting(null);
+  Object.assign(FOLLOW, { job: jobId, elapsed: job.elapsed || 0, at: Date.now() });
+  showProgress(job);
+  if (job.state === "running") { setTimeout(() => follow(jobId), FOLLOW.everyMs); return; }
+  showEnded(job);
+  if (job.state === "error") {
+    loadSearches();
+    return;
+  }
   await loadLeads();
   loadSearches();
 }
@@ -515,13 +589,15 @@ function searchSummary(form) {
   const rows = [];
   rows.push(["Search around", String(f.get("location")).trim()]);
   rows.push(["How far", `${f.get("radius")} miles`]);
-  rows.push(["Also look for",
-             String(f.get("keywords") || "").split(",").map((k) => k.trim()).filter(Boolean).join(", ")
-             || "Nothing extra"]);
+  const words = String(f.get("keywords") || "").split(",").map((k) => k.trim()).filter(Boolean);
+  rows.push(["Also look for", words.join(", ") || "Nothing extra"]);
   const source = String(f.get("source") || "auto");
-  rows.push(["Where to look", source === "auto" ? autoSources() : SOURCE_TEXT[source] || autoSources()]);
+  rows.push(["Where to look",
+             source === "auto" ? autoSources() : SOURCE_TEXT[source] || autoSources()]);
   rows.push(["Leave out scores below", String(f.get("min_score"))]);
-  if (f.get("grid") && f.get("grid") !== "1") rows.push(["Coverage for Google and Yelp", `${f.get("grid")} searches`]);
+  if (f.get("grid") && f.get("grid") !== "1") {
+    rows.push(["Coverage for Google and Yelp", `${f.get("grid")} searches`]);
+  }
   if (f.get("max_requests")) rows.push(["Most paid lookups", String(f.get("max_requests"))]);
   if (f.get("only_keyword_matches")) rows.push(["Only", "businesses matching the search words"]);
   return rows;
@@ -530,8 +606,8 @@ function searchSummary(form) {
 const MAX_KEYWORDS = 20, MAX_KEYWORD_LEN = 60;
 /**
  * Why a number field is wrong, or null when it is fine.
- * @param {FormData} f @param {string} name @param {string} label @param {number} lo @param {number} hi
- * @param {boolean} whole @param {string} [unit] @param {boolean} [required]
+ * @param {FormData} f @param {string} name @param {string} label @param {number} lo
+ * @param {number} hi @param {boolean} whole @param {string} [unit] @param {boolean} [required]
  */
 function number(f, name, label, lo, hi, whole, unit, required) {
   const raw = String(f.get(name) || "").trim();
@@ -542,7 +618,8 @@ function number(f, name, label, lo, hi, whole, unit, required) {
   if (whole && !Number.isInteger(v)) return `${label} must be a whole number.`;
   return v < lo || v > hi ? `${label} must be between ${lo} and ${hi}${unit || ""}.` : null;
 }
-/** The first field that is wrong and why, or null. @param {HTMLFormElement} form @returns {[string, string] | null} */
+/** The first field that is wrong and why, or null.
+    @param {HTMLFormElement} form @returns {[string, string] | null} */
 function checkForm(form) {
   const f = new FormData(form);
   if (!String(f.get("location") || "").trim()) {
@@ -554,8 +631,9 @@ function checkForm(form) {
   }
   const long = words.find((k) => k.length > MAX_KEYWORD_LEN);
   if (long) {
-    return ["keywords", `Each search word can be up to ${MAX_KEYWORD_LEN} characters; “${long.slice(0, 20)}…” has ` +
-                        `${long.length}. Separate words with commas.`];
+    return ["keywords", `Each search word can be up to ${MAX_KEYWORD_LEN} characters; ` +
+                        `“${long.slice(0, 20)}…” has ${long.length}. Separate words with ` +
+                        "commas."];
   }
   // The same words as the server's (web/finding.py parse_form): the field's own label.
   /** @type {[string, string, number, number, boolean, string?, boolean?][]} */
@@ -572,8 +650,8 @@ function checkForm(form) {
 // confirmation names it and how far it is from AARCO's shop. A place outside AARCO's area needs a
 // second, explicit yes (farDialog) that names it again.
 /** @type {(p: Place) => string} */
-const farText = (p) => `“${p.label}” is ${milesText(p.miles)} from AARCO's shop, outside AARCO's area ` +
-  `(about ${p.area_miles} miles around it).`;
+const farText = (p) => `“${p.label}” is ${milesText(p.miles)} from AARCO's shop, outside ` +
+  `AARCO's area (about ${p.area_miles} miles around it).`;
 $("form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
   e.preventDefault();
   if ($("go").disabled || S.locating) return;
@@ -583,7 +661,10 @@ $("form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
   S.locating = true; $("go").disabled = true; $("day-note").textContent = "Finding the place...";
   /** @type {Place} */
   let place;
-  try { place = await api(`/place?${new URLSearchParams({ location: $("form").location.value.trim() })}`); }
+  try {
+    const location = $("form").location.value.trim();
+    place = await api(`/place?${new URLSearchParams({ location })}`);
+  }
   catch (e) {
     const err = /** @type {ApiError} */ (e);
     showError(err.message, err.body && err.body.field); return;
@@ -592,10 +673,15 @@ $("form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
   S.place = place;
   const dl = $("confirm-list"); dl.replaceChildren();
   const rows = searchSummary($("form"));
-  rows.splice(1, 0, ["Searches around", place.label], ["From AARCO's shop", milesText(place.miles)]);
-  for (const [k, v] of rows) { const row = el("div"); row.append(el("dt", k), el("dd", v)); dl.append(row); }
+  rows.splice(1, 0, ["Searches around", place.label],
+              ["From AARCO's shop", milesText(place.miles)]);
+  for (const [k, v] of rows) {
+    const row = el("div"); row.append(el("dt", k), el("dd", v)); dl.append(row);
+  }
   $("confirm-far").hidden = !place.outside;
-  if (place.outside) $("confirm-far").textContent = `${farText(place)} You'll be asked once more before it starts.`;
+  if (place.outside) {
+    $("confirm-far").textContent = `${farText(place)} You'll be asked once more before it starts.`;
+  }
   $("confirm-go").textContent = place.outside ? "Next" : "Start search";
   $("confirm-dlg").showModal();
   $("confirm-go").focus();
@@ -649,14 +735,19 @@ $("admin-lock").addEventListener("submit", async (/** @type {SubmitEvent} */ e) 
   e.preventDefault();
   const err = $("admin-error"), go = $("admin-unlock");
   err.hidden = true;
-  if (!$("admin-pass").value) { err.textContent = "Enter the administrator password."; err.hidden = false; return; }
+  if (!$("admin-pass").value) {
+    err.textContent = "Enter the administrator password."; err.hidden = false; return;
+  }
   go.disabled = true;
   try {
     await post("/admin/unlock", { password: $("admin-pass").value });
     $("admin-pass").value = "";
     showAdmin(true);
     loadSearches();
-  } catch (x) { err.textContent = /** @type {Error} */ (x).message; err.hidden = false; $("admin-pass").select(); }
+  } catch (x) {
+    err.textContent = /** @type {Error} */ (x).message; err.hidden = false;
+    $("admin-pass").select();
+  }
   finally { go.disabled = false; }
 });
 $("admin-relock").addEventListener("click", async () => {

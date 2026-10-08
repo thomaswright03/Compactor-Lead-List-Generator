@@ -1,8 +1,8 @@
 /* Part 2: the Leads page (Yes / No marks, undo, keeping up with colleagues).
    The server filters, sorts and pages the list: the page holds only the rows it shows. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
-/* exported loadLeads, changeView, updateLead, addRecent, renderAll, counts, LEAD_TABS, SORTS, TIER_WORDS, tabs,
-   toast, hideToast, leadByKey, undoCall, undoButton */
+/* exported loadLeads, changeView, updateLead, addRecent, renderAll, counts, LEAD_TABS, SORTS,
+   TIER_WORDS, tabs, toast, hideToast, leadByKey, undoCall, undoButton */
 function viewQuery() {
   const p = new URLSearchParams({ tab: S.leadView || "unchecked", sort: S.sort, dir: S.dir });
   if (S.q) p.set("q", S.q);
@@ -22,14 +22,17 @@ async function loadLeads(quiet) {
     if (seq !== S.seq) return;                     // a newer view was asked for meanwhile
     S.leads = body.leads; S.total = body.total; S.counts = body.counts; S.recent = body.recent;
     S.since = body.now; S.loaded = true; S.loadError = ""; S.refreshError = "";
-    for (const [key, value] of S.sending) updateLead({ key, saving: value, savingSlow: slowMarks.has(key) });
+    for (const [key, value] of S.sending) {
+      updateLead({ key, saving: value, savingSlow: slowMarks.has(key) });
+    }
     settleFailed(body.leads);
   } catch (e) {
     const err = /** @type {ApiError} */ (e);
     if (seq !== S.seq || err.status === 401) return;
-    if (S.loaded) S.refreshError = quiet ? "Couldn't refresh the list just now; it will try again shortly."
-                                         : `Couldn't show this view. ${err.message}`;
-    else S.loadError = err.message;
+    if (S.loaded) {
+      S.refreshError = quiet ? "Couldn't refresh the list just now; it will try again shortly."
+        : `Couldn't show this view. ${err.message}`;
+    } else S.loadError = err.message;
   }
   S.viewLoading = false;
   renderAll();
@@ -40,6 +43,28 @@ function changeView() {
   S.viewLoading = true;
   renderLeads();
   loadLeads();
+}
+// The changed leads put into the rows shown: each copy of a lead takes its new values, one that
+// left the view goes (unless it is a row just marked, staying put), and one that now belongs in
+// the view means the view is fetched again (true), as it is one page of rows.
+/** @param {LeadChanges} body */
+function takeChanges(body) {
+  let missing = false;
+  for (const l of body.leads) {
+    const inView = l.in_view; delete l.in_view;
+    const old = leadByKey(l.key);
+    if (old && old.saving) continue;               // this page's own click is still being saved
+    const shown = S.leads.some((x) => x.key === l.key);
+    updateLead(l);
+    settleFailed([l]);
+    if (shown && !inView && !pinnedNow(l.key)) S.leads = S.leads.filter((x) => x.key !== l.key);
+    if (!shown && inView) missing = true;
+  }
+  const gone = new Set(body.removed);
+  S.leads = S.leads.filter((l) => !gone.has(l.key));
+  S.called = S.called.filter((l) => !gone.has(l.key));
+  S.total = body.total; S.counts = body.counts; S.recent = body.recent;
+  return missing;
 }
 // Only what changed since the last look (colleagues' marks and calls, a finished search).
 async function loadChanges() {
@@ -59,21 +84,7 @@ async function loadChanges() {
     }
     S.since = body.now; S.refreshError = "";
     if (!body.leads.length && !body.removed.length) { renderLeads(); return; }
-    let missing = false;
-    for (const l of body.leads) {
-      const inView = l.in_view; delete l.in_view;
-      const old = leadByKey(l.key);
-      if (old && old.saving) continue;               // this page's own click is still being saved
-      const shown = S.leads.some((x) => x.key === l.key);
-      updateLead(l);
-      settleFailed([l]);
-      if (shown && !inView && !pinnedNow(l.key)) S.leads = S.leads.filter((x) => x.key !== l.key);
-      if (!shown && inView) missing = true;
-    }
-    const gone = new Set(body.removed);
-    S.leads = S.leads.filter((l) => !gone.has(l.key));
-    S.called = S.called.filter((l) => !gone.has(l.key));
-    S.total = body.total; S.counts = body.counts; S.recent = body.recent;
+    const missing = takeChanges(body);
     if (!$("page-calls").hidden) loadCalled(true); else S.calledLoaded = false;
     // A business that now belongs in this view: fetch the view again (it is one page of rows).
     if (missing) return loadLeads(true);
@@ -106,10 +117,12 @@ function moveCount(lead, from, to) {
 }
 function renderAll() { renderLeads(); renderCalls(); renderRecent(); counts(); }
 function counts() {
-  // The number, then its word (phones show just the number; the link's title says what it counts).
+  // The number, then its word (phones show just the number; the link's title says what it
+  // counts).
   /** @type {(id: string, n: number, word: string) => void} */
   const show = (id, n, word) => {
-    $(id).replaceChildren(n.toLocaleString(), el("span", ` ${word}`, "cw")); $(id).hidden = !S.counts;
+    $(id).replaceChildren(n.toLocaleString(), el("span", ` ${word}`, "cw"));
+    $(id).hidden = !S.counts;
   };
   if (!S.counts) return;
   show("n-leads", S.counts.unchecked, "to check");
@@ -121,8 +134,9 @@ function counts() {
 // Businesses a later search found closed for good keep their mark (and stay under Yes or No,
 // flagged); the Closed tab lists them all, and they leave Not checked.
 /** @type {[string, string][]} */
-const LEAD_TABS = [["", "Not checked"], ["yes", "Has baler or compactor"], ["no", "No baler or compactor"],
-                   ["competitors", "Competitors & AARCO"], ["closed", "Closed"], ["all", "All"]];
+const LEAD_TABS = [["", "Not checked"], ["yes", "Has baler or compactor"],
+                   ["no", "No baler or compactor"], ["competitors", "Competitors & AARCO"],
+                   ["closed", "Closed"], ["all", "All"]];
 // How many businesses a tab ("" is Not checked) holds.
 /** @type {(c: Counts | null, tab: string) => number} */
 const tabCount = (c, tab) => {
@@ -135,8 +149,8 @@ const TIER_WORDS = { A: "strong", B: "likely", C: "possible", D: "weak" };
 // Column sorts (done by the server) and the first direction a click picks.
 // "contact": the businesses that can be phoned first (a verified phone, then the listing's).
 /** @type {Record<string, {dir: string}>} */
-const SORTS = { score: { dir: "desc" }, name: { dir: "asc" }, city: { dir: "asc" }, contact: { dir: "asc" },
-                miles: { dir: "asc" } };
+const SORTS = { score: { dir: "desc" }, name: { dir: "asc" }, city: { dir: "asc" },
+                contact: { dir: "asc" }, miles: { dir: "asc" } };
 // AARCO's own listing, or its parent company's: not a prospect, and not given a score or tier.
 /** @type {(l: Lead) => boolean} */
 const isOwn = (l) => l.lead_type === "Own company";
@@ -170,11 +184,13 @@ function parseReason(r) {
 }
 // A note as a sentence: a capital first, a full stop last (unless it has its own).
 /** @type {(text: string) => string} */
-const sentence = (text) => text.charAt(0).toUpperCase() + text.slice(1) + (/[.!?…]$/.test(text) ? "" : ".");
+const sentence = (text) => text.charAt(0).toUpperCase() + text.slice(1)
+  + (/[.!?…]$/.test(text) ? "" : ".");
 /** @param {string[]} reasons */
 function whyCell(reasons) {
   const td = el("td", undefined, "c-why");
-  // On a phone the reasons sit behind this toggle (each lead is a card there); wider screens show them.
+  // On a phone the reasons sit behind this toggle (each lead is a card there); wider screens
+  // show them.
   const toggle = ctl(button("Why this score", "link why-toggle", () => {
     td.classList.toggle("open");
     toggle.setAttribute("aria-expanded", String(td.classList.contains("open")));
@@ -189,7 +205,8 @@ function whyCell(reasons) {
     if (p.pts === null) { notes.push(sentence(p.title)); continue; }
     const row = el("div", undefined, "reason");
     row.title = r;
-    row.append(el("span", (p.pts > 0 ? "+" : "") + p.pts, "pts" + (p.pts < 0 ? " neg" : p.pts === 0 ? " zero" : "")));
+    row.append(el("span", (p.pts > 0 ? "+" : "") + p.pts,
+                  "pts" + (p.pts < 0 ? " neg" : p.pts === 0 ? " zero" : "")));
     row.append(el("span", p.title));
     list.append(row);
     if (p.note) notes.unshift(p.note);
@@ -219,7 +236,9 @@ function toast(message, undo, bad) {
   toastTimer = setTimeout(hideToast, bad ? 9000 : 7000);
 }
 function hideToast() { clearTimeout(toastTimer); $("toast").hidden = true; toastUndo = null; }
-$("toast-undo").addEventListener("click", () => { if (toastUndo) { const u = toastUndo; hideToast(); u(); } });
+$("toast-undo").addEventListener("click", () => {
+  if (toastUndo) { const u = toastUndo; hideToast(); u(); }
+});
 /** @type {(key: string) => Lead | undefined} */
 const leadByKey = (key) => [...S.leads, ...S.called, ...S.recent].find((l) => l.key === key);
 
@@ -231,8 +250,8 @@ function unpinAll() { S.pinned.clear(); }
 const inTab = (l) => S.leadView === "all" || (S.leadView === "competitors" ? !l.prospect
   : S.leadView === "closed" ? l.closed
   : l.prospect && (l.has_baler || "") === S.leadView && !(l.closed && !S.leadView));
-// Just-marked rows stay while the mouse is over the list (or keyboard focus is in it), and PIN_MS after.
-// The hover is read from the page itself, so no pointer event can be missed.
+// Just-marked rows stay while the mouse is over the list (or keyboard focus is in it), and
+// PIN_MS after. The hover is read from the page itself, so no pointer event can be missed.
 let pointerKind = "mouse";
 document.addEventListener("pointermove", (e) => { pointerKind = e.pointerType; }, true);
 document.addEventListener("pointerdown", (e) => { pointerKind = e.pointerType; }, true);
@@ -252,7 +271,10 @@ function holdingRows() {
 setInterval(() => {
   if (!S.pinned.size) return;
   const now = Date.now();
-  if (holdingRows()) { for (const key of S.pinned.keys()) S.pinned.set(key, now + PIN_MS); return; }
+  if (holdingRows()) {
+    for (const key of S.pinned.keys()) S.pinned.set(key, now + PIN_MS);
+    return;
+  }
   let gone = false;
   for (const [key, until] of S.pinned) {
     if (until > now) continue;
@@ -278,13 +300,16 @@ function settleFailed(rows) {
 /** @param {Lead} lead @param {string} value "yes" or "no" */
 function setMark(lead, value) {
   const before = lead.has_baler || "";
-  // Clearing is only via Undo; clicking the current answer only confirms a lead whose buildings disagreed.
-  if ((value === before && !lead.marks_disagreed) || lead.saving || !lead.key || !lead.prospect) return;
+  // Clearing is only via Undo; clicking the current answer only confirms a lead whose buildings
+  // disagreed.
+  if ((value === before && !lead.marks_disagreed) || lead.saving || !lead.key || !lead.prospect) {
+    return;
+  }
   if (Date.now() - S.shiftedAt < SHIFT_GUARD_MS) {
     // The rows had just moved up: the click may have been aimed at the business that left. It is
     // not saved, and the page says so (never a click that silently does nothing).
-    toast(`Nothing was saved for ${lead.name}: the list moved just as you clicked. Check the row, then click ` +
-          `${value === "yes" ? "Yes" : "No"} again.`, null, true);
+    toast(`Nothing was saved for ${lead.name}: the list moved just as you clicked. Check the ` +
+          `row, then click ${value === "yes" ? "Yes" : "No"} again.`, null, true);
     return;
   }
   // A colleague's answer is replaced only once the person sees whose it is and says so.
@@ -294,7 +319,8 @@ function setMark(lead, value) {
 // True when the lead's answer was given by someone else than the name in the sidebar (one's
 // own answer changes without asking; an answer nobody signed can't be said to be anyone's).
 /** @type {(lead: Lead) => boolean} */
-const othersAnswer = (lead) => !!lead.marked_by && personKey(lead.marked_by) !== personKey(myName());
+const othersAnswer = (lead) => !!lead.marked_by
+  && personKey(lead.marked_by) !== personKey(myName());
 /** @type {(name: string) => string} */
 const personKey = (name) => (name || "").trim().replace(/\s+/g, " ").toLowerCase();
 
@@ -306,8 +332,10 @@ let replaceThen = null;
 function askReplace(lead, value) {
   const word = value === "yes" ? "Yes" : "No", was = lead.has_baler === "yes" ? "Yes" : "No";
   $("mark-title").textContent = `Change ${lead.marked_by}'s answer?`;
-  $("mark-who").textContent = `Marked ${was} by ${lead.marked_by}${lead.marked_when ? ` on ${lead.marked_when}` : ""}.`;
-  $("mark-ask").textContent = `Change ${lead.name} to ${word}? If you aren't sure, ask ${lead.marked_by} first.`;
+  $("mark-who").textContent = `Marked ${was} by ${lead.marked_by}` +
+    `${lead.marked_when ? ` on ${lead.marked_when}` : ""}.`;
+  $("mark-ask").textContent = `Change ${lead.name} to ${word}? If you aren't sure, ask ` +
+    `${lead.marked_by} first.`;
   $("mark-go").textContent = `Change to ${word}`;
   const key = lead.key;
   replaceThen = () => {
@@ -325,6 +353,29 @@ $("mark-form").addEventListener("submit", (/** @type {SubmitEvent} */ e) => {
 $("mark-cancel").addEventListener("click", () => { replaceThen = null; $("mark-dlg").close(); });
 $("mark-dlg").addEventListener("cancel", () => { replaceThen = null; });
 
+// A Yes / No the server didn't save: the row itself says so, with Try again, until it is saved
+// or dismissed (the note at the bottom of the screen goes after a few seconds and is easy to
+// miss). Returns a colleague's answer given meanwhile (status 409: nothing was saved), if any.
+/** @param {Lead} lead @param {string} value @param {ApiError} err */
+function markNotSaved(lead, value, err) {
+  const { key } = lead, { status, offline, body, message: why } = err;
+  // Offline, the answer waits on the row (with Try again) until the device is back online.
+  const message = offline
+    ? "You're offline. Your answer is kept here; press Try again when you're back online." : why;
+  const changed = status === 409 && body && body.changed ? body.changed : null;
+  if (changed) {
+    // A colleague answered meanwhile (nothing was saved): show theirs, and ask as for any other.
+    updateLead({ key, saving: "", savingSlow: false, has_baler: changed.value,
+                 marked_by: changed.by, marked_at: changed.at, marked_when: changed.when,
+                 marks_disagreed: false });
+  } else {
+    if (status !== 401) S.failed.set(key, { value, message });
+    updateLead({ key, saving: "", savingSlow: false });
+    toast(`${lead.name}: answer not saved. ${message}`, null, true);
+  }
+  renderAll();
+  return changed;
+}
 /** @param {Lead} lead @param {string} value "yes" or "no" */
 async function saveMark(lead, value) {
   const before = lead.has_baler || "";
@@ -341,57 +392,46 @@ async function saveMark(lead, value) {
   try {
     // After TIMING.saveSlow the row says it is taking longer than usual; after TIMING.saveLimit
     // it gives up and says "not saved", with Try again (core.js save).
-    // `was`: the answer this page showed, so one a colleague gave since is never replaced unasked.
-    const { undo, at, when } = await save("/mark", { key, value, by: myName(), was: before }, () => {
+    // `was`: the answer this page showed, so one a colleague gave since is never replaced
+    // unasked.
+    const { undo, at, when } = await save("/mark", { key, value, by: myName(), was: before },
+                                          () => {
       slowMarks.add(key); updateLead({ key, savingSlow: true }); renderAll();
     });
     S.failed.delete(key);
-    if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);   // "Saved. Moves to …" gets its moment
-    updateLead({ key, saving: "", savingSlow: false, has_baler: value, marked_by: myName(), marked_at: at,
-                 marked_when: when, marks_disagreed: false, undo_mark: undo });
+    // "Saved. Moves to …" gets its moment.
+    if (S.leadView !== "all") S.pinned.set(key, Date.now() + PIN_MS);
+    updateLead({ key, saving: "", savingSlow: false, has_baler: value, marked_by: myName(),
+                 marked_at: at, marked_when: when, marks_disagreed: false, undo_mark: undo });
     moveCount(lead, before, value);
     addRecent(leadByKey(key) || lead);
     renderAll();
     toast(`${lead.name}: marked ${value === "yes" ? "Yes" : "No"}.`, () => undoMark(key));
   } catch (err) {
-    // The row itself says the answer wasn't saved, with Try again, until it is saved or dismissed
-    // (the note at the bottom of the screen goes after a few seconds and is easy to miss).
-    const { status, offline, body, message: why } = /** @type {ApiError} */ (err);
-    // Offline, the answer waits on the row (with Try again) until the device is back online.
-    const message = offline ? "You're offline. Your answer is kept here; press Try again when you're back online."
-      : why;
-    changed = status === 409 && body && body.changed ? body.changed : null;
-    if (changed) {
-      // A colleague answered meanwhile (nothing was saved): show theirs, and ask as for any other.
-      updateLead({ key, saving: "", savingSlow: false, has_baler: changed.value, marked_by: changed.by,
-                   marked_at: changed.at, marked_when: changed.when, marks_disagreed: false });
-    } else {
-      if (status !== 401) S.failed.set(key, { value, message });
-      updateLead({ key, saving: "", savingSlow: false });
-      toast(`${lead.name}: answer not saved. ${message}`, null, true);
-    }
-    renderAll();
+    changed = markNotSaved(lead, value, /** @type {ApiError} */ (err));
   } finally {
     S.sending.delete(key); slowMarks.delete(key);
     if (lead.saving) { lead.saving = ""; lead.savingSlow = false; }
     S.busy--;
   }
   if (changed) {
-    loadChanges();                                  // the tabs' counts follow the colleague's answer
+    loadChanges();                   // the tabs' counts follow the colleague's answer
     askReplace(leadByKey(key) || lead, value);
   }
 }
 // A Yes / No that didn't reach the server: said on the row, with Try again and Dismiss.
 /** @param {Lead} lead @param {FailedMark} failed */
 function failedNote(lead, failed) {
+  const word = failed.value === "yes" ? "Yes" : "No";
   const box = el("div", undefined, "mark-failed");
-  box.append(el("strong", `${failed.value === "yes" ? "Yes" : "No"} not saved.`), " ",
-             el("span", failed.message));
-  const again = ctl(button("Try again", "quiet", () => withName(() => setMark(lead, failed.value))), "retry");
-  again.setAttribute("aria-label", `Try again to save ${failed.value === "yes" ? "Yes" : "No"} for ${lead.name}`);
+  box.append(el("strong", `${word} not saved.`), " ", el("span", failed.message));
+  const again = ctl(button("Try again", "quiet", () => withName(() => setMark(lead, failed.value))),
+                    "retry");
+  again.setAttribute("aria-label", `Try again to save ${word} for ${lead.name}`);
   // Dismissed, the focus goes back to the row's Yes (restoreFocus).
-  const dismiss = ctl(button("Dismiss", "link", () => { S.failed.delete(lead.key); renderAll(); }), "dismiss");
-  dismiss.setAttribute("aria-label", `Dismiss: ${failed.value === "yes" ? "Yes" : "No"} not saved for ${lead.name}`);
+  const dismiss = ctl(button("Dismiss", "link", () => { S.failed.delete(lead.key); renderAll(); }),
+                      "dismiss");
+  dismiss.setAttribute("aria-label", `Dismiss: ${word} not saved for ${lead.name}`);
   const row = el("div", undefined, "mark-failed-do");
   row.append(again, dismiss);
   box.append(row);
@@ -402,9 +442,12 @@ async function undoMark(key) {
   const lead = leadByKey(key);
   if (!lead || !lead.undo_mark) return;
   try {
-    await save("/mark/undo", { id: lead.undo_mark.id }, () => toast(`Undoing ${lead.name}… ${SLOW_SAVE}`));
+    await save("/mark/undo", { id: lead.undo_mark.id },
+               () => toast(`Undoing ${lead.name}… ${SLOW_SAVE}`));
     toast(`${lead.name}: undone.`);
-  } catch (err) { toast(`Couldn't undo ${lead.name}. ${/** @type {Error} */ (err).message}`, null, true); }
+  } catch (err) {
+    toast(`Couldn't undo ${lead.name}. ${/** @type {Error} */ (err).message}`, null, true);
+  }
   await loadChanges();
 }
 /** @param {string} key */
@@ -415,7 +458,10 @@ async function undoCall(key) {
     await save("/calls/undo", { id: lead.undo_call.id },
                () => toast(`Removing the call to ${lead.name}… ${SLOW_SAVE}`));
     toast(`${lead.name}: call removed.`);
-  } catch (err) { toast(`Couldn't undo the call to ${lead.name}. ${/** @type {Error} */ (err).message}`, null, true); }
+  } catch (err) {
+    toast(`Couldn't undo the call to ${lead.name}. ${/** @type {Error} */ (err).message}`, null,
+          true);
+  }
   await loadChanges();
 }
 /** @param {Undo} undo @param {string} label @param {() => unknown} onClick */
@@ -430,7 +476,8 @@ setInterval(() => {
   let expired = false;
   $all("button.undo[data-until]").forEach((b) => {
     const left = Math.floor(Number(b.dataset.until) - serverNow());
-    if (left <= 0) { b.remove(); expired = true; } else b.textContent = `${b.dataset.label} (${fmtTime(left)})`;
+    if (left <= 0) { b.remove(); expired = true; }
+    else b.textContent = `${b.dataset.label} (${fmtTime(left)})`;
   });
   if (expired) {
     for (const l of [...S.leads, ...S.called, ...S.recent]) {
@@ -442,30 +489,33 @@ setInterval(() => {
   }
 }, 1000);
 
-/** @param {Lead} lead @param {boolean} withCall */
-function markCell(lead, withCall) {
-  const td = el("td", undefined, "c-mark");
-  if (!lead.prospect) {
-    td.append(el("div", lead.lead_type === "Competitor" ? "Competitor: not a prospect"
-      : lead.flags.includes(CONFIG.parent_flag) ? "AARCO's parent company" : "AARCO's own listing",
-                 "sub not-asked"));
-    return td;
-  }
+// A prospect's Yes and No buttons: the current answer pressed, the one being saved marked so.
+/** @param {Lead} lead */
+function markButtons(lead) {
   const box = el("div", undefined, "mark");
   for (const [value, label] of [["yes", "Yes"], ["no", "No"]]) {
-    const b = button(label, value + (lead.has_baler === value ? " on" : "") + (lead.saving === value ? " sending" : ""),
-                     () => withName(() => setMark(lead, value)));
-    // While saving the buttons only look disabled: a disabled button would lose the keyboard focus.
+    const cls = value + (lead.has_baler === value ? " on" : "")
+      + (lead.saving === value ? " sending" : "");
+    const b = button(label, cls, () => withName(() => setMark(lead, value)));
+    // While saving the buttons only look disabled: a disabled button would lose the keyboard
+    // focus.
     b.disabled = !lead.key;
     if (lead.saving) b.setAttribute("aria-disabled", "true");
     b.dataset.ctl = value;
     b.setAttribute("aria-pressed", String(lead.has_baler === value));
-    // The name starts with the word shown ("Yes: Target has a baler or compactor"), so "click Yes" finds it.
+    // The name starts with the word shown ("Yes: Target has a baler or compactor"), so "click
+    // Yes" finds it.
     b.setAttribute("aria-label",
-                   `${label}: ${lead.name} ${value === "yes" ? "has" : "doesn't have"} a baler or compactor`);
+                   `${label}: ${lead.name} ${value === "yes" ? "has" : "doesn't have"} a baler ` +
+                   "or compactor");
     box.append(b);
   }
-  td.append(box);
+  return box;
+}
+// What the mark cell says under the buttons: that the answer is being saved (or wasn't), who
+// gave it, that its buildings disagreed, its earlier marks, where the row moves to, and Undo.
+/** @param {Lead} lead @param {HTMLTableCellElement} td */
+function markNotes(lead, td) {
   if (lead.saving) {
     const note = el("div", `Saving ${lead.saving === "yes" ? "Yes" : "No"}…` +
                            (lead.savingSlow ? ` ${SLOW_SAVE}` : ""), "sub saving");
@@ -475,16 +525,20 @@ function markCell(lead, withCall) {
     const failed = S.failed.get(lead.key);
     if (failed) td.append(failedNote(lead, failed));
   }
-  if (lead.has_baler && lead.marked_by && !lead.saving) td.append(el("div", `Marked by ${lead.marked_by}`, "sub by"));
+  if (lead.has_baler && lead.marked_by && !lead.saving) {
+    td.append(el("div", `Marked by ${lead.marked_by}`, "sub by"));
+  }
   // Joined from buildings marked Yes and No (python -m leadgen merge-sites keeps Yes).
   if (lead.marks_disagreed) {
-    td.append(el("div", "Its buildings were marked differently (Yes and No), so it was kept as Yes. " +
-                        "Check with the business, then press Yes or No to confirm.", "flag by"));
+    td.append(el("div", "Its buildings were marked differently (Yes and No), so it was kept as " +
+                        "Yes. Check with the business, then press Yes or No to confirm.",
+                 "flag by"));
   }
   // Marked more than once (changed, or merged from listings marked apart): the earlier marks.
   if (lead.has_baler && lead.mark_clicks > 1) {
     const more = el("div", undefined, "sub by");
-    const earlier = button("Earlier marks", "link", () => openHistory(lead)); earlier.dataset.ctl = "earlier";
+    const earlier = button("Earlier marks", "link", () => openHistory(lead));
+    earlier.dataset.ctl = "earlier";
     more.append(earlier);
     td.append(more);
   }
@@ -495,6 +549,18 @@ function markCell(lead, withCall) {
   if (lead.undo_mark && leftOf(lead.undo_mark) > 0) {
     td.append(ctl(undoButton(lead.undo_mark, "Undo", () => undoMark(lead.key)), "undo"));
   }
+}
+/** @param {Lead} lead @param {boolean} withCall */
+function markCell(lead, withCall) {
+  const td = el("td", undefined, "c-mark");
+  if (!lead.prospect) {
+    td.append(el("div", lead.lead_type === "Competitor" ? "Competitor: not a prospect"
+      : lead.flags.includes(CONFIG.parent_flag) ? "AARCO's parent company"
+      : "AARCO's own listing", "sub not-asked"));
+    return td;
+  }
+  td.append(markButtons(lead));
+  markNotes(lead, td);
   if (withCall) td.append(callBox(lead));
   return td;
 }
@@ -512,41 +578,47 @@ function callBox(lead) {
     box.append(last);
   }
   box.append(ctl(callButton(lead), "call"));
-  if (lead.call_count) box.append(ctl(historyButton(lead, `History (${lead.call_count})`), "history"));
+  if (lead.call_count) {
+    box.append(ctl(historyButton(lead, `History (${lead.call_count})`), "history"));
+  }
   if (lead.undo_call && leftOf(lead.undo_call) > 0) {
     box.append(ctl(undoButton(lead.undo_call, "Undo call", () => undoCall(lead.key)), "undo-call"));
   }
   return box;
 }
 
-/** @param {Lead} l @param {boolean} withCall */
-function leadRow(l, withCall) {
-  const tr = el("tr");
-  tr.dataset.key = l.key;
-  const own = isOwn(l);
-  tr.className = (own ? "own" : l.tier) + (l.lead_type === "Competitor" ? " competitor" : "")
-    + (pinnedNow(l.key) && !inTab(l) ? " just-marked" : "");
-  tr.append(markCell(l, withCall));
-  if (own) {
-    // AARCO's own: no prospect score or tier (it is never sold to).
+// The score and tier, with the tier's meaning written next to it (A strong, B likely, C possible,
+// D weak); AARCO's own listing has none (it is never sold to).
+/** @param {Lead} l */
+function scoreCell(l) {
+  if (isOwn(l)) {
     const none = el("td", undefined, "score nowrap");
     none.append(el("span", "Not scored", "sub"));
     none.title = "AARCO's own listing: not a prospect, so it has no score or tier";
-    tr.append(none);
-  } else {
-    // The tier's meaning is written next to the score (A strong, B likely, C possible, D weak).
-    const word = TIER_WORDS[l.tier] || "";
-    const score = el("td", String(l.score), "score nowrap");
-    score.append(el("span", ` ${l.tier} ${word}`.trimEnd(), "tier-word"));
-    score.title = `Score ${l.score} of 100, tier ${l.tier}${word ? `: ${word} to have a baler or compactor` : ""}`;
-    tr.append(score);
+    return none;
   }
+  const word = TIER_WORDS[l.tier] || "";
+  const score = el("td", String(l.score), "score nowrap");
+  score.append(el("span", ` ${l.tier} ${word}`.trimEnd(), "tier-word"));
+  score.title = `Score ${l.score} of 100, tier ${l.tier}` +
+    `${word ? `: ${word} to have a baler or compactor` : ""}`;
+  return score;
+}
+// The business's name, its category and type (when that says more), and its flags.
+/** @param {Lead} l */
+function nameCell(l) {
   const name = el("td", undefined, "c-name");
   name.append(el("strong", l.name));
   if (l.category) name.append(el("div", l.category, "sub"));
-  if (l.lead_type !== "Prospect" && !saysTheSame(l.lead_type, l.category)) name.append(el("div", l.lead_type, "sub"));
+  if (l.lead_type !== "Prospect" && !saysTheSame(l.lead_type, l.category)) {
+    name.append(el("div", l.lead_type, "sub"));
+  }
   for (const f of l.flags) name.append(el("div", f, "flag"));
-  tr.append(name);
+  return name;
+}
+// The address (with its map link), phone, verified contact and website.
+/** @param {Lead} l */
+function contactCell(l) {
   const contact = el("td", undefined, "contact");
   // A lead without a street address says so (like "No phone listed"), next to its map link.
   // One without a city shows the town its map position is near ("near West Jordan, UT 84088",
@@ -559,24 +631,39 @@ function leadRow(l, withCall) {
   if (place) add(place);
   if (l.near) {
     const near = el("span", l.near, "near");
-    near.title = "Worked out from the map position (the listing gives no town): the nearest town and ZIP code area.";
+    near.title = "Worked out from the map position (the listing gives no town): the nearest " +
+      "town and ZIP code area.";
     add(near);
   }
   if (l.map_url) {
-    const map = link(l.map_url, "map"); map.classList.add("map"); map.setAttribute("aria-label", `${l.name} on a map`);
+    const map = link(l.map_url, "map"); map.classList.add("map");
+    map.setAttribute("aria-label", `${l.name} on a map`);
     addr.append(" ", map);
   }
   contact.append(addr);
-  const p = el("div"); p.append(l.phone ? phoneLink(l.phone) : el("span", "No phone listed", "sub")); contact.append(p);
+  const p = el("div");
+  p.append(l.phone ? phoneLink(l.phone) : el("span", "No phone listed", "sub"));
+  contact.append(p);
   contact.append(verifiedBox(l));
   if (l.website) {
     const a = link(l.website, l.website.replace(/^https?:\/\/(www\.)?/i, "").split("/")[0]);
     a.classList.add("site"); a.title = l.website; contact.append(a);
   }
-  tr.append(contact);
+  return contact;
+}
+/** @param {Lead} l @param {boolean} withCall */
+function leadRow(l, withCall) {
+  const tr = el("tr");
+  tr.dataset.key = l.key;
+  const own = isOwn(l);
+  tr.className = (own ? "own" : l.tier) + (l.lead_type === "Competitor" ? " competitor" : "")
+    + (pinnedNow(l.key) && !inTab(l) ? " just-marked" : "");
+  tr.append(markCell(l, withCall), scoreCell(l), nameCell(l), contactCell(l));
   const miles = el("td", undefined, "c-miles nowrap");
   // One decimal for every distance ("4.6", "2.2"), so the column reads evenly.
-  if (l.distance != null) { miles.append(Number(l.distance).toFixed(1)); miles.append(el("span", " mi", "unit")); }
+  if (l.distance != null) {
+    miles.append(Number(l.distance).toFixed(1)); miles.append(el("span", " mi", "unit"));
+  }
   tr.append(miles);
   if (own) {
     const why = el("td", undefined, "c-why");
@@ -608,7 +695,8 @@ function sortHeader(label, sort) {
   });
   b.append(el("span", label), el("span", on ? (S.dir === "asc" ? "▲" : "▼") : "↕", "arrow"));
   th.setAttribute("aria-sort", on ? (S.dir === "asc" ? "ascending" : "descending") : "none");
-  b.title = sort === "contact" ? "Sort by contact: the businesses with a phone number first (a verified one first)"
+  b.title = sort === "contact"
+    ? "Sort by contact: the businesses with a phone number first (a verified one first)"
     : `Sort by ${label.toLowerCase()}`;
   th.append(b);
   return th;
@@ -619,8 +707,9 @@ function leadTable(rows, withCall) {
   // Shown from 1100px wide (narrower windows show cards); the Why column takes the rest.
   /** @type {[string, string | null, string?][]} */
   const cols = [[withCall ? "Baler? / Call" : "Baler or compactor?", withCall ? "176px" : "118px"],
-                ["Score", "90px", "score"], ["Business", "20%", "name"], ["Contact", "20%", "contact"],
-                ["Miles", "72px", "miles"], ["Why this score", null]];
+                ["Score", "90px", "score"], ["Business", "20%", "name"],
+                ["Contact", "20%", "contact"], ["Miles", "72px", "miles"],
+                ["Why this score", null]];
   const cg = el("colgroup");
   for (const [, w] of cols) { const c = el("col"); if (w) c.style.width = w; cg.append(c); }
   const head = el("tr");
@@ -635,7 +724,8 @@ function leadTable(rows, withCall) {
 // "Pro Baler, Action Compaction, AARCO Waste & Disposal or ACE Recycling & Disposal".
 /** @param {string[]} names */
 function orList(names) {
-  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
+  return names.length < 2 ? names.join("")
+    : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
 }
 function clearFilters() {
   S.q = ""; S.lead = ""; S.tier = ""; S.phone = false;
@@ -646,7 +736,73 @@ function clearFilters() {
 /** @param {string} v */
 function pickTab(v) { S.leadView = v; S.lead = ""; S.limit = PAGE; unpinAll(); changeView(); }
 // The whole list again, after the Map page opened one business here.
-function showWholeList() { S.lead = ""; S.limit = PAGE; unpinAll(); changeView(); $("filter").focus(); }
+function showWholeList() {
+  S.lead = ""; S.limit = PAGE; unpinAll(); changeView(); $("filter").focus();
+}
+// The tabs (and, on phones, the list in their place), each with its count.
+/** @param {Counts | null} c */
+function leadTabs(c) {
+  /** @type {[string, string, number][]} */
+  const tabItems = LEAD_TABS.map(([v, t]) => [v, t, tabCount(c, v)]);
+  tabs($("lead-tabs"), tabItems, S.leadView, pickTab);
+  $("tab-pick").replaceChildren(...tabItems.map(([v, t, n]) => {
+    const o = el("option", `${t}: ${n.toLocaleString()}`); o.value = v; return o;
+  }));
+  $("tab-pick").value = S.leadView;
+}
+// No lead matches the filters: say what was filtered, and offer the way back to the whole list.
+function noMatchBox() {
+  const tab = (LEAD_TABS.find(([v]) => v === S.leadView) || ["", "All"])[1];
+  const what = [S.q && `“${S.q}”`, S.tier && `tier ${S.tier} (${TIER_WORDS[S.tier]})`,
+                S.phone && "a phone number"].filter(Boolean).join(" and ");
+  const box = el("div", undefined, "empty");
+  // Spelling advice only for typed text; a tier or "Has phone" alone can only be widened.
+  const widen = [S.tier && "pick All tiers or another tier", S.phone && "turn off Has phone"]
+    .filter(Boolean);
+  const advice = S.q
+    ? "Check the spelling, pick another tab, or clear the filters to see the whole list."
+    : `${widen.join(", ")}, pick another tab, or clear the filters to see the whole list.`;
+  box.append(el("strong", `No leads match ${what} in ${tab}.`),
+             el("p", advice.charAt(0).toUpperCase() + advice.slice(1)),
+             button("Clear filters", "quiet", clearFilters));
+  return box;
+}
+// What an empty tab says.
+function emptyTabText() {
+  if (S.leadView === "") return "Every business has been checked.";
+  if (S.leadView === "closed") return "No saved business has been reported closed for good.";
+  if (S.leadView === "competitors") {
+    return `No ${orList(CONFIG.flagged || [])} listings found in the saved leads yet. When a ` +
+      "search finds one, it is listed here, flagged, and never asked Yes / No.";
+  }
+  if (S.leadView === "yes") {
+    return "No business has been marked Yes yet. Mark leads under Not checked.";
+  }
+  if (S.leadView === "no") {
+    return "No business has been marked No yet. Mark leads under Not checked.";
+  }
+  return "Nothing here yet.";
+}
+// What the list shows in place of its rows when there are none: no saved leads at all, the one
+// business asked for gone, nothing matching the filters, or an empty tab.
+/** @param {number} all how many leads are saved */
+function leadsEmpty(all) {
+  if (!all) {
+    return emptyNote("No saved leads yet.",
+      "Run today's search on the Find leads page: the businesses it finds are saved here.",
+      "#find", "Go to Find leads");
+  }
+  if (S.lead) {
+    const box = el("div", undefined, "empty");
+    box.append(el("strong", "That business isn't in the saved list any more."),
+               el("p", "It may have been joined to another row of the same business, or taken " +
+                       "out of the list."),
+               button("Show the whole list", "quiet", showWholeList));
+    return box;
+  }
+  if (S.q || S.tier || S.phone) return noMatchBox();
+  return el("div", emptyTabText(), "empty");
+}
 function renderLeads() {
   const problemBox = $("leads-problem");
   if (S.loadError && !S.loaded) {
@@ -662,18 +818,12 @@ function renderLeads() {
     // One business, opened from the Map page; the rest of the list is a click away.
     const only = el("div", undefined, "only-one");
     only.setAttribute("role", "status");
-    only.append(el("span", "Showing one business, opened from the map."), button("Show the whole list", "quiet",
-                                                                                  showWholeList));
+    only.append(el("span", "Showing one business, opened from the map."),
+                button("Show the whole list", "quiet", showWholeList));
     $("leads-note").append(only);
   }
   const c = S.counts, all = c ? c.all : 0;
-  /** @type {[string, string, number][]} */
-  const tabItems = LEAD_TABS.map(([v, t]) => [v, t, tabCount(c, v)]);
-  tabs($("lead-tabs"), tabItems, S.leadView, pickTab);
-  $("tab-pick").replaceChildren(...tabItems.map(([v, t, n]) => {
-    const o = el("option", `${t}: ${n.toLocaleString()}`); o.value = v; return o;
-  }));
-  $("tab-pick").value = S.leadView;
+  leadTabs(c);
   $("downloads").hidden = !all;                    // nothing to download yet
   $("call-hint").hidden = ["competitors", "closed"].includes(S.leadView) || !all;
   $("competitor-hint").hidden = S.leadView !== "competitors";
@@ -683,40 +833,7 @@ function renderLeads() {
   wrap.setAttribute("aria-busy", S.viewLoading);
   loadingCue("leads-loading", S.viewLoading);
   if (!S.leads.length) {
-    if (!all) {
-      wrap.replaceChildren(emptyNote("No saved leads yet.",
-        "Run today's search on the Find leads page: the businesses it finds are saved here.", "#find",
-        "Go to Find leads"));
-    } else if (S.lead) {
-      const box = el("div", undefined, "empty");
-      box.append(el("strong", "That business isn't in the saved list any more."),
-                 el("p", "It may have been joined to another row of the same business, or taken out of the list."),
-                 button("Show the whole list", "quiet", showWholeList));
-      wrap.replaceChildren(box);
-    } else if (S.q || S.tier || S.phone) {
-      // Say what was filtered, and offer the way back to the whole list.
-      const tab = (LEAD_TABS.find(([v]) => v === S.leadView) || ["", "All"])[1];
-      const what = [S.q && `“${S.q}”`, S.tier && `tier ${S.tier} (${TIER_WORDS[S.tier]})`,
-                    S.phone && "a phone number"].filter(Boolean).join(" and ");
-      const box = el("div", undefined, "empty");
-      // Spelling advice only for typed text; a tier or "Has phone" alone can only be widened.
-      const widen = [S.tier && "pick All tiers or another tier", S.phone && "turn off Has phone"].filter(Boolean);
-      const advice = S.q ? "Check the spelling, pick another tab, or clear the filters to see the whole list."
-        : `${widen.join(", ")}, pick another tab, or clear the filters to see the whole list.`;
-      box.append(el("strong", `No leads match ${what} in ${tab}.`),
-                 el("p", advice.charAt(0).toUpperCase() + advice.slice(1)),
-                 button("Clear filters", "quiet", clearFilters));
-      wrap.replaceChildren(box);
-    } else {
-      wrap.replaceChildren(el("div", S.leadView === "" ? "Every business has been checked."
-        : S.leadView === "closed" ? "No saved business has been reported closed for good."
-        : S.leadView === "competitors"
-          ? `No ${orList(CONFIG.flagged || [])} listings found in the saved leads yet. When a search finds one, ` +
-            "it is listed here, flagged, and never asked Yes / No."
-        : S.leadView === "yes" ? "No business has been marked Yes yet. Mark leads under Not checked."
-        : S.leadView === "no" ? "No business has been marked No yet. Mark leads under Not checked."
-        : "Nothing here yet.", "empty"));
-    }
+    wrap.replaceChildren(leadsEmpty(all));
   } else {
     // Every prospect can be called (a call is how staff find out); competitors have no buttons.
     const spot = focusSpot();
@@ -738,7 +855,9 @@ function renderLeads() {
 /** @type {FocusSpot | null} */
 let lastSpot = null;
 document.addEventListener("focusin", (e) => {
-  const at = eventEl(e), tr = at.closest && /** @type {HTMLElement | null} */ (at.closest("#leads-wrap tr[data-key]"));
+  const at = eventEl(e);
+  const tr = at.closest &&
+    /** @type {HTMLElement | null} */ (at.closest("#leads-wrap tr[data-key]"));
   lastSpot = tr ? { key: tr.dataset.key || "", ctl: at.dataset.ctl || "" } : null;
 });
 /** @returns {FocusSpot | null} */
@@ -753,7 +872,8 @@ function focusSpot() {
   if (!spot) return null;
   // The businesses after it, in case it leaves the view.
   /** @type {string[]} */
-  const keys = [...wrap.querySelectorAll("tr[data-key]")].map((/** @type {HTMLElement} */ r) => r.dataset.key || "");
+  const keys = [...wrap.querySelectorAll("tr[data-key]")]
+    .map((/** @type {HTMLElement} */ r) => r.dataset.key || "");
   const at = keys.indexOf(spot.key);
   return { ...spot, next: at < 0 ? [] : [...keys.slice(at + 1), ...keys.slice(0, at).reverse()] };
 }
@@ -763,8 +883,9 @@ function rowControl(key, name) {
   const rows = [...$("leads-wrap").querySelectorAll("tr[data-key]")];
   const row = rows.find((r) => r.dataset.key === key);
   if (!row) return null;
-  return (name && row.querySelector(`[data-ctl="${name}"]`)) || row.querySelector('[data-ctl="yes"]')
-    || row.querySelector('[data-ctl="call"]') || row.querySelector("button, a[href]");
+  return (name && row.querySelector(`[data-ctl="${name}"]`))
+    || row.querySelector('[data-ctl="yes"]') || row.querySelector('[data-ctl="call"]')
+    || row.querySelector("button, a[href]");
 }
 /** @param {FocusSpot | null} spot */
 function restoreFocus(spot) {
@@ -778,14 +899,17 @@ function renderRecent() {
   /** @type {[number, string, HTMLButtonElement][]} */
   const items = [];
   for (const l of S.recent) {
-    if (l.undo_mark && leftOf(l.undo_mark) > 0)
+    if (l.undo_mark && leftOf(l.undo_mark) > 0) {
+      const answer = l.has_baler === "yes" ? "Yes" : l.has_baler === "no" ? "No" : "Not checked";
       items.push([l.undo_mark.until,
-                  `${l.name}: marked ${l.has_baler === "yes" ? "Yes" : l.has_baler === "no" ? "No" : "Not checked"}` +
-                  (l.has_baler ? byWho(l.marked_by) : ""),
+                  `${l.name}: marked ${answer}` + (l.has_baler ? byWho(l.marked_by) : ""),
                   undoButton(l.undo_mark, "Undo", () => undoMark(l.key))]);
-    if (l.undo_call && leftOf(l.undo_call) > 0)
-      items.push([l.undo_call.until, `${l.name}: call saved as ${l.call_outcome}${byWho(l.last_call_by)}`,
+    }
+    if (l.undo_call && leftOf(l.undo_call) > 0) {
+      items.push([l.undo_call.until,
+                  `${l.name}: call saved as ${l.call_outcome}${byWho(l.last_call_by)}`,
                   undoButton(l.undo_call, "Undo", () => undoCall(l.key))]);
+    }
   }
   items.sort((a, b) => b[0] - a[0]);
   $("recent").hidden = !items.length;
@@ -870,7 +994,7 @@ async function download(a) {
       loggedOut(`Your ${a.href.endsWith(".csv") ? "CSV" : "Excel"} download didn't start.`);
       return;
     }
-    if (!res.ok) {                                  // the server's error page says why, in plain words
+    if (!res.ok) {                   // the server's error page says why, in plain words
       const page = new DOMParser().parseFromString(await res.text().catch(() => ""), "text/html");
       throw new Error(page.querySelector(".box p")?.textContent || "Try again in a minute.");
     }
