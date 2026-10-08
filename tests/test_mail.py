@@ -104,6 +104,22 @@ def test_sends_with_starttls_and_login_to_the_owner(smtp, capsys):
     assert out.strip() == "Emailed t@thomasewright.com." and PASSWORD not in out and USER not in out
 
 
+def test_a_gmail_app_password_pasted_with_spaces_still_works(smtp, monkeypatch):
+    """Google shows an app password as four groups of four letters; for Gmail the spaces
+    are taken out. Another server gets the password exactly as set."""
+    monkeypatch.setenv(mail.PASSWORD_ENV, " abcd efgh ijkl mnop ")
+    mail.send("s", "b")
+    assert smtp.made[-1].login_as == (USER, "abcdefghijklmnop")
+    monkeypatch.setenv(mail.HOST_ENV, "smtp.example.net")
+    mail.send("s", "b")
+    assert smtp.made[-1].login_as == (USER, " abcd efgh ijkl mnop ")
+    monkeypatch.delenv(mail.HOST_ENV)
+    FakeSMTP.fail_login = RuntimeError("bad login abcdefghijklmnop")
+    with pytest.raises(RuntimeError) as failed:
+        mail.send("s", "b")
+    assert "abcdefghijklmnop" not in str(failed.value) and "***" in str(failed.value)
+
+
 def test_the_recipient_server_and_sender_can_be_changed(smtp, monkeypatch):
     monkeypatch.setenv(mail.TO_ENV, "someone@example.org")
     monkeypatch.setenv(mail.HOST_ENV, "smtp.example.net")

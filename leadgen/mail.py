@@ -72,7 +72,8 @@ def send(subject: str, body: str) -> str:
     class and words (never the user or the password)."""
     if not set_up():
         raise Unset(not_set_up_text())
-    user, password = _env(USER_ENV), os.environ.get(PASSWORD_ENV, "")
+    host = _env(HOST_ENV) or DEFAULT_HOST
+    user, password = _env(USER_ENV), _password(host)
     to = recipient()
     message = EmailMessage()
     message["From"] = _env(FROM_ENV) or user
@@ -81,7 +82,6 @@ def send(subject: str, body: str) -> str:
     message["Date"] = formatdate(localtime=True)
     message["Message-ID"] = make_msgid(domain="lead-finder")
     message.set_content(body)
-    host = _env(HOST_ENV) or DEFAULT_HOST
     try:
         port = int(_env(PORT_ENV) or DEFAULT_PORT)
         context = ssl.create_default_context()
@@ -100,10 +100,18 @@ def send(subject: str, body: str) -> str:
     return to
 
 
+def _password(host: str) -> str:
+    """The password as set; for Gmail without spaces, since Google shows an app password in
+    four groups of four letters and people often paste it that way."""
+    password = os.environ.get(PASSWORD_ENV, "")
+    return "".join(password.split()) if host.lower() == DEFAULT_HOST else password
+
+
 def reason(exc: BaseException) -> str:
     """The failure's class and words, with the SMTP user and password taken out."""
     text = f"{exc.__class__.__name__}: {exc}"
-    for secret in (os.environ.get(PASSWORD_ENV, ""), _env(USER_ENV)):
+    raw = os.environ.get(PASSWORD_ENV, "")
+    for secret in (raw, "".join(raw.split()), _env(USER_ENV)):
         if secret:
             text = text.replace(secret, "***")
     return " ".join(text.split())[:300]
