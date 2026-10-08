@@ -517,6 +517,22 @@ def test_theme_labels_fit_at_every_width(browser, site, page, width):
     assert clipped == [] and not wide
 
 
+def test_how_far_stops_at_100_miles_as_it_is_typed(page):
+    """Typed on the keyboard, a number past a field's most stops at the most with a note,
+    before Find leads is pressed (the owner, 2026-10-08)."""
+    page.click("nav a[data-page=find]")
+    page.wait_for_selector("text=Today's is available")
+    box = page.locator("input[name=radius]")
+    box.fill("")
+    box.press_sequentially("9000000")
+    expect(box).to_have_value("100")
+    expect(page.locator("#err-radius")).to_have_text("How far can be at most 100 miles.")
+    box.fill("")
+    box.press_sequentially("45")
+    expect(box).to_have_value("45")
+    expect(page.locator("#err-radius")).to_have_count(0)
+
+
 def test_find_leads_says_why_a_search_cannot_start(page):
     page.click("nav a[data-page=find]")
     page.wait_for_selector("text=Today's is available")

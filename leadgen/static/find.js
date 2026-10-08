@@ -50,7 +50,21 @@ function showError(message, field) {
   $("go-error").textContent = message;
   $("go-error").hidden = false;
 }
-$("form").addEventListener("input", () => { if (S.error) clearErrors(); });
+// A number typed past a field's most (9000000 miles, say) stops at the most as it is typed,
+// with a note saying so, instead of waiting for Find leads to point it out.
+/** @type {Record<string, string>} */
+const MOST = { radius: "How far can be at most 100 miles.",
+               min_score: "The score can be at most 100.",
+               max_requests: "Most paid lookups can be at most 5000." };
+$("form").addEventListener("input", (/** @type {Event} */ e) => {
+  if (S.error) clearErrors();
+  const input = /** @type {HTMLInputElement} */ (eventEl(e));
+  if (!(input.name in MOST) || !input.max) return;
+  if (Number(input.value) > Number(input.max)) {
+    input.value = input.max;
+    showError(MOST[input.name], input.name);
+  }
+});
 // Lists and the tick box say "change" (a text box's late "change" on leaving it is not an edit).
 $("form").addEventListener("change", (/** @type {Event} */ e) => {
   if (S.error && eventEl(e).matches("select, input[type=checkbox]")) clearErrors();
