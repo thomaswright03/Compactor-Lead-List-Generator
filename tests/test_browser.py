@@ -3431,3 +3431,22 @@ def test_ten_thousand_businesses_are_grouped_and_split_as_the_map_zooms(browser,
     context.close()
     assert not errors
 
+
+
+@pytest.mark.parametrize("width", [375, 1280])
+def test_the_map_keys_headings_sit_inside_their_light_cards(page, width):
+    """The owner (2026-10-08): "Businesses" and "Also on the map" sat on the cards' top edge,
+    half outside the light area."""
+    page.set_viewport_size({"width": width, "height": 900})
+    page.click("nav a[data-page=map]")
+    page.wait_for_selector(".map-side legend")
+    boxes = page.evaluate("""() => [...document.querySelectorAll('.map-side fieldset.card')].map(f => {
+        const card = f.getBoundingClientRect(), head = f.querySelector('legend').getBoundingClientRect();
+        const border = parseFloat(getComputedStyle(f).borderTopWidth);
+        return [f.querySelector('legend').textContent, card.top + border, head.top, card.left, head.left];
+    })""")
+    assert len(boxes) == 2
+    for name, inside_top, head_top, card_left, head_left in boxes:
+        assert head_top >= inside_top + 4, name
+        assert head_left > card_left, name
+    page.screenshot(path=f"/tmp/claude-0/-home-user-compactor-lead-list-generator/6d74af1b-40da-5368-9f3d-2f9f19274980/scratchpad/map-key-{width}.png", full_page=True)

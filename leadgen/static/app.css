@@ -934,9 +934,11 @@ dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturat
 #map-tiles-note { margin:var(--sp-2) 0 0; }
 /* The toggles and key in calmer cards, the area list as small tiles. */
 .map-side { display:flex; flex-direction:column; gap:var(--sp-4); min-width:0; }
-.map-side fieldset.card { margin:0; min-width:0; padding-top:var(--sp-3); }
-.map-side legend { font-weight:700; font-size:var(--fs-md); padding:0 var(--sp-1); font-variant-caps:all-small-caps; letter-spacing:.06em;
-                   color:var(--muted); }
+/* The heading sits inside the light card (a floated legend leaves the border), not on its edge. */
+.map-side fieldset.card { margin:0; min-width:0; }
+.map-side legend { float:left; width:100%; padding:0; margin:0 0 var(--sp-2); font-weight:700; font-size:var(--fs-md);
+                   font-variant-caps:all-small-caps; letter-spacing:.06em; color:var(--muted); }
+.map-side legend + * { clear:both; }
 .map-side legend + * strong { font-family:var(--serif); font-optical-sizing:auto; }
 .map-groups label.check { font-weight:400; font-size:var(--fs-base); align-items:center; }
 .map-groups label.check > span:last-child { min-width:0; }
