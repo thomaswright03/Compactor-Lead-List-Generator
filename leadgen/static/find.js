@@ -648,10 +648,14 @@ function checkForm(form) {
 }
 // Before anything is spent the server finds the place typed (web/place.py place): the
 // confirmation names it and how far it is from AARCO's shop. A place outside AARCO's area needs a
-// second, explicit yes (farDialog) that names it again.
+// second, explicit yes (farDialog) that names it again. A match that is only a road, a trail or
+// a business (place.uncertain) is asked about in the confirmation, with "Go back" in focus.
 /** @type {(p: Place) => string} */
 const farText = (p) => `“${p.label}” is ${milesText(p.miles)} from AARCO's shop, outside ` +
   `AARCO's area (about ${p.area_miles} miles around it).`;
+/** @type {(p: Place) => string} */
+const doubtText = (p) => `${p.uncertain} If not, go back and type a ZIP code, a town or a ` +
+  "street address.";
 $("form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
   e.preventDefault();
   if ($("go").disabled || S.locating) return;
@@ -678,24 +682,29 @@ $("form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
   for (const [k, v] of rows) {
     const row = el("div"); row.append(el("dt", k), el("dd", v)); dl.append(row);
   }
-  $("confirm-far").hidden = !place.outside;
-  if (place.outside) {
-    $("confirm-far").textContent = `${farText(place)} You'll be asked once more before it starts.`;
-  }
-  $("confirm-go").textContent = place.outside ? "Next" : "Start search";
+  const again = "You'll be asked once more before it starts.";
+  const warn = [place.uncertain ? doubtText(place) : "",
+                place.outside ? `${farText(place)} ${again}` : ""];
+  $("confirm-far").textContent = warn.filter(Boolean).join(" ");
+  $("confirm-far").hidden = !place.outside && !place.uncertain;
+  $("confirm-go").textContent = place.outside ? "Next" : place.uncertain ? "Yes, search there"
+    : "Start search";
   $("confirm-dlg").showModal();
-  $("confirm-go").focus();
+  // A doubtful place: the safe choice is the one already in focus.
+  $(place.uncertain ? "confirm-back" : "confirm-go").focus();
 });
 const backToPlace = () => $("form").querySelector("input[name=location]").focus();
 $("confirm-back").addEventListener("click", () => { $("confirm-dlg").close(); backToPlace(); });
 $("confirm-form").addEventListener("submit", (/** @type {SubmitEvent} */ e) => {
   e.preventDefault(); $("confirm-dlg").close();
-  if (S.place && S.place.outside) farDialog(S.place); else startSearch();
+  if (S.place && S.place.outside) farDialog(S.place);
+  else startSearch(S.place && S.place.uncertain ? S.place.confirm : undefined);
 });
 /** @param {Place} place */
 function farDialog(place) {
   S.place = place;
-  $("far-why").textContent = farText(place);
+  $("far-why").textContent = place.uncertain ? `${farText(place)} ${place.uncertain}`
+    : farText(place);
   $("far-dlg").showModal();
   $("far-back").focus();                 // the safe choice is the one already in focus
 }
@@ -703,7 +712,7 @@ $("far-back").addEventListener("click", () => { $("far-dlg").close(); backToPlac
 $("far-form").addEventListener("submit", (/** @type {SubmitEvent} */ e) => {
   e.preventDefault(); $("far-dlg").close(); startSearch(S.place && S.place.confirm);
 });
-/** @param {string} [confirmPlace] the place outside AARCO's area that was confirmed */
+/** @param {string} [confirmPlace] the place confirmed (outside AARCO's area, or doubtful) */
 async function startSearch(confirmPlace) {
   setGo(false, "Starting...");
   clearErrors(); $("search-failed").hidden = true;
@@ -720,7 +729,9 @@ async function startSearch(confirmPlace) {
     loadSearches();
     // The place turned out to be outside AARCO's area: ask, naming it (nothing was spent).
     if (err.body && err.body.confirm_far && err.body.place) { farDialog(err.body.place); return; }
-    showError(err.message, err.status === 400 && err.body ? err.body.field : "");
+    // A doubtful place that wasn't confirmed (the lookup found another since): at the field.
+    const atField = err.body && (err.status === 400 || err.body.confirm_uncertain);
+    showError(err.message, atField && err.body ? err.body.field : "");
   }
 }
 

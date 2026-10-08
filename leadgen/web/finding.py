@@ -27,7 +27,7 @@ from ..progress import SAVE, Step
 from ..sources import collecting, osm, paging
 from .common import NOT_USED_UP, SEARCH_PAUSED, db_message, same_origin, state, yelp_quota
 from .history import _for_page, _recover, searches
-from .place import CONFIRM_MILES, _place, confirmed, far_message, place, where
+from .place import CONFIRM_MILES, _place, confirmed, doubt_message, far_message, place, where
 from .search_form import MAX_KEYWORD_LEN, MAX_KEYWORDS, MAX_REQUESTS_LIMIT, FormError, Num, parse_form
 from .search_progress import (
     CREEP_PART,
@@ -325,14 +325,19 @@ def search() -> ResponseReturnValue:
         # The page attaches to it (e.g. after a reload) instead of starting another.
         return jsonify({"error": "A search is already running.", "job_id": running}), 429
     # Where it will run is found first: a place that can't be found, or one outside
-    # AARCO's area that the person hasn't confirmed, never uses up the day.
+    # AARCO's area or only a road, trail or business (place.where "uncertain") that the
+    # person hasn't confirmed, never uses up the day.
     found = _place(params)
     if isinstance(found, tuple):
         return found
-    if found["outside"] and not confirmed(request.form.get("confirm_place"), found):
+    yes = confirmed(request.form.get("confirm_place"), found)
+    if found["outside"] and not yes:
         return jsonify({"error": f"{far_message(found)} Check the place, or confirm that "
                                  "you want to search there.",
                         "field": "location", "place": found, "confirm_far": True}), 409
+    if found["uncertain"] and not yes:
+        return jsonify({"error": doubt_message(found), "field": "location", "place": found,
+                        "confirm_uncertain": True}), 409
     params = replace(params, center=(found["lat"], found["lon"]), place=found["label"])
     _recover()                  # a search a restart cut off today gives the day back first
     claimed = _claim(params, found)

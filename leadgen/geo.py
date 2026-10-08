@@ -4,6 +4,7 @@ import logging
 import math
 import os
 import re
+from typing import Any, Self
 
 from . import config
 from .http import HttpError, request_json
@@ -17,6 +18,10 @@ METERS_PER_MILE = 1609.344
 KNOWN_PLACES = {
     config.OWN_ADDRESS.lower(): config.OWN_COORDS,
     "876 fortune rd": config.OWN_COORDS,
+    "876 fortune road": config.OWN_COORDS,
+    "876 fortune rd, salt lake city": config.OWN_COORDS,
+    "876 fortune rd, salt lake city, ut": config.OWN_COORDS,
+    "876 fortune road, salt lake city": config.OWN_COORDS,
     "876 fortune road, salt lake city, ut 84104": config.OWN_COORDS,
     "1876 w fortune rd, salt lake city, ut 84104": config.OWN_COORDS,
     "aarco": config.OWN_COORDS,
@@ -178,6 +183,102 @@ Found = tuple[float, float, str]
 Lookup = tuple[Found | None, bool]
 
 
+class Place(tuple[float, float, str]):
+    """A place an online lookup found: (lat, lon, label), like Found, and `doubt`: why it
+    may not be the place meant, in the page's words ("We found a road called Springfield
+    Road in Salt Lake City. Is that what you meant?"), or "" when it is a town, a ZIP
+    code or a street address. The page asks before a search runs around a doubtful
+    place (web/place.py)."""
+
+    doubt: str
+
+    def __new__(cls, lat: float, lon: float, label: str, doubt: str = "") -> Self:
+        place = super().__new__(cls, (lat, lon, label))
+        place.doubt = doubt
+        return place
+
+
+# Some letter (in any alphabet): text without one (a date, a phone number, a bare number
+# that isn't a ZIP code) is not a place, so it is never looked up.
+_LETTER = re.compile(r"[^\W\d_]")
+# A street address typed: it starts with a house number ("4800 S State St").
+_HOUSE_NUMBER = re.compile(r"^\s*\d+[a-z]?\s+\S", re.I)
+
+# The free lookup's (OpenStreetMap's) matches that are a town, a ZIP code or a street
+# address, by class and type; any other (a road, a trail, a park, a business) may not
+# be the place meant.
+_OSM_TOWNS = {"city", "town", "village", "hamlet", "suburb", "neighbourhood", "quarter", "borough",
+              "municipality", "city_block", "county", "state", "postcode", "house"}
+_OSM_BOUNDARIES = {"administrative", "postal_code", "census"}
+_OSM_TRAILS = {"path", "footway", "track", "bridleway", "cycleway", "steps", "pedestrian"}
+# How the page names the other matches: by class and type, else by class.
+_OSM_KINDS = {("leisure", "park"): "a park", ("boundary", "national_park"): "a park",
+              ("boundary", "protected_area"): "a protected area", ("natural", "peak"): "a mountain peak",
+              ("natural", "water"): "a lake or pond", ("aeroway", "aerodrome"): "an airport",
+              ("place", "locality"): "a named spot", ("place", "farm"): "a farm",
+              ("place", "isolated_dwelling"): "a lone house", ("place", "square"): "a square",
+              ("place", "island"): "an island"}
+_OSM_CLASSES = {"railway": "a railway", "waterway": "a river or canal", "natural": "a natural feature",
+                "leisure": "a park or sports ground", "landuse": "an area of land", "aeroway": "an airport",
+                "building": "a building", "amenity": "a business or building", "shop": "a business",
+                "office": "a business", "craft": "a business", "tourism": "a tourist spot",
+                "historic": "a historic site", "man_made": "a structure"}
+# Google's: the result types that are a town, a ZIP code or a street address (and the
+# ones starting with these), and how the page names a few others.
+_GOOGLE_TOWNS = {"locality", "neighborhood", "postal_town", "colloquial_area", "street_address", "premise",
+                 "subpremise"}
+_GOOGLE_TOWN_PREFIXES = ("administrative_area_level", "sublocality", "postal_code")
+_GOOGLE_KINDS = (("route", "a road"), ("intersection", "a street corner"), ("park", "a park"),
+                 ("airport", "an airport"), ("natural_feature", "a natural feature"),
+                 ("establishment", "a business or building"), ("point_of_interest", "a business or building"))
+
+
+def _feature_doubt(kind: str, name: str, town: str, state: str, location: str) -> str:
+    """The page's question about a match that is only `kind` ("a road") named `name`."""
+    if town and state and state != "Utah":
+        town = f"{town}, {state}"
+    called = f" called {name}" if name else ""
+    near = f" in {town}" if town and town != name else ""
+    street = ", but not the street number typed" if kind == "a road" and _HOUSE_NUMBER.match(location) else ""
+    return f"We found {kind}{called}{near}{street}. Is that what you meant?"
+
+
+def _osm_doubt(match: dict[str, Any], location: str) -> str:
+    """Why the free lookup's match may not be the place meant (Place.doubt), from its own
+    class and type; "" for a town, a ZIP code or a street address, or when it doesn't say."""
+    cls, kind = str(match.get("class") or ""), str(match.get("type") or "")
+    raw = match.get("address")
+    address: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    if (not cls or kind == "postcode" or (cls == "place" and (not kind or kind in _OSM_TOWNS))
+            or (cls == "boundary" and (not kind or kind in _OSM_BOUNDARIES))):
+        return ""
+    if address.get("house_number") and _HOUSE_NUMBER.match(location):
+        return ""                 # the street address typed (a building or a business at it)
+    if cls == "highway":
+        what = "a trail" if kind in _OSM_TRAILS else "a road"
+    else:
+        what = _OSM_KINDS.get((cls, kind)) or _OSM_CLASSES.get(cls, "a map feature")
+    name = str(match.get("name") or "") or str(match.get("display_name") or "").split(",")[0].strip()
+    town = next((str(address[k]) for k in ("city", "town", "village", "hamlet", "suburb", "county")
+                 if address.get(k)), "")
+    return _feature_doubt(what, name, town, str(address.get("state") or ""), location)
+
+
+def _google_doubt(result: dict[str, Any], location: str) -> str:
+    """The same for Google's match, from its result types."""
+    types = {str(t) for t in result.get("types") or []}
+    if not types or types & _GOOGLE_TOWNS or any(t.startswith(_GOOGLE_TOWN_PREFIXES) for t in types):
+        return ""
+    what = next((words for t, words in _GOOGLE_KINDS if t in types), "a map feature")
+    parts = [p for p in result.get("address_components") or [] if isinstance(p, dict)]
+
+    def part(kind: str) -> str:
+        return next((str(p.get("long_name") or "") for p in parts if kind in (p.get("types") or [])), "")
+    name = str(parts[0].get("long_name") or "") if parts else ""
+    town = part("locality") or part("administrative_area_level_2")
+    return _feature_doubt(what, name, town, part("administrative_area_level_1"), location)
+
+
 def _coordinates(location: str) -> Found | None:
     """The place typed as "lat,lon", checked to be on the globe; None for anything else."""
     m = _LATLON.match(location)
@@ -200,7 +301,7 @@ def _zip_lookup(code: str, errors: list[str]) -> Lookup:
     try:
         place = data["places"][0]
         label = f"{place['place name']}, {place['state abbreviation']} {code}"
-        return (float(place["latitude"]), float(place["longitude"]), label), True
+        return Place(float(place["latitude"]), float(place["longitude"]), label), True
     except (KeyError, IndexError, ValueError) as exc:
         errors.append(str(exc))
         return None, True
@@ -224,7 +325,8 @@ def _google_lookup(location: str, api_key: str, elsewhere: bool, errors: list[st
         if status == "OK" and data.get("results"):
             r = data["results"][0]
             loc = r["geometry"]["location"]
-            return (loc["lat"], loc["lng"], r.get("formatted_address", location)), answered
+            return Place(loc["lat"], loc["lng"], r.get("formatted_address", location),
+                         _google_doubt(r, location)), answered
         if not answered:
             errors.append(f"Google geocoding: {status} {data.get('error_message', '')}".strip())
         return None, answered
@@ -249,17 +351,25 @@ def _free_lookup(location: str, elsewhere: bool, errors: list[str]) -> Lookup:
     return None, answered
 
 
+def _not_found(location: str) -> GeocodeError:
+    return GeocodeError(f"Could not find the place '{shown(location)}'. Check the spelling, or try "
+                        "a ZIP code, city or street address.")
+
+
 def geocode(location: str, api_key: str | None = None) -> Found:
     """Return (lat, lon, label) for a ZIP code, city, address, or "lat,lon".
 
     A place that doesn't name another state is looked for in Utah first, so a bare
     "Murray" is Murray, Utah (the Salt Lake area's towns are known offline, see
     UTAH_PLACES); the label names the place found, for the page to show before the
-    search starts."""
+    search starts. A place found online is a Place: its `doubt` says when the match is
+    only a road, a trail, a park or a business, not a town, ZIP code or street address.
+    Text with no letter that isn't a ZIP code (a date, a bare number) is not looked up,
+    and neither is a ZIP code the ZIP lookup says doesn't exist: both are not found."""
     location = (location or "").strip() or config.DEFAULT_LOCATION
     found = _coordinates(location) or _KNOWN.get(_place_key(location))
     if found:
-        return found
+        return Place(*found)           # typed as coordinates, or known offline: no doubt
     errors: list[str] = []
     answered = False          # a lookup answered (even "no such place"), so it isn't an outage
     zm = _ZIP.match(location)
@@ -267,6 +377,10 @@ def geocode(location: str, api_key: str | None = None) -> Found:
         found, answered = _zip_lookup(zm.group(1), errors)
         if found:
             return found
+        if answered:
+            raise _not_found(location)           # five digits, but no such ZIP code
+    elif not _LETTER.search(location):
+        raise _not_found(location)               # "1900-01-01", "12345678": not a place
     elsewhere = names_another_state(location)
     if api_key is None:        # "" means the caller resolved that there is no Google key
         api_key = os.environ.get("GOOGLE_PLACES_API_KEY", "")
@@ -285,20 +399,23 @@ def geocode(location: str, api_key: str | None = None) -> Found:
         raise LookupDown(f"Couldn't look up '{shown(location)}' right now: the place-lookup "
                          "services aren't answering. Nothing was spent, and today's search is "
                          "still available. Try again in a minute.")
-    raise GeocodeError(f"Could not find the place '{shown(location)}'. Check the spelling, or try "
-                       "a ZIP code, city or street address.")
+    raise _not_found(location)
 
 
-def _nominatim(location: str, in_utah: bool) -> tuple[float, float, str] | None:
+def _nominatim(location: str, in_utah: bool) -> Place | None:
     """The free OpenStreetMap lookup: the best match in the US, or (in_utah) only in
-    Utah, preferring a town or city over a street or business of the same name."""
+    Utah, preferring a town, ZIP code or street address over a street or business of the
+    same name, then any town-like match (class place or boundary). With its address
+    parts (addressdetails), so a doubtful match can name the town it is in."""
     params: dict[str, str | int] = {"q": location, "format": "json", "countrycodes": "us",
-                                    "limit": 5 if in_utah else 1}
+                                    "addressdetails": 1, "limit": 5 if in_utah else 1}
     if in_utah:
         params.update(viewbox=",".join(str(v) for v in UTAH_BOX), bounded=1)
     data = request_json("GET", "https://nominatim.openstreetmap.org/search", params=params,
                         retries=2, cacheable=lambda v: isinstance(v, list))
     if not data:
         return None
-    best = next((d for d in data if d.get("class") in ("place", "boundary")), data[0])
-    return float(best["lat"]), float(best["lon"]), best.get("display_name", location)
+    best = (next((d for d in data if not _osm_doubt(d, location)), None)
+            or next((d for d in data if d.get("class") in ("place", "boundary")), data[0]))
+    return Place(float(best["lat"]), float(best["lon"]), best.get("display_name", location),
+                 _osm_doubt(best, location))

@@ -690,7 +690,18 @@ the sidebar to the page's list (Leads, Calls) or heading.
   `config.SERVICE_AREA_MILES` (30) away needs a second confirmation (`#far-dlg`, its safe
   button focused); `POST /search` refuses such a place with 409 `confirm_far` unless
   `confirm_place` names that same place (within a mile), and it looks the place up before
-  the day is claimed, so an unknown or unconfirmed place spends nothing. The search then
+  the day is claimed, so an unknown or unconfirmed place spends nothing. **A doubtful
+  match is asked about too**: text with no letter that isn't a ZIP code (a date, a bare
+  number), or five digits the ZIP lookup doesn't know, is never looked up and gets "Could
+  not find the place"; a match that is only a road, a trail, a park or a business (the
+  geocoder's own fields: Nominatim's `class` / `type` with `addressdetails`, Google's
+  `types`) comes back as a `geo.Place` whose `doubt` says what was found ("We found a road
+  called Springfield Road in Salt Lake City. Is that what you meant?"). `/place` returns it
+  as `uncertain`, the confirmation shows it with **Go back and edit** focused and the
+  button reading "Yes, search there", and `POST /search` refuses it with 409
+  `confirm_uncertain` unless `confirm_place` names that place. A town, a ZIP code, a
+  street address (a match with the house number typed) or a place known offline is never
+  doubted. The search then
   runs around exactly that point (`SearchParams.center` / `place`, no second lookup), and
   the day's record keeps `place` and `miles`, which the history shows under what was
   typed. Pausing searching stops a running search within seconds: `osm.search` takes a

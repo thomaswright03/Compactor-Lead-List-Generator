@@ -261,7 +261,11 @@ interface Job {
 }
 
 /** GET /place: where the search would run, and how far that is from AARCO's shop. */
-interface Place { label: string; miles: number; area_miles: number; outside: boolean; confirm: string }
+interface Place {
+  label: string; miles: number; area_miles: number; outside: boolean; confirm: string;
+  /** Why the match may not be the place meant (only a road, a trail...), or "" (geo.Place.doubt). */
+  uncertain: string;
+}
 
 /** A tier's row on the Stats page (stats.py summarize). */
 interface TierRow { tier: string; saved: number; checked: number; yes: number; pct: number | null }
@@ -385,6 +389,8 @@ interface ApiError extends Error {
   /** A save (core.js save) that got no answer within TIMING.saveLimit. */
   timedOut?: boolean;
   body?: { error?: string; field?: string; job_id?: string; confirm_far?: boolean; place?: Place;
+          /** POST /search: a doubtful place that was not confirmed (web/finding.py search). */
+          confirm_uncertain?: boolean;
           /** POST /mark: a colleague answered since the page looked (nothing was saved). */
           changed?: { value: string; by: string; when: string; at: number } };
 }
