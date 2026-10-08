@@ -89,8 +89,10 @@ def test_aarco_its_area_and_the_nine_search_areas():
         assert len(area["towns"]) <= 3 and area["name"] not in area["towns"]
     # AARCO's own pin stands in the middle area; its name is written clear of it.
     assert haversine_miles(*AARCO, *areas[0]["label"]) > 3
-    # Before any search of the area, nothing is shaded and the page says why.
-    assert {a["status"] for a in areas} == {"unknown"}
+    # Before any search of the area, nothing is shaded and the page says why: every area reads
+    # "no search yet" (never "not known", which would look like something broke).
+    assert {a["status"] for a in areas} == {"never"}
+    assert {a["status_text"] for a in areas} == {"No search yet"}
     assert data["coverage"] == "No search of AARCO's area has been recorded yet, so the areas aren't shaded."
     assert data["pins"] == [] and data["no_position"] == 0
     assert data["counts"] == {"unchecked": 0, "yes": 0, "no": 0, "competitor": 0}
@@ -164,7 +166,9 @@ def test_without_the_search_history_the_map_still_shows_unshaded(monkeypatch):
         raise store.Unavailable("database down")
     monkeypatch.setattr(area_map, "latest_search", down)
     data = _data()
+    # Not "no search yet": a search may well have run.
     assert len(data["pins"]) == 1 and {a["status"] for a in data["areas"]} == {"unknown"}
+    assert {a["status_text"] for a in data["areas"]} == {"Not known"}
     assert data["coverage"] == "The search history couldn't be read just now, so the areas aren't shaded."
 
 

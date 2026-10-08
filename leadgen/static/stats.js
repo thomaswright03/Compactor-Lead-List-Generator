@@ -30,10 +30,10 @@ function statsEmpty(s) {
   return s.saved
     ? emptyNote("No businesses checked yet.",
                 "Mark businesses Yes or No on the Leads page to see these numbers.",
-                "#leads", "Go to Leads")
+                "#leads", "Go to Leads", "chart")
     : emptyNote("No saved leads yet.",
                 "Run a search on the Find leads page, then mark businesses Yes or No on the " +
-                "Leads page.", "#find", "Go to Find leads");
+                "Leads page.", "#find", "Go to Find leads", "chart");
 }
 async function loadStats() {
   /** @type {StatsAnswer} */

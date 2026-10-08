@@ -290,15 +290,28 @@ nav a.on .count { background:var(--side-on); color:var(--side-2); }
                      vertical-align:-3px; border-radius:50%; background:var(--gold-soft); color:var(--gold-text);
                      font:italic 700 var(--fs-xs)/1 Georgia, serif; }
 .hint-line button.link { font-size:var(--fs-sm); text-decoration:underline; }
-/* Empty states: a small ornament (a navy-to-brass ring) above the words. */
+/* Empty states: a still picture of what the page holds (a phone on Calls, a chart on Stats...,
+   emptyBox in core.js) on a brass tile above the words. Square, not round, and never moving, so
+   it can't be taken for the loading spinner. */
 .empty { padding:var(--sp-6); text-align:center; color:var(--muted); }
-.empty::before { content:""; display:block; width:44px; height:44px; margin:0 auto var(--sp-4); border-radius:50%;
-  background:conic-gradient(from 210deg, var(--accent-2), var(--gold), var(--accent-2));
-  -webkit-mask:radial-gradient(circle, transparent 15px, #000 16px); mask:radial-gradient(circle, transparent 15px, #000 16px); opacity:.85; }
+.empty-icon { display:grid; place-items:center; width:52px; height:52px; margin:0 auto var(--sp-4); border-radius:var(--r-md);
+              background:var(--gold-soft); color:var(--gold-text);
+              box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--gold-text) 22%, transparent); }
+.empty-icon svg { display:block; }
 .empty strong { display:block; color:var(--ink); font-family:var(--serif); font-optical-sizing:auto; font-size:var(--fs-title-lg);
                 font-weight:560; }
 .empty p { margin:var(--sp-2) 0 var(--sp-4); }
 #stats-empty .empty { padding:var(--sp-3); }
+/* The Map's note before any business is saved: one slim row (picture, words, button) above the
+   map, so the map itself stays in view. */
+.map-empty { padding:var(--sp-3) var(--sp-4); }
+.map-empty .empty { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:var(--sp-1) var(--sp-4); align-items:center;
+                    padding:0; text-align:left; }
+.map-empty .empty-icon { grid-row:1 / span 2; width:44px; height:44px; margin:0; }
+.map-empty .empty strong { grid-column:2; align-self:end; font-size:var(--fs-md); }
+.map-empty .empty p { grid-column:2; align-self:start; margin:0; }
+.map-empty .empty .btn { grid-column:3; grid-row:1 / span 2; }
+@media (max-width: 600px) { .map-empty .empty .btn { grid-column:1 / -1; grid-row:auto; justify-self:start; margin-top:var(--sp-2); } }
 
 /* ==== Find leads =================================================================== */
 /* The hero: the search form, framed in a navy-to-brass border with a glow in its corners. */
@@ -888,14 +901,20 @@ dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturat
 .tour-actions { display:flex; justify-content:space-between; align-items:center; gap:var(--sp-3); flex-wrap:wrap; }
 .tour-nav { display:flex; gap:var(--sp-2); }
 .tour-actions button { min-height:44px; }
-/* The first visit's offer of the tour: a note in the bottom corner (along the bottom on a phone). */
-.tour-offer { position:fixed; z-index:45; right:var(--sp-5); bottom:var(--sp-5); width:min(360px, calc(100vw - 2 * var(--sp-4)));
-              background:var(--card); color:var(--ink); border:1px solid var(--line); border-left:3px solid var(--gold);
-              border-radius:var(--r-lg); padding:var(--sp-4); box-shadow:var(--shadow-sm), var(--highlight); }
-.tour-offer p { margin:0 0 var(--sp-3); line-height:1.5; }
-.tour-offer-actions { display:flex; justify-content:flex-end; gap:var(--sp-2); flex-wrap:wrap; }
+/* The first visit's offer of the tour: a banner at the top of the page's content, in the page's
+   flow, so it moves the page down and never covers a lead, a call or the map. Words beside the
+   buttons where there is room, above them on a phone. */
+.tour-offer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--sp-3) var(--sp-5);
+              margin:0 0 var(--sp-5); background:var(--card); color:var(--ink); border:1px solid var(--line);
+              border-left:3px solid var(--gold); border-radius:var(--r-lg); padding:var(--sp-3) var(--sp-4);
+              box-shadow:var(--shadow-sm), var(--highlight); }
+.tour-offer p { flex:1 1 22em; margin:0; line-height:1.5; }
+.tour-offer-actions { display:flex; justify-content:flex-end; gap:var(--sp-2); flex-wrap:wrap; margin-left:auto; }
 .tour-offer-actions button { min-height:44px; }
-@media (max-width: 600px) { .tour-offer { left:var(--sp-4); right:var(--sp-4); bottom:var(--sp-4); width:auto; } }
+@media (max-width: 600px) {
+  .tour-offer-actions { display:grid; grid-template-columns:auto minmax(0,1fr); width:100%; margin-left:0; }
+  .tour-offer-actions button { padding-inline:var(--sp-3); }
+}
 
 /* ==== The Map page ================================================================= */
 /* The map with its toggles and key beside it (below it on narrower screens), then the search
@@ -983,7 +1002,7 @@ dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturat
 .area-name.crowded { visibility:hidden; }
 .area-name span { display:block; }
 .area-name small { display:block; font-size:var(--fs-xs); font-weight:700; color:var(--area-miss); }
-.area-name.unknown small { color:var(--muted); }
+.area-name:is(.unknown, .never) small { color:var(--muted); }
 /* A competitor: a hollow square. AARCO: a pin of its own with its name beside it. */
 #map .pin-comp { box-sizing:border-box; border:3px solid var(--pin-comp); border-radius:2px; background:var(--pin-ring);
                  box-shadow:0 0 0 1.5px var(--pin-ring); }

@@ -219,8 +219,9 @@ function placeTour() {
   box.style.top = `${Math.min(Math.max(edge, y), vh - h - edge)}px`;
 }
 
-/* The first visit: a small note in a corner offers the tour. Taken or turned down, it isn't
-   offered again in this browser; the Tutorial button still opens the tour at any time. */
+/* The first visit: a banner at the top of the page's content offers the tour (in the page's
+   flow, so it moves the page down and never covers a lead or the map). Taken or turned down, it
+   isn't offered again in this browser; the Tutorial button still opens the tour at any time. */
 const TOUR_OFFERED = "tour-offered";
 /** Whether this browser was offered the tour; with now = true, remember that it was.
     @param {boolean} [now] @returns {boolean} */
@@ -242,7 +243,7 @@ function offerTour() {
                     '<div class="tour-offer-actions">' +
                     '<button type="button" class="quiet" id="tour-offer-no">No thanks</button>' +
                     '<button type="button" id="tour-offer-yes">Take the tour</button></div>';
-  document.body.append(offer);
+  $("starting").after(offer);                  // above whichever page shows, under the loading cue
   $("tour-offer-yes").addEventListener("click", startTour);
   $("tour-offer-no").addEventListener("click", () => {
     tourOffered(true);

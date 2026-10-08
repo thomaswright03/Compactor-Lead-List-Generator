@@ -44,11 +44,14 @@ SAME_CENTRE_MILES = 0.1
 # (the edge of a neighbouring part) as searched.
 WHOLE, SLIVER = 0.99, 0.01
 
-# How an area stands after the latest search of AARCO's area, and the page's words.
-SEARCHED, PARTLY, MISSED, ASKING, UNKNOWN = "searched", "partly", "missed", "asking", "unknown"
+# How an area stands after the latest search of AARCO's area, and the page's words. NEVER:
+# no search of the area has been recorded at all; UNKNOWN: a search ran, but how far it
+# reached wasn't recorded (or the search history couldn't be read).
+SEARCHED, PARTLY, MISSED, ASKING, NEVER, UNKNOWN = "searched", "partly", "missed", "asking", "never", "unknown"
 STATUS_TEXT = {SEARCHED: "Searched", PARTLY: "Partly searched: some of it didn't come in",
                MISSED: "Not searched: the free map data didn't come in for it",
                ASKING: "Not searched yet: still filling in, in the background",
+               NEVER: "No search yet",
                UNKNOWN: "Not known"}
 # PARTLY while the missing parts are still being asked.
 PARTLY_FILLING = "Partly searched: the rest is still filling in, in the background"
@@ -375,7 +378,7 @@ def _named_missing(record: dict[str, Any]) -> tuple[set[str], bool] | None:
 
 @dataclass
 class Coverage:
-    statuses: list[str]          # each area's (SEARCHED, PARTLY, MISSED, ASKING or UNKNOWN)
+    statuses: list[str]          # each area's (SEARCHED, PARTLY, MISSED, ASKING, NEVER or UNKNOWN)
     note: str                    # which search it is, and what it covered, for the page
     filling: bool = False        # its missing areas are still being asked in the background
 
@@ -384,7 +387,8 @@ def coverage(record: dict[str, Any] | None, drawn: Sequence[Area]) -> Coverage:
     """How the search on record (latest_search) covered each of the areas drawn."""
     unknown = [UNKNOWN] * len(drawn)
     if record is None:
-        return Coverage(unknown, "No search of AARCO's area has been recorded yet, so the areas aren't shaded.")
+        return Coverage([NEVER] * len(drawn),
+                        "No search of AARCO's area has been recorded yet, so the areas aren't shaded.")
     about = f"Shaded by the latest search of AARCO's area ({record.get('when') or record.get('day')})"
     fill = _dict(record.get("fill"))
     filling = fill.get("state") == "filling"
@@ -474,7 +478,8 @@ def page(leads: list[Lead], record: dict[str, Any] | None, unread: bool = False)
     drawn = areas()
     covered = coverage(record, drawn)
     if unread:
-        covered.note = "The search history couldn't be read just now, so the areas aren't shaded."
+        covered = Coverage([UNKNOWN] * len(drawn),
+                           "The search history couldn't be read just now, so the areas aren't shaded.")
     shown = [l for l in leads if _has_position(l)]
     counts = dict.fromkeys(GROUPS, 0)
     for lead in shown:

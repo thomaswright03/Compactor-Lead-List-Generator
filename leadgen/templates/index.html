@@ -88,9 +88,10 @@
                 <option value="both">Google and free map data (paid)</option>{% endif %}
               </select>
               <span class="hint">{% if google_on or yelp_on %}Google and Yelp add phone numbers; Google lookups are paid.{% else %}Google and Yelp aren't set up, so the free map data is used.{% endif %}</span></label>
-            <label>Leave out weak leads below score
+            <label>Leave out weak leads: scores below (out of 100)
               <input name="min_score" type="number" min="0" max="100" value="{{ defaults.min_score }}">
-              <span class="hint">0 to 100. Lower keeps more, weaker businesses.</span></label>
+              <span class="hint">The usual {{ defaults.min_score }} leaves out only tier D, the weakest
+                businesses. Lower keeps more of them; 0 keeps every one.</span></label>
             {% if google_on or yelp_on %}<label>Coverage for Google and Yelp
               <select name="grid">
                 <option value="1">Standard: one search around the center</option>
@@ -263,6 +264,7 @@
       <div id="map-body">
         <div class="map-layout">
           <div class="map-main">
+            <div class="card map-empty" id="map-empty" hidden></div>
             <div class="map-box" id="map-box" role="region" aria-label="Map of AARCO's area and the saved businesses"
                  aria-describedby="map-coverage">
               <div id="map" data-js="/static/vendor/leaflet/leaflet.js?v={{ asset_version }}"
@@ -300,7 +302,7 @@
               <label class="check"><input type="checkbox" id="map-show-areas" checked> <span>Search areas, shaded by the latest search:</span></label>
               <div class="key sub-key"><span class="sym area searched" aria-hidden="true"></span><span>Searched</span></div>
               <div class="key sub-key"><span class="sym area partly" aria-hidden="true"></span><span>Partly searched, or not searched (dashed edge)</span></div>
-              <div class="key sub-key"><span class="sym area unknown" aria-hidden="true"></span><span>Not known (dotted edge)</span></div>
+              <div class="key sub-key"><span class="sym area unknown" aria-hidden="true"></span><span>No search yet, or not known (dotted edge)</span></div>
             </fieldset>
           </div>
         </div>

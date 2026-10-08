@@ -1272,6 +1272,120 @@ def test_a_first_visit_is_offered_the_tutorial_once(browser, site, page):
     context.close()
 
 
+# ---- round 25: empty pages that can't be taken for loading, a tour offer that covers nothing,
+# the minimum score in plain words, and areas never searched read "no search yet"
+
+# Each empty page's picture: whether anything round or moving is in its box (the loading spinner
+# is a turning ring), and what it is drawn with.
+EMPTY_PICTURE = """(sel) => {
+  const box = document.querySelector(sel);
+  const pic = box.querySelector('.empty-icon'), svg = pic && pic.querySelector('svg');
+  const round = [box, ...box.querySelectorAll('*')].filter((n) => {
+    const s = getComputedStyle(n), r = n.getBoundingClientRect();
+    return r.width >= 20 && Math.abs(r.width - r.height) < 4 &&
+           parseFloat(s.borderTopLeftRadius) >= r.width / 2 - 1;
+  }).map((n) => n.className.baseVal ?? n.className);
+  return { kind: pic && pic.classList[1], shown: !!pic && pic.getBoundingClientRect().height > 0,
+           stroke: svg && svg.getAttribute('stroke'), colour: svg && getComputedStyle(svg).color,
+           tile: pic && getComputedStyle(pic).backgroundColor, round,
+           moving: [box, ...box.querySelectorAll('*')].some((n) => n.getAnimations().length),
+           ring: getComputedStyle(box, '::before').content };
+}"""
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_empty_pages_show_a_still_picture_of_the_page_not_a_spinner(browser, site, theme):
+    """Calls, Stats, Leads and the Map with nothing saved: each shows its own still picture (a phone,
+    a chart, a list, a pin; drawn in the text's colour, so it suits the theme), never a ring that
+    could be taken for the loading spinner."""
+    context = _context(browser, viewport={"width": 1280, "height": 900}, color_scheme=theme)
+    tab = context.new_page()
+    seen = {}
+    for page_name, sel, kind in [("calls", "#calls-wrap .empty", "phone"), ("stats", "#stats-empty .empty", "chart"),
+                                 ("leads", "#leads-wrap .empty", "list"), ("map", "#map-empty .empty", "pin")]:
+        tab.goto(site + "#" + page_name)
+        tab.wait_for_selector(sel + " .empty-icon svg")
+        seen[page_name] = tab.evaluate(EMPTY_PICTURE, sel)
+        assert seen[page_name]["kind"] == kind and seen[page_name]["shown"], seen
+    expect(tab.locator("#map-empty")).to_contain_text("No saved businesses yet.")
+    context.close()
+    for got in seen.values():
+        assert got["stroke"] == "currentColor" and got["colour"] != got["tile"], seen
+        assert got["round"] == [] and not got["moving"] and got["ring"] == "none", seen
+
+
+# Whether the tour offer covers anything: its box against each lead row (or card), the map, the
+# map's key and every search area's line; and how it is placed.
+OFFER_OVER = """(sels) => {
+  const offer = document.querySelector('.tour-offer'), o = offer.getBoundingClientRect();
+  const over = [...document.querySelectorAll(sels)].filter((n) => n.getClientRects().length).filter((n) => {
+    const r = n.getBoundingClientRect();
+    return r.left < o.right && o.left < r.right && r.top < o.bottom && o.top < r.bottom;
+  }).map((n) => n.id || n.className || n.tagName);
+  return { over, position: getComputedStyle(offer).position, bottom: o.bottom, left: o.left, right: o.right,
+           wide: document.documentElement.scrollWidth > innerWidth };
+}"""
+
+
+@pytest.mark.parametrize("width,height,theme", [(320, 640, "light"), (390, 844, "dark"), (768, 1024, "light"),
+                                                (1440, 900, "dark"), (2560, 1440, "light")])
+def test_the_tour_offer_moves_the_page_down_and_never_covers_a_lead_or_the_map(browser, site, page, width,
+                                                                               height, theme):
+    """The first visit's offer of the tour is a banner in the page's flow at the top of the content:
+    every lead row and card, the map, its key and every search area stay fully visible beside it."""
+    context = _context(browser, first_visit=True, viewport={"width": width, "height": height}, color_scheme=theme)
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("#leads-wrap .c-mark")
+    offer = tab.locator(".tour-offer")
+    expect(offer).to_be_visible()
+    rows = tab.evaluate(OFFER_OVER, "#leads-wrap tbody tr, #page-leads .toolbar, #lead-tabs, #page-leads h1")
+    assert rows["over"] == [] and rows["position"] == "static" and not rows["wide"], rows
+    assert rows["left"] >= 0 and rows["right"] <= width, rows
+    # Every row's middle is the row itself, not the offer.
+    hidden = tab.evaluate("""() => [...document.querySelectorAll('#leads-wrap tbody tr')].filter((tr) => {
+        const r = tr.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + Math.min(r.height / 2, 20);
+        return y < innerHeight && !tr.contains(document.elementFromPoint(x, y)); }).length""")
+    assert hidden == 0
+    tab.click("nav a[data-page=map]")
+    tab.wait_for_selector("#map-areas li")
+    expect(offer).to_be_visible()                       # the same banner, still above the page
+    tab.evaluate("scrollTo(0, 0)")
+    on_map = tab.evaluate(OFFER_OVER, "#map-box, #map-groups, .map-legend, #map-areas li, #map-coverage, "
+                                      "#page-map h1")
+    assert on_map["over"] == [] and on_map["position"] == "static" and not on_map["wide"], on_map
+    context.close()
+
+
+def test_the_minimum_score_is_written_out_in_plain_words(page):
+    """More options says what the minimum score means: out of 100, and that the usual one leaves
+    out only tier D, the weakest businesses."""
+    from leadgen.scoring import TIERS
+    tier_c_floor = dict((t, low) for low, t in TIERS)["C"]
+    assert tier_c_floor == config.DEFAULT_MIN_SCORE              # so the words below stay true
+    page.click("nav a[data-page=find]")
+    page.locator("details.advanced summary").click()
+    field = page.get_by_label("Leave out weak leads: scores below (out of 100)")
+    expect(field).to_have_value(str(config.DEFAULT_MIN_SCORE))
+    label = page.locator("label", has=page.locator("input[name=min_score]"))
+    expect(label).to_contain_text(f"The usual {config.DEFAULT_MIN_SCORE} leaves out only tier D, the weakest "
+                                  "businesses. Lower keeps more of them; 0 keeps every one.")
+
+
+def test_before_any_search_the_areas_read_no_search_yet_never_not_known(page):
+    """With no search of AARCO's area on record, each area's name on the map and its line in the
+    list say "no search yet"; nothing says "not known"."""
+    page.click("nav a[data-page=map]")
+    page.wait_for_selector("#map-areas li")
+    expect(page.locator("#map .area-name.never small").first).to_have_text("no search yet")
+    assert set(page.locator("#map .area-name small").all_text_contents()) == {"no search yet"}
+    expect(page.locator("#map-areas li").first).to_contain_text("No search yet")
+    expect(page.locator("#map-coverage")).to_have_text(
+        "No search of AARCO's area has been recorded yet, so the areas aren't shaded.")
+    assert "not known" not in page.locator("#map-areas").inner_text().lower()
+    expect(page.locator("#map-empty")).to_be_hidden()      # businesses are saved: no empty note
+
+
 def test_miles_have_one_decimal_and_a_category_is_not_repeated(page):
     miles = page.locator("table.leads td.c-miles").all_inner_texts()
     assert miles and all(re.fullmatch(r"\d+\.\d( mi)?", m.strip()) for m in miles), miles

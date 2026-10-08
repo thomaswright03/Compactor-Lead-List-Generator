@@ -293,7 +293,8 @@ interface MapArea {
   /** The area cut to the circle, as [lat, lon] points, and where its name goes. */
   outline: [number, number][];
   label: [number, number];
-  /** "searched", "partly", "missed", "asking" or "unknown", and the same in words. */
+  /** "searched", "partly", "missed", "asking", "never" (no search yet) or "unknown", and the
+   *  same in words. */
   status: string;
   status_text: string;
 }

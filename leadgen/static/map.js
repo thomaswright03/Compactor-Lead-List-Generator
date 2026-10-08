@@ -110,7 +110,8 @@ function pinStyle(group) {
   return { radius: 6, color: themeColour("--pin-ring"), weight: 1.5, opacity: 1,
            fillColor: themeColour(`--pin-${group}`), fillOpacity: 1 };
 }
-// The search areas: a solid edge when searched, dashed when (partly) missed, dotted when not known.
+// The search areas: a solid edge when searched, dashed when (partly) missed, dotted when not
+// searched at all yet ("no search yet") or not known.
 /** @param {string} status @returns {L.PathOptions} */
 function areaStyle(status) {
   const done = themeColour("--area-done"), miss = themeColour("--area-miss");
@@ -177,8 +178,9 @@ async function loadMap() {
 // An area's status under its name, in words ("not searched"); nothing when searched in full.
 /** @param {string} status */
 function areaStatusWord(status) {
-  return status === "unknown" ? "not known" : status === "partly" ? "partly searched"
-    : status === "asking" ? "filling in" : "not searched";
+  return status === "never" ? "no search yet" : status === "unknown" ? "not known"
+    : status === "partly" ? "partly searched" : status === "asking" ? "filling in"
+      : "not searched";
 }
 // The search areas under everything else, then the circle around AARCO.
 /** @param {L.Map} map @param {MapData} data */
@@ -243,6 +245,12 @@ function drawMap(data) {
   aarcoPin(map, data);
 
   $("map-coverage").textContent = data.coverage;
+  // No saved business at all: say how the map fills up (AARCO and its areas are still drawn).
+  const none = !data.pins.length && !data.no_position;
+  $("map-empty").hidden = !none;
+  $("map-empty").replaceChildren(...(none ? [emptyNote("No saved businesses yet.",
+    "Run today's search on the Find leads page: each business it finds gets a dot on this map.",
+    "#find", "Go to Find leads", "pin")] : []));
   $("map-no-position").hidden = !data.no_position;
   $("map-no-position").textContent = data.no_position === 1
     ? "1 saved business has no map position, so it isn't on the map (it is on the Leads page)."
@@ -593,7 +601,8 @@ function areaList(areas) {
   $("map-areas").replaceChildren(...areas.map((area) => {
     const li = el("li");
     const partly = area.status === "asking" || area.status === "missed";
-    li.append(el("span", undefined, `sym area ${partly ? "partly" : area.status}`));
+    const sym = partly ? "partly" : area.status === "never" ? "unknown" : area.status;
+    li.append(el("span", undefined, `sym area ${sym}`));
     const text = el("div");
     text.append(el("strong", `${area.n}. ${area.name}`), DOT, el("span", area.status_text));
     if (area.towns.length) text.append(el("div", `Also ${area.towns.join(", ")}`, "sub"));

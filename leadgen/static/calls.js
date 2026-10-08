@@ -3,13 +3,11 @@
 /* exported emptyNote, loadCalled, renderCalls, openCall, openHistory, callButton, historyButton,
    verifiedBox */
 // An empty page that says how it fills up, with a link to where that happens.
-/** @param {string} title @param {string} text @param {string} href @param {string} label */
-function emptyNote(title, text, href, label) {
-  const box = el("div", undefined, "empty");
-  box.append(el("strong", title), el("p", text));
+/** @param {string} title @param {string} text @param {string} href @param {string} label
+    @param {Parameters<typeof emptyBox>[0]} icon */
+function emptyNote(title, text, href, label, icon) {
   const a = el("a", label, "btn quiet"); a.href = href;
-  box.append(a);
-  return box;
+  return emptyBox(icon, el("strong", title), el("p", text), a);
 }
 // The called businesses the Calls page shows: the server keeps those the words typed match (in
 // the business's details, or in what its calls said, how they went and who made them) and, on an
@@ -72,11 +70,11 @@ function callsEmpty(rows, anyCalls) {
   if (!anyCalls) {
     return emptyNote("No calls logged yet.",
       "Log a call with Just called on any business on the Leads page.",
-      "#leads", "Go to Leads");
+      "#leads", "Go to Leads", "phone");
   }
   if (rows.length) return null;
-  if (!S.callQ) return el("div", `No calls with the result “${S.callView}” yet.`, "empty");
-  const box = el("div", undefined, "empty");
+  if (!S.callQ) return emptyBox("phone", `No calls with the result “${S.callView}” yet.`);
+  const box = emptyBox("filter");
   const where = S.callView ? ` under ${S.callView}` : "";
   box.append(el("strong", `No calls match “${S.callQ}”${where}.`),
              el("p", "The filter looks in each business's name, town and category, in what was " +

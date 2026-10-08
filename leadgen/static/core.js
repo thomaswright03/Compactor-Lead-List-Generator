@@ -3,9 +3,9 @@
    the #address; these scripts load in order and share their top-level names. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, TIMING, S, el,
-   link, phoneLink, button, DOT, api, noAnswer, post, save, SLOW_SAVE, fmtTime, serverNow, leftOf,
-   problem, loadingCue, themeChoice, applyTheme, myName, withName, byWho, parseHash, readLeadView,
-   route, writeHash, loggedOut */
+   emptyBox, link, phoneLink, button, DOT, api, noAnswer, post, save, SLOW_SAVE, fmtTime, serverNow,
+   leftOf, problem, loadingCue, themeChoice, applyTheme, myName, withName, byWho, parseHash,
+   readLeadView, route, writeHash, loggedOut */
 // An element of the page by its id: an input, a dialog, a button... (typed `any`, as the page's
 // ids name every kind; the type check still catches a misspelt function or variable).
 /** @type {(id: string) => any} */
@@ -64,6 +64,34 @@ function el(tag, text, cls) {
   if (text !== undefined && text !== null) e.textContent = String(text);
   if (cls) e.className = cls;
   return e;
+}
+// The small pictures above an empty page's words, drawn in the text's colour (so they suit
+// both themes) and never moving, so an empty page can't be taken for one still loading: the
+// page's own picture from the sidebar (a phone on Calls, a chart on Stats, a list on Leads, a
+// pin on the Map), a funnel when filters hide everything, a tick when every business is checked.
+const EMPTY_ICONS = {
+  phone: '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 ' +
+         '3 5a2 2 0 0 1 2-2z"/>',
+  chart: '<path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/>',
+  list: '<path d="M9 6h11M9 12h11M9 18h11"/>' +
+        '<path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" stroke-width="2.6"/>',
+  pin: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/>' +
+       '<circle cx="12" cy="9.5" r="2.5"/>',
+  filter: '<path d="M4 5h16l-6.2 7.6v5.6l-3.6 1.8v-7.4z"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+};
+/** An empty page's box (class "empty"), its picture already in it; the caller adds the words.
+    @param {keyof typeof EMPTY_ICONS} icon @param {...(Node | string)} words
+    @returns {HTMLDivElement} */
+function emptyBox(icon, ...words) {
+  const pic = el("span", undefined, `empty-icon ${icon}`);
+  pic.setAttribute("aria-hidden", "true");
+  pic.innerHTML = '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" ' +
+    'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+    `${EMPTY_ICONS[icon]}</svg>`;
+  const box = el("div", undefined, "empty");
+  box.append(pic, ...words);
+  return box;
 }
 /** A link opening in a new tab (a plain span when href isn't a web address).
     @param {string} href @param {string} [text] @returns {HTMLElement} */

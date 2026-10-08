@@ -591,7 +591,7 @@ AARCO's own show no score or tier.
 - **What it shows.** AARCO's own pin at 876 Fortune Rd, the 30-mile circle around it,
   the nine areas a search asks the free map data in (named after their biggest town, as
   in the search's "N of 9 areas done") shaded by how the latest search of AARCO's area went
-  (searched, partly searched, not searched or still filling in, or not known), and a pin
+  (searched, partly searched, not searched or still filling in, no search yet, or not known), and a pin
   for every saved business with a map position: coloured by its Yes / No answer (blue
   not checked, green Yes, orange No, a set that stays apart for colour-blind eyes and in
   the dark theme, each named in the key and the pin's details, never colour alone),
@@ -985,7 +985,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
     of its progress), each cut to the circle and named by `osm.area_name` like
     elsewhere (its biggest town, else "The area to the northwest"), with up to three
     more towns for the list under the map. Each name (with its status: "partly
-    searched", "not searched", "not known") is drawn above the pins with a halo and is
+    searched", "not searched", "no search yet", "not known") is drawn above the pins with a halo and is
     placed again whenever the map moves or its circles change (`placeLabels`, after
     `placePins`): it stays on its spot when that is clear, else moves to the nearest
     clear spot (8 px steps, up to 160 px each way) whose middle is still inside its

@@ -2,10 +2,11 @@
 
 How to use the Lead Finder, one task at a time. Each part fits on one screen.
 
-New to the site? The first time you open it, a note in the corner offers a step-by-step tour
-of every page: press **Take the tour**, or **No thanks** to skip it (it isn't offered again).
-Open it any time with **Tutorial** in the sidebar (under **Menu** on a phone or tablet). It
-only looks around and never changes anything.
+New to the site? The first time you open it, a note at the top of the page offers a
+step-by-step tour of every page (it moves the page down rather than covering anything):
+press **Take the tour**, or **No thanks** to skip it (it isn't offered again). Open it any
+time with **Tutorial** in the sidebar (under **Menu** on a phone or tablet). It only looks
+around and never changes anything.
 
 ## A day's work
 
@@ -209,10 +210,11 @@ Open **Map** in the sidebar (in the bar at the top on a phone).
   of 9 areas done" while it runs), each named after its biggest town. Their edges show
   how the latest search of AARCO's area went: a thin solid edge where it was searched,
   a dashed, shaded edge where the free map data didn't come in for all or part of it (or it
-  is still filling in, in the background), and a dotted edge where that isn't
-  known. The line under the map says which search that was, and the list under it
-  names every area and how it stands. **Search areas, shaded by the latest search** in
-  the key hides them.
+  is still filling in, in the background), and a dotted edge where it reads **no search
+  yet** (no search of AARCO's area has been run) or **not known** (a search ran, but how
+  far it reached wasn't recorded). The line under the map says which search that was,
+  and the list under it names every area and how it stands. **Search areas, shaded by
+  the latest search** in the key hides them.
 - Each **pin** is a saved business: **green** has a baler or compactor (Yes),
   **orange** doesn't (No), **blue** isn't checked yet, and a **hollow square** is a
   competitor or AARCO's own listing. The key beside the map (below it on a phone) names
@@ -285,8 +287,9 @@ or skip it.
 Words you type under **Extra search words** add businesses to look for; they
 don't change scores, so a business scores the same whichever search found it.
 To keep only businesses that match your words, tick **Only businesses matching
-the search words** under More options. **Leave out weak leads below score**
-uses the same score you then see in the list.
+the search words** under More options. **Leave out weak leads: scores below**
+uses the same 0 to 100 score you then see in the list: the usual 20 leaves out only
+tier D, the weakest businesses; a lower number keeps more of them, and 0 keeps every one.
 
 ## The administrator's section
 

@@ -755,7 +755,7 @@ function noMatchBox() {
   const tab = (LEAD_TABS.find(([v]) => v === S.leadView) || ["", "All"])[1];
   const what = [S.q && `“${S.q}”`, S.tier && `tier ${S.tier} (${TIER_WORDS[S.tier]})`,
                 S.phone && "a phone number"].filter(Boolean).join(" and ");
-  const box = el("div", undefined, "empty");
+  const box = emptyBox("filter");
   // Spelling advice only for typed text; a tier or "Has phone" alone can only be widened.
   const widen = [S.tier && "pick All tiers or another tier", S.phone && "turn off Has phone"]
     .filter(Boolean);
@@ -790,10 +790,10 @@ function leadsEmpty(all) {
   if (!all) {
     return emptyNote("No saved leads yet.",
       "Run today's search on the Find leads page: the businesses it finds are saved here.",
-      "#find", "Go to Find leads");
+      "#find", "Go to Find leads", "list");
   }
   if (S.lead) {
-    const box = el("div", undefined, "empty");
+    const box = emptyBox("list");
     box.append(el("strong", "That business isn't in the saved list any more."),
                el("p", "It may have been joined to another row of the same business, or taken " +
                        "out of the list."),
@@ -801,7 +801,7 @@ function leadsEmpty(all) {
     return box;
   }
   if (S.q || S.tier || S.phone) return noMatchBox();
-  return el("div", emptyTabText(), "empty");
+  return emptyBox(S.leadView === "" ? "check" : "list", emptyTabText());
 }
 function renderLeads() {
   const problemBox = $("leads-problem");
