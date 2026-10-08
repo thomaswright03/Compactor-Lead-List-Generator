@@ -48,13 +48,14 @@ known-first-party = ["leadgen"]
 
 # Dead-code check (vulture). Run: python -m vulture   CI runs it on every push.
 # Flask calls the decorated routes and openpyxl reads the attributes set on cells;
-# store.TABLES is for the tests.
+# store.TABLES is for the tests; http.server calls the recorded stand-in's handler
+# methods (recorded.py).
 [tool.vulture]
 paths = ["leadgen"]
 min_confidence = 60
 ignore_decorators = ["@bp.*", "@app.*"]
 ignore_names = ["quotePrefix", "font", "alignment", "hyperlink", "freeze_panes", "ref",
-                "permanent", "TABLES"]
+                "permanent", "TABLES", "do_GET", "do_POST", "log_message"]
 
 # Type check (mypy). Run: python -m mypy   CI runs it on every push; a type error fails it.
 # Strict: every function in leadgen/ has parameter and return annotations, and mypy

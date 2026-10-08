@@ -346,52 +346,12 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
     stopped: list[tuple[str, str]] = []      # (source, why) for the sources skipped
     why: list[str] = []                      # why the search was cut short
     missing = missing if missing is not None else {}
-
-    def halted(source: str) -> bool:
-        """True when the administrator switched searching (or this source) off
-        since the search started; the source is then skipped."""
-        reason = config.stop_reason(source)
-        if reason:
-            stopped.append((source, reason))
-            why.append(reason)
-            return True
-        return False
-
-    if use_google and not halted("google"):
+    if use_google and not _halted("google", stopped, why):
         _ask_google(params, keywords, api_key, (lat, lon), progress, got)
-    if use_yelp and not halted("yelp"):
-        try:
-            found, n_requests, w = yelp.search(
-                lat, lon, params.radius_miles, yelp.queries_for(keywords), yelp_key, params.grid,
-                params.max_requests, progress)
-            got.add("yelp", found, w, n_requests)
-        except SourceError as exc:
-            got.fail("yelp", exc)
-    if use_osm and not halted("osm"):
-        try:
-            found, w = osm.search(lat, lon, params.radius_miles, keywords, progress, stats=stats,
-                                  stop=lambda: config.stop_reason("osm"))
-            got.add("osm", found, w)
-        except osm.Stopped as exc:
-            # Paused partway: what the areas that had answered found is kept.
-            got.add("osm", exc.leads, exc.warnings)
-            why.append(exc.reason)
-            if not got.raw:
-                raise SearchStopped("The search was stopped by the administrator (searching "
-                                    "was paused) before it found anything.", exc.reason) from None
-            got.warnings.append(f"The search was stopped by the administrator partway through "
-                                f"the free map data ({exc.reason}); the businesses already "
-                                "found were kept, and the rest of the area wasn't searched.")
-        except osm.PartialResult as exc:
-            # Some of the areas answered: keep what they found; the search is incomplete.
-            got.add("osm", exc.leads, exc.warnings)
-            if exc.coverage:
-                stats["osm areas searched"] = exc.coverage
-            if missing is not None:
-                missing.update(parts=exc.missing, areas=exc.areas)
-            got.fail("osm", exc, partly=True)
-        except SourceError as exc:
-            got.fail("osm", exc)
+    if use_yelp and not _halted("yelp", stopped, why):
+        _ask_yelp(params, keywords, yelp_key, (lat, lon), progress, got)
+    if use_osm and not _halted("osm", stopped, why):
+        _ask_osm(params, keywords, (lat, lon), progress, got, missing, why)
     # A paid source stopped partway by a switch (sources/paging.py says why).
     why += [m.group(1) for m in (re.match(r"Stopped early: (the administrator [^:;]+)", w)
                                  for w in got.warnings) if m]
@@ -402,6 +362,17 @@ def _query_sources(params: SearchParams, use: tuple[bool, bool, bool], keys: tup
     if paused:
         missing["stopped"] = paused[0]
     return got.raw, got.errors, got.failed, got.partly
+
+
+def _halted(source: str, stopped: list[tuple[str, str]], why: list[str]) -> bool:
+    """True when the administrator switched searching (or this source) off since the
+    search started; the source is then skipped, noted in stopped (source, why) and why."""
+    reason = config.stop_reason(source)
+    if reason:
+        stopped.append((source, reason))
+        why.append(reason)
+        return True
+    return False
 
 
 def _ask_google(params: SearchParams, keywords: list[str], api_key: str, centre: tuple[float, float],
@@ -420,6 +391,48 @@ def _ask_google(params: SearchParams, keywords: list[str], api_key: str, centre:
         got.add("google", found, w, n_requests)
     except SourceError as exc:
         got.fail("google", exc)
+
+
+def _ask_yelp(params: SearchParams, keywords: list[str], yelp_key: str, centre: tuple[float, float],
+              progress: Progress | None, got: _Found) -> None:
+    try:
+        found, n_requests, w = yelp.search(
+            centre[0], centre[1], params.radius_miles, yelp.queries_for(keywords), yelp_key, params.grid,
+            params.max_requests, progress)
+        got.add("yelp", found, w, n_requests)
+    except SourceError as exc:
+        got.fail("yelp", exc)
+
+
+def _ask_osm(params: SearchParams, keywords: list[str], centre: tuple[float, float],
+             progress: Progress | None, got: _Found, missing: dict[str, Any], why: list[str]) -> None:
+    """The free map data, asked in parts: a pause partway keeps what the parts that had
+    answered found (why gets the reason), and parts no server answered for are noted
+    in missing ("parts", "areas") for the background fill-in."""
+    lat, lon = centre
+    try:
+        found, w = osm.search(lat, lon, params.radius_miles, keywords, progress, stats=got.stats,
+                              stop=lambda: config.stop_reason("osm"))
+        got.add("osm", found, w)
+    except osm.Stopped as exc:
+        # Paused partway: what the areas that had answered found is kept.
+        got.add("osm", exc.leads, exc.warnings)
+        why.append(exc.reason)
+        if not got.raw:
+            raise SearchStopped("The search was stopped by the administrator (searching "
+                                "was paused) before it found anything.", exc.reason) from None
+        got.warnings.append(f"The search was stopped by the administrator partway through "
+                            f"the free map data ({exc.reason}); the businesses already "
+                            "found were kept, and the rest of the area wasn't searched.")
+    except osm.PartialResult as exc:
+        # Some of the areas answered: keep what they found; the search is incomplete.
+        got.add("osm", exc.leads, exc.warnings)
+        if exc.coverage:
+            got.stats["osm areas searched"] = exc.coverage
+        missing.update(parts=exc.missing, areas=exc.areas)
+        got.fail("osm", exc, partly=True)
+    except SourceError as exc:
+        got.fail("osm", exc)
 
 
 def _check_found(got: _Found, stopped: list[tuple[str, str]]) -> None:

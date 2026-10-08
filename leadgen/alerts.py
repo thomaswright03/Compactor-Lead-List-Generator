@@ -20,6 +20,7 @@ import time
 import urllib.request
 import uuid
 from typing import Any
+from urllib.parse import urlsplit
 
 from . import THREAD_PREFIX, config, store
 from .localtime import date_time_text
@@ -75,7 +76,7 @@ def _deliver(kind: str, text: str, at: float) -> None:
         url = os.environ.get(WEBHOOK_ENV, "").strip()
         if url:
             try:
-                _post(url, f"{SITE}: {text} ({date_time_text(at)}, Utah time)")
+                _send(url, f"{SITE}: {text} ({date_time_text(at)}, Utah time)")
             except Exception as exc:  # noqa: BLE001 - a report must never break anything
                 log.warning("Sending the problem to %s failed: %s", WEBHOOK_ENV,
                             exc.__class__.__name__)
@@ -83,8 +84,20 @@ def _deliver(kind: str, text: str, at: float) -> None:
         _reporting.on = False
 
 
+def _send(url: str, message: str) -> None:
+    """Post one message, noting for /healthz (health.py) whether it was delivered."""
+    from . import health
+    try:
+        _post(url, message)
+    except Exception as exc:
+        # The error's class and words only: never the address.
+        health.record("alerts", False, f"{exc.__class__.__name__}: {exc}")
+        raise
+    health.record("alerts", True)
+
+
 def _post(url: str, message: str) -> None:
-    if not url.startswith("https://"):
+    if not url.startswith("https://") and not _on_this_machine(url):
         raise ValueError("the webhook address must start with https://")
     # "text" is read by Slack, Teams and Google Chat; "content" by Discord.
     body = json.dumps({"text": message, "content": message}).encode()
@@ -92,6 +105,32 @@ def _post(url: str, message: str) -> None:
                                      headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(request, timeout=10) as res:     # https only (checked above)
         res.read()
+
+
+def _on_this_machine(url: str) -> bool:
+    """A plain http:// address on this machine (127.0.0.1, localhost): nothing leaves it,
+    so the tests and a local try can use a local stand-in for the chat service."""
+    parts = urlsplit(url)
+    return parts.scheme == "http" and parts.hostname in ("127.0.0.1", "localhost", "::1")
+
+
+def send_test(where: str = "") -> str:
+    """Post a test message to the webhook now (`python -m leadgen test-alert`, and the
+    administrator's "Send a test alert"); `where` says where it was sent from. Returns
+    the message sent. Raises Unset when no webhook is set up, else whatever the
+    delivery raised."""
+    url = os.environ.get(WEBHOOK_ENV, "").strip()
+    if not url:
+        raise Unset(f"No alert webhook is set up ({WEBHOOK_ENV} is not set).")
+    where = f" {where}" if where else ""
+    message = (f"{SITE}: Test alert sent{where} at {date_time_text(time.time())}, Utah time. "
+               "Problem reports from the site reach this channel.")
+    _send(url, message)
+    return message
+
+
+class Unset(RuntimeError):
+    """No webhook address is set, so there is nothing to send to."""
 
 
 def recent(now: float | None = None) -> dict[str, Any]:

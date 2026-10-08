@@ -157,7 +157,7 @@ def _fetch_page(query: str, cell: Cell, offset: int | None, headers: dict[str, s
     try:
         data = request_json("GET", SEARCH_URL, params=params, headers=headers,
                             use_cache=False, no_retry=(QUOTA_ERROR,), response_headers=got,
-                            before_retry=lambda: take_call() is None)
+                            before_retry=lambda: take_call() is None, source="yelp")
     except HttpError as exc:
         if QUOTA_ERROR in str(exc):
             quota["left"] = 0
@@ -183,7 +183,6 @@ def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], 
     """
     if not api_key:
         raise SourceError("No Yelp API key configured")
-    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
     budget = usage.yelp_budget()
     left = budget.left()
     cap = config.YELP_DEFAULT_MAX_REQUESTS if max_requests is None else max_requests
@@ -194,13 +193,25 @@ def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], 
     n_cells = choose_grid(radius_miles, grid_cells, len(queries), cap)
     cells = search_grid(lat, lon, min(radius_miles, MAX_RADIUS_MILES) if n_cells == 1
                         else radius_miles, n_cells)
-    quota: dict[str, int | None] = {"left": None}
     if progress:
         progress(Step(f"Yelp: {len(queries)} searches x {n_cells} area(s), up to {cap} calls "
                       f"({left} of {budget.limit} left in the last 24 hours)", PAID, 0, cap, "yelp"))
     warnings = _area_warnings(n_cells < grid_for(radius_miles, grid_cells) and cap > 0,
                               cells[0][2], radius_miles)
+    leads, n, w = _run(queries, cells, _headers(api_key), budget, cap, limit_note, progress)
+    return leads, n, warnings + w
 
+
+def _headers(api_key: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
+
+
+def _run(queries: Sequence[str], cells: Sequence[Cell], headers: dict[str, str],
+         budget: usage.DailyBudget, cap: int, limit_note: str | None,
+         progress: Callable[[str], None] | None) -> tuple[list[Lead], int, list[str]]:
+    """The searches themselves, each call taken from the budget first; the Yelp results
+    saved in the database are reused and the new ones saved there."""
+    quota: dict[str, int | None] = {"left": None}
     cache = usage.SharedCache()
 
     def take_call() -> str | None:
@@ -238,7 +249,27 @@ def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], 
         w = [x for x in w if QUOTA_ERROR not in x]
         w.append("Yelp's daily limit was reached, so some Yelp searches did not run "
                  "(it resets at midnight UTC).")
-    return leads, n, warnings + w
+    return leads, n, w
+
+
+def check(api_key: str) -> str:
+    """One Yelp call (taken from the daily budget first, and refused when the calls are
+    used up) for the businesses within a mile of AARCO's shop: what it found, for
+    `python -m leadgen check-sources`. Raises SourceError when the call wasn't made, or
+    HttpError when Yelp didn't answer."""
+    budget = usage.yelp_budget()
+    if not budget.take():
+        raise SourceError(f"Not called: {budget.problem or used_up(budget)}.")
+    lat, lon = config.OWN_COORDS
+    try:
+        items, _ = _fetch_page(next(iter(config.YELP_SEARCHES)), (lat, lon, 1.0), 0, _headers(api_key),
+                               {"left": None}, lambda: "one call only")
+    except HttpError as exc:
+        if any(k in str(exc) for k in KEY_ERRORS):
+            raise SourceError(f"Yelp rejected the key. {exc}") from exc
+        raise
+    return (f"{len(items)} businesses within a mile of AARCO's shop; {budget.left()} of "
+            f"{budget.limit} calls left in the last 24 hours")
 
 
 _GOOGLE_KEY = re.compile(r"^AIza[0-9A-Za-z_\-]{30,}$")

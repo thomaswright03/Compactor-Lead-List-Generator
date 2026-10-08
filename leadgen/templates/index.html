@@ -161,6 +161,15 @@
             it copies the businesses marked Yes or No (names and categories only, no phone numbers or
             notes) into the tests, so a change to the scores can't push known Yes businesses down.</p>
           <p><a class="btn quiet" href="/download/scoring-reference.json" download>Download the scoring check file</a></p>
+          <h2>Check the sources</h2>
+          <p class="muted">Ask each source (Yelp, Google, the free map data, the place lookup, the database)
+            for one small answer and see what came back. It makes one real call per source that is set up;
+            the Yelp call counts as one of the site's 50 for the day. The result opens on its own page.</p>
+          <form method="post" action="/admin/check-sources"><button type="submit" class="quiet">Check sources</button></form>
+          <h2>Test the alerts</h2>
+          <p class="muted">Send a test message to the chat webhook that gets the site's problem reports, to
+            see that it arrives. If no webhook is set up, the page says so.</p>
+          <form method="post" action="/admin/test-alert"><button type="submit" class="quiet">Send a test alert</button></form>
           </div>
         </div>
       </details>

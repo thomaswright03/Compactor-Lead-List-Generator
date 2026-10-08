@@ -7,11 +7,15 @@
     python -m leadgen out-of-area    # list saved leads far outside AARCO's area (--remove, --restore)
     python -m leadgen backup         # copy every saved lead, mark, call and search to a file
     python -m leadgen restore FILE   # what putting a copy back would add (--apply adds it)
+    python -m leadgen check-sources  # one small call to each source; --recorded: no key needed
+    python -m leadgen test-alert     # send a test message to the alert webhook
+    python -m leadgen scoring-report # how the scoring does on the reference set
 """
 
 import argparse
 import sys
 from pathlib import Path
+from typing import TypeAlias
 
 from . import config, saved, store
 from .envfile import load_dotenv
@@ -32,7 +36,21 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="leadgen", description="Find businesses likely to run "
                                 "large commercial compactors or balers.")
     sub = p.add_subparsers(dest="command")
+    _add_run(sub)
+    _add_reference(sub)
+    _add_merge_sites(sub)
+    _add_out_of_area(sub)
+    _add_backup_and_restore(sub)
+    _add_checks(sub)
+    _add_web(sub)
+    return p
 
+
+# argparse's subparser group (add_subparsers()'s result).
+Commands: TypeAlias = "argparse._SubParsersAction[argparse.ArgumentParser]"
+
+
+def _add_run(sub: Commands) -> None:
     r = sub.add_parser("run", help="Generate a lead list")
     r.add_argument("--location", "-l", default=config.DEFAULT_LOCATION,
                    help="ZIP, city, address, or 'lat,lon' (default: "
@@ -68,17 +86,23 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--yelp-api-key", default="", help="Yelp API key (or set YELP_API_KEY)")
     r.add_argument("--quiet", "-q", action="store_true")
 
+
+def _add_reference(sub: Commands) -> None:
     ref = sub.add_parser("reference", help="Copy the businesses marked Yes / No on the site "
                          "into the scoring reference set (needs DATABASE_URL)")
     ref.add_argument("--out", default=None, help="Reference file (default "
                      "tests/fixtures/scoring_reference.json)")
 
+
+def _add_merge_sites(sub: Commands) -> None:
     ms = sub.add_parser("merge-sites", help="List the saved leads that are one business (two "
                         "rows for one site, saved before the search rules joined them); "
                         "--apply merges each group into one lead, keeping every listing, mark "
                         "and call. Searches never do this on their own")
     ms.add_argument("--apply", action="store_true", help="Merge the listed groups")
 
+
+def _add_out_of_area(sub: Commands) -> None:
     far = sub.add_parser("out-of-area", help="List the saved leads far outside AARCO's area (from a "
                          "search around the wrong place); --remove takes them out of the list, "
                          "--restore puts them back. Leads marked Yes / No or called are never removed")
@@ -90,21 +114,41 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Take them out of the saved list (each is kept aside, so --restore can bring it back)")
     act.add_argument("--restore", action="store_true", help="Put every removed lead back in the saved list")
 
+
+def _add_backup_and_restore(sub: Commands) -> None:
     bk = sub.add_parser("backup", help="Write a copy of the database (saved leads, Yes / No marks, calls, "
                         "searches, who made each) to a file; changes nothing")
     bk.add_argument("--out", default=None, help="The file to write (default leadgen-backup-<Utah date and "
                     "time>.json.gz in this folder; an existing file is never replaced)")
-
     rs = sub.add_parser("restore", help="Put a backup's rows back: lists what would be added; --apply adds "
                         "every row the database doesn't have. Never changes or removes a row")
     rs.add_argument("file", help="The backup file (.json.gz, from `python -m leadgen backup`)")
     rs.add_argument("--apply", action="store_true", help="Add the missing rows (one transaction)")
 
+
+def _add_checks(sub: Commands) -> None:
+    cs = sub.add_parser("check-sources", help="Ask each source (Yelp, Google, the map data, the place "
+                        "lookup, the database) for one small answer and print what came back. A source "
+                        "whose key isn't set is reported as not set up and not called; the Yelp call "
+                        f"counts as one of the site's {config.YELP_DAILY_LIMIT} for the day")
+    cs.add_argument("--recorded", action="store_true",
+                    help="No key needed: run the real Yelp and Google client code against a local "
+                         "stand-in serving recorded answers (leadgen/data/recorded), in a throwaway "
+                         "database; the other sources are not checked")
+    sub.add_parser("test-alert", help="Send a test message to the alert webhook (LEADGEN_ALERT_WEBHOOK) "
+                   "and say whether it was delivered")
+    sr = sub.add_parser("scoring-report", help="How the scoring does on the reference set: per tier, how "
+                        "many businesses, how many have equipment or are flagged, and which confirmed "
+                        "businesses moved tier since the set was copied (docs/scoring-evaluation.md)")
+    sr.add_argument("--reference", default=None, help="The reference file (default "
+                    "tests/fixtures/scoring_reference.json)")
+
+
+def _add_web(sub: Commands) -> None:
     w = sub.add_parser("web", help="Start the web page")
     w.add_argument("--host", default="127.0.0.1")
     w.add_argument("--port", type=int, default=5000)
     w.add_argument("--debug", action="store_true")
-    return p
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -317,6 +361,47 @@ def cmd_restore(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_check_sources(args: argparse.Namespace) -> int:
+    from . import checks
+    if args.recorded:
+        print("Checking Yelp and Google against the recorded stand-in (no key, nothing spent)...",
+              file=sys.stderr)
+    else:
+        _which_database()
+    rows = checks.run_all(recorded=args.recorded)
+    print(checks.table(rows))
+    bad = checks.failed(rows)
+    if bad:
+        print(f"\n{len(bad)} source{'' if len(bad) == 1 else 's'} didn't answer.", file=sys.stderr)
+        return 2
+    print("\nEvery source that is set up answered.")
+    return 0
+
+
+def cmd_test_alert() -> int:
+    from . import alerts
+    try:
+        sent = alerts.send_test("from the command line")
+    except alerts.Unset as exc:
+        print(f"Not sent: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:  # noqa: BLE001 - say what went wrong, by class and words (never the address)
+        print(f"Not delivered: {exc.__class__.__name__}: {exc}", file=sys.stderr)
+        return 2
+    print(f"Delivered to the webhook ({alerts.WEBHOOK_ENV}). The message was:\n  {sent}")
+    return 0
+
+
+def cmd_scoring_report(args: argparse.Namespace) -> int:
+    from . import reference, scoring_report
+    path = Path(args.reference) if args.reference else reference.DEFAULT_PATH
+    if not path.exists():
+        print(f"Error: {path} does not exist.", file=sys.stderr)
+        return 2
+    print(scoring_report.report(path))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     args = build_parser().parse_args(argv)
@@ -324,17 +409,12 @@ def main(argv: list[str] | None = None) -> int:
         from .web import create_app
         create_app().run(host=args.host, port=args.port, debug=args.debug)
         return 0
-    if args.command == "reference":
-        return cmd_reference(args)
-    if args.command == "out-of-area":
-        return cmd_out_of_area(args)
-    if args.command == "merge-sites":
-        return cmd_merge_sites(args)
-    if args.command == "backup":
-        return cmd_backup(args)
-    if args.command == "restore":
-        return cmd_restore(args)
-    if args.command != "run":
+    commands = {"run": cmd_run, "reference": cmd_reference, "out-of-area": cmd_out_of_area,
+                "merge-sites": cmd_merge_sites, "backup": cmd_backup, "restore": cmd_restore,
+                "check-sources": cmd_check_sources, "test-alert": lambda a: cmd_test_alert(),
+                "scoring-report": cmd_scoring_report}
+    command = commands.get(args.command or "")
+    if command is None:
         build_parser().print_help()
         return 1
-    return cmd_run(args)
+    return command(args)

@@ -1,0 +1,2019 @@
+{
+ "about": "A recorded, sanitized Yelp Fusion business search answer for `python -m leadgen check-sources --recorded`: made-up businesses shaped like Yelp's (555 phone numbers, no real listing), served by leadgen/recorded.py a page at a time by offset and limit, as Yelp does. Edit by hand or regenerate; the real API is never recorded with a key.",
+ "businesses": [
+  {
+   "id": "recorded-yelp-001",
+   "alias": "wasatch-grocery-salt-lake-city",
+   "name": "Wasatch Grocery",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/wasatch-grocery-salt-lake-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 12,
+   "categories": [
+    {
+     "alias": "grocery",
+     "title": "Grocery"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.65013,
+    "longitude": -111.93842
+   },
+   "transactions": [],
+   "price": "$$",
+   "location": {
+    "address1": "100 W Example Rd",
+    "address2": "",
+    "address3": "",
+    "city": "Salt Lake City",
+    "zip_code": "84104",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "100 W Example Rd",
+     "Salt Lake City, UT 84104"
+    ]
+   },
+   "phone": "+18015550100",
+   "display_phone": "(801) 555-0100",
+   "distance": 14760.2
+  },
+  {
+   "id": "recorded-yelp-002",
+   "alias": "canyon-warehouse-store-west-valley-city",
+   "name": "Canyon Warehouse Store",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/canyon-warehouse-store-west-valley-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "wholesalers",
+     "title": "Wholesale Stores"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.81173,
+    "longitude": -112.00556
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "137 S Sample St",
+    "address2": "",
+    "address3": "",
+    "city": "West Valley City",
+    "zip_code": "84119",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "137 S Sample St",
+     "West Valley City, UT 84119"
+    ]
+   },
+   "phone": "+18015550101",
+   "display_phone": "(801) 555-0101",
+   "distance": 6262.9
+  },
+  {
+   "id": "recorded-yelp-003",
+   "alias": "bonneville-hospital-murray",
+   "name": "Bonneville Hospital",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/bonneville-hospital-murray?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 130,
+   "categories": [
+    {
+     "alias": "hospitals",
+     "title": "Hospitals"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.71602,
+    "longitude": -111.92984
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "174 N Placeholder Ave",
+    "address2": "",
+    "address3": "",
+    "city": "Murray",
+    "zip_code": "84107",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "174 N Placeholder Ave",
+     "Murray, UT 84107"
+    ]
+   },
+   "phone": "+18015550102",
+   "display_phone": "(801) 555-0102",
+   "distance": 3523.4
+  },
+  {
+   "id": "recorded-yelp-004",
+   "alias": "jordan-hotel-sandy",
+   "name": "Jordan Hotel",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/jordan-hotel-sandy?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 12,
+   "categories": [
+    {
+     "alias": "hotels",
+     "title": "Hotels"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.64879,
+    "longitude": -111.93487
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "211 E Specimen Blvd",
+    "address2": "",
+    "address3": "",
+    "city": "Sandy",
+    "zip_code": "84070",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "211 E Specimen Blvd",
+     "Sandy, UT 84070"
+    ]
+   },
+   "phone": "+18015550103",
+   "display_phone": "(801) 555-0103",
+   "distance": 8383.4
+  },
+  {
+   "id": "recorded-yelp-005",
+   "alias": "granite-recycling-west-jordan",
+   "name": "Granite Recycling",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/granite-recycling-west-jordan?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 130,
+   "categories": [
+    {
+     "alias": "recyclingcenter",
+     "title": "Recycling Center"
+    }
+   ],
+   "rating": 4.5,
+   "coordinates": {
+    "latitude": 40.78703,
+    "longitude": -111.77883
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "248 S Model Way",
+    "address2": "",
+    "address3": "",
+    "city": "West Jordan",
+    "zip_code": "84088",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "248 S Model Way",
+     "West Jordan, UT 84088"
+    ]
+   },
+   "phone": "+18015550104",
+   "display_phone": "(801) 555-0104",
+   "distance": 7063.8
+  },
+  {
+   "id": "recorded-yelp-006",
+   "alias": "beehive-plastics-taylorsville",
+   "name": "Beehive Plastics",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/beehive-plastics-taylorsville?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 48,
+   "categories": [
+    {
+     "alias": "manufacturing",
+     "title": "Manufacturing"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.69105,
+    "longitude": -112.06751
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "285 W Example Rd",
+    "address2": "",
+    "address3": "",
+    "city": "Taylorsville",
+    "zip_code": "84123",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "285 W Example Rd",
+     "Taylorsville, UT 84123"
+    ]
+   },
+   "phone": "+18015550105",
+   "display_phone": "(801) 555-0105",
+   "distance": 11392.6
+  },
+  {
+   "id": "recorded-yelp-007",
+   "alias": "pioneer-distribution-center-salt-lake-city",
+   "name": "Pioneer Distribution Center",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/pioneer-distribution-center-salt-lake-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 410,
+   "categories": [
+    {
+     "alias": "wholesalers",
+     "title": "Wholesale Stores"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.59526,
+    "longitude": -111.82922
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "322 S Sample St",
+    "address2": "",
+    "address3": "",
+    "city": "Salt Lake City",
+    "zip_code": "84104",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "322 S Sample St",
+     "Salt Lake City, UT 84104"
+    ]
+   },
+   "phone": "+18015550106",
+   "display_phone": "(801) 555-0106",
+   "distance": 4898.9
+  },
+  {
+   "id": "recorded-yelp-008",
+   "alias": "red-rock-department-store-west-valley-city",
+   "name": "Red Rock Department Store",
+   "image_url": "",
+   "is_closed": true,
+   "url": "https://www.yelp.com/biz/red-rock-department-store-west-valley-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "deptstores",
+     "title": "Department Stores"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.66396,
+    "longitude": -112.05433
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "359 N Placeholder Ave",
+    "address2": "",
+    "address3": "",
+    "city": "West Valley City",
+    "zip_code": "84119",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "359 N Placeholder Ave",
+     "West Valley City, UT 84119"
+    ]
+   },
+   "phone": "+18015550107",
+   "display_phone": "(801) 555-0107",
+   "distance": 10042.9
+  },
+  {
+   "id": "recorded-yelp-009",
+   "alias": "great-basin-hardware-murray",
+   "name": "Great Basin Hardware",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/great-basin-hardware-murray?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "hardware",
+     "title": "Hardware Stores"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.65048,
+    "longitude": -111.79958
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "396 E Specimen Blvd",
+    "address2": "",
+    "address3": "",
+    "city": "Murray",
+    "zip_code": "84107",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "396 E Specimen Blvd",
+     "Murray, UT 84107"
+    ]
+   },
+   "phone": "+18015550108",
+   "display_phone": "(801) 555-0108",
+   "distance": 1453.2
+  },
+  {
+   "id": "recorded-yelp-010",
+   "alias": "oquirrh-bakery-sandy",
+   "name": "Oquirrh Bakery",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/oquirrh-bakery-sandy?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 3,
+   "categories": [
+    {
+     "alias": "bakeries",
+     "title": "Bakeries"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.77338,
+    "longitude": -112.01217
+   },
+   "transactions": [],
+   "price": "$$",
+   "location": {
+    "address1": "433 S Model Way",
+    "address2": "",
+    "address3": "",
+    "city": "Sandy",
+    "zip_code": "84070",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "433 S Model Way",
+     "Sandy, UT 84070"
+    ]
+   },
+   "phone": "+18015550109",
+   "display_phone": "(801) 555-0109",
+   "distance": 8029.3
+  },
+  {
+   "id": "recorded-yelp-011",
+   "alias": "sego-grocery-west-jordan",
+   "name": "Sego Grocery",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/sego-grocery-west-jordan?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "grocery",
+     "title": "Grocery"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.77128,
+    "longitude": -112.04884
+   },
+   "transactions": [],
+   "price": "$$",
+   "location": {
+    "address1": "470 W Example Rd",
+    "address2": "",
+    "address3": "",
+    "city": "West Jordan",
+    "zip_code": "84088",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "470 W Example Rd",
+     "West Jordan, UT 84088"
+    ]
+   },
+   "phone": "+18015550110",
+   "display_phone": "(801) 555-0110",
+   "distance": 6572.9
+  },
+  {
+   "id": "recorded-yelp-012",
+   "alias": "timpanogos-warehouse-store-taylorsville",
+   "name": "Timpanogos Warehouse Store",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/timpanogos-warehouse-store-taylorsville?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 12,
+   "categories": [
+    {
+     "alias": "wholesalers",
+     "title": "Wholesale Stores"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.60379,
+    "longitude": -111.79882
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "507 S Sample St",
+    "address2": "",
+    "address3": "",
+    "city": "Taylorsville",
+    "zip_code": "84123",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "507 S Sample St",
+     "Taylorsville, UT 84123"
+    ]
+   },
+   "phone": "+18015550111",
+   "display_phone": "(801) 555-0111",
+   "distance": 10496.6
+  },
+  {
+   "id": "recorded-yelp-013",
+   "alias": "antelope-hospital-salt-lake-city",
+   "name": "Antelope Hospital",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/antelope-hospital-salt-lake-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 48,
+   "categories": [
+    {
+     "alias": "hospitals",
+     "title": "Hospitals"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.68481,
+    "longitude": -111.84044
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "544 N Placeholder Ave",
+    "address2": "",
+    "address3": "",
+    "city": "Salt Lake City",
+    "zip_code": "84104",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "544 N Placeholder Ave",
+     "Salt Lake City, UT 84104"
+    ]
+   },
+   "phone": "+18015550112",
+   "display_phone": "(801) 555-0112",
+   "distance": 13203.3
+  },
+  {
+   "id": "recorded-yelp-014",
+   "alias": "deseret-hotel-west-valley-city",
+   "name": "Deseret Hotel",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/deseret-hotel-west-valley-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 48,
+   "categories": [
+    {
+     "alias": "hotels",
+     "title": "Hotels"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.60778,
+    "longitude": -111.8397
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "581 E Specimen Blvd",
+    "address2": "",
+    "address3": "",
+    "city": "West Valley City",
+    "zip_code": "84119",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "581 E Specimen Blvd",
+     "West Valley City, UT 84119"
+    ]
+   },
+   "phone": "+18015550113",
+   "display_phone": "(801) 555-0113",
+   "distance": 3761.6
+  },
+  {
+   "id": "recorded-yelp-015",
+   "alias": "uinta-recycling-murray",
+   "name": "Uinta Recycling",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/uinta-recycling-murray?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 130,
+   "categories": [
+    {
+     "alias": "recyclingcenter",
+     "title": "Recycling Center"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.76593,
+    "longitude": -111.87836
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "618 S Model Way",
+    "address2": "",
+    "address3": "",
+    "city": "Murray",
+    "zip_code": "84107",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "618 S Model Way",
+     "Murray, UT 84107"
+    ]
+   },
+   "phone": "+18015550114",
+   "display_phone": "(801) 555-0114",
+   "distance": 4161.6
+  },
+  {
+   "id": "recorded-yelp-016",
+   "alias": "cottonwood-plastics-sandy",
+   "name": "Cottonwood Plastics",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/cottonwood-plastics-sandy?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 12,
+   "categories": [
+    {
+     "alias": "manufacturing",
+     "title": "Manufacturing"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.61245,
+    "longitude": -111.78397
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "655 W Example Rd",
+    "address2": "",
+    "address3": "",
+    "city": "Sandy",
+    "zip_code": "84070",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "655 W Example Rd",
+     "Sandy, UT 84070"
+    ]
+   },
+   "phone": "+18015550115",
+   "display_phone": "(801) 555-0115",
+   "distance": 4138.3
+  },
+  {
+   "id": "recorded-yelp-017",
+   "alias": "wasatch-distribution-center-2-west-jordan",
+   "name": "Wasatch Distribution Center 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/wasatch-distribution-center-2-west-jordan?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 12,
+   "categories": [
+    {
+     "alias": "wholesalers",
+     "title": "Wholesale Stores"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.69205,
+    "longitude": -111.8494
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "692 S Sample St",
+    "address2": "",
+    "address3": "",
+    "city": "West Jordan",
+    "zip_code": "84088",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "692 S Sample St",
+     "West Jordan, UT 84088"
+    ]
+   },
+   "phone": "+18015550116",
+   "display_phone": "(801) 555-0116",
+   "distance": 13645.5
+  },
+  {
+   "id": "recorded-yelp-018",
+   "alias": "canyon-department-store-2-taylorsville",
+   "name": "Canyon Department Store 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/canyon-department-store-2-taylorsville?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 3,
+   "categories": [
+    {
+     "alias": "deptstores",
+     "title": "Department Stores"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.70769,
+    "longitude": -111.97809
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "729 N Placeholder Ave",
+    "address2": "",
+    "address3": "",
+    "city": "Taylorsville",
+    "zip_code": "84123",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "729 N Placeholder Ave",
+     "Taylorsville, UT 84123"
+    ]
+   },
+   "phone": "+18015550117",
+   "display_phone": "(801) 555-0117",
+   "distance": 1114.6
+  },
+  {
+   "id": "recorded-yelp-019",
+   "alias": "bonneville-hardware-2-salt-lake-city",
+   "name": "Bonneville Hardware 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/bonneville-hardware-2-salt-lake-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 3,
+   "categories": [
+    {
+     "alias": "hardware",
+     "title": "Hardware Stores"
+    }
+   ],
+   "rating": 4.5,
+   "coordinates": {
+    "latitude": 40.59527,
+    "longitude": -111.96456
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "766 E Specimen Blvd",
+    "address2": "",
+    "address3": "",
+    "city": "Salt Lake City",
+    "zip_code": "84104",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "766 E Specimen Blvd",
+     "Salt Lake City, UT 84104"
+    ]
+   },
+   "phone": "+18015550118",
+   "display_phone": "(801) 555-0118",
+   "distance": 1149.6
+  },
+  {
+   "id": "recorded-yelp-020",
+   "alias": "jordan-bakery-2-west-valley-city",
+   "name": "Jordan Bakery 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/jordan-bakery-2-west-valley-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "bakeries",
+     "title": "Bakeries"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.69498,
+    "longitude": -111.84188
+   },
+   "transactions": [],
+   "price": "$$",
+   "location": {
+    "address1": "803 S Model Way",
+    "address2": "",
+    "address3": "",
+    "city": "West Valley City",
+    "zip_code": "84119",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "803 S Model Way",
+     "West Valley City, UT 84119"
+    ]
+   },
+   "phone": "+18015550119",
+   "display_phone": "(801) 555-0119",
+   "distance": 3930.8
+  },
+  {
+   "id": "recorded-yelp-021",
+   "alias": "granite-grocery-2-murray",
+   "name": "Granite Grocery 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/granite-grocery-2-murray?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 130,
+   "categories": [
+    {
+     "alias": "grocery",
+     "title": "Grocery"
+    }
+   ],
+   "rating": 4.5,
+   "coordinates": {
+    "latitude": 40.77776,
+    "longitude": -112.02579
+   },
+   "transactions": [],
+   "price": "$$",
+   "location": {
+    "address1": "840 W Example Rd",
+    "address2": "",
+    "address3": "",
+    "city": "Murray",
+    "zip_code": "84107",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "840 W Example Rd",
+     "Murray, UT 84107"
+    ]
+   },
+   "phone": "+18015550120",
+   "display_phone": "(801) 555-0120",
+   "distance": 2511.0
+  },
+  {
+   "id": "recorded-yelp-022",
+   "alias": "beehive-warehouse-store-2-sandy",
+   "name": "Beehive Warehouse Store 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/beehive-warehouse-store-2-sandy?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 410,
+   "categories": [
+    {
+     "alias": "wholesalers",
+     "title": "Wholesale Stores"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.63018,
+    "longitude": -111.86527
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "877 S Sample St",
+    "address2": "",
+    "address3": "",
+    "city": "Sandy",
+    "zip_code": "84070",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "877 S Sample St",
+     "Sandy, UT 84070"
+    ]
+   },
+   "phone": "+18015550121",
+   "display_phone": "(801) 555-0121",
+   "distance": 13395.9
+  },
+  {
+   "id": "recorded-yelp-023",
+   "alias": "pioneer-hospital-2-west-jordan",
+   "name": "Pioneer Hospital 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/pioneer-hospital-2-west-jordan?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "hospitals",
+     "title": "Hospitals"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.61346,
+    "longitude": -112.01101
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "914 N Placeholder Ave",
+    "address2": "",
+    "address3": "",
+    "city": "West Jordan",
+    "zip_code": "84088",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "914 N Placeholder Ave",
+     "West Jordan, UT 84088"
+    ]
+   },
+   "phone": "+18015550122",
+   "display_phone": "(801) 555-0122",
+   "distance": 9647.1
+  },
+  {
+   "id": "recorded-yelp-024",
+   "alias": "red-rock-hotel-2-taylorsville",
+   "name": "Red Rock Hotel 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/red-rock-hotel-2-taylorsville?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "hotels",
+     "title": "Hotels"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.66628,
+    "longitude": -111.97898
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "951 E Specimen Blvd",
+    "address2": "",
+    "address3": "",
+    "city": "Taylorsville",
+    "zip_code": "84123",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "951 E Specimen Blvd",
+     "Taylorsville, UT 84123"
+    ]
+   },
+   "phone": "+18015550123",
+   "display_phone": "(801) 555-0123",
+   "distance": 885.3
+  },
+  {
+   "id": "recorded-yelp-025",
+   "alias": "great-basin-recycling-2-salt-lake-city",
+   "name": "Great Basin Recycling 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/great-basin-recycling-2-salt-lake-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 12,
+   "categories": [
+    {
+     "alias": "recyclingcenter",
+     "title": "Recycling Center"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.64592,
+    "longitude": -111.87778
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "988 S Model Way",
+    "address2": "",
+    "address3": "",
+    "city": "Salt Lake City",
+    "zip_code": "84104",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "988 S Model Way",
+     "Salt Lake City, UT 84104"
+    ]
+   },
+   "phone": "+18015550124",
+   "display_phone": "(801) 555-0124",
+   "distance": 1200.1
+  },
+  {
+   "id": "recorded-yelp-026",
+   "alias": "oquirrh-plastics-2-west-valley-city",
+   "name": "Oquirrh Plastics 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/oquirrh-plastics-2-west-valley-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 12,
+   "categories": [
+    {
+     "alias": "manufacturing",
+     "title": "Manufacturing"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.68839,
+    "longitude": -112.06874
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1025 W Example Rd",
+    "address2": "",
+    "address3": "",
+    "city": "West Valley City",
+    "zip_code": "84119",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1025 W Example Rd",
+     "West Valley City, UT 84119"
+    ]
+   },
+   "phone": "+18015550125",
+   "display_phone": "(801) 555-0125",
+   "distance": 10575.7
+  },
+  {
+   "id": "recorded-yelp-027",
+   "alias": "sego-distribution-center-2-murray",
+   "name": "Sego Distribution Center 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/sego-distribution-center-2-murray?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 12,
+   "categories": [
+    {
+     "alias": "wholesalers",
+     "title": "Wholesale Stores"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.6442,
+    "longitude": -111.92991
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1062 S Sample St",
+    "address2": "",
+    "address3": "",
+    "city": "Murray",
+    "zip_code": "84107",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1062 S Sample St",
+     "Murray, UT 84107"
+    ]
+   },
+   "phone": "+18015550126",
+   "display_phone": "(801) 555-0126",
+   "distance": 2660.7
+  },
+  {
+   "id": "recorded-yelp-028",
+   "alias": "timpanogos-department-store-2-sandy",
+   "name": "Timpanogos Department Store 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/timpanogos-department-store-2-sandy?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 130,
+   "categories": [
+    {
+     "alias": "deptstores",
+     "title": "Department Stores"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.69109,
+    "longitude": -111.97166
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1099 N Placeholder Ave",
+    "address2": "",
+    "address3": "",
+    "city": "Sandy",
+    "zip_code": "84070",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1099 N Placeholder Ave",
+     "Sandy, UT 84070"
+    ]
+   },
+   "phone": "+18015550127",
+   "display_phone": "(801) 555-0127",
+   "distance": 13700.4
+  },
+  {
+   "id": "recorded-yelp-029",
+   "alias": "antelope-hardware-2-west-jordan",
+   "name": "Antelope Hardware 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/antelope-hardware-2-west-jordan?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 130,
+   "categories": [
+    {
+     "alias": "hardware",
+     "title": "Hardware Stores"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.69403,
+    "longitude": -111.84293
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1136 E Specimen Blvd",
+    "address2": "",
+    "address3": "",
+    "city": "West Jordan",
+    "zip_code": "84088",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1136 E Specimen Blvd",
+     "West Jordan, UT 84088"
+    ]
+   },
+   "phone": "+18015550128",
+   "display_phone": "(801) 555-0128",
+   "distance": 9031.6
+  },
+  {
+   "id": "recorded-yelp-030",
+   "alias": "deseret-bakery-2-taylorsville",
+   "name": "Deseret Bakery 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/deseret-bakery-2-taylorsville?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "bakeries",
+     "title": "Bakeries"
+    }
+   ],
+   "rating": 4.5,
+   "coordinates": {
+    "latitude": 40.75166,
+    "longitude": -111.89367
+   },
+   "transactions": [],
+   "price": "$$",
+   "location": {
+    "address1": "1173 S Model Way",
+    "address2": "",
+    "address3": "",
+    "city": "Taylorsville",
+    "zip_code": "84123",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1173 S Model Way",
+     "Taylorsville, UT 84123"
+    ]
+   },
+   "phone": "+18015550129",
+   "display_phone": "(801) 555-0129",
+   "distance": 9200.5
+  },
+  {
+   "id": "recorded-yelp-031",
+   "alias": "uinta-grocery-2-salt-lake-city",
+   "name": "Uinta Grocery 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/uinta-grocery-2-salt-lake-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "grocery",
+     "title": "Grocery"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.80254,
+    "longitude": -111.83839
+   },
+   "transactions": [],
+   "price": "$$",
+   "location": {
+    "address1": "1210 W Example Rd",
+    "address2": "",
+    "address3": "",
+    "city": "Salt Lake City",
+    "zip_code": "84104",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1210 W Example Rd",
+     "Salt Lake City, UT 84104"
+    ]
+   },
+   "phone": "+18015550130",
+   "display_phone": "(801) 555-0130",
+   "distance": 5162.2
+  },
+  {
+   "id": "recorded-yelp-032",
+   "alias": "cottonwood-warehouse-store-2-west-valley-city",
+   "name": "Cottonwood Warehouse Store 2",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/cottonwood-warehouse-store-2-west-valley-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 12,
+   "categories": [
+    {
+     "alias": "wholesalers",
+     "title": "Wholesale Stores"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.64106,
+    "longitude": -111.85633
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1247 S Sample St",
+    "address2": "",
+    "address3": "",
+    "city": "West Valley City",
+    "zip_code": "84119",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1247 S Sample St",
+     "West Valley City, UT 84119"
+    ]
+   },
+   "phone": "+18015550131",
+   "display_phone": "(801) 555-0131",
+   "distance": 12744.0
+  },
+  {
+   "id": "recorded-yelp-033",
+   "alias": "wasatch-hospital-3-murray",
+   "name": "Wasatch Hospital 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/wasatch-hospital-3-murray?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 12,
+   "categories": [
+    {
+     "alias": "hospitals",
+     "title": "Hospitals"
+    }
+   ],
+   "rating": 4.5,
+   "coordinates": {
+    "latitude": 40.81602,
+    "longitude": -111.79235
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1284 N Placeholder Ave",
+    "address2": "",
+    "address3": "",
+    "city": "Murray",
+    "zip_code": "84107",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1284 N Placeholder Ave",
+     "Murray, UT 84107"
+    ]
+   },
+   "phone": "+18015550132",
+   "display_phone": "(801) 555-0132",
+   "distance": 5179.2
+  },
+  {
+   "id": "recorded-yelp-034",
+   "alias": "canyon-hotel-3-sandy",
+   "name": "Canyon Hotel 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/canyon-hotel-3-sandy?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 3,
+   "categories": [
+    {
+     "alias": "hotels",
+     "title": "Hotels"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.65358,
+    "longitude": -111.80517
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1321 E Specimen Blvd",
+    "address2": "",
+    "address3": "",
+    "city": "Sandy",
+    "zip_code": "84070",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1321 E Specimen Blvd",
+     "Sandy, UT 84070"
+    ]
+   },
+   "phone": "+18015550133",
+   "display_phone": "(801) 555-0133",
+   "distance": 6974.1
+  },
+  {
+   "id": "recorded-yelp-035",
+   "alias": "bonneville-recycling-3-west-jordan",
+   "name": "Bonneville Recycling 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/bonneville-recycling-3-west-jordan?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 12,
+   "categories": [
+    {
+     "alias": "recyclingcenter",
+     "title": "Recycling Center"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.60086,
+    "longitude": -112.00456
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1358 S Model Way",
+    "address2": "",
+    "address3": "",
+    "city": "West Jordan",
+    "zip_code": "84088",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1358 S Model Way",
+     "West Jordan, UT 84088"
+    ]
+   },
+   "phone": "+18015550134",
+   "display_phone": "(801) 555-0134",
+   "distance": 14446.8
+  },
+  {
+   "id": "recorded-yelp-036",
+   "alias": "jordan-plastics-3-taylorsville",
+   "name": "Jordan Plastics 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/jordan-plastics-3-taylorsville?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 130,
+   "categories": [
+    {
+     "alias": "manufacturing",
+     "title": "Manufacturing"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.62178,
+    "longitude": -111.93802
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1395 W Example Rd",
+    "address2": "",
+    "address3": "",
+    "city": "Taylorsville",
+    "zip_code": "84123",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1395 W Example Rd",
+     "Taylorsville, UT 84123"
+    ]
+   },
+   "phone": "+18015550135",
+   "display_phone": "(801) 555-0135",
+   "distance": 4336.9
+  },
+  {
+   "id": "recorded-yelp-037",
+   "alias": "granite-distribution-center-3-salt-lake-city",
+   "name": "Granite Distribution Center 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/granite-distribution-center-3-salt-lake-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 130,
+   "categories": [
+    {
+     "alias": "wholesalers",
+     "title": "Wholesale Stores"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.67881,
+    "longitude": -111.99127
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1432 S Sample St",
+    "address2": "",
+    "address3": "",
+    "city": "Salt Lake City",
+    "zip_code": "84104",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1432 S Sample St",
+     "Salt Lake City, UT 84104"
+    ]
+   },
+   "phone": "+18015550136",
+   "display_phone": "(801) 555-0136",
+   "distance": 1897.1
+  },
+  {
+   "id": "recorded-yelp-038",
+   "alias": "beehive-department-store-3-west-valley-city",
+   "name": "Beehive Department Store 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/beehive-department-store-3-west-valley-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "deptstores",
+     "title": "Department Stores"
+    }
+   ],
+   "rating": 4.5,
+   "coordinates": {
+    "latitude": 40.67598,
+    "longitude": -111.93518
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1469 N Placeholder Ave",
+    "address2": "",
+    "address3": "",
+    "city": "West Valley City",
+    "zip_code": "84119",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1469 N Placeholder Ave",
+     "West Valley City, UT 84119"
+    ]
+   },
+   "phone": "+18015550137",
+   "display_phone": "(801) 555-0137",
+   "distance": 12095.0
+  },
+  {
+   "id": "recorded-yelp-039",
+   "alias": "pioneer-hardware-3-murray",
+   "name": "Pioneer Hardware 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/pioneer-hardware-3-murray?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "hardware",
+     "title": "Hardware Stores"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.78447,
+    "longitude": -111.9637
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1506 E Specimen Blvd",
+    "address2": "",
+    "address3": "",
+    "city": "Murray",
+    "zip_code": "84107",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1506 E Specimen Blvd",
+     "Murray, UT 84107"
+    ]
+   },
+   "phone": "+18015550138",
+   "display_phone": "(801) 555-0138",
+   "distance": 4594.6
+  },
+  {
+   "id": "recorded-yelp-040",
+   "alias": "red-rock-bakery-3-sandy",
+   "name": "Red Rock Bakery 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/red-rock-bakery-3-sandy?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "bakeries",
+     "title": "Bakeries"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.77122,
+    "longitude": -111.97416
+   },
+   "transactions": [],
+   "price": "$$",
+   "location": {
+    "address1": "1543 S Model Way",
+    "address2": "",
+    "address3": "",
+    "city": "Sandy",
+    "zip_code": "84070",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1543 S Model Way",
+     "Sandy, UT 84070"
+    ]
+   },
+   "phone": "+18015550139",
+   "display_phone": "(801) 555-0139",
+   "distance": 14130.2
+  },
+  {
+   "id": "recorded-yelp-041",
+   "alias": "great-basin-grocery-3-west-jordan",
+   "name": "Great Basin Grocery 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/great-basin-grocery-3-west-jordan?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 48,
+   "categories": [
+    {
+     "alias": "grocery",
+     "title": "Grocery"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.71383,
+    "longitude": -111.79873
+   },
+   "transactions": [],
+   "price": "$$",
+   "location": {
+    "address1": "1580 W Example Rd",
+    "address2": "",
+    "address3": "",
+    "city": "West Jordan",
+    "zip_code": "84088",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1580 W Example Rd",
+     "West Jordan, UT 84088"
+    ]
+   },
+   "phone": "+18015550140",
+   "display_phone": "(801) 555-0140",
+   "distance": 7598.2
+  },
+  {
+   "id": "recorded-yelp-042",
+   "alias": "oquirrh-warehouse-store-3-taylorsville",
+   "name": "Oquirrh Warehouse Store 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/oquirrh-warehouse-store-3-taylorsville?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 130,
+   "categories": [
+    {
+     "alias": "wholesalers",
+     "title": "Wholesale Stores"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.72832,
+    "longitude": -111.89963
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1617 S Sample St",
+    "address2": "",
+    "address3": "",
+    "city": "Taylorsville",
+    "zip_code": "84123",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1617 S Sample St",
+     "Taylorsville, UT 84123"
+    ]
+   },
+   "phone": "+18015550141",
+   "display_phone": "(801) 555-0141",
+   "distance": 4829.6
+  },
+  {
+   "id": "recorded-yelp-043",
+   "alias": "sego-hospital-3-salt-lake-city",
+   "name": "Sego Hospital 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/sego-hospital-3-salt-lake-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 3,
+   "categories": [
+    {
+     "alias": "hospitals",
+     "title": "Hospitals"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.68156,
+    "longitude": -111.93973
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1654 N Placeholder Ave",
+    "address2": "",
+    "address3": "",
+    "city": "Salt Lake City",
+    "zip_code": "84104",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1654 N Placeholder Ave",
+     "Salt Lake City, UT 84104"
+    ]
+   },
+   "phone": "+18015550142",
+   "display_phone": "(801) 555-0142",
+   "distance": 3273.9
+  },
+  {
+   "id": "recorded-yelp-044",
+   "alias": "timpanogos-hotel-3-west-valley-city",
+   "name": "Timpanogos Hotel 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/timpanogos-hotel-3-west-valley-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 980,
+   "categories": [
+    {
+     "alias": "hotels",
+     "title": "Hotels"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.64504,
+    "longitude": -111.97995
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1691 E Specimen Blvd",
+    "address2": "",
+    "address3": "",
+    "city": "West Valley City",
+    "zip_code": "84119",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1691 E Specimen Blvd",
+     "West Valley City, UT 84119"
+    ]
+   },
+   "phone": "+18015550143",
+   "display_phone": "(801) 555-0143",
+   "distance": 10935.0
+  },
+  {
+   "id": "recorded-yelp-045",
+   "alias": "antelope-recycling-3-murray",
+   "name": "Antelope Recycling 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/antelope-recycling-3-murray?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 130,
+   "categories": [
+    {
+     "alias": "recyclingcenter",
+     "title": "Recycling Center"
+    }
+   ],
+   "rating": 3.5,
+   "coordinates": {
+    "latitude": 40.72857,
+    "longitude": -112.01219
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1728 S Model Way",
+    "address2": "",
+    "address3": "",
+    "city": "Murray",
+    "zip_code": "84107",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1728 S Model Way",
+     "Murray, UT 84107"
+    ]
+   },
+   "phone": "+18015550144",
+   "display_phone": "(801) 555-0144",
+   "distance": 477.7
+  },
+  {
+   "id": "recorded-yelp-046",
+   "alias": "deseret-plastics-3-sandy",
+   "name": "Deseret Plastics 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/deseret-plastics-3-sandy?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 3,
+   "categories": [
+    {
+     "alias": "manufacturing",
+     "title": "Manufacturing"
+    }
+   ],
+   "rating": 4.5,
+   "coordinates": {
+    "latitude": 40.79296,
+    "longitude": -112.00845
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1765 W Example Rd",
+    "address2": "",
+    "address3": "",
+    "city": "Sandy",
+    "zip_code": "84070",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1765 W Example Rd",
+     "Sandy, UT 84070"
+    ]
+   },
+   "phone": "+18015550145",
+   "display_phone": "(801) 555-0145",
+   "distance": 9017.4
+  },
+  {
+   "id": "recorded-yelp-047",
+   "alias": "uinta-distribution-center-3-west-jordan",
+   "name": "Uinta Distribution Center 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/uinta-distribution-center-3-west-jordan?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 3,
+   "categories": [
+    {
+     "alias": "wholesalers",
+     "title": "Wholesale Stores"
+    }
+   ],
+   "rating": 3.0,
+   "coordinates": {
+    "latitude": 40.75401,
+    "longitude": -112.03766
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1802 S Sample St",
+    "address2": "",
+    "address3": "",
+    "city": "West Jordan",
+    "zip_code": "84088",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1802 S Sample St",
+     "West Jordan, UT 84088"
+    ]
+   },
+   "phone": "+18015550146",
+   "display_phone": "(801) 555-0146",
+   "distance": 9271.3
+  },
+  {
+   "id": "recorded-yelp-048",
+   "alias": "cottonwood-department-store-3-taylorsville",
+   "name": "Cottonwood Department Store 3",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/cottonwood-department-store-3-taylorsville?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 3,
+   "categories": [
+    {
+     "alias": "deptstores",
+     "title": "Department Stores"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.67344,
+    "longitude": -111.92558
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1839 N Placeholder Ave",
+    "address2": "",
+    "address3": "",
+    "city": "Taylorsville",
+    "zip_code": "84123",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1839 N Placeholder Ave",
+     "Taylorsville, UT 84123"
+    ]
+   },
+   "phone": "+18015550147",
+   "display_phone": "(801) 555-0147",
+   "distance": 289.3
+  },
+  {
+   "id": "recorded-yelp-049",
+   "alias": "wasatch-hardware-4-salt-lake-city",
+   "name": "Wasatch Hardware 4",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/wasatch-hardware-4-salt-lake-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 48,
+   "categories": [
+    {
+     "alias": "hardware",
+     "title": "Hardware Stores"
+    }
+   ],
+   "rating": 4.5,
+   "coordinates": {
+    "latitude": 40.77716,
+    "longitude": -112.02441
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1876 E Specimen Blvd",
+    "address2": "",
+    "address3": "",
+    "city": "Salt Lake City",
+    "zip_code": "84104",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1876 E Specimen Blvd",
+     "Salt Lake City, UT 84104"
+    ]
+   },
+   "phone": "+18015550148",
+   "display_phone": "(801) 555-0148",
+   "distance": 14212.0
+  },
+  {
+   "id": "recorded-yelp-050",
+   "alias": "canyon-bakery-4-west-valley-city",
+   "name": "Canyon Bakery 4",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/canyon-bakery-4-west-valley-city?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 3,
+   "categories": [
+    {
+     "alias": "bakeries",
+     "title": "Bakeries"
+    }
+   ],
+   "rating": 4.5,
+   "coordinates": {
+    "latitude": 40.59079,
+    "longitude": -111.88593
+   },
+   "transactions": [],
+   "price": "$$",
+   "location": {
+    "address1": "1913 S Model Way",
+    "address2": "",
+    "address3": "",
+    "city": "West Valley City",
+    "zip_code": "84119",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1913 S Model Way",
+     "West Valley City, UT 84119"
+    ]
+   },
+   "phone": "+18015550149",
+   "display_phone": "(801) 555-0149",
+   "distance": 13634.5
+  },
+  {
+   "id": "recorded-yelp-051",
+   "alias": "bonneville-grocery-4-murray",
+   "name": "Bonneville Grocery 4",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/bonneville-grocery-4-murray?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 3,
+   "categories": [
+    {
+     "alias": "grocery",
+     "title": "Grocery"
+    }
+   ],
+   "rating": 4.0,
+   "coordinates": {
+    "latitude": 40.62428,
+    "longitude": -111.83438
+   },
+   "transactions": [],
+   "price": "$$",
+   "location": {
+    "address1": "1950 W Example Rd",
+    "address2": "",
+    "address3": "",
+    "city": "Murray",
+    "zip_code": "84107",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1950 W Example Rd",
+     "Murray, UT 84107"
+    ]
+   },
+   "phone": "+18015550150",
+   "display_phone": "(801) 555-0150",
+   "distance": 976.8
+  },
+  {
+   "id": "recorded-yelp-052",
+   "alias": "jordan-warehouse-store-4-sandy",
+   "name": "Jordan Warehouse Store 4",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/jordan-warehouse-store-4-sandy?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 410,
+   "categories": [
+    {
+     "alias": "wholesalers",
+     "title": "Wholesale Stores"
+    }
+   ],
+   "rating": 4.5,
+   "coordinates": {
+    "latitude": 40.70168,
+    "longitude": -111.83867
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "1987 S Sample St",
+    "address2": "",
+    "address3": "",
+    "city": "Sandy",
+    "zip_code": "84070",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "1987 S Sample St",
+     "Sandy, UT 84070"
+    ]
+   },
+   "phone": "+18015550151",
+   "display_phone": "(801) 555-0151",
+   "distance": 14195.1
+  },
+  {
+   "id": "recorded-yelp-053",
+   "alias": "granite-hospital-4-west-jordan",
+   "name": "Granite Hospital 4",
+   "image_url": "",
+   "is_closed": false,
+   "url": "https://www.yelp.com/biz/granite-hospital-4-west-jordan?adjust_creative=recorded&utm_source=recorded",
+   "review_count": 3,
+   "categories": [
+    {
+     "alias": "hospitals",
+     "title": "Hospitals"
+    }
+   ],
+   "rating": 4.5,
+   "coordinates": {
+    "latitude": 40.70996,
+    "longitude": -111.81461
+   },
+   "transactions": [],
+   "price": null,
+   "location": {
+    "address1": "2024 N Placeholder Ave",
+    "address2": "",
+    "address3": "",
+    "city": "West Jordan",
+    "zip_code": "84088",
+    "country": "US",
+    "state": "UT",
+    "display_address": [
+     "2024 N Placeholder Ave",
+     "West Jordan, UT 84088"
+    ]
+   },
+   "phone": "+18015550152",
+   "display_phone": "(801) 555-0152",
+   "distance": 8707.6
+  }
+ ]
+}

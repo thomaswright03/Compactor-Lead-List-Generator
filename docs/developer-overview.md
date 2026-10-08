@@ -149,6 +149,25 @@ npm run lint:js                                # ESLint over leadgen/static/*.js
 npm run types:js                               # TypeScript's strict check of the same scripts (tsconfig.json)
 ```
 
+**Seeing the sources work without a key.** Every call to Yelp, Google, the map data
+(Overpass) and the place lookup goes through `http.request_json`, which notes each
+attempt's outcome (the paid sources name theirs with `source=`, the free ones are known
+by host) in `health.record`; `alerts.py` notes each webhook delivery the same way. The
+notes live in the `source_status` table (one row per source and outcome, replaced in
+place, an unchanged outcome written at most once a minute) and the public `/healthz`
+shows them through `health.status()`: set up or not (never a key), last answered, last
+failure and its one-line reason, Yelp's calls in the last 24 hours, the database's
+standing and the scoring rules' version. `checks.py` is `python -m leadgen check-sources`
+and the administrator's **Check sources** button (`web/admin.py`, a plain form whose
+answer is `templates/admin_check.html`): one cheapest real call per source. With
+`--recorded`, `recorded.py` starts a local stand-in on `127.0.0.1` that serves the
+recorded, made-up answers in `leadgen/data/recorded/` (shaped like the real APIs: Yelp
+pages by offset and limit and checks the bearer token, Google pages by `nextPageToken`
+and checks the key header, and each answers its first request with a 503 once), points
+`yelp.SEARCH_URL` and `google_places.SEARCH_URL` at it in a throwaway database and cache,
+and runs the real `search()` of each. `tests/test_health.py` covers all of it, with a
+local webhook server for `python -m leadgen test-alert`.
+
 The page's scripts are classic scripts that share their top-level names. Each lists the
 names it shares at its top (`/* exported ... */`); ESLint lets the other files use only
 those, so a misspelt or renamed function, an undeclared (implicit) global or an unused
@@ -309,6 +328,17 @@ python -m leadgen out-of-area [--miles 60] [--remove | --restore]
 # lacks, never changing or removing one (operator runbook: "Backups and restoring")
 python -m leadgen backup [--out FILE]
 python -m leadgen restore FILE [--apply]
+
+# Ask each source (Yelp, Google, the map data, the place lookup, the database) for one
+# small answer and print a table; --recorded needs no key: the real Yelp and Google code
+# runs against a local stand-in serving recorded answers (leadgen/data/recorded)
+python -m leadgen check-sources [--recorded]
+
+# Send a test message to the alert webhook (LEADGEN_ALERT_WEBHOOK) and say if it arrived
+python -m leadgen test-alert
+
+# How the scoring does on tests/fixtures/scoring_reference.json (docs/scoring-evaluation.md)
+python -m leadgen scoring-report
 ```
 
 ### API keys (Google and Yelp)
@@ -1163,6 +1193,14 @@ C's, the weights in `leadgen/config.py` need adjusting (say so in the commit).
 Its **not_production** list holds small shops and eateries whose name has a
 production word ("Day Dairy Barn"): `config.NOT_PRODUCTION_NAME_WORDS` keeps a name
 alone from making them a food & beverage plant.
+
+`python -m leadgen scoring-report` (`leadgen/scoring_report.py`) scores the file with the
+rules as they are now and prints, per tier, how many listings, how many have equipment
+(or were marked Yes / No), how many are flagged, and which confirmed businesses moved
+tier since the file was copied, under the rules' version (`config.SCORING_VERSION`,
+raised by hand when a change moves scores; `/healthz` shows it too). The current
+numbers, what they mean and how to refresh the file are in
+[docs/scoring-evaluation.md](scoring-evaluation.md).
 
 ## The downloads' columns (details)
 

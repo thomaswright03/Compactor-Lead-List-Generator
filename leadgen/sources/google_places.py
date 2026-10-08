@@ -12,7 +12,7 @@ from typing import Any
 
 from .. import config
 from ..geo import METERS_PER_MILE, search_grid
-from ..http import request_json
+from ..http import HttpError, request_json
 from ..models import Lead
 from . import SourceError
 from .paging import Cell, run_searches
@@ -73,14 +73,43 @@ def estimate_requests(queries: Sequence[str], grid_cells: int) -> int:
     return len(queries) * len(search_grid(0, 0, 1, grid_cells)) * MAX_PAGES
 
 
+KEY_ERRORS = ("API_KEY_INVALID", "API key not valid")
+# The cheapest text search (Google's IDs-only request) for check-sources: one place near
+# AARCO's shop, with no detail fields.
+CHECK_FIELD_MASK = "places.id,places.name"
+
+
+def _headers(api_key: str, field_mask: str = FIELD_MASK) -> dict[str, str]:
+    return {"X-Goog-Api-Key": api_key, "X-Goog-FieldMask": field_mask,
+            "Content-Type": "application/json"}
+
+
+def check(api_key: str) -> str:
+    """One cheapest Google call (IDs only) for a place near AARCO's shop: what it found,
+    for `python -m leadgen check-sources`. Raises SourceError for a rejected key, or
+    HttpError when Google didn't answer."""
+    lat, lon = config.OWN_COORDS
+    body = {"textQuery": "grocery store", "pageSize": 1,
+            "locationBias": {"circle": {"center": {"latitude": lat, "longitude": lon},
+                                        "radius": METERS_PER_MILE}}}
+    try:
+        data = request_json("POST", SEARCH_URL, json_body=body, headers=_headers(api_key, CHECK_FIELD_MASK),
+                            use_cache=False, retries=1, source="google")
+    except HttpError as exc:
+        if any(k in str(exc) for k in KEY_ERRORS):
+            raise SourceError(f"Google rejected the key. {exc}") from exc
+        raise
+    places = data.get("places") or []
+    return f"{len(places)} place found near AARCO's shop (an IDs-only search, Google's cheapest)"
+
+
 def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], api_key: str,
            grid_cells: int = 1, max_requests: int | None = None,
            progress: Callable[[str], None] | None = None) -> tuple[list[Lead], int, list[str]]:
     """Return (leads, requests_made, warnings). Put the most important queries first."""
     if not api_key:
         raise SourceError("No Google Places API key configured")
-    headers = {"X-Goog-Api-Key": api_key, "X-Goog-FieldMask": FIELD_MASK,
-               "Content-Type": "application/json"}
+    headers = _headers(api_key)
     cells = search_grid(lat, lon, radius_miles, grid_cells)
     if max_requests is None:
         max_requests = len(queries) * len(cells) * MAX_PAGES
@@ -97,7 +126,8 @@ def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], 
         }
         if token:
             body["pageToken"] = token
-        data = request_json("POST", SEARCH_URL, json_body=body, headers=headers, use_cache=False)
+        data = request_json("POST", SEARCH_URL, json_body=body, headers=headers, use_cache=False,
+                            source="google")
         return data.get("places", []), data.get("nextPageToken")
 
     def chain_key(query: str, cell: Cell) -> str:
@@ -109,5 +139,4 @@ def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], 
                         max_pages=MAX_PAGES, max_requests=max_requests,
                         cache_version=["google-chain-v1", FIELD_MASK], cache_key=chain_key,
                         progress=progress, stop_check=lambda: config.stop_reason("google"),
-                        token_delay=TOKEN_DELAY_SECONDS,
-                        key_errors=("API_KEY_INVALID", "API key not valid"))
+                        token_delay=TOKEN_DELAY_SECONDS, key_errors=KEY_ERRORS)

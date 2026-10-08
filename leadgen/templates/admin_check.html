@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} · {{ site_name }}</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+{% include "_theme.html" %}
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; flex-direction:column; background:linear-gradient(160deg, var(--side), var(--side-2)); background-color:var(--side);
+         font:var(--fs-base)/1.5 var(--font); color:var(--ink); }
+  main { flex:1; display:grid; place-items:center; padding:var(--sp-5) var(--sp-4); }
+  .box { width:min(900px,100%); background:var(--card); border-radius:var(--r-lg); padding:var(--sp-6);
+         border:1px solid var(--line); box-shadow:var(--shadow-lg); }
+  .brand { display:flex; align-items:center; gap:var(--sp-3); }
+  .brand .logo { width:40px; height:40px; flex:none; border-radius:var(--r-sm); }
+  .brand strong { font-family:var(--serif); display:block; font-size:var(--fs-md); text-wrap:balance; }
+  .brand span { color:var(--muted); font-size:var(--fs-sm); }
+  h1 { font-family:var(--serif); font-weight:540; letter-spacing:-.015em; font-size:var(--fs-lg); margin:var(--sp-5) 0 var(--sp-2); }
+  p { margin:0 0 var(--sp-4); color:var(--muted); font-size:var(--fs-md); }
+  p.ok { color:var(--good-ink); }
+  p.bad { color:var(--bad-ink); }
+  .table-wrap { overflow-x:auto; margin:0 0 var(--sp-5); }
+  table { border-collapse:collapse; width:100%; font-size:var(--fs-sm); }
+  th, td { text-align:left; padding:var(--sp-2) var(--sp-3); border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  td.yes { color:var(--good-ink); font-weight:600; }
+  td.no { color:var(--bad-ink); font-weight:600; }
+  a.btn { display:inline-block; font-weight:600; border-radius:var(--r-pill); background-image:linear-gradient(180deg, var(--btn), var(--btn-2)); padding:var(--sp-3) var(--sp-4); background:var(--btn);
+          color:var(--btn-ink); text-decoration:none; min-height:44px; box-shadow:var(--shadow-sm); }
+  a.btn:hover { background:var(--btn-hover); }
+  a.btn:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
+  footer { text-align:center; color:var(--side-ink); font-size:var(--fs-sm); padding:var(--sp-4); }
+</style>
+</head>
+<body>
+<main>
+  <div class="box">
+    <div class="brand"><img class="logo" src="/static/favicon.svg" alt="" width="40" height="40">
+      <div><strong>{{ company }}</strong><span>Lead Finder</span></div></div>
+    <h1>{{ title }}</h1>
+    <p{% if ok is defined %} class="{{ 'ok' if ok else 'bad' }}"{% endif %}>{{ text }}</p>
+    {% if rows %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Source</th><th>Set up?</th><th>Answered?</th><th>Took</th><th>What happened</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.label }}</td>
+        <td>{{ "yes" if r.set_up else "no" }}</td>
+        <td class="{{ '' if r.ok is none else ('yes' if r.ok else 'no') }}">{{ "-" if r.ok is none else ("yes" if r.ok else "no") }}</td>
+        <td>{{ "-" if r.seconds is none else "%.1f s"|format(r.seconds) }}</td>
+        <td>{{ r.detail }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p>The same check runs from a computer as <code>python -m leadgen check-sources</code>; the public
+      <a href="/healthz">/healthz</a> page shows when each source last answered.</p>
+    {% endif %}
+    <a class="btn" href="/#find">Back to Find leads</a>
+  </div>
+</main>
+<footer>© {{ year }} Wright AI Solutions. All rights reserved.</footer>
+</body>
+</html>

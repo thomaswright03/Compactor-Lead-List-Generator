@@ -18,7 +18,8 @@ still do is in [Owner actions still open](#owner-actions-still-open).
 - [Common actions](#common-actions) · [Owner actions still open](#owner-actions-still-open)
 - [Emergency switches](#emergency-switches-stop-searches-or-paid-calls)
 - [Deploying](#deploying) · [Logs and rollback](#logs-and-rolling-back-a-bad-deploy) ·
-  [Alerts: the webhook](#problems-the-webhook)
+  [Alerts: the webhook](#problems-the-webhook) ·
+  [Checking the sources and the alerts](#checking-the-sources-and-the-alerts)
 - [Monthly: the scoring check](#monthly-the-scoring-check) ·
   [The one-search-a-day rule](#the-one-search-a-day-rule)
 - [Settings](#settings-environment-variables) · [Put it online (Render)](#put-it-online-render) ·
@@ -45,6 +46,8 @@ still do is in [Owner actions still open](#owner-actions-still-open).
 | Change the login page's help contact | Built in: `SUPPORT_CONTACT` in `leadgen/config.py` (Thomas Wright at (801) 580-8630); or Render → **Environment** → `LEADGEN_SUPPORT_CONTACT` = a name with a phone or email, which replaces it | [Login](#login-and-the-render-plan) |
 | Merge a business saved as two rows | `python -m leadgen merge-sites` (lists, changes nothing), then `--apply` | [The database](#the-database-saved-leads-marks-calls-the-yelp-count) |
 | Send the monthly scoring check | **For the site administrator** → **Scoring check** → download, send to the developer | [Monthly](#monthly-the-scoring-check) |
+| See whether Yelp, Google, the map data and the database answer | Open `/healthz` (no login): set up, last answered, last failure per source. Or **For the site administrator** → **Check sources** (one real call each), or `python -m leadgen check-sources` | [Checking the sources](#checking-the-sources-and-the-alerts) |
+| Check that alerts arrive | **For the site administrator** → **Send a test alert**, or `python -m leadgen test-alert` | [Checking the sources](#checking-the-sources-and-the-alerts) |
 
 ## Owner actions still open
 
@@ -245,7 +248,11 @@ then on a scoring change that pushes a business marked Yes to a lower tier (or o
 marked No to a higher tier) fails the tests. The command
 `python -m leadgen reference` (with `DATABASE_URL` set) does the same from a
 computer. If the Stats page shows tier A's Yes share not above tier C's, ask for the
-weights to be looked at.
+weights to be looked at. The developer runs `python -m leadgen scoring-report` on the new
+file: per tier, how many businesses, how many have equipment or were marked Yes, and
+which moved tier since the copy; the numbers and what they mean are in
+[docs/scoring-evaluation.md](scoring-evaluation.md), with the scoring rules' version
+(`SCORING_VERSION`, also shown on `/healthz`).
 
 Write each run down here (the Stats page's tier table gives the shares), so it is
 clear whether the ranking works for AARCO's market. The first run needs about 50
@@ -346,6 +353,47 @@ words and error class names, never request data or settings. Reporting runs in
 the background and never slows or breaks a page; if the webhook can't be
 reached, that is only logged.
 
+To see that messages arrive, send a test one: **For the site administrator** →
+**Send a test alert**, or `python -m leadgen test-alert` from a computer with
+`LEADGEN_ALERT_WEBHOOK` set. Both say whether it was delivered, and `/healthz`
+shows when a message last reached the webhook (next section).
+
+## Checking the sources and the alerts
+
+Three ways to see that the outside sources answer, none of which needs a key in hand:
+
+**`/healthz`** (`https://compactor-lead-finder.onrender.com/healthz`, no login, holds
+no saved data and never a key) says, besides `ok`, `version` (the deployed commit) and
+`up_since`:
+
+| Field | Meaning |
+| --- | --- |
+| `scoring_version` | The scoring rules' version (`SCORING_VERSION` in `leadgen/config.py`; docs/scoring-evaluation.md) |
+| `sources.yelp`, `sources.google` | `set_up`: the key is set (yes / no, never the key); `switched_off`: the administrator's switch is on; `last_ok`: when it last answered (Utah time); `last_failure` and `failure_reason`: the last failed call and its one-line reason (an HTTP status, a timeout...); for Yelp `calls_24h` and `calls_limit`: the calls made in the last 24 hours against the 50 allowed |
+| `sources.osm`, `sources.geocoding` | The free map data (Overpass) and the place lookup: always set up; the same `last_ok` / `last_failure` / `failure_reason` |
+| `sources.database` | `kind` (`postgres` or `sqlite`), `ok` (it answered just now), `last_ok`, and the last connection failure with its reason (passwords taken out) |
+| `sources.alerts` | `set_up`: `LEADGEN_ALERT_WEBHOOK` is set (never the address); `last_ok`: when a message was last delivered; `last_failure` and `failure_reason` |
+
+Every call to a source (a search's, a fill-in's, a check's) notes its outcome in the
+`source_status` table (one row per source and outcome, kept up to date; an unchanged
+outcome is written at most once a minute), so the times are real and cost nothing to
+show. A source that has never been called since the table was added shows `null`.
+
+**Check sources** (**For the site administrator** → **Check the sources** → **Check
+sources**) asks each source for one small answer right now and opens a page with the
+table: set up?, answered?, how long it took, and what happened in plain words. It makes
+one real call per source that is set up; the Yelp call is taken from the site's 50 for
+the day first (and refused, spending nothing, when they are used up), Google's is its
+cheapest IDs-only search. A source whose key isn't set is reported as not set and never
+called. The same from a computer: `python -m leadgen check-sources` (with the site's
+`.env` or `DATABASE_URL`; exit code 2 when a source that is set up didn't answer).
+
+**With no key at all**, `python -m leadgen check-sources --recorded` runs the real Yelp
+and Google client code (the key headers, paging, parsing and a retry after a 503)
+against a local stand-in on this machine serving recorded, made-up answers shaped
+like the real ones (`leadgen/data/recorded/`), in a throwaway database, so the whole
+path can be seen working without a key and nothing is counted or noted.
+
 ## Settings (environment variables)
 
 In Render: open the service, **Environment**, add or edit the variable, then
@@ -368,7 +416,7 @@ them in `.env` (see `.env.example`) or the shell.
 | `LEADGEN_SUPPORT_CONTACT` | No | The built-in contact, `SUPPORT_CONTACT` in `leadgen/config.py` ("Thomas Wright at (801) 580-8630") | Whom the login page names for access or a forgotten password: a name plus a phone number or email, e.g. `Jane Doe at (801) 555-0100 or jane@example.com` (the number and email become tap-to-call and email links) |
 | `LEADGEN_ALLOWED_HOSTS` | No | `localhost` | Without a password, extra host names the page answers on (comma separated) |
 | `LEADGEN_CACHE_DIR` | No | `.cache` | Folder for the API response cache and the local SQLite database |
-| `RENDER`, `RENDER_GIT_COMMIT`, `PORT` | Set by Render | | Render's own; `/healthz` shows the deployed commit |
+| `RENDER`, `RENDER_GIT_COMMIT`, `PORT` | Set by Render | | Render's own; `/healthz` shows the deployed commit, and each source's standing ([Checking the sources](#checking-the-sources-and-the-alerts)) |
 | `PYTHON_VERSION` | Render | 3.11.9 (`render.yaml`) | Python version Render builds with |
 | `LEADGEN_TEST_DATABASE_URL` | Tests only | none | Runs the tests on a throwaway Postgres instead of SQLite (its tables are emptied) |
 | `LEADGEN_CHROMIUM` | Tests only | Playwright's Chromium | A Chromium binary for the browser tests |

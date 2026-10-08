@@ -119,16 +119,27 @@ SCHEMA = [
     # Utah working hours with no new version means the site had gone to sleep).
     """CREATE TABLE IF NOT EXISTS site_starts (
         id TEXT PRIMARY KEY, at DOUBLE PRECISION NOT NULL, version TEXT NOT NULL)""",
+    # When each outside source (Yelp, Google, the map data, the place lookup, the alert
+    # webhook) last answered and last failed, and why (health.py; /healthz shows it). One
+    # row per source and outcome, replaced in place: operating state like `windows` and
+    # `switches`, never saved data.
+    """CREATE TABLE IF NOT EXISTS source_status (
+        source TEXT NOT NULL, outcome TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
+        reason TEXT NOT NULL, PRIMARY KEY (source, outcome))""",
 ]
 # Every table, for tests that empty them.
 TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "mark_changes",
           "search_failures", "call_undos", "problems", "made_by", "switches", "merged_leads",
-          "removed_leads", "search_runs", "search_found", "lead_contacts", "site_starts")
+          "removed_leads", "search_runs", "search_found", "lead_contacts", "site_starts",
+          "source_status")
 # Up to this many ids are looked up by id (in chunks); more read the whole table.
 BY_ID_LIMIT = 1000
 _CHUNK = 500
 
 _ready: set[str] = set()       # the databases whose tables this process has created
+# The last failed connection in this process: (when, why), for /healthz (health.py); kept
+# in memory, as a database that can't be reached can't record it.
+last_failure: tuple[float, str] | None = None
 _lock = threading.Lock()
 _local = threading.local()      # the connection a web request shares (see scope())
 
@@ -292,7 +303,9 @@ def _new_connection(key: str, postgres: bool) -> Db:
         try:
             conn = psycopg.connect(key, autocommit=True, connect_timeout=15)
         except (psycopg.Error, OSError) as exc:
+            global last_failure
             log.warning("Database connection failed: %s: %s", exc.__class__.__name__, _reason(exc))
+            last_failure = (time.time(), f"{exc.__class__.__name__}: {_reason(exc)}")
             raise Unavailable("the database could not be reached") from exc
     else:
         http.CACHE_DIR.mkdir(parents=True, exist_ok=True)

@@ -24,6 +24,11 @@ SERVICE_CENTER = OWN_COORDS
 SERVICE_AREA_MILES = 30.0
 DEFAULT_KEYWORDS = ["compactor", "baler", "waste", "recycling"]
 DEFAULT_MIN_SCORE = 20
+# The version of the scoring rules (the categories, weights, brands and name words in this
+# file and the rules in scoring.py). Raise it by hand whenever a change moves scores or
+# tiers, and say so in the commit; /healthz and `python -m leadgen scoring-report` show
+# it, so a saved score can be matched to the rules that made it (docs/scoring-evaluation.md).
+SCORING_VERSION = 1
 
 # The client's name, as every page title, the brand block, the login and error pages,
 # the own-listing flag and the problem alerts write it. OWN_COMPANY_SHORT is the brand

@@ -17,11 +17,11 @@ from flask import Flask, jsonify, redirect, render_template, request, session
 from flask.typing import ResponseReturnValue
 from werkzeug.exceptions import HTTPException
 
-from .. import alerts, awake, calls, config, localtime, marks, store
+from .. import alerts, awake, calls, config, health, localtime, marks, store
 from ..localtime import date_time_text
 from ..pipeline import SearchParams
 from ..scoring import PARENT_FLAG
-from . import auth, finding, leads, mapping
+from . import admin, auth, finding, leads, mapping
 from .auth import LOGIN_DAYS, LOGIN_TRIES, LOGIN_WINDOW
 from .common import (
     DB_DOWN,
@@ -97,6 +97,19 @@ def _register_pages(app: Flask) -> None:
                 "company": config.OWN_COMPANY, "company_short": config.OWN_COMPANY_SHORT,
                 "site_name": config.SITE_NAME}
 
+    _register_request_scope(app)
+    _register_errors(app)
+
+    @app.get("/healthz")
+    def healthz() -> ResponseReturnValue:
+        return jsonify(health_check())
+
+    @app.get("/")
+    def index() -> str:
+        return render_template("index.html", **index_context())
+
+
+def _register_request_scope(app: Flask) -> None:
     # One database connection per request, shared by everything the request reads.
     @app.before_request
     def open_scope() -> None:
@@ -114,6 +127,8 @@ def _register_pages(app: Flask) -> None:
         name = request.path.strip("/")
         return redirect(f"/#{name}") if name in PAGES and wants_page() else None
 
+
+def _register_errors(app: Flask) -> None:
     @app.errorhandler(HTTPException)
     def http_error(exc: HTTPException) -> ResponseReturnValue:
         code = exc.code or 500
@@ -130,25 +145,33 @@ def _register_pages(app: Flask) -> None:
             return _error_page(500)
         return jsonify({"error": "Something went wrong. Try again in a minute."}), 500
 
-    @app.get("/healthz")
-    def healthz() -> ResponseReturnValue:
-        # up_since: when this start of the site began (Utah time); the same time all day
-        # means it never went to sleep (awake.py, the runbook's "Keep the site awake").
-        return jsonify({"ok": True, "version": os.environ.get("RENDER_GIT_COMMIT", "")[:7],
-                        "up_since": date_time_text(awake.started_at)})
 
-    @app.get("/")
-    def index() -> str:
-        google, yelp_key, _ = SearchParams().resolved_keys()
-        return render_template("index.html", defaults={
-            "location": config.DEFAULT_LOCATION, "radius": config.DEFAULT_RADIUS_MILES,
-            "keywords": ", ".join(config.DEFAULT_KEYWORDS), "min_score": config.DEFAULT_MIN_SCORE,
-        }, yelp=yelp_quota(), outcomes=list(calls.OUTCOMES), google_on=bool(google),
-            yelp_on=bool(yelp_key), switches=switches(), paused_text=SEARCH_PAUSED,
-            undo_seconds=marks.UNDO_SECONDS, admin=auth.admin_state(),
-            admin_lockable=bool(state().admin_password),
-            flagged=[*config.COMPETITORS, config.OWN_COMPANY, config.PARENT_COMPANY], parent_flag=PARENT_FLAG,
-            area_miles=config.SERVICE_AREA_MILES)
+def health_check() -> dict[str, Any]:
+    """What /healthz answers (public, no login: never a key, an address or saved data).
+
+    ok and version (the deployed commit) as before; up_since: when this start of the site
+    began (Utah time; the same time all day means it never went to sleep, awake.py);
+    scoring_version: the scoring rules' version (config.SCORING_VERSION); sources: each
+    outside source's standing (health.status): set up or not, when it last answered,
+    when it last failed and why, Yelp's calls in the last 24 hours.
+    """
+    return {"ok": True, "version": os.environ.get("RENDER_GIT_COMMIT", "")[:7],
+            "up_since": date_time_text(awake.started_at), "scoring_version": config.SCORING_VERSION,
+            "sources": health.status()}
+
+
+def index_context() -> dict[str, Any]:
+    google, yelp_key, _ = SearchParams().resolved_keys()
+    return {
+        "defaults": {"location": config.DEFAULT_LOCATION, "radius": config.DEFAULT_RADIUS_MILES,
+                     "keywords": ", ".join(config.DEFAULT_KEYWORDS), "min_score": config.DEFAULT_MIN_SCORE},
+        "yelp": yelp_quota(), "outcomes": list(calls.OUTCOMES), "google_on": bool(google),
+        "yelp_on": bool(yelp_key), "switches": switches(), "paused_text": SEARCH_PAUSED,
+        "undo_seconds": marks.UNDO_SECONDS, "admin": auth.admin_state(),
+        "admin_lockable": bool(state().admin_password),
+        "flagged": [*config.COMPETITORS, config.OWN_COMPANY, config.PARENT_COMPANY], "parent_flag": PARENT_FLAG,
+        "area_miles": config.SERVICE_AREA_MILES,
+    }
 
 
 def create_app(password: str | None = None, username: str | None = None,
@@ -179,7 +202,7 @@ def create_app(password: str | None = None, username: str | None = None,
         log.warning("No login contact: config.SUPPORT_CONTACT and LEADGEN_SUPPORT_CONTACT are both empty, so "
                     "the login page names no one to ask for access or a forgotten password.")
     app.extensions["leadgen"] = State(password, username, admin_password)
-    for blueprint in (auth.bp, finding.bp, leads.bp, mapping.bp):
+    for blueprint in (auth.bp, finding.bp, leads.bp, mapping.bp, admin.bp):
         app.register_blueprint(blueprint)
     _register_pages(app)
     return app

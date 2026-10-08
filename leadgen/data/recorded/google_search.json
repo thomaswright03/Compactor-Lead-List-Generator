@@ -1,0 +1,2055 @@
+{
+ "about": "A recorded, sanitized Google Places (New) text search answer for `python -m leadgen check-sources --recorded`: made-up places shaped like Google's (555 phone numbers, example.com websites, no real listing), served by leadgen/recorded.py 20 a page with a nextPageToken, as Google does. Edit by hand or regenerate; the real API is never recorded with a key.",
+ "places": [
+  {
+   "name": "places/recorded-google-001",
+   "id": "recorded-google-001",
+   "types": [
+    "hotel",
+    "lodging",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0200",
+   "formattedAddress": "200 N Placeholder Ave, Salt Lake City, UT 84104, USA",
+   "addressComponents": [
+    {
+     "longText": "200",
+     "shortText": "200",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "N Placeholder Ave",
+     "shortText": "N Placeholder Ave",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Salt Lake City",
+     "shortText": "Salt Lake City",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84104",
+     "shortText": "84104",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.64181,
+    "longitude": -112.00109
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded1",
+   "websiteUri": "https://www.example.com/jordan-hotel/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 1200,
+   "displayName": {
+    "text": "Jordan Hotel",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Hotel",
+    "languageCode": "en-US"
+   },
+   "primaryType": "hotel"
+  },
+  {
+   "name": "places/recorded-google-002",
+   "id": "recorded-google-002",
+   "types": [
+    "recycling_center",
+    "point_of_interest",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0201",
+   "formattedAddress": "241 E Specimen Blvd, West Valley City, UT 84119, USA",
+   "addressComponents": [
+    {
+     "longText": "241",
+     "shortText": "241",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "E Specimen Blvd",
+     "shortText": "E Specimen Blvd",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "West Valley City",
+     "shortText": "West Valley City",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84119",
+     "shortText": "84119",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.60148,
+    "longitude": -111.87022
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded2",
+   "websiteUri": "https://www.example.com/granite-recycling/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 350,
+   "displayName": {
+    "text": "Granite Recycling",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Recycling Center",
+    "languageCode": "en-US"
+   },
+   "primaryType": "recycling_center"
+  },
+  {
+   "name": "places/recorded-google-003",
+   "id": "recorded-google-003",
+   "types": [
+    "manufacturer",
+    "point_of_interest",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0202",
+   "formattedAddress": "282 S Model Way, Murray, UT 84107, USA",
+   "addressComponents": [
+    {
+     "longText": "282",
+     "shortText": "282",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "S Model Way",
+     "shortText": "S Model Way",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Murray",
+     "shortText": "Murray",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84107",
+     "shortText": "84107",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.71874,
+    "longitude": -111.80018
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded3",
+   "websiteUri": "https://www.example.com/beehive-plastics/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 8,
+   "displayName": {
+    "text": "Beehive Plastics",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Manufacturer",
+    "languageCode": "en-US"
+   },
+   "primaryType": "manufacturer"
+  },
+  {
+   "name": "places/recorded-google-004",
+   "id": "recorded-google-004",
+   "types": [
+    "warehouse",
+    "point_of_interest",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0203",
+   "formattedAddress": "323 W Example Rd, Sandy, UT 84070, USA",
+   "addressComponents": [
+    {
+     "longText": "323",
+     "shortText": "323",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "W Example Rd",
+     "shortText": "W Example Rd",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Sandy",
+     "shortText": "Sandy",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84070",
+     "shortText": "84070",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.78884,
+    "longitude": -111.78084
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded4",
+   "websiteUri": "https://www.example.com/pioneer-distribution-center/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 90,
+   "displayName": {
+    "text": "Pioneer Distribution Center",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Warehouse",
+    "languageCode": "en-US"
+   },
+   "primaryType": "warehouse"
+  },
+  {
+   "name": "places/recorded-google-005",
+   "id": "recorded-google-005",
+   "types": [
+    "department_store",
+    "store",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0204",
+   "formattedAddress": "364 S Sample St, West Jordan, UT 84088, USA",
+   "addressComponents": [
+    {
+     "longText": "364",
+     "shortText": "364",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "S Sample St",
+     "shortText": "S Sample St",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "West Jordan",
+     "shortText": "West Jordan",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84088",
+     "shortText": "84088",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.76357,
+    "longitude": -111.84385
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded5",
+   "websiteUri": "https://www.example.com/red-rock-department-store/",
+   "businessStatus": "CLOSED_PERMANENTLY",
+   "userRatingCount": 1200,
+   "displayName": {
+    "text": "Red Rock Department Store",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Department Store",
+    "languageCode": "en-US"
+   },
+   "primaryType": "department_store"
+  },
+  {
+   "name": "places/recorded-google-006",
+   "id": "recorded-google-006",
+   "types": [
+    "hardware_store",
+    "home_improvement_store",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0205",
+   "formattedAddress": "405 N Placeholder Ave, Taylorsville, UT 84123, USA",
+   "addressComponents": [
+    {
+     "longText": "405",
+     "shortText": "405",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "N Placeholder Ave",
+     "shortText": "N Placeholder Ave",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Taylorsville",
+     "shortText": "Taylorsville",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84123",
+     "shortText": "84123",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.78748,
+    "longitude": -112.04632
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded6",
+   "websiteUri": "https://www.example.com/great-basin-hardware/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 350,
+   "displayName": {
+    "text": "Great Basin Hardware",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Hardware Store",
+    "languageCode": "en-US"
+   },
+   "primaryType": "hardware_store"
+  },
+  {
+   "name": "places/recorded-google-007",
+   "id": "recorded-google-007",
+   "types": [
+    "bakery",
+    "food",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0206",
+   "formattedAddress": "446 E Specimen Blvd, Salt Lake City, UT 84104, USA",
+   "addressComponents": [
+    {
+     "longText": "446",
+     "shortText": "446",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "E Specimen Blvd",
+     "shortText": "E Specimen Blvd",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Salt Lake City",
+     "shortText": "Salt Lake City",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84104",
+     "shortText": "84104",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.66407,
+    "longitude": -111.96483
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded7",
+   "websiteUri": "https://www.example.com/oquirrh-bakery/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 1200,
+   "displayName": {
+    "text": "Oquirrh Bakery",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Bakery",
+    "languageCode": "en-US"
+   },
+   "primaryType": "bakery"
+  },
+  {
+   "name": "places/recorded-google-008",
+   "id": "recorded-google-008",
+   "types": [
+    "supermarket",
+    "grocery_store",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0207",
+   "formattedAddress": "487 S Model Way, West Valley City, UT 84119, USA",
+   "addressComponents": [
+    {
+     "longText": "487",
+     "shortText": "487",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "S Model Way",
+     "shortText": "S Model Way",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "West Valley City",
+     "shortText": "West Valley City",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84119",
+     "shortText": "84119",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.71232,
+    "longitude": -111.90585
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded8",
+   "websiteUri": "https://www.example.com/sego-grocery/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 8,
+   "displayName": {
+    "text": "Sego Grocery",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Supermarket",
+    "languageCode": "en-US"
+   },
+   "primaryType": "supermarket"
+  },
+  {
+   "name": "places/recorded-google-009",
+   "id": "recorded-google-009",
+   "types": [
+    "warehouse_store",
+    "store",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0208",
+   "formattedAddress": "528 W Example Rd, Murray, UT 84107, USA",
+   "addressComponents": [
+    {
+     "longText": "528",
+     "shortText": "528",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "W Example Rd",
+     "shortText": "W Example Rd",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Murray",
+     "shortText": "Murray",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84107",
+     "shortText": "84107",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.81657,
+    "longitude": -111.86989
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded9",
+   "websiteUri": "https://www.example.com/timpanogos-warehouse-store/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 2600,
+   "displayName": {
+    "text": "Timpanogos Warehouse Store",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Warehouse Store",
+    "languageCode": "en-US"
+   },
+   "primaryType": "warehouse_store"
+  },
+  {
+   "name": "places/recorded-google-010",
+   "id": "recorded-google-010",
+   "types": [
+    "hospital",
+    "health",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0209",
+   "formattedAddress": "569 S Sample St, Sandy, UT 84070, USA",
+   "addressComponents": [
+    {
+     "longText": "569",
+     "shortText": "569",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "S Sample St",
+     "shortText": "S Sample St",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Sandy",
+     "shortText": "Sandy",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84070",
+     "shortText": "84070",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.61766,
+    "longitude": -111.84794
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded10",
+   "websiteUri": "https://www.example.com/antelope-hospital/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 1200,
+   "displayName": {
+    "text": "Antelope Hospital",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Hospital",
+    "languageCode": "en-US"
+   },
+   "primaryType": "hospital"
+  },
+  {
+   "name": "places/recorded-google-011",
+   "id": "recorded-google-011",
+   "types": [
+    "hotel",
+    "lodging",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0210",
+   "formattedAddress": "610 N Placeholder Ave, West Jordan, UT 84088, USA",
+   "addressComponents": [
+    {
+     "longText": "610",
+     "shortText": "610",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "N Placeholder Ave",
+     "shortText": "N Placeholder Ave",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "West Jordan",
+     "shortText": "West Jordan",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84088",
+     "shortText": "84088",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.78203,
+    "longitude": -112.01238
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded11",
+   "websiteUri": "https://www.example.com/deseret-hotel/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 8,
+   "displayName": {
+    "text": "Deseret Hotel",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Hotel",
+    "languageCode": "en-US"
+   },
+   "primaryType": "hotel"
+  },
+  {
+   "name": "places/recorded-google-012",
+   "id": "recorded-google-012",
+   "types": [
+    "recycling_center",
+    "point_of_interest",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0211",
+   "formattedAddress": "651 E Specimen Blvd, Taylorsville, UT 84123, USA",
+   "addressComponents": [
+    {
+     "longText": "651",
+     "shortText": "651",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "E Specimen Blvd",
+     "shortText": "E Specimen Blvd",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Taylorsville",
+     "shortText": "Taylorsville",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84123",
+     "shortText": "84123",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.6175,
+    "longitude": -111.95969
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded12",
+   "websiteUri": "https://www.example.com/uinta-recycling/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 350,
+   "displayName": {
+    "text": "Uinta Recycling",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Recycling Center",
+    "languageCode": "en-US"
+   },
+   "primaryType": "recycling_center"
+  },
+  {
+   "name": "places/recorded-google-013",
+   "id": "recorded-google-013",
+   "types": [
+    "manufacturer",
+    "point_of_interest",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0212",
+   "formattedAddress": "692 S Model Way, Salt Lake City, UT 84104, USA",
+   "addressComponents": [
+    {
+     "longText": "692",
+     "shortText": "692",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "S Model Way",
+     "shortText": "S Model Way",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Salt Lake City",
+     "shortText": "Salt Lake City",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84104",
+     "shortText": "84104",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.60528,
+    "longitude": -111.78583
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded13",
+   "websiteUri": "https://www.example.com/cottonwood-plastics/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 2600,
+   "displayName": {
+    "text": "Cottonwood Plastics",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Manufacturer",
+    "languageCode": "en-US"
+   },
+   "primaryType": "manufacturer"
+  },
+  {
+   "name": "places/recorded-google-014",
+   "id": "recorded-google-014",
+   "types": [
+    "warehouse",
+    "point_of_interest",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0213",
+   "formattedAddress": "733 W Example Rd, West Valley City, UT 84119, USA",
+   "addressComponents": [
+    {
+     "longText": "733",
+     "shortText": "733",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "W Example Rd",
+     "shortText": "W Example Rd",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "West Valley City",
+     "shortText": "West Valley City",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84119",
+     "shortText": "84119",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.74354,
+    "longitude": -111.9335
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded14",
+   "websiteUri": "https://www.example.com/wasatch-distribution-center-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 1200,
+   "displayName": {
+    "text": "Wasatch Distribution Center 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Warehouse",
+    "languageCode": "en-US"
+   },
+   "primaryType": "warehouse"
+  },
+  {
+   "name": "places/recorded-google-015",
+   "id": "recorded-google-015",
+   "types": [
+    "department_store",
+    "store",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0214",
+   "formattedAddress": "774 S Sample St, Murray, UT 84107, USA",
+   "addressComponents": [
+    {
+     "longText": "774",
+     "shortText": "774",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "S Sample St",
+     "shortText": "S Sample St",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Murray",
+     "shortText": "Murray",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84107",
+     "shortText": "84107",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.60813,
+    "longitude": -112.0377
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded15",
+   "websiteUri": "https://www.example.com/canyon-department-store-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 90,
+   "displayName": {
+    "text": "Canyon Department Store 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Department Store",
+    "languageCode": "en-US"
+   },
+   "primaryType": "department_store"
+  },
+  {
+   "name": "places/recorded-google-016",
+   "id": "recorded-google-016",
+   "types": [
+    "hardware_store",
+    "home_improvement_store",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0215",
+   "formattedAddress": "815 N Placeholder Ave, Sandy, UT 84070, USA",
+   "addressComponents": [
+    {
+     "longText": "815",
+     "shortText": "815",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "N Placeholder Ave",
+     "shortText": "N Placeholder Ave",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Sandy",
+     "shortText": "Sandy",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84070",
+     "shortText": "84070",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.6615,
+    "longitude": -111.97543
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded16",
+   "websiteUri": "https://www.example.com/bonneville-hardware-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 8,
+   "displayName": {
+    "text": "Bonneville Hardware 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Hardware Store",
+    "languageCode": "en-US"
+   },
+   "primaryType": "hardware_store"
+  },
+  {
+   "name": "places/recorded-google-017",
+   "id": "recorded-google-017",
+   "types": [
+    "bakery",
+    "food",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0216",
+   "formattedAddress": "856 E Specimen Blvd, West Jordan, UT 84088, USA",
+   "addressComponents": [
+    {
+     "longText": "856",
+     "shortText": "856",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "E Specimen Blvd",
+     "shortText": "E Specimen Blvd",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "West Jordan",
+     "shortText": "West Jordan",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84088",
+     "shortText": "84088",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.60058,
+    "longitude": -111.9736
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded17",
+   "websiteUri": "https://www.example.com/jordan-bakery-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 90,
+   "displayName": {
+    "text": "Jordan Bakery 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Bakery",
+    "languageCode": "en-US"
+   },
+   "primaryType": "bakery"
+  },
+  {
+   "name": "places/recorded-google-018",
+   "id": "recorded-google-018",
+   "types": [
+    "supermarket",
+    "grocery_store",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0217",
+   "formattedAddress": "897 S Model Way, Taylorsville, UT 84123, USA",
+   "addressComponents": [
+    {
+     "longText": "897",
+     "shortText": "897",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "S Model Way",
+     "shortText": "S Model Way",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Taylorsville",
+     "shortText": "Taylorsville",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84123",
+     "shortText": "84123",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.75048,
+    "longitude": -112.03137
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded18",
+   "websiteUri": "https://www.example.com/granite-grocery-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 8,
+   "displayName": {
+    "text": "Granite Grocery 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Supermarket",
+    "languageCode": "en-US"
+   },
+   "primaryType": "supermarket"
+  },
+  {
+   "name": "places/recorded-google-019",
+   "id": "recorded-google-019",
+   "types": [
+    "warehouse_store",
+    "store",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0218",
+   "formattedAddress": "938 W Example Rd, Salt Lake City, UT 84104, USA",
+   "addressComponents": [
+    {
+     "longText": "938",
+     "shortText": "938",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "W Example Rd",
+     "shortText": "W Example Rd",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Salt Lake City",
+     "shortText": "Salt Lake City",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84104",
+     "shortText": "84104",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.79685,
+    "longitude": -111.90244
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded19",
+   "websiteUri": "https://www.example.com/beehive-warehouse-store-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 8,
+   "displayName": {
+    "text": "Beehive Warehouse Store 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Warehouse Store",
+    "languageCode": "en-US"
+   },
+   "primaryType": "warehouse_store"
+  },
+  {
+   "name": "places/recorded-google-020",
+   "id": "recorded-google-020",
+   "types": [
+    "hospital",
+    "health",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0219",
+   "formattedAddress": "979 S Sample St, West Valley City, UT 84119, USA",
+   "addressComponents": [
+    {
+     "longText": "979",
+     "shortText": "979",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "S Sample St",
+     "shortText": "S Sample St",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "West Valley City",
+     "shortText": "West Valley City",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84119",
+     "shortText": "84119",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.81438,
+    "longitude": -112.0628
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded20",
+   "websiteUri": "https://www.example.com/pioneer-hospital-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 90,
+   "displayName": {
+    "text": "Pioneer Hospital 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Hospital",
+    "languageCode": "en-US"
+   },
+   "primaryType": "hospital"
+  },
+  {
+   "name": "places/recorded-google-021",
+   "id": "recorded-google-021",
+   "types": [
+    "hotel",
+    "lodging",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0220",
+   "formattedAddress": "1020 N Placeholder Ave, Murray, UT 84107, USA",
+   "addressComponents": [
+    {
+     "longText": "1020",
+     "shortText": "1020",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "N Placeholder Ave",
+     "shortText": "N Placeholder Ave",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Murray",
+     "shortText": "Murray",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84107",
+     "shortText": "84107",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.74151,
+    "longitude": -111.77053
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded21",
+   "websiteUri": "https://www.example.com/red-rock-hotel-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 2600,
+   "displayName": {
+    "text": "Red Rock Hotel 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Hotel",
+    "languageCode": "en-US"
+   },
+   "primaryType": "hotel"
+  },
+  {
+   "name": "places/recorded-google-022",
+   "id": "recorded-google-022",
+   "types": [
+    "recycling_center",
+    "point_of_interest",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0221",
+   "formattedAddress": "1061 E Specimen Blvd, Sandy, UT 84070, USA",
+   "addressComponents": [
+    {
+     "longText": "1061",
+     "shortText": "1061",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "E Specimen Blvd",
+     "shortText": "E Specimen Blvd",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Sandy",
+     "shortText": "Sandy",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84070",
+     "shortText": "84070",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.70775,
+    "longitude": -112.02339
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded22",
+   "websiteUri": "https://www.example.com/great-basin-recycling-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 1200,
+   "displayName": {
+    "text": "Great Basin Recycling 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Recycling Center",
+    "languageCode": "en-US"
+   },
+   "primaryType": "recycling_center"
+  },
+  {
+   "name": "places/recorded-google-023",
+   "id": "recorded-google-023",
+   "types": [
+    "manufacturer",
+    "point_of_interest",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0222",
+   "formattedAddress": "1102 S Model Way, West Jordan, UT 84088, USA",
+   "addressComponents": [
+    {
+     "longText": "1102",
+     "shortText": "1102",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "S Model Way",
+     "shortText": "S Model Way",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "West Jordan",
+     "shortText": "West Jordan",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84088",
+     "shortText": "84088",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.72998,
+    "longitude": -111.9064
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded23",
+   "websiteUri": "https://www.example.com/oquirrh-plastics-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 8,
+   "displayName": {
+    "text": "Oquirrh Plastics 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Manufacturer",
+    "languageCode": "en-US"
+   },
+   "primaryType": "manufacturer"
+  },
+  {
+   "name": "places/recorded-google-024",
+   "id": "recorded-google-024",
+   "types": [
+    "warehouse",
+    "point_of_interest",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0223",
+   "formattedAddress": "1143 W Example Rd, Taylorsville, UT 84123, USA",
+   "addressComponents": [
+    {
+     "longText": "1143",
+     "shortText": "1143",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "W Example Rd",
+     "shortText": "W Example Rd",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Taylorsville",
+     "shortText": "Taylorsville",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84123",
+     "shortText": "84123",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.58098,
+    "longitude": -111.90262
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded24",
+   "websiteUri": "https://www.example.com/sego-distribution-center-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 350,
+   "displayName": {
+    "text": "Sego Distribution Center 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Warehouse",
+    "languageCode": "en-US"
+   },
+   "primaryType": "warehouse"
+  },
+  {
+   "name": "places/recorded-google-025",
+   "id": "recorded-google-025",
+   "types": [
+    "department_store",
+    "store",
+    "point_of_interest",
+    "establishment"
+   ],
+   "nationalPhoneNumber": "(801) 555-0224",
+   "formattedAddress": "1184 S Sample St, Salt Lake City, UT 84104, USA",
+   "addressComponents": [
+    {
+     "longText": "1184",
+     "shortText": "1184",
+     "types": [
+      "street_number"
+     ],
+     "languageCode": "en-US"
+    },
+    {
+     "longText": "S Sample St",
+     "shortText": "S Sample St",
+     "types": [
+      "route"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Salt Lake City",
+     "shortText": "Salt Lake City",
+     "types": [
+      "locality",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "Utah",
+     "shortText": "UT",
+     "types": [
+      "administrative_area_level_1",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "United States",
+     "shortText": "US",
+     "types": [
+      "country",
+      "political"
+     ],
+     "languageCode": "en"
+    },
+    {
+     "longText": "84104",
+     "shortText": "84104",
+     "types": [
+      "postal_code"
+     ],
+     "languageCode": "en-US"
+    }
+   ],
+   "location": {
+    "latitude": 40.72804,
+    "longitude": -111.93082
+   },
+   "googleMapsUri": "https://maps.google.com/?cid=recorded25",
+   "websiteUri": "https://www.example.com/timpanogos-department-store-2/",
+   "businessStatus": "OPERATIONAL",
+   "userRatingCount": 350,
+   "displayName": {
+    "text": "Timpanogos Department Store 2",
+    "languageCode": "en"
+   },
+   "primaryTypeDisplayName": {
+    "text": "Department Store",
+    "languageCode": "en-US"
+   },
+   "primaryType": "department_store"
+  }
+ ]
+}
