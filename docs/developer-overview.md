@@ -178,7 +178,7 @@ not on the page, a field the server may leave out) must be checked before use, a
 server's answers are read through the shapes in `types/page.d.ts` (`Lead`, `LeadsPage`,
 `SearchesAnswer`, `Job`...), along with the page's state (`PageState`) and what the
 scripts use from the page itself. A server change that adds or renames a field the page
-reads updates that file too. Lines are at most 120 characters, as in the Python.
+reads updates that file too. Script lines are at most 100 characters (Python: 120).
 
 The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
 `leadgen/saved.py`, `marks.py`, `calls.py` and `daily.py` keep the saved data

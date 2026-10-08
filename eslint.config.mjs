@@ -69,9 +69,8 @@ export default [
       "no-var": "error",
       "prefer-const": ["error", { destructuring: "all" }],
       // Narrower than the Python's 120 (pyproject.toml): the scripts' nested callbacks and
-      // template strings read better short. tour.js keeps the old limit until its owner
-      // reflows it.
-      "max-len": ["error", { code: file === "tour.js" ? 120 : 100, ignoreUrls: true }],
+      // template strings read better short.
+      "max-len": ["error", { code: 100, ignoreUrls: true }],
     },
   })),
 ];

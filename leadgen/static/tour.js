@@ -6,63 +6,74 @@
 /** @type {TourStep[]} */
 const TOUR = [
   { page: "find", title: "Welcome to the Lead Finder",
-    text: "This site finds businesses around Salt Lake City likely to run a baler or compactor. You call them, " +
-          "answer Yes or No, and keep track of each call. This tour only looks around: nothing is changed." },
+    text: "This site finds businesses around Salt Lake City likely to run a baler or compactor. " +
+          "You call them, answer Yes or No, and keep track of each call. This tour only looks " +
+          "around: nothing is changed." },
   { page: "find", target: "nav", title: "The five pages",
-    text: "Find leads runs a search. Leads is the list to check. Calls keeps every call. Map shows them all around " +
-          "AARCO. Stats sums up what you found." },
+    text: "Find leads runs a search. Leads is the list to check. Calls keeps every call. Map " +
+          "shows them all around AARCO. Stats sums up what you found." },
   { page: "find", target: "#form .form-grid", title: "Where to search",
-    text: "Type a ZIP code, city or address and how many miles around it to look. AARCO's address is filled in. " +
-          "A town name on its own means the Utah one." },
+    text: "Type a ZIP code, city or address and how many miles around it to look. AARCO's " +
+          "address is filled in. A town name on its own means the Utah one." },
   { page: "find", target: ".go-row", title: "Find leads, once a day",
-    text: "Press Find leads to start. You get one search per day (Utah time), so the site asks first. " +
-          "New businesses join your saved leads; ones you already have are updated, never duplicated." },
+    text: "Press Find leads to start. You get one search per day (Utah time), so the site asks " +
+          "first. New businesses join your saved leads; ones you already have are updated, " +
+          "never duplicated." },
   { page: "find", target: "#history", title: "Search history",
-    text: "Every search: when it ran, where it looked, and how many businesses it found and added. A note above " +
-          "this list says how much of the area the latest search covered." },
+    text: "Every search: when it ran, where it looked, and how many businesses it found and " +
+          "added. A note above this list says how much of the area the latest search covered." },
   { page: "find", target: "#admin-card", title: "For the site administrator",
-    text: "Closed and locked with its own password. It lists recent problems and can pause searching right away." },
+    text: "Closed and locked with its own password. It lists recent problems and can pause " +
+          "searching right away." },
   { page: "leads", target: "#lead-tabs, #tab-pick", title: "Leads: one tab per answer",
-    text: "Not checked holds the businesses nobody has answered yet. Once marked, a business moves to " +
-          "Has baler or compactor or No baler or compactor. Competitors have their own tab and are never asked." },
+    text: "Not checked holds the businesses nobody has answered yet. Once marked, a business " +
+          "moves to Has baler or compactor or No baler or compactor. Competitors have their own " +
+          "tab and are never asked." },
   { page: "leads", target: "#page-leads .toolbar", title: "Find the right business",
-    text: "Filter by name, city or category, pick a tier, show only businesses with a phone number, " +
-          "and download the whole list as Excel or CSV." },
+    text: "Filter by name, city or category, pick a tier, show only businesses with a phone " +
+          "number, and download the whole list as Excel or CSV." },
   { page: "leads", target: "#leads-wrap", title: "Each business",
-    text: "Every business has a score from 0 to 100 and a tier: A strong, B likely, C possible, D weak. " +
-          "Why this score lists the reasons. Found a better number or who to ask for? Save it with " +
-          "Add verified phone or contact." },
-  { page: "leads", target: "#leads-wrap .c-mark .mark, #leads-wrap", title: "Has baler or compactor? Yes or No",
+    text: "Every business has a score from 0 to 100 and a tier: A strong, B likely, C possible, " +
+          "D weak. Why this score lists the reasons. Found a better number or who to ask for? " +
+          "Save it with Add verified phone or contact." },
+  { page: "leads", target: "#leads-wrap .c-mark .mark, #leads-wrap",
+    title: "Has baler or compactor? Yes or No",
     text: "Once you know, press Yes or No. The mark is kept for good and shows who made it. " +
           "Pressed the wrong one? Undo is offered for 5 minutes." },
   { page: "leads", target: "#leads-wrap .call-cell, #leads-wrap", title: "Just called",
-    text: "After a call, press Just called: write a short Conversation Summary and pick how it went. " +
-          "History shows every earlier call. A call never changes the Yes / No answer." },
+    text: "After a call, press Just called: write a short Conversation Summary and pick how it " +
+          "went. History shows every earlier call. A call never changes the Yes / No answer." },
   { page: "calls", target: "#call-tabs, #call-pick", title: "Calls",
-    text: "Every business that has been called, latest call first. Each outcome has its own tab, so Follow Up " +
-          "shows exactly who to call back." },
+    text: "Every business that has been called, latest call first. Each outcome has its own " +
+          "tab, so Follow Up shows exactly who to call back." },
   { page: "map", target: "#map-box", title: "Map",
-    text: `AARCO's pin, its ${CONFIG.area_miles}-mile area and the areas a search looks through, shaded by how ` +
-          "the latest search went. Every saved business is a dot coloured by its answer. Tap one for its details." },
+    text: `AARCO's pin, its ${CONFIG.area_miles}-mile area and the areas a search looks ` +
+          "through, shaded by how the latest search went. Every saved business is a dot " +
+          "coloured by its answer. Tap one for its details." },
   { page: "map", target: "#map-groups", title: "Show or hide businesses",
-    text: "Untick a group to hide it from the map, tick it to show it again. The key explains every symbol." },
+    text: "Untick a group to hide it from the map, tick it to show it again. The key explains " +
+          "every symbol." },
   { page: "stats", target: "#stats-body", title: "Stats",
-    text: "How many businesses have a baler or compactor, their average score, and how often each tier " +
-          "turned out right. It fills in as the team marks businesses Yes or No." },
+    text: "How many businesses have a baler or compactor, their average score, and how often " +
+          "each tier turned out right. It fills in as the team marks businesses Yes or No." },
   { page: "stats", target: "#me", title: "Your name",
-    text: "Marks and calls are saved with the name set in this browser. Change it here if someone else uses " +
-          "this computer." },
+    text: "Marks and calls are saved with the name set in this browser. Change it here if " +
+          "someone else uses this computer." },
   { page: "stats", target: "#yelp-quota", needs: "#yelp-quota", title: "Yelp lookups",
-    text: "Yelp adds phone numbers. The site uses at most 50 Yelp lookups in any 24 hours and shows when they reset." },
+    text: "Yelp adds phone numbers. The site uses at most 50 Yelp lookups in any 24 hours and " +
+          "shows when they reset." },
   { page: "stats", target: ".theme", title: "Light or dark",
     text: "Pick a light or dark look, or follow your computer's setting." },
   { page: "find", target: "#tour-btn", title: "That's it",
-    text: "Open this tour again anytime with the Tutorial button (under Menu on a phone or tablet)." },
+    text: "Open this tour again anytime with the Tutorial button (under Menu on a phone or " +
+          "tablet)." },
 ];
 
 // The tutorial's own parts (made the first time it opens) and where it is.
-/** @typedef {{box: HTMLElement, spot: HTMLElement, shade: HTMLElement, keys: (e: KeyboardEvent) => void}} TourParts */
-/** @type {{steps: TourStep[], i: number, parts: TourParts | null, last: Element | null, timer: number}} */
+/** @typedef {{box: HTMLElement, spot: HTMLElement, shade: HTMLElement,
+ *              keys: (e: KeyboardEvent) => void}} TourParts */
+/** @type {{steps: TourStep[], i: number, parts: TourParts | null, last: Element | null,
+ *          timer: number}} */
 const tour = { steps: [], i: -1, parts: null, last: null, timer: 0 };
 
 /** @param {Element | undefined} node */
@@ -94,7 +105,8 @@ function tourParts() {
   box.innerHTML = '<div class="tour-count" id="tour-count"></div><h2 id="tour-title"></h2>' +
                   '<p id="tour-text"></p><div class="tour-actions">' +
                   '<button type="button" class="link" id="tour-close">Close tutorial</button>' +
-                  '<span class="tour-nav"><button type="button" class="quiet" id="tour-back">Back</button>' +
+                  '<span class="tour-nav">' +
+                  '<button type="button" class="quiet" id="tour-back">Back</button>' +
                   '<button type="button" id="tour-next">Next</button></span></div>';
   const shade = el("div", undefined, "tour-shade");
   shade.addEventListener("click", endTour);
@@ -108,10 +120,14 @@ function tourParts() {
     else if (e.key === "ArrowRight") showStep(tour.i + 1);
     else if (e.key === "ArrowLeft") showStep(tour.i - 1);
     else if (e.key === "Tab") {                      // keep the keyboard inside the tutorial
-      const buttons = /** @type {HTMLButtonElement[]} */ ([...box.querySelectorAll("button:not([disabled])")]);
+      const buttons = /** @type {HTMLButtonElement[]} */
+        ([...box.querySelectorAll("button:not([disabled])")]);
       const at = buttons.indexOf(/** @type {HTMLButtonElement} */ (document.activeElement));
       if (e.shiftKey && at <= 0) { e.preventDefault(); buttons[buttons.length - 1].focus(); }
-      else if (!e.shiftKey && (at === buttons.length - 1 || at < 0)) { e.preventDefault(); buttons[0].focus(); }
+      else if (!e.shiftKey && (at === buttons.length - 1 || at < 0)) {
+        e.preventDefault();
+        buttons[0].focus();
+      }
     }
   };
   tour.parts = { box, spot, shade, keys };
@@ -177,7 +193,7 @@ function placeTour() {
   const node = tourTarget(tour.steps[tour.i]);
   const { box, spot, shade } = tourParts(), pad = 6, gap = 12, edge = 12;
   const vw = document.documentElement.clientWidth, vh = window.innerHeight;
-  if (!node) {                                       // nothing to point at: the box sits in the middle
+  if (!node) {                                    // nothing to point at: the box sits in the middle
     spot.hidden = true;
     shade.classList.add("dim");
     box.style.left = `${Math.max(edge, (vw - box.offsetWidth) / 2)}px`;
@@ -189,7 +205,8 @@ function placeTour() {
   const top = Math.max(0, r.top - pad), left = Math.max(0, r.left - pad);
   const bottom = Math.min(vh, r.bottom + pad), right = Math.min(vw, r.right + pad);
   Object.assign(spot.style, { top: `${top}px`, left: `${left}px`,
-                              width: `${Math.max(0, right - left)}px`, height: `${Math.max(0, bottom - top)}px` });
+                              width: `${Math.max(0, right - left)}px`,
+                              height: `${Math.max(0, bottom - top)}px` });
   spot.hidden = false;
   const w = box.offsetWidth, h = box.offsetHeight;
   let x, y;
@@ -219,10 +236,12 @@ function offerTour() {
   if (tourOffered()) return;
   const offer = el("aside", undefined, "tour-offer");
   offer.setAttribute("aria-labelledby", "tour-offer-title");
-  offer.innerHTML = '<p><strong id="tour-offer-title">New here?</strong> A short tour shows each page. ' +
+  offer.innerHTML = '<p><strong id="tour-offer-title">New here?</strong> ' +
+                    "A short tour shows each page. " +
                     "It only looks; nothing is changed.</p>" +
-                    '<div class="tour-offer-actions"><button type="button" class="quiet" id="tour-offer-no">' +
-                    'No thanks</button><button type="button" id="tour-offer-yes">Take the tour</button></div>';
+                    '<div class="tour-offer-actions">' +
+                    '<button type="button" class="quiet" id="tour-offer-no">No thanks</button>' +
+                    '<button type="button" id="tour-offer-yes">Take the tour</button></div>';
   document.body.append(offer);
   $("tour-offer-yes").addEventListener("click", startTour);
   $("tour-offer-no").addEventListener("click", () => {

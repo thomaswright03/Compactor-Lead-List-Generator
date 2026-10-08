@@ -263,8 +263,8 @@ const groupBox = (group) => /** @type {HTMLInputElement} */ (
 // What a circle with a number means, said once under the key.
 function clusterNote() {
   if ($("map-cluster-note")) return;
-  const note = el("p", "Businesses close together show as one circle with their number (its " +
-                       "ring shows their mix of answers). Tap it, or zoom in, to see each one.",
+  const note = el("p", "Businesses close together show as one circle with their number. " +
+                       "Tap it, or zoom in, to see each one.",
                 "sub");
   note.id = "map-cluster-note";
   $("map-groups").append(note);

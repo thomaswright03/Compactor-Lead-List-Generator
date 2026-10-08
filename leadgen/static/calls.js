@@ -71,8 +71,7 @@ function callTabs(c) {
 function callsEmpty(rows, anyCalls) {
   if (!anyCalls) {
     return emptyNote("No calls logged yet.",
-      "Log a call with Just called on any business on the Leads page. It doesn't change the " +
-      "business's Yes / No answer.",
+      "Log a call with Just called on any business on the Leads page.",
       "#leads", "Go to Leads");
   }
   if (rows.length) return null;

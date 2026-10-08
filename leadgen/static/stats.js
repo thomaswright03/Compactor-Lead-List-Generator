@@ -22,7 +22,7 @@ function tierDNote(s, d) {
       `(scores below ${s.tier_floors.C}): from a search that lowered the minimum score under ` +
       "More options, or scored lower since. None has been checked yet."
     : `Tier D (scores below ${s.tier_floors.C}) is empty: searches leave out businesses ` +
-      `scoring below ${s.min_score} unless the minimum score is lowered under More options.`;
+      `scoring below ${s.min_score} (changed under More options).`;
 }
 // Until something is marked, only the note that says how to get numbers shows.
 /** @param {StatsAnswer} s */
