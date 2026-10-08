@@ -58,7 +58,8 @@ links to. This list is the one place for the owner's dated status notes; the REA
 only links here.
 
 **Still open:** item 5, confirm Render shows the Starter plan, then turn off the
-cron-job.org pinger. Everything else is done.
+cron-job.org pinger; items 7 and 8, two choices put to the owner on 2026-10-08 (alerts and
+Google); item 9, one press of **Check sources**. Everything else is done.
 
 1. **Protect `main`** (GitHub; **Done (2026-10-03)**: ruleset `Protect main`). So a commit with a
    failing check can't land on `main`. Steps: [Deploying → Protect `main`](#deploying)
@@ -109,6 +110,24 @@ cron-job.org pinger. Everything else is done.
    compares the counts with the copy's own and with the live database's. What a pass
    looks like: [Restore rehearsal](#restore-rehearsal). *Check:* the run is green; write
    its row in the rehearsals table there, then mark this item **Done (the date)**.
+7. **Choose whether problems send an alert** (Render; **Open**: asked 2026-10-08). Without
+   it, a failed nightly search or a source that stops answering shows only on the site
+   (the administrator section's problem list and `/healthz`); nobody is told. Either set
+   `LEADGEN_ALERT_WEBHOOK` in Render to a chat webhook (steps:
+   [Checking the sources and the alerts](#checking-the-sources-and-the-alerts)), or write
+   **Decided (the date): no alerts** here. *Check:* **For the site administrator** →
+   **Send a test alert** says it was delivered, and `/healthz` shows `sources.alerts.set_up`
+   `true`.
+8. **Choose whether to use Google Places** (Render; **Open**: asked 2026-10-08). Searches
+   work without it: Yelp and the free map data find the businesses, and Google adds the
+   best phone numbers and websites at a cost (see [Cost notes (Google)](#cost-notes-google)).
+   Either set `GOOGLE_PLACES_API_KEY` in Render, or write **Decided (the date): no Google**
+   here. *Check:* `/healthz` shows `sources.google.set_up` `true` (or, if no Google was
+   chosen, `false` is expected and is not a problem).
+9. **Press Check sources once after a deploy** (the site; **Open**). So `/healthz` shows
+   when Yelp last answered before the next search does. **Find leads** → **For the site
+   administrator** → **Check sources** (one real call to each set-up source; it spends one
+   of the day's Yelp calls). *Check:* `/healthz` shows a time in `sources.yelp.last_ok`.
 
 ## Emergency switches: stop searches or paid calls
 
