@@ -41,6 +41,7 @@ def _worked_on(db: store.Db) -> set[str]:
     uids = {uid for (uid,) in db.all("SELECT uid FROM marks")}
     uids |= {uid for (uid,) in db.all("SELECT uid FROM mark_changes")}
     uids |= {uid for (uid,) in db.all("SELECT uid FROM calls")}
+    uids |= {uid for (uid,) in db.all("SELECT uid FROM calls_withdrawn")}
     return uids
 
 

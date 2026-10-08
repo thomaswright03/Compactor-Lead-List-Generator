@@ -3448,3 +3448,89 @@ def test_the_map_keys_headings_sit_inside_their_light_cards(page, width):
     for name, inside_top, head_top, card_left, head_left in boxes:
         assert head_top >= inside_top + 4, name
         assert head_left > card_left, name
+
+
+def test_not_called_needs_a_confirm_then_puts_the_business_back_on_leads(page):
+    """The owner (2026-10-08): a called business can be put back as never called at any time;
+    one click says "Confirm?", a second one (a double click too) does it."""
+    from leadgen import calls, marks
+    uid = _uid("Smith")
+    marks.set_mark(uid, "yes")
+    calls.log_call(uid, "Follow Up", "Send a quote.", by="Dana")
+    sent = _posts(page, "/withdraw")
+    page.reload()
+    page.get_by_role("button", name="Has baler or compactor (1)").click()
+    row = _row(page, "Smith")
+    button = row.get_by_role("button", name="Not called: Smith's Marketplace", exact=True)
+    expect(button).to_have_text("Not called")
+    # One click only asks; nothing is sent. Escape, a click elsewhere or 5 seconds take it back.
+    button.click()
+    asking = row.locator("button.not-called.confirm")
+    expect(asking).to_have_text("Confirm?")
+    assert "danger" in asking.get_attribute("class")
+    page.keyboard.press("Escape")
+    expect(button).to_have_text("Not called")
+    button.click()
+    expect(asking).to_have_text("Confirm?")
+    page.click("#page-leads h1")
+    expect(button).to_have_text("Not called")
+    button.click()
+    expect(asking).to_have_text("Confirm?")
+    expect(button).to_have_text("Not called", timeout=7000)
+    page.wait_for_timeout(300)
+    assert sent == [] and len(calls.history(uid)) == 1
+    # A double click is the click and its confirm.
+    button.dblclick()
+    expect(row.locator("button.not-called")).to_have_count(0)
+    expect(row.locator(".call-last")).to_have_count(0)
+    expect(row.locator(".mark button.yes.on")).to_have_count(1)           # its Yes stays
+    assert len(sent) == 1 and calls.history(uid) == []
+    expect(page.locator("#toast")).to_contain_text("back as not called")
+    page.click("nav a[data-page=calls]")
+    expect(page.locator("#calls-wrap")).to_contain_text("No calls logged yet.")
+
+
+def test_not_called_on_the_calls_page_with_the_keyboard(page):
+    from leadgen import calls
+    smith, costco = _uid("Smith"), _uid("Costco")
+    calls.log_call(costco, "Interested", "Wants a baler.", by="Dana")
+    calls.log_call(smith, "No Contact", "", by="Dana")
+    page.click("nav a[data-page=calls]")
+    page.wait_for_selector("table.calls")
+    cell = page.locator("#calls-wrap tr", has_text="Smith's Marketplace")
+    button = cell.get_by_role("button", name="Not called: Smith's Marketplace", exact=True)
+    button.focus()
+    page.keyboard.press("Enter")
+    expect(cell.locator("button.not-called")).to_have_text("Confirm?")
+    page.keyboard.press("Escape")
+    expect(button).to_have_text("Not called")
+    button.focus()
+    page.keyboard.press("Enter")
+    expect(cell.locator("button.not-called")).to_have_text("Confirm?")
+    page.keyboard.press("Space")
+    expect(page.locator("#calls-wrap tr", has_text="Smith's Marketplace")).to_have_count(0)
+    expect(page.locator("#calls-wrap tr", has_text="Costco Wholesale")).to_have_count(1)
+    expect(page.get_by_role("button", name="All called businesses (1)")).to_be_visible()
+    assert calls.history(smith) == [] and len(calls.history(costco)) == 1
+    page.click("nav a[data-page=leads]")
+    expect(_row(page, "Smith").locator(".call-last")).to_have_count(0)
+
+
+def test_not_called_and_its_confirm_fit_a_phone_card(browser, site, page):
+    from leadgen import calls
+    calls.log_call(_uid("Smith"), "Follow Up", "Send a quote.", by="Dana")
+    context = _context(browser, viewport={"width": 320, "height": 700}, has_touch=True, is_mobile=True)
+    phone = context.new_page()
+    phone.goto(site + "#leads")
+    phone.wait_for_selector("table.leads")
+    button = _row(phone, "Smith").locator("button.not-called")
+    sizes = []
+    for word in ("Not called", "Confirm?"):
+        expect(button).to_have_text(word)
+        box = button.bounding_box()
+        sizes.append((word, box["width"], box["height"], box["x"] + box["width"]))
+        if word == "Not called":
+            button.tap()
+    wide = phone.evaluate("document.documentElement.scrollWidth > window.innerWidth")
+    context.close()
+    assert all(w >= 44 and h >= 44 and right <= 320 for _, w, h, right in sizes) and not wide, sizes

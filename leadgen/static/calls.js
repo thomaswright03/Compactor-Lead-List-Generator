@@ -1,7 +1,7 @@
 /* Part 3: the Calls page, the "Just called" box and call history. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported emptyNote, loadCalled, renderCalls, openCall, openHistory, callButton, historyButton,
-   verifiedBox */
+   notCalledButton, verifiedBox */
 // An empty page that says how it fills up, with a link to where that happens.
 /** @param {string} title @param {string} text @param {string} href @param {string} label
     @param {Parameters<typeof emptyBox>[0]} icon */
@@ -104,7 +104,7 @@ function calledRow(l) {
   tr.append(when);
   tr.append(notesCell(l));
   const act = el("td", undefined, "c-act"); const box = el("div", undefined, "call-cell");
-  box.append(callButton(l), historyButton(l, "History"));
+  box.append(callButton(l), historyButton(l, "History"), notCalledButton(l));
   if (l.undo_call && leftOf(l.undo_call) > 0) {
     box.append(undoButton(l.undo_call, "Undo call", () => undoCall(l.key)));
   }
@@ -273,6 +273,89 @@ function historyButton(lead, text) {
   const n = lead.call_count || 0;
   b.setAttribute("aria-label", `History (${n} call${n === 1 ? "" : "s"}): ${lead.name}`);
   return b;
+}
+/* "Not called": puts a business that was called back as a lead that hasn't been called, at any
+   time (its Yes / No stays). Never on one click: the first turns the button into "Confirm?",
+   and a second click on it within 5 seconds does it (a double click counts). A click anywhere
+   else, Escape, or the 5 seconds running out turns it back. The calls are kept on the server
+   (calls_withdrawn), not deleted. */
+const CONFIRM_MS = 5000;
+/** @type {{ key: string, until: number } | null} */
+let confirming = null;
+let confirmTimer = 0;
+// Is this business's "Not called" asking "Confirm?" now?
+/** @type {(key: string) => boolean} */
+const askingConfirm = (key) => !!confirming && confirming.key === key
+  && Date.now() < confirming.until;
+/** @param {HTMLElement} b @param {Lead} lead */
+function paintNotCalled(b, lead) {
+  const on = askingConfirm(lead.key);
+  b.textContent = on ? "Confirm?" : "Not called";
+  b.className = on ? "danger not-called confirm" : "quiet not-called";
+  b.setAttribute("aria-label", on
+    ? `Confirm? Click again to put ${lead.name} back as not called`
+    : `Not called: ${lead.name}`);
+  b.title = on ? "Click again to take out its calls. Escape or click elsewhere to keep them."
+    : "Put this business back as not called (its calls are taken out; its Yes / No stays)";
+}
+// Every copy of the button (Leads, Calls) shows the business's state.
+function repaintNotCalled() {
+  $all("button.not-called").forEach((b) => {
+    const lead = leadByKey(b.dataset.key || "");
+    if (lead) paintNotCalled(b, lead);
+  });
+}
+function stopConfirm() {
+  if (!confirming) return;
+  confirming = null; clearTimeout(confirmTimer);
+  repaintNotCalled();
+}
+/** @param {Lead} lead */
+function notCalledButton(lead) {
+  const b = button("", "", () => {
+    if (askingConfirm(lead.key)) {
+      stopConfirm();
+      withName(() => withdrawCalls(lead));
+      return;
+    }
+    confirming = { key: lead.key, until: Date.now() + CONFIRM_MS };
+    clearTimeout(confirmTimer);
+    confirmTimer = setTimeout(stopConfirm, CONFIRM_MS);
+    repaintNotCalled();
+  });
+  b.dataset.key = lead.key;
+  paintNotCalled(b, lead);
+  return b;
+}
+// A click anywhere but on the button asking, or Escape, keeps the calls.
+document.addEventListener("click", (e) => {
+  const b = /** @type {HTMLElement | null} */ (eventEl(e).closest("button.not-called"));
+  if (confirming && !(b && b.dataset.key === confirming.key)) stopConfirm();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") stopConfirm(); });
+// lead: as its row showed it. The server takes the calls out only if no call came since (a
+// colleague's): then it says so and nothing changes.
+/** @param {Lead} lead */
+async function withdrawCalls(lead) {
+  const key = lead.key;
+  S.busy++;
+  try {
+    await save(`/calls/${encodeURIComponent(key)}/withdraw`,
+               { by: myName(), seen: lead.last_call_at },
+               () => toast(`Putting ${lead.name} back as not called… ${SLOW_SAVE}`));
+    // Shown at once everywhere; the refresh below brings the counts and the Calls page.
+    updateLead({ key, call_outcome: "", call_notes: "", call_count: 0, last_call: "",
+                 last_call_at: null, last_call_by: "", earlier_notes: "",
+                 earlier_notes_when: "", undo_call: null });
+    S.called = S.called.filter((l) => l.key !== key);
+    if (S.counts) S.counts.called = Math.max(0, S.counts.called - 1);
+    toast(`${lead.name}: back as not called. Its calls were taken out.`);
+  } catch (err) {
+    toast(`Couldn't put ${lead.name} back as not called. ${/** @type {Error} */ (err).message}`,
+          null, true);
+  } finally { S.busy--; }
+  renderAll();
+  await loadChanges();
 }
 /** @param {Lead} lead */
 function openCallBox(lead) {

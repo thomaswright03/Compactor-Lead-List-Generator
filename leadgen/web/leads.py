@@ -595,6 +595,35 @@ def call_history(uid: str) -> ResponseReturnValue:
         return jsonify({"error": f"Couldn't load the calls. {db_message(exc)}"}), 503
 
 
+@bp.post("/calls/<uid>/withdraw")
+def withdraw_calls(uid: str) -> ResponseReturnValue:
+    """"Not called": put a business back as a lead that hasn't been called, at any time.
+    Its calls are moved to calls_withdrawn (kept for good), its Yes / No mark stays. The
+    page sends the latest call it showed ("seen"); a call made since is never taken out
+    unseen (409, like /mark)."""
+    if not same_origin():
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    if not store.person(data.get("by")):
+        return jsonify({"error": NO_NAME}), 400
+    seen = data.get("seen")
+    seen = float(seen) if isinstance(seen, (int, float)) and not isinstance(seen, bool) else None
+    try:
+        taken = calls.withdraw(uid[:64], str(data.get("by") or ""), seen)
+    except calls.CalledMeanwhile as now:
+        who = f" by {now.by}" if now.by else ""
+        return jsonify({"error": f"A newer call ({now.outcome}){who} on {date_time_text(now.at)} was "
+                                 "saved meanwhile, so nothing was changed. Check it, then try again.",
+                        "changed": {"at": now.at, "outcome": now.outcome, "by": now.by,
+                                    "when": date_time_text(now.at)}}), 409
+    except ValueError:
+        return jsonify({"error": "That business isn't in the saved list. Reload the page."}), 404
+    except Exception as exc:
+        log.error("Taking out a business's calls failed", exc_info=True)
+        return jsonify({"error": db_message(exc)}), 503
+    return jsonify({"ok": True, "withdrawn": taken, "now": time.time()})
+
+
 @bp.get("/stats")
 def stats_data() -> ResponseReturnValue:
     try:

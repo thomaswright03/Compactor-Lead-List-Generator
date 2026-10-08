@@ -378,9 +378,9 @@ def _take_mark(db: store.Db, keep: _Row, others: list[_Row], marked: dict[str, t
 
 
 def _move_history(db: store.Db, keep: _Row, r: _Row, now: float, record: dict[str, Any]) -> None:
-    """Move a merged row's calls, undos, mark history and verified contacts to the kept
-    row, and record the row as it was (merged_leads)."""
-    for table in ("calls", "call_undos", "mark_changes", "lead_contacts"):
+    """Move a merged row's calls (and those taken out with Not called), undos, mark history
+    and verified contacts to the kept row, and record the row as it was (merged_leads)."""
+    for table in ("calls", "call_undos", "calls_withdrawn", "mark_changes", "lead_contacts"):
         db.run(f"UPDATE {table} SET uid = ? WHERE uid = ?", (keep.uid, r.uid))
     db.run("INSERT INTO merged_leads (uid, into_uid, at, row) VALUES (?, ?, ?, ?) "
            "ON CONFLICT (uid) DO NOTHING",

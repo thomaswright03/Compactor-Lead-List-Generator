@@ -42,7 +42,8 @@ const TOUR = [
           "Pressed the wrong one? Undo is offered for 5 minutes." },
   { page: "leads", target: "#leads-wrap .call-cell, #leads-wrap", title: "Just called",
     text: "After a call, press Just called: write a short Conversation Summary and pick how it " +
-          "went. History shows every earlier call. A call never changes the Yes / No answer." },
+          "went. History shows every earlier call. A call never changes the Yes / No answer. " +
+          "Not called (press it twice) puts a business back as never called, at any time." },
   { page: "calls", target: "#call-tabs, #call-pick", title: "Calls",
     text: "Every business that has been called, latest call first. Each outcome has its own " +
           "tab, so Follow Up shows exactly who to call back." },

@@ -1,8 +1,8 @@
 /* Part 2: the Leads page (Yes / No marks, undo, keeping up with colleagues).
    The server filters, sorts and pages the list: the page holds only the rows it shows. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
-/* exported loadLeads, changeView, updateLead, addRecent, renderAll, counts, LEAD_TABS, SORTS,
-   TIER_WORDS, tabs, toast, hideToast, leadByKey, undoCall, undoButton */
+/* exported loadLeads, loadChanges, changeView, updateLead, addRecent, renderAll, counts,
+   LEAD_TABS, SORTS, TIER_WORDS, tabs, toast, hideToast, leadByKey, undoCall, undoButton */
 function viewQuery() {
   const p = new URLSearchParams({ tab: S.leadView || "unchecked", sort: S.sort, dir: S.dir });
   if (S.q) p.set("q", S.q);
@@ -579,7 +579,8 @@ function callBox(lead) {
   }
   box.append(ctl(callButton(lead), "call"));
   if (lead.call_count) {
-    box.append(ctl(historyButton(lead, `History (${lead.call_count})`), "history"));
+    box.append(ctl(historyButton(lead, `History (${lead.call_count})`), "history"),
+               ctl(notCalledButton(lead), "not-called"));
   }
   if (lead.undo_call && leftOf(lead.undo_call) > 0) {
     box.append(ctl(undoButton(lead.undo_call, "Undo call", () => undoCall(lead.key)), "undo-call"));
