@@ -156,7 +156,15 @@ Good to know:
 3. Pick how it went: Interested, Follow Up, Not Interested, Not Qualified,
    No Contact or Bad Lead.
 4. Press **Save** (if no result is picked, the box says to pick one first). A
-   wrong call can be undone for 5 minutes.
+   wrong call can be undone for 5 minutes with **Undo**.
+
+**Logged a call by mistake, or the business should be called again from scratch?**
+Press **Not called** on it (on Leads or Calls), at any time. The button turns red
+and says **Confirm?**: press it again within 5 seconds (a double click works too)
+and the business goes back to being a lead that hasn't been called. It leaves the
+Calls page, and its Yes / No answer stays as it was. One press on its own never
+does anything: pressing Escape, clicking anywhere else or waiting 5 seconds turns
+the button back. The calls taken out are kept on the server, not deleted.
 
 Your typed notes are kept as a draft until you save, even if you close the box.
 On a weak connection the box says "This is taking longer than usual" after 10

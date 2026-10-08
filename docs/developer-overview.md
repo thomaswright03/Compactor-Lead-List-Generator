@@ -273,7 +273,9 @@ businesses saved without a second search, the record ending complete, areas that
 never answer, pausing, a restart);
 `tests/test_saved_list.py` closed businesses never being added, refreshes after a
 big search staying one page at most and the parsed saved list being reused;
-`tests/test_calls.py` calls on unmarked businesses and who made each mark and call;
+`tests/test_calls.py` calls on unmarked businesses, who made each mark and call, and
+**Not called** moving every call to `calls_withdrawn` (a late copy stays out, a newer call
+answers 409);
 `tests/test_daily_search.py` an incomplete search using up the day (no same-day re-run);
 `tests/test_find_page.py`, `tests/test_search_words.py`, `tests/test_campus.py`,
 `tests/test_downloads.py`, `tests/test_switches.py` and `tests/test_offline.py`
@@ -576,7 +578,20 @@ AARCO's own show no score or tier.
 ### Marks, calls, verified contacts and downloads
 
 - **Yes / No** "has a baler or compactor" marks (permanent; a click can be undone for 5
-  minutes), and **Just called** notes with six results and a Calls tab for each.
+  minutes), and **Just called** notes with six results and a Calls tab for each. A
+  call can be undone for 5 minutes (`POST /calls/undo`); at any time, **Not called**
+  (shown on a called business on Leads and Calls; a first click turns it into
+  **Confirm?** for 5 seconds, a second click does it, Escape or a click elsewhere
+  cancels) sends `POST /calls/<uid>/withdraw` with **Your name** and the latest call
+  the page showed (`seen`). `calls.withdraw` moves every call of that business, in
+  one transaction, to the additive `calls_withdrawn` table (id, uid, at, outcome,
+  notes, called_by from `made_by`, withdrawn_at, withdrawn_by) and puts each id in
+  `call_undos`, so open pages pick up the change and a late copy of the call stays
+  out. The business is then never called (it leaves the Calls tabs; Stats and the
+  downloads read the `calls` table, so they follow); its Yes / No mark is not
+  touched. A call saved since the page loaded answers 409 and nothing changes (as
+  `/mark` does); an unknown business 404. `merge-sites` moves `calls_withdrawn` rows
+  with the others, and `out-of-area` counts them as worked on.
   Every Yes / No mark and call needs **Your name**: the server refuses one without it.
   Each mark and call records who made it (the name set under **Your name** in that
   browser, asked before the first mark or call and not skippable). Changing an answer

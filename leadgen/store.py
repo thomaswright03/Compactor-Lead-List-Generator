@@ -126,12 +126,21 @@ SCHEMA = [
     """CREATE TABLE IF NOT EXISTS source_status (
         source TEXT NOT NULL, outcome TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
         reason TEXT NOT NULL, PRIMARY KEY (source, outcome))""",
+    # Calls taken out with "Not called" (calls.withdraw), so the business is a lead that
+    # hasn't been called again: each call as it was (with who made it, from made_by), when
+    # it was taken out and by whom. Kept for good; the id is also in call_undos, so a late
+    # copy of the call never comes back.
+    """CREATE TABLE IF NOT EXISTS calls_withdrawn (
+        id TEXT PRIMARY KEY, uid TEXT NOT NULL, at DOUBLE PRECISION NOT NULL,
+        outcome TEXT NOT NULL, notes TEXT NOT NULL, called_by TEXT NOT NULL,
+        withdrawn_at DOUBLE PRECISION NOT NULL, withdrawn_by TEXT NOT NULL)""",
+    "CREATE INDEX IF NOT EXISTS calls_withdrawn_by_uid ON calls_withdrawn (uid)",
 ]
 # Every table, for tests that empty them.
 TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "mark_changes",
           "search_failures", "call_undos", "problems", "made_by", "switches", "merged_leads",
           "removed_leads", "search_runs", "search_found", "lead_contacts", "site_starts",
-          "source_status")
+          "source_status", "calls_withdrawn")
 # Up to this many ids are looked up by id (in chunks); more read the whole table.
 BY_ID_LIMIT = 1000
 _CHUNK = 500

@@ -159,3 +159,73 @@ def test_the_calls_filter_finds_what_was_said_how_it_went_and_who_called():
     assert changed["call_counts"]["all"] == 1 and changed["total"] == 1
     assert {l["key"]: l["in_view"] for l in changed["leads"]}[forklift.uid] is True
     assert {l["key"]: l["in_view"] for l in changed["leads"]}[other.uid] is False
+
+
+# ---- "Not called": every call of a business taken out, at any time, and kept
+
+def _rows(sql, args=()):
+    with store.connect() as db:
+        return db.all(sql, args)
+
+
+def test_not_called_moves_every_call_aside_and_keeps_the_mark(monkeypatch):
+    lead, other = _lead(), _lead("Walmart", "w")
+    saved.save_search([lead, other])
+    client = web.create_app().test_client()
+    client.post("/mark", json={"key": lead.uid, "value": "yes", "by": "Dana"})
+    first = client.post("/calls", json={"key": lead.uid, "outcome": "No Contact", "notes": "Rang",
+                                        "by": "Lee", "id": "a" * 32}).get_json()["call"]
+    second = client.post("/calls", json={"key": lead.uid, "outcome": "Interested", "by": "Sam",
+                                         "notes": "Send a quote"}).get_json()["call"]
+    client.post("/calls", json={"key": other.uid, "outcome": "Follow Up", "by": "Sam"})
+    before = client.get("/leads?tab=called").get_json()
+    assert before["call_counts"]["all"] == 2
+    # Long after the 5 minutes of Undo.
+    real = calls.time.time
+    monkeypatch.setattr(calls.time, "time", lambda: real() + calls.UNDO_SECONDS + 60)
+    res = client.post(f"/calls/{lead.uid}/withdraw", json={"by": "Pat", "seen": second["at"]})
+    assert res.status_code == 200 and res.get_json()["withdrawn"] == 2
+    assert calls.history(lead.uid) == []
+    assert client.get(f"/calls/{lead.uid}").get_json()["calls"] == []
+    assert _rows("SELECT uid FROM calls") == [(other.uid,)]
+    kept = _rows("SELECT id, uid, at, outcome, notes, called_by, withdrawn_by FROM calls_withdrawn "
+                 "ORDER BY at")
+    assert kept == [(first["id"], lead.uid, first["at"], "No Contact", "Rang", "Lee", "Pat"),
+                    (second["id"], lead.uid, second["at"], "Interested", "Send a quote", "Sam", "Pat")]
+    assert {i for (i,) in _rows("SELECT id FROM call_undos")} == {first["id"], second["id"]}
+    # Back as a lead that hasn't been called; its Yes stays; it leaves the Calls page.
+    row = next(l for l in client.get("/leads?tab=yes").get_json()["leads"] if l["key"] == lead.uid)
+    assert row["call_count"] == 0 and row["call_outcome"] == "" and row["has_baler"] == "yes"
+    called = client.get("/leads?tab=called").get_json()
+    assert [l["key"] for l in called["leads"]] == [other.uid] and called["call_counts"]["all"] == 1
+    # A page that asks what changed since it loaded gets the business, out of the Calls view.
+    changed = client.get(f"/leads?tab=called&since={before['now'] - 1}").get_json()
+    assert {l["key"]: l["in_view"] for l in changed["leads"]}[lead.uid] is False
+    # A late copy of a call taken out (a retry on a flaky connection) stays out.
+    late = client.post("/calls", json={"key": lead.uid, "outcome": "No Contact", "by": "Lee", "id": "a" * 32})
+    assert late.status_code == 400 and calls.history(lead.uid) == []
+    # Again: nothing left to take out.
+    assert client.post(f"/calls/{lead.uid}/withdraw", json={"by": "Pat"}).get_json()["withdrawn"] == 0
+
+
+def test_not_called_refuses_a_call_saved_since_the_page_showed_it():
+    lead = _lead()
+    saved.save_search([lead])
+    client = web.create_app().test_client()
+    first = client.post("/calls", json={"key": lead.uid, "outcome": "No Contact", "by": "Lee"}).get_json()["call"]
+    client.post("/calls", json={"key": lead.uid, "outcome": "Interested", "by": "Dana"})
+    res = client.post(f"/calls/{lead.uid}/withdraw", json={"by": "Pat", "seen": first["at"]})
+    assert res.status_code == 409 and "Dana" in res.get_json()["error"]
+    assert len(calls.history(lead.uid)) == 2 and _rows("SELECT id FROM calls_withdrawn") == []
+
+
+def test_not_called_checks_its_input():
+    lead = _lead()
+    saved.save_search([lead])
+    client = web.create_app().test_client()
+    assert client.post("/calls/nope/withdraw", json={"by": "Pat"}).status_code == 404
+    assert client.post(f"/calls/{lead.uid}/withdraw", json={}).status_code == 400       # no name
+    assert client.post(f"/calls/{lead.uid}/withdraw", json={"by": "Pat"},
+                       headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    locked = web.create_app(password="s3cret", username="Matt").test_client()
+    assert locked.post(f"/calls/{lead.uid}/withdraw", json={"by": "Pat"}).status_code == 401

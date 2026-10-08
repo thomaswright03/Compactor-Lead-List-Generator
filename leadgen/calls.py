@@ -1,7 +1,9 @@
-"""The call log: every "Just called" note, kept for good (nothing here deletes).
+"""The call log: every "Just called" note, kept for good.
 
 A call belongs to a saved lead (its uid). Its outcome is one of OUTCOMES; the
-latest call's outcome is the lead's current one (the page's call tabs).
+latest call's outcome is the lead's current one (the page's call tabs). A call
+leaves the log only by Undo within UNDO_SECONDS (a misclick), or with "Not
+called" (withdraw), which moves every call of a business to calls_withdrawn.
 """
 
 import re
@@ -67,6 +69,48 @@ def undo(call_id: str) -> bool:
         if row is not None:
             db.run("INSERT INTO call_undos (id, uid, at) VALUES (?, ?, ?)", (call_id, row[0], now))
     return row is not None
+
+
+class CalledMeanwhile(Exception):
+    """withdraw found a call newer than the one the page showed (a colleague's)."""
+
+    def __init__(self, at: float, outcome: str, by: str) -> None:
+        super().__init__(outcome)
+        self.at, self.outcome, self.by = at, outcome, by
+
+
+def withdraw(uid: str, by: str = "", seen: float | None = None) -> int:
+    """"Not called": take every call to a business out of the log, so it is a lead that
+    hasn't been called again (its Yes / No mark stays). Nothing is lost: each call is
+    copied, with who made it, to calls_withdrawn (with when and by whom), and its id goes
+    in call_undos, so open pages notice and a late copy of it stays out (log_call). One
+    transaction. Returns how many calls were taken out (0: none left).
+
+    seen: the latest call's time as the page showed it; a newer call (a colleague's, made
+    since) raises CalledMeanwhile and nothing changes. ValueError for an unknown lead.
+    """
+    now, by = time.time(), store.person(by)
+    with store.connect() as db, db.transaction():
+        if db.one("SELECT uid FROM leads WHERE uid = ?", (uid,)) is None:
+            raise ValueError("Unknown lead")
+        rows = db.all("SELECT calls.id, calls.at, calls.outcome, calls.notes, made_by.name "
+                      "FROM calls LEFT JOIN made_by ON made_by.id = calls.id "
+                      "WHERE calls.uid = ? ORDER BY calls.at", (uid,))
+        if seen is not None and rows and rows[-1][1] > seen:
+            raise CalledMeanwhile(rows[-1][1], rows[-1][2], rows[-1][4] or "")
+        taken = 0
+        for call_id, at, outcome, notes, name in rows:
+            # Deleted first: a call another request took out meanwhile is copied once.
+            if db.one("DELETE FROM calls WHERE id = ? RETURNING id", (call_id,)) is None:
+                continue
+            db.run("INSERT INTO calls_withdrawn (id, uid, at, outcome, notes, called_by, "
+                   "withdrawn_at, withdrawn_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                   "ON CONFLICT (id) DO NOTHING",
+                   (call_id, uid, at, outcome, notes, name or "", now, by))
+            db.run("INSERT INTO call_undos (id, uid, at) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING",
+                   (call_id, uid, now))
+            taken += 1
+    return taken
 
 
 def changed_since(ts: float) -> set[str]:
