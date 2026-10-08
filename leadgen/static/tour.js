@@ -6,70 +6,58 @@
 /** @type {TourStep[]} */
 const TOUR = [
   { page: "find", title: "Welcome to the Lead Finder",
-    text: "This site finds businesses around Salt Lake City that are likely to run a baler or compactor. " +
-          "You check each one, call them, and keep track of how it went. This tour shows every page. " +
-          "It only looks around: nothing you see here is changed." },
+    text: "This site finds businesses around Salt Lake City likely to run a baler or compactor. You call them, " +
+          "answer Yes or No, and keep track of each call. This tour only looks around: nothing is changed." },
   { page: "find", target: "nav", title: "The five pages",
-    text: "Find leads runs a search. Leads is the list of businesses to check. Calls keeps every call. " +
-          "Map shows them all around AARCO. Stats sums up what you found. The numbers next to Leads and Calls " +
-          "show how many are waiting." },
+    text: "Find leads runs a search. Leads is the list to check. Calls keeps every call. Map shows them all around " +
+          "AARCO. Stats sums up what you found." },
   { page: "find", target: "#form .form-grid", title: "Where to search",
     text: "Type a ZIP code, city or address and how many miles around it to look. AARCO's address is filled in. " +
-          "Extra search words are optional; the standard words are always searched." },
+          "A town name on its own means the Utah one." },
   { page: "find", target: ".go-row", title: "Find leads, once a day",
-    text: "Press Find leads to start. You get one search per day (Utah time), so the site asks before it starts. " +
-          "A progress bar shows each step, and you can use other pages while it runs. " +
-          "New businesses are added to your saved leads; ones you already have are updated, never duplicated." },
+    text: "Press Find leads to start. You get one search per day (Utah time), so the site asks first. " +
+          "New businesses join your saved leads; ones you already have are updated, never duplicated." },
   { page: "find", target: "#history", title: "Search history",
-    text: "Every search is listed here: when it ran, where it looked, and how many businesses it found and added. " +
-          "After a search, a note above this list says how much of the area it covered. If some towns are still " +
-          "being filled in, the businesses already found are ready to call now." },
+    text: "Every search: when it ran, where it looked, and how many businesses it found and added. A note above " +
+          "this list says how much of the area the latest search covered." },
   { page: "find", target: "#admin-card", title: "For the site administrator",
-    text: "Kept closed for the sales team and locked with its own administrator password. It lists recent problems, " +
-          "has switches to pause searching right away, and a scoring check file to send in once a month." },
+    text: "Closed and locked with its own password. It lists recent problems and can pause searching right away." },
   { page: "leads", target: "#lead-tabs, #tab-pick", title: "Leads: one tab per answer",
     text: "Not checked holds the businesses nobody has answered yet. Once marked, a business moves to " +
-          "Has baler or compactor or No baler or compactor. Competitors (like Pro Baler and Action Compaction) " +
-          "are flagged in their own tab and never asked." },
+          "Has baler or compactor or No baler or compactor. Competitors have their own tab and are never asked." },
   { page: "leads", target: "#page-leads .toolbar", title: "Find the right business",
     text: "Filter by name, city or category, pick a tier, show only businesses with a phone number, " +
           "and download the whole list as Excel or CSV." },
   { page: "leads", target: "#leads-wrap", title: "Each business",
     text: "Every business has a score from 0 to 100 and a tier: A strong, B likely, C possible, D weak. " +
-          "Why this score lists the reasons. The phone, address and map link are there to call or look it up. " +
-          "Found a better number or who to ask for? Save it with Add verified phone or contact." },
+          "Why this score lists the reasons. Found a better number or who to ask for? Save it with " +
+          "Add verified phone or contact." },
   { page: "leads", target: "#leads-wrap .c-mark .mark, #leads-wrap", title: "Has baler or compactor? Yes or No",
     text: "Once you know, press Yes or No. The mark is kept for good and shows who made it. " +
-          "Pressed the wrong one? Undo is offered for 5 minutes. The first time, the site asks your name." },
+          "Pressed the wrong one? Undo is offered for 5 minutes." },
   { page: "leads", target: "#leads-wrap .call-cell, #leads-wrap", title: "Just called",
-    text: "After a call, press Just called. Write a short Conversation Summary and pick how it went: " +
-          "Interested, Follow Up, Not Interested, Not Qualified, No Contact or Bad Lead. " +
+    text: "After a call, press Just called: write a short Conversation Summary and pick how it went. " +
           "History shows every earlier call. A call never changes the Yes / No answer." },
   { page: "calls", target: "#call-tabs, #call-pick", title: "Calls",
-    text: "Every business that has been called, latest call first. Each outcome has its own tab, " +
-          "so Follow Up shows exactly who to call back. The filter finds a business by its name, town, what " +
-          "was said on its calls or who called." },
+    text: "Every business that has been called, latest call first. Each outcome has its own tab, so Follow Up " +
+          "shows exactly who to call back." },
   { page: "map", target: "#map-box", title: "Map",
-    text: `AARCO's pin, the ${CONFIG.area_miles}-mile area searches are meant for, and the areas a search looks ` +
-          "through one at a time, shaded by how the latest search went. Every saved business is a dot coloured by " +
-          "its answer: Yes, No or not checked yet; competitors are hollow squares. Tap one for its phone, its " +
-          "latest call and a link to it on the Leads page." },
+    text: `AARCO's pin, its ${CONFIG.area_miles}-mile area and the areas a search looks through, shaded by how ` +
+          "the latest search went. Every saved business is a dot coloured by its answer. Tap one for its details." },
   { page: "map", target: "#map-groups", title: "Show or hide businesses",
-    text: "Untick a group to hide it from the map, tick it to show it again. The key explains every symbol, and " +
-          "the list below the map says how each search area stands, in words." },
+    text: "Untick a group to hide it from the map, tick it to show it again. The key explains every symbol." },
   { page: "stats", target: "#stats-body", title: "Stats",
     text: "How many businesses have a baler or compactor, their average score, and how often each tier " +
           "turned out right. It fills in as the team marks businesses Yes or No." },
   { page: "stats", target: "#me", title: "Your name",
-    text: "Marks and calls are saved with the name set in this browser. Change it here (under Menu on a " +
-          "phone or tablet) if someone else uses this computer." },
+    text: "Marks and calls are saved with the name set in this browser. Change it here if someone else uses " +
+          "this computer." },
   { page: "stats", target: "#yelp-quota", needs: "#yelp-quota", title: "Yelp lookups",
     text: "Yelp adds phone numbers. The site uses at most 50 Yelp lookups in any 24 hours and shows when they reset." },
   { page: "stats", target: ".theme", title: "Light or dark",
     text: "Pick a light or dark look, or follow your computer's setting." },
   { page: "find", target: "#tour-btn", title: "That's it",
-    text: "Open this tour again anytime with the Tutorial button (under Menu on a phone or tablet). Start on " +
-          "Find leads, then work through Leads." },
+    text: "Open this tour again anytime with the Tutorial button (under Menu on a phone or tablet)." },
 ];
 
 // The tutorial's own parts (made the first time it opens) and where it is.
@@ -231,9 +219,8 @@ function offerTour() {
   if (tourOffered()) return;
   const offer = el("aside", undefined, "tour-offer");
   offer.setAttribute("aria-labelledby", "tour-offer-title");
-  offer.innerHTML = '<p><strong id="tour-offer-title">New here?</strong> A short tour shows each page: ' +
-                    "finding leads, marking Yes or No, and logging calls. It only looks; nothing is changed. " +
-                    "You can also open it later with the Tutorial button.</p>" +
+  offer.innerHTML = '<p><strong id="tour-offer-title">New here?</strong> A short tour shows each page. ' +
+                    "It only looks; nothing is changed.</p>" +
                     '<div class="tour-offer-actions"><button type="button" class="quiet" id="tour-offer-no">' +
                     'No thanks</button><button type="button" id="tour-offer-yes">Take the tour</button></div>';
   document.body.append(offer);

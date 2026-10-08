@@ -351,6 +351,39 @@ def test_touch_targets_on_a_phone(browser, site, page):
     assert small == []
 
 
+# Every control on a business's row the selector picks that is under 44 px tall or wide.
+SMALL_TARGETS = """(sel) => [...document.querySelectorAll(sel)]
+    .filter((e) => e.offsetParent !== null)
+    .map((e) => [e.textContent.trim().slice(0, 30), e.getBoundingClientRect()])
+    .filter(([, r]) => r.width > 0 && (r.height < 44 || r.width < 44))
+    .map(([t, r]) => `${t}: ${Math.round(r.width)}x${Math.round(r.height)}`)"""
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize("width", [320, 390, 768, 1100, 1440, 2560])
+def test_row_buttons_are_44px_targets_with_a_mouse_at_every_width(browser, site, page, width, theme):
+    """Yes, No, Just called, History, the Undos, the verified-contact and Why this score buttons,
+    the column sorts, Explain and the row's links: 44 px each way in a mouse window too (a narrow
+    one is as hard to hit as a phone), on Leads and on Calls, and the rows still fit the window."""
+    from leadgen import calls
+    calls.log_call(_uid("Costco"), "Follow Up", "Call back Friday.", by="Dana")
+    context = _context(browser, viewport={"width": width, "height": 900}, color_scheme=theme)   # no touch screen
+    tab = context.new_page()
+    tab.goto(site + "#leads")
+    tab.wait_for_selector("table.leads")
+    assert tab.evaluate("matchMedia('(pointer: coarse)').matches") is False
+    _row(tab, "Smith").locator(".mark button.yes").click()           # its Undo appears
+    tab.wait_for_selector("table.leads button.undo")
+    small = tab.evaluate(SMALL_TARGETS, "table.leads button, table.leads a, table.leads summary")
+    wide = tab.evaluate("document.documentElement.scrollWidth > window.innerWidth")
+    tab.click("nav a[data-page=calls]")
+    tab.wait_for_selector("table.calls button.undo")
+    small += tab.evaluate(SMALL_TARGETS, "table.calls button, table.calls a")
+    wide = wide or tab.evaluate("document.documentElement.scrollWidth > window.innerWidth")
+    context.close()
+    assert small == [] and not wide, (small, wide)
+
+
 def test_competitors_are_flagged_not_asked(page):
     assert "Pro Baler" not in page.inner_text("#leads-wrap")      # not in Not checked
     assert page.inner_text("#n-leads") == "3 to check"
@@ -464,7 +497,10 @@ def test_theme_labels_fit_at_every_width(browser, site, page, width):
 def test_find_leads_says_why_a_search_cannot_start(page):
     page.click("nav a[data-page=find]")
     page.wait_for_selector("text=Today's is available")
-    assert "up to 20 words, each up to 60 characters" in page.inner_text("#form")
+    # The limits are under "More about these fields", not in the one-line hint.
+    assert "up to 20 words" not in page.inner_text("#form")
+    page.click("#find-more summary")
+    assert "Up to 20 words, each up to 60 characters" in page.inner_text("#find-more")
     # Caught in the browser, before the confirmation opens.
     page.fill("input[name=keywords]", "x" * 70)
     page.click("#go")

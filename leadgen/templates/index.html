@@ -57,14 +57,25 @@
         <div class="form-grid">
           <label>Search around
             <input name="location" value="{{ defaults.location }}" autocomplete="off" maxlength="200" required>
-            <span class="hint">A ZIP code, city or street address. A town name on its own means the Utah one. Before the search starts you'll see the place found and how far it is from AARCO's shop.</span></label>
+            <span class="hint">A ZIP code, city or street address.</span></label>
           <label>How far (miles)
             <input name="radius" type="number" min="1" max="100" step="1" value="{{ defaults.radius|int }}">
             <span class="hint">Businesses farther away are left out.</span></label>
           <label>Extra search words (optional)
             <input name="keywords" value="" placeholder="For example: cardboard, pallets" autocomplete="off">
-            <span class="hint">The standard words ({{ defaults.keywords }}) are always searched. Anything you type here is searched as well. Separate with commas: up to 20 words, each up to 60 characters.</span></label>
+            <span class="hint">Separate with commas. The standard words are always searched.</span></label>
         </div>
+        <!-- The longer word about the fields, out of the way until wanted. -->
+        <details class="more-about" id="find-more">
+          <summary>More about these fields</summary>
+          <ul>
+            <li><strong>Search around:</strong> a town name on its own means the Utah one. Before the search starts,
+              you see the place found and how far it is from AARCO's shop.</li>
+            <li><strong>How far:</strong> 1 to 100 miles around that place.</li>
+            <li><strong>Extra search words:</strong> the standard words ({{ defaults.keywords }}) are always searched,
+              and anything you type here as well. Up to 20 words, each up to 60 characters.</li>
+          </ul>
+        </details>
         <details class="advanced">
           <summary>More options</summary>
           <div class="form-grid">
@@ -89,13 +100,12 @@
               <span class="hint">Wider coverage finds more businesses but uses more paid lookups.</span></label>
             <label>Most paid lookups for this search
               <input name="max_requests" type="number" min="1" max="5000" placeholder="Automatic">
-              <span class="hint">Leave blank for automatic. A number limits what Google (and Yelp) may charge for.</span></label>{% endif %}
+              <span class="hint">Blank means automatic; a number caps the paid lookups.</span></label>{% endif %}
             <label class="check"><input type="checkbox" name="only_keyword_matches"> Only businesses matching the search words</label>
           </div>
         </details>
         {% if not (google_on or yelp_on) %}<p class="warn" id="phone-note">Google and Yelp aren't set up, so
-          searches use the free map data only: most businesses found will have no phone number, and
-          some no street address. Whoever looks after the site can add Google or Yelp.</p>{% endif %}
+          most businesses found will have no phone number.</p>{% endif %}
         <div class="go-row">
           <button id="go" type="submit"{% if switches.search_paused %} disabled{% endif %}>Find leads</button>
           <span id="day-note" role="status">Checking today's search...</span>
@@ -178,7 +188,7 @@
     <!-- Leads -->
     <section class="page" id="page-leads" hidden>
       <div class="page-head"><h1>Leads</h1>
-        <p>Mark whether each business has a baler or compactor. A mark is kept for good; a misclick can be undone for 5 minutes.</p></div>
+        <p>Mark whether each business has a baler or compactor. A misclick can be undone for 5 minutes.</p></div>
       <div id="leads-problem"></div>
       <div id="leads-body">
         <div class="tabs" id="lead-tabs"></div>
@@ -206,14 +216,12 @@
           </div>
         </div>
         <div id="leads-note"></div>
-        <p class="hint-line" id="competitor-hint" hidden>Competitors and AARCO's own listings (its
-          parent company's too) are flagged here so you can see who else works the area. They aren't prospects, so they aren't
-          asked Yes / No and aren't counted in Stats.</p>
-        <p class="hint-line" id="closed-hint" hidden>A later search reported these businesses
-          closed for good. They keep their Yes / No marks and calls (also on the Calls page and in
-          the downloads) and are no longer listed under Not checked. Stats still counts their marks.</p>
-        <p class="hint-line" id="call-hint" hidden>Called a business? Use <strong>Just called</strong> on
-          its row, whatever its answer: the call goes on the Calls page and doesn't change Yes / No.</p>
+        <p class="hint-line" id="competitor-hint" hidden>Competitors and AARCO's own listings aren't prospects, so
+          they aren't asked Yes / No or counted in Stats.</p>
+        <p class="hint-line" id="closed-hint" hidden>A later search found these businesses closed for good.
+          They keep their marks and calls, and Stats still counts them.</p>
+        <p class="hint-line" id="call-hint" hidden>Called a business? Press <strong>Just called</strong> on
+          its row, whatever its answer. It never changes Yes / No.</p>
         <div class="recent" id="recent" hidden><h2>Recent changes (can be undone for 5 minutes)</h2><ul id="recent-list"></ul>
           <button type="button" class="link" id="recent-more" aria-controls="recent-list" hidden></button></div>
         <!-- A tab, filter or sort that takes a moment: "Loading…" over the dimmed rows (core.js loadingCue). -->
@@ -228,7 +236,7 @@
     <!-- Calls -->
     <section class="page" id="page-calls" hidden>
       <div class="page-head"><h1>Calls</h1>
-        <p>Every business that has been called, whatever its Yes / No answer: one row per business, latest call first, or grouped by how the latest call went. Every call is under History.</p></div>
+        <p>Every business that has been called, latest call first. History shows every call to it.</p></div>
       <div id="calls-problem"></div>
       <div id="calls-body">
         <div class="calls-tools" id="call-filter-row" hidden>
@@ -250,7 +258,7 @@
          business (static/map.js; Leaflet is loaded the first time this page opens). -->
     <section class="page" id="page-map" hidden>
       <div class="page-head"><h1>Map</h1>
-        <p>AARCO's {{ area_miles|int }}-mile area, the areas a search looks through one at a time, and every saved business. Tap a pin for its details.</p></div>
+        <p>AARCO's {{ area_miles|int }}-mile area, its search areas and every saved business. Tap a pin for its details.</p></div>
       <div id="map-problem"></div>
       <div id="map-body">
         <div class="map-layout">
@@ -261,11 +269,11 @@
                    data-css="/static/vendor/leaflet/leaflet.css?v={{ asset_version }}"></div>
               <div class="map-loading" id="map-loading" role="status"></div>
             </div>
-            <p class="warn" id="map-tiles-note" hidden>The street map couldn't be loaded (no connection to
-              OpenStreetMap's map tiles), so the area and the businesses are shown on a plain background.</p>
+            <p class="warn" id="map-tiles-note" hidden>The street map couldn't be loaded, so the area and the
+              businesses are shown on a plain background.</p>
             <p class="map-note" id="map-coverage"></p>
-            <p class="map-note" id="map-names-note" hidden>Some area names don't fit among the businesses at this
-              zoom. Zoom in to see them; every area and how it was searched is listed under Search areas below.</p>
+            <p class="map-note" id="map-names-note" hidden>Some area names don't fit at this zoom. Zoom in to see
+              them; every area is listed under Search areas below.</p>
             <p class="map-note" id="map-no-position" hidden></p>
           </div>
           <div class="map-side">
@@ -286,8 +294,8 @@
             </fieldset>
             <fieldset class="card map-legend">
               <legend>Also on the map</legend>
-              <div class="key"><span class="sym aarco" aria-hidden="true"></span><span><strong>AARCO</strong><span
-                id="map-aarco-address"></span>: the default place searches are measured from</span></div>
+              <div class="key"><span class="sym aarco" aria-hidden="true"></span><span><strong>AARCO</strong>'s shop<span
+                id="map-aarco-address"></span></span></div>
               <div class="key"><span class="sym ring" aria-hidden="true"></span><span>The {{ area_miles|int }}-mile area around AARCO</span></div>
               <label class="check"><input type="checkbox" id="map-show-areas" checked> <span>Search areas, shaded by the latest search:</span></label>
               <div class="key sub-key"><span class="sym area searched" aria-hidden="true"></span><span>Searched</span></div>
@@ -298,8 +306,8 @@
         </div>
         <div class="card">
           <h2>Search areas</h2>
-          <p class="muted">A search looks through these areas one at a time, nearest first (the "3 of 9 areas
-            done" while it runs). Each is named after its biggest town.</p>
+          <p class="muted">A search looks through these areas one at a time, nearest first. Each is named
+            after its biggest town.</p>
           <ol class="area-list" id="map-areas"></ol>
         </div>
       </div>
@@ -382,8 +390,8 @@
   <form class="dlg" method="dialog" id="far-form">
     <h2 id="far-title">Search outside AARCO's area?</h2>
     <p id="far-why"></p>
-    <p><strong>This uses today's only search</strong>, and the businesses it finds stay in your saved leads.
-      If this isn't the place you meant, go back and type a ZIP code or the town with its state (for example, Murray, UT).</p>
+    <p><strong>This uses today's only search.</strong> Not the place you meant? Go back and type a ZIP code,
+      or the town with its state (Murray, UT).</p>
     <div class="dlg-actions">
       <button type="button" class="quiet" id="far-back">Go back and edit</button>
       <button type="submit" class="danger" id="far-go">Search there anyway</button>
@@ -396,7 +404,7 @@
     <h2 id="name-title">Who is using this browser?</h2>
     <label for="name-input">Your name
       <input id="name-input" maxlength="60" autocomplete="name" placeholder="For example, Dana">
-      <span class="hint">It is saved with each Yes / No and call you make here, so colleagues know who to ask. This browser remembers it; change it any time from the menu.</span></label>
+      <span class="hint">Saved with each Yes / No and call, so colleagues know who to ask.</span></label>
     <div class="error" id="name-error" role="alert" hidden>Enter your name to save marks and calls.</div>
     <div class="dlg-actions">
       <button type="button" class="quiet" id="name-cancel">Cancel</button>
@@ -438,7 +446,7 @@
       <input id="contact-phone" type="tel" maxlength="40" autocomplete="off" placeholder="For example, (801) 555-0199"></label>
     <label for="contact-name">Who to ask for
       <input id="contact-name" maxlength="80" autocomplete="off" placeholder="For example, Jane Doe, facilities manager"></label>
-    <p class="hint">Saved for the whole team with your name, and shown on the Leads and Calls pages and in the downloads. Searches never change it. To take it off, empty both boxes and save.</p>
+    <p class="hint">Saved for the whole team, with your name. To take it off, empty both boxes and save.</p>
     <div class="sub slow-save" id="contact-slow" role="status"></div>
     <div class="error" id="contact-error" role="alert"></div>
     <div class="dlg-actions">
