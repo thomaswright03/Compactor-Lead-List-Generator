@@ -59,7 +59,7 @@ links to. This list is the one place for the owner's dated status notes; the REA
 only links here.
 
 **Still open:** item 5, turn off the cron-job.org pinger (Render shows Starter since
-2026-10-08); item 9, one press of **Check sources**. Everything else is done or decided.
+2026-10-08). Everything else is done or decided.
 
 1. **Protect `main`** (GitHub; **Done (2026-10-03)**: ruleset `Protect main`). So a commit with a
    failing check can't land on `main`. Steps: [Deploying → Protect `main`](#deploying)
@@ -142,7 +142,7 @@ only links here.
    The owner chose no Google: the searches use Yelp and the free map data only, and nothing
    is paid to Google. To change that later, set `GOOGLE_PLACES_API_KEY` in Render.
    *Check:* `/healthz` shows `sources.google.set_up` `false`, which is expected.
-9. **Press Check sources once after a deploy** (the site; **Open**). So `/healthz` shows
+9. **Press Check sources once after a deploy** (the site; **Done (2026-10-08)**: every set-up source answered). So `/healthz` shows
    when Yelp last answered before the next search does. **Find leads** → **For the site
    administrator** → **Check sources** (one real call to each set-up source; it spends one
    of the day's Yelp calls). *Check:* `/healthz` shows a time in `sources.yelp.last_ok`.
