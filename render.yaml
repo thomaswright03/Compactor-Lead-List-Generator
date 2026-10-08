@@ -9,6 +9,10 @@ services:
     # are green: Render's Settings > Auto-Deploy > "After CI Checks Pass" (the owner's choice,
     # 2026-09-30; it needs Render's GitHub app to have access to the repository, which it now has).
     autoDeployTrigger: checksPass
+    # Render opens /healthz to judge the service: it answers 503 ("ok": false) while the
+    # database doesn't, so a broken instance shows in the Render dashboard, and a deploy whose
+    # new instance can't reach the database isn't switched to (the old one keeps serving).
+    healthCheckPath: /healthz
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn wsgi:app --workers 1 --threads 8 --timeout 0 --bind 0.0.0.0:$PORT
     envVars:

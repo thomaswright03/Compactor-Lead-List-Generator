@@ -157,7 +157,9 @@ notes live in the `source_status` table (one row per source and outcome, replace
 place, an unchanged outcome written at most once a minute) and the public `/healthz`
 shows them through `health.status()`: set up or not (never a key), last answered, last
 failure and its one-line reason, Yelp's calls in the last 24 hours, the database's
-standing and the scoring rules' version. `checks.py` is `python -m leadgen check-sources`
+standing and the scoring rules' version. Its top-level `ok` is the database's (`false`
+with HTTP 503 while the database doesn't answer, which Render's `healthCheckPath` sees);
+a failing outside source never makes it `false`. `checks.py` is `python -m leadgen check-sources`
 and the administrator's **Check sources** button (`web/admin.py`, a plain form whose
 answer is `templates/admin_check.html`): one cheapest real call per source. With
 `--recorded`, `recorded.py` starts a local stand-in on `127.0.0.1` that serves the

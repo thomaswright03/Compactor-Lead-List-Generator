@@ -1,4 +1,4 @@
-# A copy of the live database every night, older than Neon's own history reaches (6 hours
+# A copy of the live database once a day, older than Neon's own history reaches (6 hours
 # on the free plan): `python -m leadgen backup` (every saved lead, Yes / No mark, call and
 # search, with who made each), encrypted with the owner's passphrase and kept as this run's
 # artifact for 90 days. The repository is public, so the copy is only ever stored
@@ -16,7 +16,11 @@ name: Nightly backup
 
 on:
   schedule:
-    # 3:15 AM Utah time in summer (2:15 AM in winter): nobody is searching or calling.
+    # Once a day. Asked for at 3:15 AM Utah time in summer (2:15 AM in winter), but GitHub
+    # often starts scheduled runs hours late, usually by late morning Utah time (from
+    # 2026-10-03 to 10-08 they started between 8:19 AM and 12:29 PM), so a copy can hold
+    # part of a working morning. The step "Copy the database" prints the copy's exact
+    # time, and the copy keeps it ("made", docs/operator-runbook.md, Backups and restoring).
     - cron: "15 9 * * *"
   workflow_dispatch:
 

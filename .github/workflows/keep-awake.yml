@@ -38,9 +38,18 @@ jobs:
             fi
             began=$(date +%s)
             # A sleeping site takes up to a minute to answer; retry a refused or cut-off try.
-            if curl -fsS -o /dev/null -m 90 --retry 3 --retry-delay 10 --retry-all-errors \
-                 -w "$(utah '+%-I:%M %p') Utah time: HTTP %{http_code} in %{time_total} s\n" "$SITE"; then
+            # /healthz answers 503 with "ok": false while the site is up but its database
+            # isn't: the site is awake (the ping did its job), so that counts as answered,
+            # with a warning.
+            got=$(curl -sS -o "$RUNNER_TEMP/healthz.json" -m 90 --retry 3 --retry-delay 10 \
+                    --retry-all-errors -w "%{http_code} %{time_total}" "$SITE") || got="000 -"
+            code=${got%% *}
+            echo "$(utah '+%-I:%M %p') Utah time: HTTP $code in ${got#* } s"
+            if [ "$code" = "200" ]; then
               ok=$((ok + 1))
+            elif [ "$code" = "503" ] && grep -Eq '"ok": ?false' "$RUNNER_TEMP/healthz.json"; then
+              ok=$((ok + 1))
+              echo "::warning::The site answered at $(utah '+%-I:%M %p') Utah time, but its database didn't (/healthz said \"ok\": false)."
             else
               missed=$((missed + 1))
               echo "::warning::The site didn't answer at $(utah '+%-I:%M %p') Utah time."

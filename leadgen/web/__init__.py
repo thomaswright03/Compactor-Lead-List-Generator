@@ -102,7 +102,10 @@ def _register_pages(app: Flask) -> None:
 
     @app.get("/healthz")
     def healthz() -> ResponseReturnValue:
-        return jsonify(health_check())
+        # 503 while the database doesn't answer, so Render (healthCheckPath in render.yaml)
+        # and any uptime monitor see the outage; the body still lists every source.
+        body = health_check()
+        return jsonify(body), 200 if body["ok"] else 503
 
     @app.get("/")
     def index() -> str:
@@ -149,15 +152,19 @@ def _register_errors(app: Flask) -> None:
 def health_check() -> dict[str, Any]:
     """What /healthz answers (public, no login: never a key, an address or saved data).
 
-    ok and version (the deployed commit) as before; up_since: when this start of the site
-    began (Utah time; the same time all day means it never went to sleep, awake.py);
-    scoring_version: the scoring rules' version (config.SCORING_VERSION); sources: each
-    outside source's standing (health.status): set up or not, when it last answered,
-    when it last failed and why, Yelp's calls in the last 24 hours.
+    ok: the site can do its work, that is the database (saved leads, marks, calls) answered
+    just now; false, with HTTP 503, while it doesn't. An outside source that fails (Yelp,
+    Google, the map data, the webhook) doesn't make it false: searches carry on without
+    it, and its entry under sources says so. version: the deployed commit; up_since: when
+    this start of the site began (Utah time; the same time all day means it never went to
+    sleep, awake.py); scoring_version: the scoring rules' version (config.SCORING_VERSION);
+    sources: each source's standing (health.status): set up or not, when it last
+    answered, when it last failed and why, Yelp's calls in the last 24 hours.
     """
-    return {"ok": True, "version": os.environ.get("RENDER_GIT_COMMIT", "")[:7],
+    sources = health.status()
+    return {"ok": bool(sources["database"]["ok"]), "version": os.environ.get("RENDER_GIT_COMMIT", "")[:7],
             "up_since": date_time_text(awake.started_at), "scoring_version": config.SCORING_VERSION,
-            "sources": health.status()}
+            "sources": sources}
 
 
 def index_context() -> dict[str, Any]:
