@@ -7,7 +7,7 @@ ranked where it did and tell us which rules to adjust.
 
 import functools
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import NamedTuple
@@ -26,6 +26,9 @@ OWN_FLAG_START = "OWN COMPANY: "
 OWN_FLAG = OWN_FLAG_START + config.OWN_COMPANY
 PARENT_FLAG = f"{OWN_FLAG_START}AARCO's parent company ({config.PARENT_COMPANY})"
 OWN_TYPE = "Own company"
+PROSPECT_TYPE = "Prospect"
+# The flag on a competitor's listing (config.COMPETITORS): "COMPETITOR: Pro Baler".
+COMPETITOR_FLAG_START = "COMPETITOR: "
 INDUSTRY_FLAG = "Possible competitor or partner (equipment / hauler)"
 
 
@@ -648,23 +651,6 @@ def _brand_bonus(lead: Lead) -> str | None:
     return None
 
 
-def _all_names(lead: Lead) -> list[str]:
-    return [lead.name, lead.website] + list(lead.alt_names)
-
-
-def _competitor(lead: Lead) -> str | None:
-    hay = " ".join(compact(x) for x in _all_names(lead))
-    for name, aliases in config.COMPETITORS.items():
-        if any(compact(a) in hay for a in aliases):
-            return name
-    return None
-
-
-def _is_self(lead: Lead) -> bool:
-    hay = " ".join(compact(x) for x in _all_names(lead))
-    return any(compact(a) in hay for a in config.SELF_ALIASES)
-
-
 # ---- AARCO's parent company (config.PARENT_*): its listings are AARCO's own
 
 # Street words written short, so "1240 South Wallace Road" = "1240 S Wallace Rd".
@@ -688,24 +674,60 @@ def _parent_facilities(addresses: tuple[str, ...]) -> tuple[tuple[list[str], str
     return tuple(out)
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=16)
 def _alias_patterns(aliases: tuple[str, ...]) -> tuple[re.Pattern[str], re.Pattern[str]]:
-    """(any alias as whole words, any alias written as one word opening the name)."""
+    """(any alias as whole words, an "s" after it allowed; any alias written as one word
+    opening the text)."""
     words = "|".join(re.escape(normalize(a)) for a in aliases if normalize(a))
     joined = "|".join(re.escape(compact(a)) for a in aliases if compact(a))
-    return re.compile(rf"(?<![a-z0-9])(?:{words})(?![a-z0-9])"), re.compile(rf"^(?:{joined})")
+    return re.compile(rf"(?<![a-z0-9])(?:{words})s?(?![a-z0-9])"), re.compile(rf"^(?:{joined})")
+
+
+def _alias_named(name: str, aliases: Sequence[str]) -> bool:
+    """True when a name holds one of aliases as whole words ("Pro Baler Inc", "Pro-Baler",
+    "AARCO Compactors & Balers") or written as one word opening it ("ProBaler",
+    "AarcoWaste"), never inside another word ("Repro Balers", "Marco Compactor Repair")."""
+    if not aliases:
+        return False
+    words, joined = _alias_patterns(tuple(aliases))
+    plain = normalize(name)
+    return bool(words.search(plain) or joined.search(plain.replace(" ", ""))
+                or (("-" in name or "/" in name) and words.search(_split_hyphens(name))))
+
+
+def _alias_site(website: str, aliases: Sequence[str]) -> bool:
+    """True when a website's address holds one of aliases as whole words between its dots,
+    dashes and slashes ("pro-baler.com"), or a part of it opens with one written as one
+    word ("probaler.com", "aarcowastedisposal.com"), never inside another ("reprobalers.com")."""
+    if not aliases:
+        return False
+    words, joined = _alias_patterns(tuple(aliases))
+    parts = re.split(r"[^a-z0-9]+", re.sub(r"^(https?://)?(www\d?\.)?", "", website.strip().lower()))
+    return bool(words.search(" ".join(parts)) or any(joined.match(p) for p in parts if p))
+
+
+def _holds_alias(lead: Lead, aliases: Sequence[str]) -> bool:
+    """True when the lead's name, website or another name it goes by holds one of aliases
+    (_alias_named, _alias_site)."""
+    return (any(_alias_named(x, aliases) for x in [lead.name, *lead.alt_names] if x)
+            or any(_alias_site(x, aliases) for x in [lead.website, *lead.alt_names] if x))
+
+
+def _competitor(lead: Lead) -> str | None:
+    """The competitor (config.COMPETITORS) whose name or website the lead holds, or None."""
+    return next((name for name, aliases in config.COMPETITORS.items() if _holds_alias(lead, aliases)), None)
+
+
+def _is_self(lead: Lead) -> bool:
+    """True for AARCO's own listing: its names or website hold one of config.SELF_ALIASES."""
+    return _holds_alias(lead, config.SELF_ALIASES)
 
 
 def _parent_named(name: str) -> bool:
     """True when a name holds one of config.PARENT_ALIASES as whole words ("Ace
     Intermountain Recycling Center", "ACE-Disposal", "AceDisposal"), never inside other
     words or as a bare "Ace" ("Ace Hardware", "Grace Recycling")."""
-    if not config.PARENT_ALIASES:
-        return False
-    words, joined = _alias_patterns(tuple(config.PARENT_ALIASES))
-    plain = normalize(name)
-    return bool(words.search(plain) or joined.search(plain.replace(" ", ""))
-                or (("-" in name or "/" in name) and words.search(_split_hyphens(name))))
+    return _alias_named(name, config.PARENT_ALIASES)
 
 
 def _parent_site(website: str) -> bool:
@@ -759,6 +781,32 @@ def current_own_flag(flag: str) -> str:
     return PARENT_FLAG if "parent company" in flag.lower() else OWN_FLAG
 
 
+def current_type_flags(lead: Lead) -> Lead:
+    """A saved competitor's or own-company flag (OWN_FLAG, not the parent company's) as
+    the names match now: a row flagged before the names had to match as whole words
+    (SCORING_VERSION 1: "Marco Compactor Repair" read as AARCO's own, "Repro Balers" as
+    Pro Baler) is shown with the type its category gives and without the flag, as a
+    search now scores it. saved.py does it after current_own_flag; the saved row is
+    unchanged."""
+    old = {f for f in lead.flags if f == OWN_FLAG or f.startswith(COMPETITOR_FLAG_START)}
+    if not old:
+        return lead
+    now = _own_or_competitor(lead)
+    if now and now[1] in old:
+        return lead
+    if now:
+        lead.lead_type, flag = now
+        flags = [flag]
+    else:
+        category = config.CATEGORY_BY_KEY.get(lead.category_key)
+        lead.lead_type = category.lead_type if category else PROSPECT_TYPE
+        flags = [INDUSTRY_FLAG] if lead.lead_type.startswith("Industry") else []
+    at = next(i for i, f in enumerate(lead.flags) if f in old)
+    kept = [f for f in lead.flags if f not in old]
+    lead.flags = [*kept[:at], *flags, *kept[at:]]
+    return lead
+
+
 def keyword_hits(lead: Lead, keywords: Iterable[str]) -> list[str]:
     """The words (of keywords) found in the lead's name, category, website or tags."""
     hay = normalize(" ".join([lead.name, lead.primary_category, lead.website]
@@ -784,6 +832,8 @@ def _category_points(lead: Lead, best: Match | None, rule: Rule) -> Points:
     else:
         lead.category = lead.primary_category or "Uncategorized"
         lead.category_key = ""
+        # Not the type an earlier scoring gave a saved listing (saved._rebuild).
+        lead.lead_type = PROSPECT_TYPE
         reasons.append("+0 category not on the high-volume list")
     if rule is not NO_MATCH:
         # Which classifying rule decided (RULES), for anyone checking why a lead scored as it did.
@@ -851,16 +901,23 @@ def _also_like(best: Match | None, matched: list[Match]) -> list[str]:
     return ["also looks like: " + "; ".join(others)] if others else []
 
 
+def _own_or_competitor(lead: Lead) -> tuple[str, str] | None:
+    """(type, flag) for a competitor's listing or AARCO's own, else None."""
+    competitor = _competitor(lead)
+    if competitor:
+        return "Competitor", COMPETITOR_FLAG_START + competitor
+    if _is_self(lead):
+        return OWN_TYPE, OWN_FLAG
+    return None
+
+
 def _type_flags(lead: Lead) -> list[str]:
     """A competitor's, AARCO's own (its parent company's) or an industry listing's flag,
     with the lead's type set to match."""
-    competitor = _competitor(lead)
-    if competitor:
-        lead.lead_type = "Competitor"
-        return [f"COMPETITOR: {competitor}"]
-    if _is_self(lead):
-        lead.lead_type = OWN_TYPE
-        return [OWN_FLAG]
+    own_or_competitor = _own_or_competitor(lead)
+    if own_or_competitor:
+        lead.lead_type, flag = own_or_competitor
+        return [flag]
     if parent_company(lead):
         lead.lead_type = OWN_TYPE
         return [PARENT_FLAG]

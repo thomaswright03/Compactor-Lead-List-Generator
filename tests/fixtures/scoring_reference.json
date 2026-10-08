@@ -698,6 +698,14 @@
    "own": "AARCO"
   },
   {
+   "name": "Arco Compactor",
+   "source": "google",
+   "raw_categories": [
+    "point_of_interest"
+   ],
+   "own": "AARCO"
+  },
+  {
    "name": "ACE Recycling & Disposal",
    "source": "google",
    "raw_categories": [
@@ -807,6 +815,22 @@
     "point_of_interest"
    ],
    "website": "https://notacedisposal.com.example.net",
+   "own": false
+  },
+  {
+   "name": "Marco Compactor Repair",
+   "source": "google",
+   "raw_categories": [
+    "point_of_interest"
+   ],
+   "own": false
+  },
+  {
+   "name": "Monarco Compactor",
+   "source": "osm",
+   "raw_categories": [
+    "craft=metal_construction"
+   ],
    "own": false
   }
  ]

@@ -131,6 +131,41 @@ def test_aarcos_own_listing_saved_under_an_old_name_shows_the_name_now(old_flag)
         assert db.one("SELECT lead FROM leads WHERE uid = ?", (lead.uid,))[0] == old
 
 
+def test_a_listing_flagged_by_a_name_inside_another_word_shows_as_scored_now():
+    """A row flagged AARCO's own or a competitor's when the names matched inside other
+    words (scoring rules version 1: "Marco Compactor Repair", "Repro Balers") is shown
+    with the type its category gives, as a search now scores it; AARCO's own and a real
+    competitor keep their flags, and no saved row is rewritten."""
+    from leadgen import store
+    from leadgen.scoring import INDUSTRY_FLAG, OWN_FLAG
+    leads = [_lead("Marco Compactor Repair", "m", raw_categories=[]), _lead("Repro Balers", "r", raw_categories=[]),
+             _lead("Valley Storage Co", "v", raw_categories=[], lat=40.75),
+             _lead("AARCO Waste & Disposal", "a", raw_categories=[], lat=40.7),
+             _lead("Pro Baler", "p", raw_categories=[], lat=40.68)]
+    saved.save_search(leads)
+    stale = {"Marco Compactor Repair": ("Own company", [OWN_FLAG]),
+             "Repro Balers": ("Competitor", ["Temporarily closed", "COMPETITOR: Pro Baler"]),
+             "Valley Storage Co": ("Own company", ["OWN COMPANY: Arco Compactor"])}
+    olds = {}
+    with store.connect() as db:
+        for lead in leads:
+            if lead.name in stale:
+                data = json.loads(db.one("SELECT lead FROM leads WHERE uid = ?", (lead.uid,))[0])
+                data["lead_type"], data["flags"] = stale[lead.name]          # as version 1 saved it
+                olds[lead.uid] = json.dumps(data)
+                db.run("UPDATE leads SET lead = ?, last_seen = last_seen + 1 WHERE uid = ?",
+                       (olds[lead.uid], lead.uid))
+    shown = {l.name: (l.lead_type, l.flags) for l in saved.load()}
+    assert shown["Marco Compactor Repair"] == ("Industry (equipment / hauler)", [INDUSTRY_FLAG])
+    assert shown["Repro Balers"] == ("Industry (equipment / hauler)", ["Temporarily closed", INDUSTRY_FLAG])
+    assert shown["Valley Storage Co"][1] == [] and shown["Valley Storage Co"][0] not in ("Own company", "Competitor")
+    assert shown["AARCO Waste & Disposal"] == ("Own company", [OWN_FLAG])
+    assert shown["Pro Baler"] == ("Competitor", ["COMPETITOR: Pro Baler"])
+    with store.connect() as db:
+        for uid, old in olds.items():
+            assert db.one("SELECT lead FROM leads WHERE uid = ?", (uid,))[0] == old
+
+
 def test_a_parent_company_listing_saved_before_it_was_recognised_shows_as_aarcos_own():
     """A listing of AARCO's parent company saved as a prospect (before config.PARENT_*)
     is shown flagged as the parent's, not a prospect: out of "Not checked" and Stats.

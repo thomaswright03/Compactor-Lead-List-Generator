@@ -1105,14 +1105,21 @@ reference file's **needs_name** list and its round-21 **not_prospect** and
 ## AARCO's own listings and its parent company's
 
 AARCO is a division of ACE Recycling & Disposal. A listing is AARCO's own when its
-names hold one of `config.SELF_ALIASES` (`scoring._is_self`, flag `scoring.OWN_FLAG`),
-and its parent company's (`scoring.parent_company`, flag `scoring.PARENT_FLAG`, "OWN
+names or website hold one of `config.SELF_ALIASES` (`scoring._is_self`, flag
+`scoring.OWN_FLAG`), a competitor's when they hold one of `config.COMPETITORS`, and its
+parent company's (`scoring.parent_company`, flag `scoring.PARENT_FLAG`, "OWN
 COMPANY: AARCO's parent company (ACE Recycling & Disposal)") when its name or another
 name it goes by holds one of `config.PARENT_ALIASES` as whole words, its website is on
 one of `config.PARENT_DOMAINS`, or its street address starts with one of
 `config.PARENT_ADDRESSES` (street words written short, "South Road" = "S Rd"; a listing
 that names another town is not). A bare "Ace" never matches: "Ace Hardware", "Ace Auto
-Parts" and "Grace Recycling" are ordinary businesses. Both get the lead type "Own
+Parts" and "Grace Recycling" are ordinary businesses. All three lists match the same
+way (`scoring._holds_alias`): as whole words, or written as one word opening the name or a
+part of the website ("ProBaler", "probaler.com"), never inside another word, so "Marco
+Compactor Repair", "Repro Balers" and "Transaction Compaction" are ordinary businesses
+too (rules version 2, `docs/scoring-evaluation.md`); rows flagged under version 1 show as
+version 2 reads them (`scoring.current_type_flags` in `saved._ready`), unchanged in the
+database. Both get the lead type "Own
 company" (`pipeline.EXEMPT_TYPES`): kept and flagged by a search, never in Not checked,
 left out of Stats, a hollow-square pin ("AARCO's parent company" in its box). A competitor
 match wins over both. Rows saved before the parent was recognised show the same way

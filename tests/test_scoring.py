@@ -43,6 +43,48 @@ def test_own_company_is_flagged():
         assert score_lead(make(name)).lead_type != "Own company", name
 
 
+def test_own_and_competitor_names_match_only_as_whole_words():
+    """AARCO's own names and the competitors' (config.SELF_ALIASES, config.COMPETITORS)
+    match as whole words, or written as one word opening the name or a part of its
+    website, never inside another word: "Marco Compactor Repair" is not AARCO's and
+    "Repro Balers" is not Pro Baler. They are scored as any other business."""
+    from leadgen.pipeline import EXEMPT_TYPES
+    from leadgen.scoring import OWN_FLAG
+    own = [make("AARCO Waste & Disposal"), make("AARCO Compactors & Balers"), make("Arco Compactor"),
+           make("AarcoWaste Inc"), make("Valley Yard", website="https://www.aarcowaste.com/")]
+    for lead in own:
+        assert score_lead(lead).flags == [OWN_FLAG], (lead.name, lead.website)
+        assert lead.lead_type == "Own company"
+    competitors = [("Pro Baler", make("Pro-Baler Inc")), ("Pro Baler", make("Pro Balers of Utah")),
+                   ("Pro Baler", make("Utah Balers", website="probaler.com")),
+                   ("Pro Baler", make("Utah Balers", website="http://pro-baler.com/contact")),
+                   ("Action Compaction", make("Action Compaction Services")),
+                   ("Action Compaction", make("Wasatch Services", website="https://actioncompaction.com"))]
+    for competitor, lead in competitors:
+        assert score_lead(lead).flags == [f"COMPETITOR: {competitor}"], (lead.name, lead.website)
+        assert lead.lead_type == "Competitor"
+    neither = [make("Marco Compactor Repair"), make("Monarco Compactor"), make("Repro Balers"),
+               make("Transaction Compaction"), make("Valley Yard", website="https://reprobalers.com"),
+               make("Valley Yard", website="https://www.marcocompactor.com/about")]
+    for lead in neither:
+        score_lead(lead)
+        assert lead.lead_type not in EXEMPT_TYPES, (lead.name, lead.website, lead.lead_type)
+        assert not any(f.startswith(("OWN COMPANY", "COMPETITOR")) for f in lead.flags), (lead.name, lead.flags)
+    # Scored as the same business under a name holding no alias.
+    marco = score_lead(make("Marco Compactor Repair"))
+    plain = score_lead(make("Wasatch Compactor Repair"))
+    assert (marco.score, marco.tier, marco.lead_type, marco.flags) == (plain.score, plain.tier, plain.lead_type,
+                                                                      plain.flags)
+
+
+def test_a_rescored_listing_loses_a_type_its_name_no_longer_gives():
+    """Scoring a listing again (a saved row rebuilt from its listings) sets its type from
+    the rules as they are now, never keeping one an earlier scoring gave it."""
+    lead = make("Repro Widgets", lead_type="Own company", flags=["OWN COMPANY: AARCO Waste & Disposal"])
+    score_lead(lead)
+    assert (lead.lead_type, lead.flags) == ("Prospect", [])
+
+
 def _own_case(item):
     keep = ("address", "city", "website", "alt_names")
     return make(item["name"], item["raw_categories"], item["source"], **{k: item[k] for k in keep if k in item})

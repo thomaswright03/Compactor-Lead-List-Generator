@@ -28,7 +28,7 @@ DEFAULT_MIN_SCORE = 20
 # file and the rules in scoring.py). Raise it by hand whenever a change moves scores or
 # tiers, and say so in the commit; /healthz and `python -m leadgen scoring-report` show
 # it, so a saved score can be matched to the rules that made it (docs/scoring-evaluation.md).
-SCORING_VERSION = 1
+SCORING_VERSION = 2
 
 # The client's name, as every page title, the brand block, the login and error pages,
 # the own-listing flag and the problem alerts write it. OWN_COMPANY_SHORT is the brand
@@ -44,7 +44,10 @@ SITE_NAME = f"{OWN_COMPANY} Lead Finder"
 SUPPORT_CONTACT = "Thomas Wright at (801) 580-8630"
 
 # Competitors are flagged (never dropped) so the client can see who else is
-# servicing the area. Matching is done on a normalized name/website.
+# servicing the area. A name matches as whole words ("Pro-Baler Inc", "Action Compaction
+# Services") or written as one word opening the name or a part of the website
+# ("probaler.com"), never inside another word ("Repro Balers", "Transaction
+# Compaction"); SELF_ALIASES and PARENT_ALIASES match the same way (scoring._holds_alias).
 COMPETITORS = {
     "Pro Baler": ["probaler", "pro baler"],
     "Action Compaction": ["actioncompaction", "action compaction"],
