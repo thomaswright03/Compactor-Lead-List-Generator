@@ -58,8 +58,8 @@ links to. This list is the one place for the owner's dated status notes; the REA
 only links here.
 
 **Still open:** item 5, confirm Render shows the Starter plan, then turn off the
-cron-job.org pinger; items 7 and 8, two choices put to the owner on 2026-10-08 (alerts and
-Google); item 9, one press of **Check sources**. Everything else is done.
+cron-job.org pinger; item 7, the alert choice put to the owner on 2026-10-08; item 9, one
+press of **Check sources**. Everything else is done or decided.
 
 1. **Protect `main`** (GitHub; **Done (2026-10-03)**: ruleset `Protect main`). So a commit with a
    failing check can't land on `main`. Steps: [Deploying → Protect `main`](#deploying)
@@ -118,12 +118,12 @@ Google); item 9, one press of **Check sources**. Everything else is done.
    **Decided (the date): no alerts** here. *Check:* **For the site administrator** →
    **Send a test alert** says it was delivered, and `/healthz` shows `sources.alerts.set_up`
    `true`.
-8. **Choose whether to use Google Places** (Render; **Open**: asked 2026-10-08). Searches
+8. **Choose whether to use Google Places** (Render; **Decided (2026-10-08): no Google**). Searches
    work without it: Yelp and the free map data find the businesses, and Google adds the
    best phone numbers and websites at a cost (see [Cost notes (Google)](#cost-notes-google)).
-   Either set `GOOGLE_PLACES_API_KEY` in Render, or write **Decided (the date): no Google**
-   here. *Check:* `/healthz` shows `sources.google.set_up` `true` (or, if no Google was
-   chosen, `false` is expected and is not a problem).
+   The owner chose no Google: the searches use Yelp and the free map data only, and nothing
+   is paid to Google. To change that later, set `GOOGLE_PLACES_API_KEY` in Render.
+   *Check:* `/healthz` shows `sources.google.set_up` `false`, which is expected.
 9. **Press Check sources once after a deploy** (the site; **Open**). So `/healthz` shows
    when Yelp last answered before the next search does. **Find leads** → **For the site
    administrator** → **Check sources** (one real call to each set-up source; it spends one
@@ -913,6 +913,9 @@ the working day:
   production lead lists.
 
 ## Cost notes (Google)
+
+The owner chose not to use Google (2026-10-08), so the live site makes no Google calls and
+costs nothing here. These notes apply only if a `GOOGLE_PLACES_API_KEY` is added later.
 
 With the default `--grid 1`, a run makes at most about 100 requests (about 33
 phrases × up to 3 pages). The command prints the maximum before it starts, and

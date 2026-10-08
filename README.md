@@ -2,8 +2,9 @@
 
 The Lead Finder: AARCO Waste & Disposal's website for finding businesses around its
 Salt Lake City shop (or any ZIP or city) that are likely to run **large commercial
-trash compactors or cardboard balers**. Once a Utah day it searches Google Places, Yelp
-and the free OpenStreetMap data, scores each business and adds it to one saved list,
+trash compactors or cardboard balers**. Once a Utah day it searches Yelp and the free
+OpenStreetMap data (Google Places is supported, but the owner chose not to use it on
+2026-10-08), scores each business and adds it to one saved list,
 where the sales team marks Yes / No, logs calls, sees every business on a map and
 downloads the list to Excel or CSV. Competitors and AARCO's own listings are flagged,
 never dropped, and never offered as prospects.
