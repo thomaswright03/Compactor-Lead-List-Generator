@@ -58,8 +58,8 @@ one is done, change its **Open** to **Done (the date)** here and in the section 
 links to. This list is the one place for the owner's dated status notes; the README
 only links here.
 
-**Still open:** item 5, confirm Render shows the Starter plan, then turn off the
-cron-job.org pinger; item 7, set up the alert emails (an app password in Render and GitHub); item 9, one
+**Still open:** item 5, turn off the cron-job.org pinger (Render shows Starter since
+2026-10-08); item 7, set up the alert emails (an app password in Render and GitHub); item 9, one
 press of **Check sources**. Everything else is done or decided.
 
 1. **Protect `main`** (GitHub; **Done (2026-10-03)**: ruleset `Protect main`). So a commit with a
@@ -96,8 +96,8 @@ press of **Check sources**. Everything else is done or decided.
    manager (without it the copies can't be read, by anyone). Then **Actions** →
    **Nightly backup** → **Run workflow**. *Check:* the run is green and has an artifact
    `leadgen-backup-<date>`. Details: [Backups and restoring](#backups-and-restoring).
-5. **Keep the site awake: Render Starter** (Render; **chosen 2026-10-07**; **Open**: confirm
-   Render shows Starter, then turn off the cron-job.org pinger). The free plan slept after 15 idle minutes and the outside pinger didn't always reach it, so a visit in
+5. **Keep the site awake: Render Starter** (Render; **chosen 2026-10-07**; Render shows
+   **Starter** (checked 2026-10-08); **Open**: turn off the cron-job.org pinger). The free plan slept after 15 idle minutes and the outside pinger didn't always reach it, so a visit in
    the working day could wait up to a minute. Starter (about $7 a month) never sleeps.
    Render → the **compactor-lead-finder** service → **Settings** → **Instance Type** →
    **Starter** → **Save** (`render.yaml` says `plan: starter` too, so a Blueprint sync
