@@ -460,6 +460,29 @@ def test_a_note_never_follows_to_another_page(page):
     assert "Costco Wholesale: marked Yes" in page.inner_text("#recent")   # the Undo is still there
 
 
+def test_every_page_opens_at_the_top(page):
+    # #map is also the map's id; the browser must not jump down to it.
+    page.set_viewport_size({"width": 390, "height": 500})
+    for target in ["map", "stats", "find", "map", "calls", "leads"]:
+        page.evaluate("window.scrollTo(0, 400)")
+        page.click(f"nav a[data-page={target}]")
+        expect(page.locator(f"#page-{target}")).to_be_visible()
+        page.wait_for_timeout(50)
+        assert page.evaluate("window.scrollY") == 0, target
+    for target in ["map", "stats", "leads"]:
+        page.goto(page.url.split("#")[0] + "#" + target)
+        expect(page.locator(f"#page-{target}")).to_be_visible()
+        page.wait_for_timeout(300)
+        assert page.evaluate("window.scrollY") == 0, "opened at #" + target
+    fresh = page.context.new_page()
+    fresh.set_viewport_size({"width": 390, "height": 500})
+    fresh.goto(page.url.split("#")[0] + "#map")
+    expect(fresh.locator("#page-map")).to_be_visible()
+    fresh.wait_for_timeout(500)
+    assert fresh.evaluate("window.scrollY") == 0, "a new tab at #map"
+    fresh.close()
+
+
 def test_stats_show_only_the_note_until_something_is_marked(page):
     page.click("nav a[data-page=stats]")
     page.wait_for_selector("#stats-empty:not([hidden])")
@@ -3355,3 +3378,4 @@ def test_ten_thousand_businesses_are_grouped_and_split_as_the_map_zooms(browser,
     expect(box.get_by_role("button", name="Twin Suite A")).to_be_visible()
     context.close()
     assert not errors
+

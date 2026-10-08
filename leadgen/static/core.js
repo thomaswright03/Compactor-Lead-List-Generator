@@ -432,6 +432,16 @@ function readLeadView(params) {
   $("filter").value = S.q; $("tier").value = S.tier; $("has-phone").checked = S.phone;
   return before !== [S.leadView, S.q, S.lead, S.tier, S.phone, S.sort, S.dir].join("|");
 }
+// The page on screen; a new page starts at the top. Without this, the browser
+// jumps to the element whose id matches the address, such as the map at #map.
+let shownPage = "";
+// Chrome keeps the address's element in view while the page lays out, so ask again
+// on the next two frames as well.
+function toTop() {
+  const top = () => window.scrollTo(0, 0);
+  top();
+  window.requestAnimationFrame(() => { top(); window.requestAnimationFrame(top); });
+}
 function route() {
   const { page: asked, params } = parseHash();
   const page = PAGES.includes(asked) ? asked
@@ -449,6 +459,7 @@ function route() {
     loadCalled();
   }
   for (const p of PAGES) $(`page-${p}`).hidden = p !== page;
+  if (page !== shownPage) { shownPage = page; toTop(); }
   document.title = `${TITLES[page]} · ${SITE}`;
   $all("nav a").forEach((a) => {
     a.classList.toggle("on", a.dataset.page === page);
