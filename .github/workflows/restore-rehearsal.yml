@@ -192,3 +192,31 @@ jobs:
       - name: Remove the decrypted copy
         if: always()
         run: rm -rf "$RUNNER_TEMP/backup.json.gz" "$RUNNER_TEMP/copy" "$RUNNER_TEMP/restore.out" "$RUNNER_TEMP/restore.err"
+
+  # Emails the owner when a job above failed (leadgen/mail.py, standard library only, so
+  # nothing is installed). Needs the repository secrets LEADGEN_SMTP_USER and
+  # LEADGEN_SMTP_PASSWORD (docs/operator-runbook.md, "Owner actions still open", item 7);
+  # without them it only prints a notice and stays green.
+  email-on-failure:
+    needs: [rehearse]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Email the owner
+        env:
+          LEADGEN_SMTP_USER: ${{ secrets.LEADGEN_SMTP_USER }}
+          LEADGEN_SMTP_PASSWORD: ${{ secrets.LEADGEN_SMTP_PASSWORD }}
+          WORKFLOW: ${{ github.workflow }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          COMMIT: ${{ github.sha }}
+          PUSHED_BY: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 leadgen/mail.py --subject "Lead Finder: $WORKFLOW failed on $BRANCH" \
+            "The GitHub workflow \"$WORKFLOW\" failed on the branch $BRANCH." \
+            "" \
+            "Commit: $COMMIT" \
+            "Started by: $PUSHED_BY" \
+            "The run (which step failed, and its log): $RUN_URL"

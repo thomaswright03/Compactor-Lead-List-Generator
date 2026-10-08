@@ -153,8 +153,13 @@ def no_real_keys(monkeypatch, tmp_path):
     # The map areas a search missed are filled in in the background only in the tests
     # about that (test_fill_in.py switches it on).
     monkeypatch.setattr("leadgen.fillin.ON", False)
-    # Problem reports (alerts.py) only in the tests about them, and never to a real webhook.
+    # Problem reports (alerts.py) only in the tests about them, and never to a real webhook
+    # or a real mail server (email is set up only by the tests about it, with a stand-in).
     monkeypatch.delenv("LEADGEN_ALERT_WEBHOOK", raising=False)
+    for var in ("LEADGEN_SMTP_USER", "LEADGEN_SMTP_PASSWORD", "LEADGEN_SMTP_HOST", "LEADGEN_SMTP_PORT",
+                "LEADGEN_SMTP_FROM", "LEADGEN_ALERT_EMAIL"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr("leadgen.alerts._emailed", [])
     monkeypatch.setattr("leadgen.alerts.ON", False)
     monkeypatch.setattr("leadgen.alerts.BACKGROUND", False)
     monkeypatch.setattr("leadgen.alerts._last", {})

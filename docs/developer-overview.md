@@ -174,7 +174,7 @@ npm run types:js                               # TypeScript's strict check of th
 **Seeing the sources work without a key.** Every call to Yelp, Google, the map data
 (Overpass) and the place lookup goes through `http.request_json`, which notes each
 attempt's outcome (the paid sources name theirs with `source=`, the free ones are known
-by host) in `health.record`; `alerts.py` notes each webhook delivery the same way. The
+by host) in `health.record`; `alerts.py` notes each alert delivered (email or webhook) the same way. The
 notes live in the `source_status` table (one row per source and outcome, replaced in
 place, an unchanged outcome written at most once a minute) and the public `/healthz`
 shows them through `health.status()`: set up or not (never a key), last answered, last
@@ -190,7 +190,8 @@ pages by offset and limit and checks the bearer token, Google pages by `nextPage
 and checks the key header, and each answers its first request with a 503 once), points
 `yelp.SEARCH_URL` and `google_places.SEARCH_URL` at it in a throwaway database and cache,
 and runs the real `search()` of each. `tests/test_health.py` covers all of it, with a
-local webhook server for `python -m leadgen test-alert`.
+local webhook server for `python -m leadgen test-alert`; `tests/test_mail.py` covers the
+alert emails with a stand-in for `smtplib` (no test reaches a mail server).
 
 The page's scripts are classic scripts that share their top-level names. Each lists the
 names it shares at its top (`/* exported ... */`); ESLint lets the other files use only
@@ -206,8 +207,11 @@ reads updates that file too. Script lines are at most 100 characters (Python: 12
 
 The code: `leadgen/pipeline.py` runs a search (sources in `leadgen/sources/`);
 `leadgen/saved.py`, `marks.py`, `calls.py` and `daily.py` keep the saved data
-(`store.py` is the database); `alerts.py` records problems and sends them to the
-webhook. The website is `leadgen/web/`: `auth.py` (login),
+(`store.py` is the database); `alerts.py` records problems and sends them by email
+(`mail.py`, standard library only and nothing from `leadgen`, so the GitHub workflows'
+`email-on-failure` job runs it as `python3 leadgen/mail.py --subject ... body` without
+installing anything; at most 10 alert emails an hour) and to the webhook, each channel
+on its own. The website is `leadgen/web/`: `auth.py` (login),
 `finding.py` (Find leads: start and follow the search; beside it `search_form.py`, `place.py`, `search_progress.py`, `search_words.py`, `history.py` and `switch_routes.py`, one job each), `leads.py` (the saved list, marks, calls, stats,
 downloads), `mapping.py` (the Map page's data, `/map-data`, from `leadgen/area_map.py`)
 and `common.py`. `export.py` lays out the CSV and Excel files and
@@ -358,7 +362,8 @@ python -m leadgen restore FILE [--apply]
 # runs against a local stand-in serving recorded answers (leadgen/data/recorded)
 python -m leadgen check-sources [--recorded]
 
-# Send a test message to the alert webhook (LEADGEN_ALERT_WEBHOOK) and say if it arrived
+# Send a test alert by email (LEADGEN_SMTP_USER/PASSWORD) and to the webhook
+# (LEADGEN_ALERT_WEBHOOK), whichever are set up, and say where it arrived
 python -m leadgen test-alert
 
 # How the scoring does on tests/fixtures/scoring_reference.json (docs/scoring-evaluation.md)
@@ -794,7 +799,7 @@ the sidebar to the page's list (Leads, Calls) or heading.
   holds **Recent problems** (failed or incomplete searches and server errors of the
   last 7 days) and the **site switches**; each switch asks first, naming its effect
   ("Pause all searching for everyone? ..."), and Cancel leaves it as it was. The problems list is there so nobody has to read the logs to
-  notice them (see "Problems: the webhook" in the [operator runbook](operator-runbook.md)). The public map servers often
+  notice them (see "Problems: email and the webhook" in the [operator runbook](operator-runbook.md)). The public map servers often
   refuse or time out on one big query, so a wide search asks the free map data
   **in parts**: a grid of areas up to 20 miles wide (`OVERPASS_PART_MILES`; a
   30-mile search is 9 areas), two at a time, **nearest the center first** (the area

@@ -9,7 +9,8 @@ staff want the [sales guide](sales-guide.md); developers the
 `main` goes live only once the GitHub checks pass; a bad deploy is rolled back in
 Render's **Events**. In an emergency, pause searching from **Find leads** → **For the
 site administrator**, or with `LEADGEN_SEARCH_PAUSED` = `1` in Render. The same section
-lists the last 7 days' problems, which can also go to a chat webhook. A nightly encrypted
+lists the last 7 days' problems, which are also emailed to the owner (once email is set up)
+or posted to a chat webhook. A nightly encrypted
 backup runs on GitHub, on top of Neon's 6 hours of history. What only the owner can
 still do is in [Owner actions still open](#owner-actions-still-open).
 
@@ -18,7 +19,7 @@ still do is in [Owner actions still open](#owner-actions-still-open).
 - [Common actions](#common-actions) · [Owner actions still open](#owner-actions-still-open)
 - [Emergency switches](#emergency-switches-stop-searches-or-paid-calls)
 - [Deploying](#deploying) · [Logs and rollback](#logs-and-rolling-back-a-bad-deploy) ·
-  [Alerts: the webhook](#problems-the-webhook) ·
+  [Alerts: email and the webhook](#problems-email-and-the-webhook) ·
   [Checking the sources and the alerts](#checking-the-sources-and-the-alerts)
 - [Monthly: the scoring check](#monthly-the-scoring-check) ·
   [The one-search-a-day rule](#the-one-search-a-day-rule)
@@ -37,7 +38,7 @@ still do is in [Owner actions still open](#owner-actions-still-open).
 | **Stop all searching right now** | Site: **Find leads** → **For the site administrator** (bottom) → **Unlock** → **Pause searching** → confirm. Site won't load: Render → the service → **Environment** → `LEADGEN_SEARCH_PAUSED` = `1` → **Save Changes** | [Emergency switches](#emergency-switches-stop-searches-or-paid-calls) |
 | Stop Google or Yelp charges only | Same place: **Stop using Google** / **Stop using Yelp** (or `LEADGEN_GOOGLE_OFF` / `LEADGEN_YELP_OFF` = `1` in Render) | [Emergency switches](#emergency-switches-stop-searches-or-paid-calls) |
 | Undo a bad deploy | Render → the service → **Events** → the last good deploy → **Rollback** | [Logs and rollback](#logs-and-rolling-back-a-bad-deploy) |
-| See what went wrong | **For the site administrator** lists the last 7 days' problems; Render → **Logs** has the detail | [Logs](#logs-and-rolling-back-a-bad-deploy) · [Alerts](#problems-the-webhook) |
+| See what went wrong | **For the site administrator** lists the last 7 days' problems; Render → **Logs** has the detail | [Logs](#logs-and-rolling-back-a-bad-deploy) · [Alerts](#problems-email-and-the-webhook) |
 | Make a backup now | `python -m leadgen backup` with `DATABASE_URL` set, or GitHub → **Actions** → **Nightly backup** → **Run workflow** | [Backups](#backups-and-restoring) |
 | Get lost data back | Neon → **Branches** → **New branch** from past data (last 6 hours), or `python -m leadgen restore <copy>` (lists what it would add), then the same with `--apply` (adds only, never overwrites) | [Restoring](#restoring) |
 | Change the login password | Render → **Environment** → `APP_PASSWORD` → **Save Changes** (everyone logs in again) | [Login](#login-and-the-render-plan) |
@@ -58,7 +59,7 @@ links to. This list is the one place for the owner's dated status notes; the REA
 only links here.
 
 **Still open:** item 5, confirm Render shows the Starter plan, then turn off the
-cron-job.org pinger; item 7, the alert choice put to the owner on 2026-10-08; item 9, one
+cron-job.org pinger; item 7, set up the alert emails (an app password in Render and GitHub); item 9, one
 press of **Check sources**. Everything else is done or decided.
 
 1. **Protect `main`** (GitHub; **Done (2026-10-03)**: ruleset `Protect main`). So a commit with a
@@ -110,14 +111,32 @@ press of **Check sources**. Everything else is done or decided.
    compares the counts with the copy's own and with the live database's. What a pass
    looks like: [Restore rehearsal](#restore-rehearsal). *Check:* the run is green; write
    its row in the rehearsals table there, then mark this item **Done (the date)**.
-7. **Choose whether problems send an alert** (Render; **Open**: asked 2026-10-08). Without
-   it, a failed nightly search or a source that stops answering shows only on the site
-   (the administrator section's problem list and `/healthz`); nobody is told. Either set
-   `LEADGEN_ALERT_WEBHOOK` in Render to a chat webhook (steps:
-   [Checking the sources and the alerts](#checking-the-sources-and-the-alerts)), or write
-   **Decided (the date): no alerts** here. *Check:* **For the site administrator** →
-   **Send a test alert** says it was delivered, and `/healthz` shows `sources.alerts.set_up`
-   `true`.
+7. **Set up the alert emails** (Render and GitHub; **Open**: the owner asked for them on
+   2026-10-08). So the owner is emailed when something isn't working, instead of it
+   showing only on the site. What is sent: every failed or incomplete search and every
+   error the site logs (from Render), and every failed GitHub run: the checks (CI), the
+   nightly backup and the restore rehearsal. To whom: `t@thomasewright.com`, built in
+   (`ALERT_EMAIL` in `leadgen/mail.py`); `LEADGEN_ALERT_EMAIL` in Render replaces it. The
+   site sends through a Google account (Gmail or Google Workspace) with an app password:
+   1. Sign in to the Google account that will send the emails, open
+      **myaccount.google.com** → **Security** → turn **2-Step Verification** on (app
+      passwords need it) → **App passwords** (or search the account settings for
+      "App passwords") → create one named `Lead Finder`, and copy the 16 letters it shows
+      (shown once; keep it in your password manager).
+   2. Render → the **compactor-lead-finder** service → **Environment** → add
+      `LEADGEN_SMTP_USER` = that Google address (the one that sends) and
+      `LEADGEN_SMTP_PASSWORD` = the app password → **Save Changes**.
+   3. GitHub → the repository → **Settings** → **Secrets and variables** → **Actions** →
+      **New repository secret**, twice: the same `LEADGEN_SMTP_USER` and
+      `LEADGEN_SMTP_PASSWORD`. (Without them a failed run's last job only prints a notice.)
+
+   Another mail provider works too: also set `LEADGEN_SMTP_HOST` and `LEADGEN_SMTP_PORT`
+   (587 with STARTTLS, or 465 with SSL) to its server, and the user and password it gives.
+   A chat webhook (`LEADGEN_ALERT_WEBHOOK`) can get the site's problems as well, or
+   instead ([Problems: email and the webhook](#problems-email-and-the-webhook)).
+   *Check:* **For the site administrator** → **Send a test alert** says
+   "Delivered by email to t@thomasewright.com", the email arrives, and `/healthz` shows
+   `sources.alerts.set_up` `true`. Then mark this item **Done (the date)**.
 8. **Choose whether to use Google Places** (Render; **Decided (2026-10-08): no Google**). Searches
    work without it: Yelp and the free map data find the businesses, and Google adds the
    best phone numbers and websites at a cost (see [Cost notes (Google)](#cost-notes-google)).
@@ -154,7 +173,7 @@ stays used (one a day). The background filling in of map areas a search missed s
 within a few seconds as well (no more map requests), and Find leads then says "Covered:
 … searched in full; partly searched: …; not searched: …. Filling in stopped because searching was paused, so the rest wasn't searched today. …". A search stopped before it found anything gives the day back
 and is listed as "Stopped by the administrator", not as failed, and not under Recent
-problems or on the webhook (a deliberate stop is not a problem). If the switches can't
+problems or in an alert (a deliberate stop is not a problem). If the switches can't
 be read while a search runs (the database stopped answering), a switch last seen on
 still counts as on, and no further paid Google or Yelp call is made (the free map data
 carries on); the search's notes say the switches couldn't be checked. Each switch shows who
@@ -349,33 +368,48 @@ Rolling back is safe for the data: database changes are only ever additive
 (new tables or columns, created on first use), so an older version keeps
 working with the newer database, and nothing is deleted.
 
-## Problems: the webhook
+## Problems: email and the webhook
 
 So that nobody has to watch the Logs tab, every failed or incomplete search and
 every error the site logs is also recorded in the database (the `problems`
-table; the Find leads page lists the last 7 days under the search history) and,
-when `LEADGEN_ALERT_WEBHOOK` is set, sent as a one-line message such as
-"AARCO Waste & Disposal Lead Finder: Today's search failed: Couldn't reach the map data
-service (OpenStreetMap), so no leads were found. (Sep 29, 2026, 5:48 PM, Utah time)".
-To set it up:
+table; the Find leads page lists the last 7 days under the search history) and
+sent on every channel that is set up:
 
-1. Create an incoming webhook where the person who looks after the site will
-   see it: in Slack, **Apps → Incoming Webhooks**; in Microsoft Teams, a
-   channel's **Workflows → Post to a channel when a webhook request is
-   received**; in Google Chat, a space's **Apps & integrations → Webhooks**; in
-   Discord, **Channel settings → Integrations → Webhooks**. Copy its https address.
-2. In Render, **Environment**, add `LEADGEN_ALERT_WEBHOOK` with that address and
-   **Save Changes**.
+- **By email** (the owner's choice, 2026-10-08), when `LEADGEN_SMTP_USER` and
+  `LEADGEN_SMTP_PASSWORD` are set (steps: [Owner actions still open](#owner-actions-still-open),
+  item 7), to `t@thomasewright.com` (or `LEADGEN_ALERT_EMAIL`), with a subject such as
+  "Lead Finder problem: Today's search failed: Couldn't reach the map data service
+  (OpenStreetMap)…". At most 10 alert emails go out in any hour; more than that are only
+  recorded (and listed on the site), so a burst of errors can't flood the inbox.
+- **To a chat webhook**, when `LEADGEN_ALERT_WEBHOOK` is set, as a one-line message such as
+  "AARCO Waste & Disposal Lead Finder: Today's search failed: Couldn't reach the map data
+  service (OpenStreetMap), so no leads were found. (Sep 29, 2026, 5:48 PM, Utah time)".
+  To set it up:
+  1. Create an incoming webhook where the person who looks after the site will
+     see it: in Slack, **Apps → Incoming Webhooks**; in Microsoft Teams, a
+     channel's **Workflows → Post to a channel when a webhook request is
+     received**; in Google Chat, a space's **Apps & integrations → Webhooks**; in
+     Discord, **Channel settings → Integrations → Webhooks**. Copy its https address.
+  2. In Render, **Environment**, add `LEADGEN_ALERT_WEBHOOK` with that address and
+     **Save Changes**.
 
-The same problem is sent at most once every 15 minutes; messages hold plain
-words and error class names, never request data or settings. Reporting runs in
-the background and never slows or breaks a page; if the webhook can't be
-reached, that is only logged.
+Each channel is tried on its own: if one fails, the other still gets the message. The
+same problem is sent at most once every 15 minutes; messages hold plain words and error
+class names, never request data or settings. Reporting runs in the background and never
+slows or breaks a page; if a channel can't be reached, that is only logged.
+
+The GitHub workflows (the checks, the nightly backup, the restore rehearsal) email the
+owner too when they fail: each ends with a job, `email-on-failure`, that runs only after a
+failed job and sends "Lead Finder: CI failed on main" (or the backup's or rehearsal's
+name) with the commit, who started it and a link to the run. It uses the repository
+secrets `LEADGEN_SMTP_USER` and `LEADGEN_SMTP_PASSWORD`; without them it prints a notice
+and sends nothing.
 
 To see that messages arrive, send a test one: **For the site administrator** →
-**Send a test alert**, or `python -m leadgen test-alert` from a computer with
-`LEADGEN_ALERT_WEBHOOK` set. Both say whether it was delivered, and `/healthz`
-shows when a message last reached the webhook (next section).
+**Send a test alert**, or `python -m leadgen test-alert` from a computer with the
+settings in `.env`. Both send on every channel that is set up and say where it was
+delivered ("Delivered by email to t@thomasewright.com", "Delivered to the webhook"), and
+`/healthz` shows when a message was last delivered (next section).
 
 ## Checking the sources and the alerts
 
@@ -386,14 +420,14 @@ no saved data and never a key) says:
 
 | Field | Meaning |
 | --- | --- |
-| `ok` | `true` (HTTP 200): the site can do its work: the database (saved leads, Yes / No marks, calls) answered just now. `false` (HTTP 503): the database didn't answer, so the team can't work; `sources.database` says why. A paid or free source that fails (Yelp, Google, the map data, the webhook) doesn't make it `false`: searches carry on without it, and its own entry shows the failure. Render's health check opens `/healthz` (`healthCheckPath` in `render.yaml`), so while `ok` is `false` the service shows as unhealthy in the Render dashboard, and a deploy whose new start can't reach the database isn't switched to (the running one keeps serving) |
+| `ok` | `true` (HTTP 200): the site can do its work: the database (saved leads, Yes / No marks, calls) answered just now. `false` (HTTP 503): the database didn't answer, so the team can't work; `sources.database` says why. A paid or free source that fails (Yelp, Google, the map data, the alerts) doesn't make it `false`: searches carry on without it, and its own entry shows the failure. Render's health check opens `/healthz` (`healthCheckPath` in `render.yaml`), so while `ok` is `false` the service shows as unhealthy in the Render dashboard, and a deploy whose new start can't reach the database isn't switched to (the running one keeps serving) |
 | `version` | The deployed commit (its first seven characters) |
 | `up_since` | When this start of the site began (Utah time) |
 | `scoring_version` | The scoring rules' version (`SCORING_VERSION` in `leadgen/config.py`; docs/scoring-evaluation.md) |
 | `sources.yelp`, `sources.google` | `set_up`: the key is set (yes / no, never the key); `switched_off`: the administrator's switch is on; `last_ok`: when it last answered (Utah time); `last_failure` and `failure_reason`: the last failed call and its one-line reason (an HTTP status, a timeout...); for Yelp `calls_24h` and `calls_limit`: the calls made in the last 24 hours against the 50 allowed |
 | `sources.osm`, `sources.geocoding` | The free map data (Overpass) and the place lookup: always set up; the same `last_ok` / `last_failure` / `failure_reason` |
 | `sources.database` | `kind` (`postgres` or `sqlite`), `ok` (it answered just now), `last_ok`, and the last connection failure with its reason (passwords taken out) |
-| `sources.alerts` | `set_up`: `LEADGEN_ALERT_WEBHOOK` is set (never the address); `last_ok`: when a message was last delivered; `last_failure` and `failure_reason` |
+| `sources.alerts` | `set_up`: email (`LEADGEN_SMTP_USER` and `LEADGEN_SMTP_PASSWORD`) or the webhook (`LEADGEN_ALERT_WEBHOOK`) is set up (never an address or a password); `last_ok`: when an alert was last delivered, by email or to the webhook; `last_failure` and `failure_reason` (an email failure starts with `Email:`) |
 
 Every call to a source (a search's, a fill-in's, a check's) notes its outcome in the
 `source_status` table (one row per source and outcome, kept up to date; an unchanged
@@ -433,7 +467,10 @@ them in `.env` (see `.env.example`) or the shell.
 | `LEADGEN_SEARCH_PAUSED` | No | off | Emergency stop: `1` makes Find leads refuse to start (see below) |
 | `LEADGEN_GOOGLE_OFF` | No | off | `1` stops every Google call (no Google charges); searches use the other sources |
 | `LEADGEN_YELP_OFF` | No | off | `1` stops every Yelp call; searches use the other sources |
-| `LEADGEN_ALERT_WEBHOOK` | No (recommended on the live site) | none | An https incoming-webhook address (Slack, Microsoft Teams, Google Chat or Discord) that gets a message for every failed or incomplete search and server error; see "Problems: the webhook" above |
+| `LEADGEN_SMTP_USER`, `LEADGEN_SMTP_PASSWORD` | No (recommended on the live site, and as GitHub repository secrets) | none (no alert emails) | The account that emails problem alerts: for Google (Gmail or Workspace) the sending address and an app password ([Owner actions still open](#owner-actions-still-open), item 7). Never shown anywhere |
+| `LEADGEN_ALERT_EMAIL` | No | `t@thomasewright.com` (`ALERT_EMAIL` in `leadgen/mail.py`) | Whom the alert emails go to |
+| `LEADGEN_SMTP_HOST`, `LEADGEN_SMTP_PORT`, `LEADGEN_SMTP_FROM` | No | `smtp.gmail.com`, `587` (STARTTLS; `465` means SSL), the user | Another mail provider's server and port, and a From address other than the user |
+| `LEADGEN_ALERT_WEBHOOK` | No (an alternative or addition to email) | none | An https incoming-webhook address (Slack, Microsoft Teams, Google Chat or Discord) that gets a message for every failed or incomplete search and server error; see "Problems: email and the webhook" above |
 | `LEADGEN_SUPPORT_CONTACT` | No | The built-in contact, `SUPPORT_CONTACT` in `leadgen/config.py` ("Thomas Wright at (801) 580-8630") | Whom the login page names for access or a forgotten password: a name plus a phone number or email, e.g. `Jane Doe at (801) 555-0100 or jane@example.com` (the number and email become tap-to-call and email links) |
 | `LEADGEN_ALLOWED_HOSTS` | No | `localhost` | Without a password, extra host names the page answers on (comma separated) |
 | `LEADGEN_CACHE_DIR` | No | `.cache` | Folder for the API response cache and the local SQLite database |

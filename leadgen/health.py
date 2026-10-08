@@ -3,7 +3,7 @@ answered, when it last failed and why.
 
 Every call to Yelp, Google, the map data (Overpass) and the place lookup goes through
 http.request_json, which notes each attempt's outcome here; alerts.py notes each
-webhook delivery. The notes go to the source_status table (one row per source and
+alert delivered (by email or to the webhook). The notes go to the source_status table (one row per source and
 outcome, replaced in place), so they survive a restart and every web worker sees the
 same ones. A source's unchanged outcome is written at most once a minute, so a search
 of a few hundred calls costs a handful of writes; a change of outcome is written at
@@ -17,7 +17,7 @@ import threading
 import time
 from typing import Any
 
-from . import config, store, usage
+from . import config, mail, store, usage
 from .localtime import date_time_text
 
 log = logging.getLogger(__name__)
@@ -25,7 +25,8 @@ log = logging.getLogger(__name__)
 # The sources /healthz lists, in order, and how the page names each.
 SOURCES = ("yelp", "google", "osm", "geocoding", "database", "alerts")
 LABELS = {"yelp": "Yelp", "google": "Google Places", "osm": "Map data (OpenStreetMap)",
-          "geocoding": "Place lookup", "database": "Database", "alerts": "Alert webhook"}
+          "geocoding": "Place lookup", "database": "Database",
+          "alerts": "Alerts (email or webhook)"}
 WRITE_EVERY = 60.0            # a source's unchanged outcome is written at most this often
 REASON_CHARS = 300
 
@@ -82,7 +83,8 @@ def status() -> dict[str, Any]:
     and last_failure (Utah time, or null), failure_reason (one line, or ""). Yelp and
     Google add switched_off (the administrator's switch) and Yelp calls_24h / calls_limit
     (the rolling budget). The database adds kind (postgres or sqlite) and ok (it answered
-    just now). The alert webhook's last_ok is when a message was last delivered.
+    just now). The alerts are set up when email (mail.py) or the webhook is; their last_ok
+    is when a message was last delivered on either.
     """
     from .pipeline import SearchParams  # it imports the sources, which import http
     google_key, yelp_key, _ = SearchParams().resolved_keys()
@@ -99,7 +101,8 @@ def status() -> dict[str, Any]:
         elif source == "database":
             entry.update(database)
         elif source == "alerts":
-            entry.update(set_up=bool(os.environ.get("LEADGEN_ALERT_WEBHOOK", "").strip()))
+            entry.update(set_up=bool(os.environ.get("LEADGEN_ALERT_WEBHOOK", "").strip())
+                         or mail.set_up())
         else:
             entry["set_up"] = True      # the free services need no key
         out[source] = entry

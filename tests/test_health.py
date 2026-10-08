@@ -1,7 +1,7 @@
 """Every outside source can be seen working without a key: /healthz says whether each is
 set up and when it last answered or failed (never a key), `check-sources` asks each for
 one small answer (or, with --recorded, runs the real Yelp and Google code against a
-local stand-in), `test-alert` posts to the webhook, and `scoring-report` says how the
+local stand-in), `test-alert` posts to the webhook (and emails: tests/test_mail.py), and `scoring-report` says how the
 scoring does on the reference set."""
 
 import html
@@ -137,7 +137,7 @@ def test_without_keys_the_paid_sources_are_not_set_and_not_called(monkeypatch, c
     out = capsys.readouterr().out
     assert "Yelp" in out and "YELP_API_KEY is not set" in out and "GOOGLE_PLACES_API_KEY is not set" in out
     assert "overpass-api.de answered" in out and "Found Salt Lake City" in out
-    assert "saved leads" in out and "LEADGEN_ALERT_WEBHOOK is not set" in out
+    assert "saved leads" in out and "nor a webhook (LEADGEN_ALERT_WEBHOOK) is set" in out
     assert "Every source that is set up answered." in out and not called
 
 
@@ -262,7 +262,8 @@ def test_test_alert_posts_to_the_webhook_and_is_noted(hook, capsys):
     [(content_type, body)] = hook.got
     assert content_type == "application/json" and body["text"] == body["content"]
     assert body["text"].startswith(f"{alerts.SITE}: Test alert sent from the command line at ")
-    assert "Delivered to the webhook" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Delivered to the webhook (LEADGEN_ALERT_WEBHOOK)." in out and "by email" not in out
     status = web.create_app().test_client().get("/healthz").get_json()["sources"]["alerts"]
     assert status["set_up"] and status["last_ok"] and status["last_failure"] is None
 
@@ -270,15 +271,18 @@ def test_test_alert_posts_to_the_webhook_and_is_noted(hook, capsys):
 def test_a_webhook_that_refuses_is_reported_and_noted(hook, capsys):
     hook.status = 500
     assert cli.main(["test-alert"]) == 2
-    assert "Not delivered: HTTPError: HTTP Error 500" in capsys.readouterr().err
+    assert "Not delivered to the webhook: HTTPError: HTTP Error 500" in capsys.readouterr().err
     status = health.status()["alerts"]
     assert status["last_failure"] and status["failure_reason"].startswith("HTTPError: HTTP Error 500")
     assert "127.0.0.1" not in status["failure_reason"]
 
 
-def test_without_a_webhook_test_alert_says_so(capsys):
+def test_without_email_or_a_webhook_test_alert_says_so(capsys):
     assert cli.main(["test-alert"]) == 2
-    assert "No alert webhook is set up (LEADGEN_ALERT_WEBHOOK is not set)" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "No alert is set up: neither email (LEADGEN_SMTP_USER and LEADGEN_SMTP_PASSWORD)" in err
+    assert "nor a webhook (LEADGEN_ALERT_WEBHOOK) is set" in err
+    assert not health.status()["alerts"]["set_up"]
 
 
 def test_a_plain_http_webhook_elsewhere_is_still_refused():
@@ -326,11 +330,12 @@ def test_send_a_test_alert_from_the_site(hook):
     client = _admin()
     client.post("/admin/unlock", json={"password": "open-sesame"})
     page = _page(client.post("/admin/test-alert"))
-    assert "Delivered. The message was:" in page and "Test alert sent from the site at" in page
+    assert "Delivered to the webhook (LEADGEN_ALERT_WEBHOOK). The message was:" in page
+    assert "Test alert sent from the site at" in page
     assert len(hook.got) == 1
     hook.status = 404
     page = _page(client.post("/admin/test-alert"))
-    assert "couldn't be delivered: HTTPError: HTTP Error 404" in page
+    assert "couldn't be delivered to the webhook: HTTPError: HTTP Error 404" in page
 
 
 # ---- scoring-report: the scorer's quality on the reference set, with its rules' version

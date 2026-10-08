@@ -56,7 +56,7 @@ every option are in the [developer overview](docs/developer-overview.md#run-it-o
 | Download the list | **Leads** → **Download Excel** / **Download CSV** | [Sales guide](docs/sales-guide.md#download-the-list) |
 | Undo a bad deploy | Render → the service → **Events** → last good deploy → **Rollback** | [Runbook](docs/operator-runbook.md#logs-and-rolling-back-a-bad-deploy) |
 | Back up or restore the data | `python -m leadgen backup`; `python -m leadgen restore <copy>` lists, `--apply` adds (never overwrites) | [Runbook](docs/operator-runbook.md#backups-and-restoring) |
-| Check that Yelp, Google, the map data and alerts work | `python -m leadgen check-sources` (`--recorded` needs no keys); `python -m leadgen test-alert`; or the admin section's **Check sources** / **Send a test alert**; `/healthz` shows each source's last success | [Runbook](docs/operator-runbook.md#checking-the-sources-and-the-alerts) |
+| Check that Yelp, Google, the map data and alerts work | `python -m leadgen check-sources` (`--recorded` needs no keys); `python -m leadgen test-alert` (emails t@thomasewright.com once email is set up); or the admin section's **Check sources** / **Send a test alert**; `/healthz` shows each source's last success | [Runbook](docs/operator-runbook.md#checking-the-sources-and-the-alerts) |
 
 ## Deploying
 

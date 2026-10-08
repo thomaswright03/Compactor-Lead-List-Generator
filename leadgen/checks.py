@@ -12,11 +12,12 @@ retries) runs against a local stand-in serving recorded answers (recorded.py), i
 throwaway database and cache, so the whole path can be seen working with no key.
 """
 
+import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from . import alerts, config, health, store
+from . import alerts, config, health, mail, store
 from .http import HttpError, request_json
 from .pipeline import SearchParams
 from .sources import SourceError, google_places, yelp
@@ -100,10 +101,16 @@ def _database() -> str:
 def _alerts() -> Check:
     entry = health.status()["alerts"]
     if not entry["set_up"]:
-        return Check("alerts", False, None, None, f"{alerts.WEBHOOK_ENV} is not set")
+        return Check("alerts", False, None, None,
+                     f"Neither email ({mail.USER_ENV} and {mail.PASSWORD_ENV}) nor a webhook "
+                     f"({alerts.WEBHOOK_ENV}) is set")
+    channels = [f"email to {mail.recipient()}"] if mail.set_up() else []
+    if os.environ.get(alerts.WEBHOOK_ENV, "").strip():
+        channels.append("the webhook")
     when = (f"last delivered {entry['last_ok']}" if entry["last_ok"] else "nothing delivered yet")
     return Check("alerts", True, None, None,
-                 f"Set up; {when}. `python -m leadgen test-alert` sends a test message")
+                 f"Set up ({' and '.join(channels)}); {when}. "
+                 "`python -m leadgen test-alert` sends a test message")
 
 
 def run_all(recorded: bool = False) -> list[Check]:

@@ -51,6 +51,10 @@ SITE_NAME = f"{OWN_COMPANY} Lead Finder"
 # 2026-10-07); the phone number becomes a tap-to-call link. LEADGEN_SUPPORT_CONTACT in
 # the environment replaces it.
 SUPPORT_CONTACT = "Thomas Wright at (801) 580-8630"
+# Whom problem alerts are emailed to (the owner's choice, 2026-10-08). It lives in mail.py,
+# which the GitHub workflows run on its own; LEADGEN_ALERT_EMAIL in the environment
+# replaces it.
+from .mail import ALERT_EMAIL as ALERT_EMAIL  # noqa: E402
 
 # Competitors are flagged (never dropped) so the client can see who else is
 # servicing the area. A name matches as whole words ("Pro-Baler Inc", "Action Compaction

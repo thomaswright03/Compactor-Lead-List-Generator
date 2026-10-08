@@ -2,11 +2,17 @@
 
 Every failed or incomplete search and every error the site logs is recorded in
 the database (the Find leads page shows the last 7 days under the search
-history) and, when LEADGEN_ALERT_WEBHOOK is set, posted to that address: an
-incoming-webhook URL of Slack, Microsoft Teams, Google Chat or Discord, so
-whoever looks after the site hears about it without watching Render's Logs tab.
+history) and sent on every channel that is set up, so whoever looks after the site
+hears about it without watching Render's Logs tab:
 
-The same problem is reported at most once every THROTTLE_SECONDS, reporting
+- by email (mail.py: LEADGEN_SMTP_USER and LEADGEN_SMTP_PASSWORD set) to
+  LEADGEN_ALERT_EMAIL, by default the owner's address (mail.ALERT_EMAIL);
+- to LEADGEN_ALERT_WEBHOOK when it is set: an incoming-webhook URL of Slack,
+  Microsoft Teams, Google Chat or Discord.
+
+Each channel is tried on its own (one failing never stops the other). The same
+problem is reported at most once every THROTTLE_SECONDS, at most EMAILS_PER_HOUR
+emails go out in any hour (the rest are only recorded and logged), reporting
 happens in the background (a page never waits for it), and a report that can't
 be delivered is only logged. Reports hold plain messages and error class names,
 never request data or settings.
@@ -19,15 +25,19 @@ import threading
 import time
 import urllib.request
 import uuid
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
 
-from . import THREAD_PREFIX, config, store
+from . import THREAD_PREFIX, config, mail, store
 from .localtime import date_time_text
 
 WEBHOOK_ENV = "LEADGEN_ALERT_WEBHOOK"
 SITE = config.SITE_NAME
 THROTTLE_SECONDS = 15 * 60
+# At most this many alert emails in any hour, so a burst of errors can't flood the inbox.
+EMAILS_PER_HOUR = 10
+EMAIL_SUBJECT = "Lead Finder problem: "
 # The Find leads page lists the problems of this many days.
 RECENT_SECONDS = 7 * 24 * 3600
 MAX_TEXT = 500
@@ -39,12 +49,13 @@ BACKGROUND = True
 
 log = logging.getLogger(__name__)
 _last: dict[str, float] = {}
+_emailed: list[float] = []          # when the alert emails of the last hour went out
 _lock = threading.Lock()
 _reporting = threading.local()
 
 
 def report(kind: str, text: str) -> None:
-    """Record a problem ("search" or "error") and send it to the webhook, if one is set."""
+    """Record a problem ("search" or "error") and send it on every channel that is set up."""
     if not ON:
         return
     text = " ".join(text.split())[:MAX_TEXT]
@@ -73,15 +84,49 @@ def _deliver(kind: str, text: str, at: float) -> None:
                        (uuid.uuid4().hex, at, kind, text))
         except Exception as exc:  # noqa: BLE001 - often the very problem being reported
             log.warning("Recording a problem failed: %s", exc.__class__.__name__)
+        message = f"{SITE}: {text} ({date_time_text(at)}, Utah time)"
         url = os.environ.get(WEBHOOK_ENV, "").strip()
         if url:
             try:
-                _send(url, f"{SITE}: {text} ({date_time_text(at)}, Utah time)")
+                _send(url, message)
             except Exception as exc:  # noqa: BLE001 - a report must never break anything
                 log.warning("Sending the problem to %s failed: %s", WEBHOOK_ENV,
                             exc.__class__.__name__)
+        if mail.set_up():
+            if not _email_allowed(at):
+                log.warning("Not emailing the problem: %d alert emails went out in the last hour",
+                            EMAILS_PER_HOUR)
+            else:
+                try:
+                    _email(EMAIL_SUBJECT + text[:80], message)
+                except Exception as exc:  # noqa: BLE001 - a report must never break anything
+                    log.warning("Emailing the problem failed: %s", exc)
     finally:
         _reporting.on = False
+
+
+def _email_allowed(now: float) -> bool:
+    """Whether another alert email may go out now (fewer than EMAILS_PER_HOUR in the last
+    hour); counts it when so."""
+    with _lock:
+        _emailed[:] = [at for at in _emailed if now - at < 3600]
+        if len(_emailed) >= EMAILS_PER_HOUR:
+            return False
+        _emailed.append(now)
+        return True
+
+
+def _email(subject: str, body: str) -> str:
+    """Email one message (mail.py), noting for /healthz whether it was delivered; returns
+    the address it went to."""
+    from . import health
+    try:
+        to = mail.send(subject, body)
+    except Exception as exc:
+        health.record("alerts", False, f"Email: {exc}")
+        raise
+    health.record("alerts", True)
+    return to
 
 
 def _send(url: str, message: str) -> None:
@@ -114,23 +159,44 @@ def _on_this_machine(url: str) -> bool:
     return parts.scheme == "http" and parts.hostname in ("127.0.0.1", "localhost", "::1")
 
 
-def send_test(where: str = "") -> str:
-    """Post a test message to the webhook now (`python -m leadgen test-alert`, and the
-    administrator's "Send a test alert"); `where` says where it was sent from. Returns
-    the message sent. Raises Unset when no webhook is set up, else whatever the
-    delivery raised."""
+@dataclass
+class Sent:
+    """What send_test sent, where it was delivered, and where it failed (and why)."""
+    message: str
+    delivered: list[str] = field(default_factory=list)
+    failed: list[str] = field(default_factory=list)
+
+
+def send_test(where: str = "") -> Sent:
+    """Send a test message now on every channel that is set up (`python -m leadgen
+    test-alert`, and the administrator's "Send a test alert"); `where` says where it was
+    sent from. Raises Unset when neither email nor a webhook is set up; a channel that
+    fails is listed in `failed` (its error's class and words, never an address or a
+    password)."""
     url = os.environ.get(WEBHOOK_ENV, "").strip()
-    if not url:
-        raise Unset(f"No alert webhook is set up ({WEBHOOK_ENV} is not set).")
+    if not url and not mail.set_up():
+        raise Unset(f"No alert is set up: neither email ({mail.USER_ENV} and {mail.PASSWORD_ENV}) "
+                    f"nor a webhook ({WEBHOOK_ENV}) is set.")
     where = f" {where}" if where else ""
-    message = (f"{SITE}: Test alert sent{where} at {date_time_text(time.time())}, Utah time. "
-               "Problem reports from the site reach this channel.")
-    _send(url, message)
-    return message
+    sent = Sent(f"{SITE}: Test alert sent{where} at {date_time_text(time.time())}, Utah time. "
+                    "Problem reports from the site reach you here.")
+    if mail.set_up():
+        try:
+            to = _email("Lead Finder: test alert", sent.message)
+            sent.delivered.append(f"by email to {to}")
+        except Exception as exc:  # noqa: BLE001 - said on the page; the other channel still runs
+            sent.failed.append(f"by email: {exc}")
+    if url:
+        try:
+            _send(url, sent.message)
+            sent.delivered.append(f"to the webhook ({WEBHOOK_ENV})")
+        except Exception as exc:  # noqa: BLE001 - the error's class and words, never the address
+            sent.failed.append(f"to the webhook: {exc.__class__.__name__}: {exc}")
+    return sent
 
 
 class Unset(RuntimeError):
-    """No webhook address is set, so there is nothing to send to."""
+    """Neither email nor a webhook is set up, so there is nothing to send to."""
 
 
 def recent(now: float | None = None) -> dict[str, Any]:

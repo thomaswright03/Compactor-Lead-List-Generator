@@ -42,7 +42,8 @@ def check_sources() -> ResponseReturnValue:
 
 @bp.post("/admin/test-alert")
 def test_alert() -> ResponseReturnValue:
-    """Post a test message to the alert webhook and say whether it was delivered."""
+    """Send a test alert on every channel that is set up (email, the webhook) and say
+    where it was delivered."""
     refused = _refused()
     if refused is not None:
         return refused
@@ -51,9 +52,9 @@ def test_alert() -> ResponseReturnValue:
                                 if request.form.get("by", "").strip() else "from the site")
     except alerts.Unset as exc:
         return render_template("admin_check.html", title="Test alert", text=str(exc), ok=False)
-    except Exception as exc:  # noqa: BLE001 - the page says what went wrong, by class and words
-        log.warning("The test alert could not be delivered: %s", exc.__class__.__name__)
-        return render_template("admin_check.html", title="Test alert", ok=False,
-                               text=f"The test alert couldn't be delivered: {exc.__class__.__name__}: {exc}")
-    return render_template("admin_check.html", title="Test alert", ok=True,
-                           text=f"Delivered. The message was: {sent}")
+    said = [f"Delivered {where}." for where in sent.delivered]
+    if sent.failed:
+        log.warning("The test alert could not be delivered on %d channel(s)", len(sent.failed))
+        said += [f"The test alert couldn't be delivered {why}" for why in sent.failed]
+    return render_template("admin_check.html", title="Test alert", ok=not sent.failed,
+                           text=" ".join(said) + f" The message was: {sent.message}")

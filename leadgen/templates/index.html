@@ -178,8 +178,9 @@
             the Yelp call counts as one of the site's 50 for the day. The result opens on its own page.</p>
           <form method="post" action="/admin/check-sources"><button type="submit" class="quiet">Check sources</button></form>
           <h2>Test the alerts</h2>
-          <p class="muted">Send a test message to the chat webhook that gets the site's problem reports, to
-            see that it arrives. If no webhook is set up, the page says so.</p>
+          <p class="muted">Send a test message by email (and to the chat webhook, if one is set up), the
+            way the site's problem reports go, to see that it arrives. The page says where it was
+            delivered, or that no alert is set up.</p>
           <form method="post" action="/admin/test-alert"><button type="submit" class="quiet">Send a test alert</button></form>
           </div>
         </div>

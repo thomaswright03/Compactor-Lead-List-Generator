@@ -26,6 +26,10 @@ services:
         sync: false
       - key: LEADGEN_SUPPORT_CONTACT # optional: whom the login page names for login help, instead
         sync: false                  # of the built-in contact (SUPPORT_CONTACT in leadgen/config.py)
+      - key: LEADGEN_SMTP_USER       # the address that emails problem alerts (e.g. a Gmail
+        sync: false                  # address); see docs/operator-runbook.md, owner item 7
+      - key: LEADGEN_SMTP_PASSWORD   # its password (for Google: an app password)
+        sync: false
       - key: GOOGLE_PLACES_API_KEY   # optional
         sync: false
       - key: YELP_API_KEY            # optional

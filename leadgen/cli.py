@@ -8,7 +8,7 @@
     python -m leadgen backup         # copy every saved lead, mark, call and search to a file
     python -m leadgen restore FILE   # what putting a copy back would add (--apply adds it)
     python -m leadgen check-sources  # one small call to each source; --recorded: no key needed
-    python -m leadgen test-alert     # send a test message to the alert webhook
+    python -m leadgen test-alert     # send a test alert by email and/or to the webhook
     python -m leadgen scoring-report # how the scoring does on the reference set
 """
 
@@ -135,8 +135,9 @@ def _add_checks(sub: Commands) -> None:
                     help="No key needed: run the real Yelp and Google client code against a local "
                          "stand-in serving recorded answers (leadgen/data/recorded), in a throwaway "
                          "database; the other sources are not checked")
-    sub.add_parser("test-alert", help="Send a test message to the alert webhook (LEADGEN_ALERT_WEBHOOK) "
-                   "and say whether it was delivered")
+    sub.add_parser("test-alert", help="Send a test alert on every channel that is set up (email: "
+                   "LEADGEN_SMTP_USER and LEADGEN_SMTP_PASSWORD; the webhook: LEADGEN_ALERT_WEBHOOK) "
+                   "and say where it was delivered")
     sr = sub.add_parser("scoring-report", help="How the scoring does on the reference set: per tier, how "
                         "many businesses, how many have equipment or are flagged, and which confirmed "
                         "businesses moved tier since the set was copied (docs/scoring-evaluation.md)")
@@ -385,11 +386,12 @@ def cmd_test_alert() -> int:
     except alerts.Unset as exc:
         print(f"Not sent: {exc}", file=sys.stderr)
         return 2
-    except Exception as exc:  # noqa: BLE001 - say what went wrong, by class and words (never the address)
-        print(f"Not delivered: {exc.__class__.__name__}: {exc}", file=sys.stderr)
-        return 2
-    print(f"Delivered to the webhook ({alerts.WEBHOOK_ENV}). The message was:\n  {sent}")
-    return 0
+    for where in sent.delivered:
+        print(f"Delivered {where}.")
+    for why in sent.failed:     # the error's class and words, never an address or a password
+        print(f"Not delivered {why}", file=sys.stderr)
+    print(f"The message was:\n  {sent.message}")
+    return 2 if sent.failed else 0
 
 
 def cmd_scoring_report(args: argparse.Namespace) -> int:
