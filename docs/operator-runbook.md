@@ -43,7 +43,7 @@ still do is in [Owner actions still open](#owner-actions-still-open).
 | Get lost data back | Neon → **Branches** → **New branch** from past data (last 6 hours), or `python -m leadgen restore <copy>` (lists what it would add), then the same with `--apply` (adds only, never overwrites) | [Restoring](#restoring) |
 | Change the login password | Render → **Environment** → `APP_PASSWORD` → **Save Changes** (everyone logs in again) | [Login](#login-and-the-render-plan) |
 | Prove a nightly copy restores | GitHub → **Actions** → **Restore rehearsal** → **Run workflow** (prints only counts) | [Restore rehearsal](#restore-rehearsal) |
-| Keep the site awake while the team works | Render's **Starter** plan (since 2026-10-07) never sleeps; **For the site administrator** says "The site had gone to sleep" if it ever does | [Keep the site awake](#keep-the-site-awake) |
+| Keep the site awake while the team works | Render's **Starter** plan (since 2026-10-07) never sleeps; **For the site administrator** says "The site restarted" if it restarts without a deploy | [Keep the site awake](#keep-the-site-awake) |
 | Change the login page's help contact | Built in: `SUPPORT_CONTACT` in `leadgen/config.py` (Thomas Wright at (801) 580-8630); or Render → **Environment** → `LEADGEN_SUPPORT_CONTACT` = a name with a phone or email, which replaces it | [Login](#login-and-the-render-plan) |
 | Merge a business saved as two rows | `python -m leadgen merge-sites` (lists, changes nothing), then `--apply` | [The database](#the-database-saved-leads-marks-calls-the-yelp-count) |
 | Send the monthly scoring check | **For the site administrator** → **Scoring check** → download, send to the developer | [Monthly](#monthly-the-scoring-check) |
@@ -901,12 +901,13 @@ the working day:
    under **Actions** → **Keep the site awake** → **Enable workflow** if so.
 3. **The site's own check.** Each start of the site is recorded (the additive
    `site_starts` table: when, and which version). A start on a weekday between 7:20 AM and 7 PM
-   Utah time without a new version (no deploy since the start before) means the site had gone
-   to sleep, or Render restarted it, and it says so once a Utah day under **For the site
-   administrator** → **Recent problems** (and on the webhook): "The site had gone to sleep and
-   started again at … Utah time without a new version, so whoever opened it then waited
-   up to a minute. On Render's Starter plan it shouldn't sleep: check the service's
-   Instance Type in Render …". When you see it, check that Render shows **Starter**. Each start also reaches the
+   Utah time without a new version (no deploy since the start before) means Render restarted
+   it (a setting saved or the plan changed in Render) or it had been asleep, and it says so
+   once a Utah day under **For the site administrator** → **Recent problems** (and by email):
+   "The site restarted at … Utah time without a new version. Saving a setting or changing
+   the plan in Render restarts it like this, and then nothing needs doing. If nobody changed
+   anything in Render, check that the service's Instance Type still says Starter …". After a
+   settings change it can be ignored; otherwise check that Render shows **Starter**. Each start also reaches the
    database and reads the saved list once, in the background, so the first page doesn't
    wait for either.
 
@@ -919,7 +920,7 @@ the working day:
   ([Checking the sources](#checking-the-sources-and-the-alerts)).
 - `curl -s -o /dev/null -w "%{time_total}\n" https://compactor-lead-finder.onrender.com/healthz`
   prints well under 2 (seconds); 20 or more means it had been asleep.
-- **Recent problems** has no "The site had gone to sleep".
+- **Recent problems** has no "The site restarted" from a time nobody changed anything in Render.
 
 
 ## Yelp notes

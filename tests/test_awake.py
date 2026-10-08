@@ -30,8 +30,8 @@ def test_a_start_in_working_hours_without_a_deploy_means_the_site_had_slept(repo
     assert awake.check_start("abc1234", _utah(5, 6, 1)) is None          # the first start on record
     assert awake.check_start("abc1234", _utah(5, 6, 15)) is None         # the morning's first ping woke it
     said = awake.check_start("abc1234", _utah(5, 9, 32))                 # asleep after that
-    assert said and said.startswith("The site had gone to sleep and started again at Oct 5, 2026, 9:32 AM")
-    assert "Instance Type" in said and _problems() == [said]
+    assert said and said.startswith("The site restarted at Oct 5, 2026, 9:32 AM Utah time without a new version")
+    assert "Saving a setting" in said and "Instance Type" in said and _problems() == [said]
     # Said once a Utah day; again the next day.
     assert awake.check_start("abc1234", _utah(5, 14, 0)) is None
     assert awake.check_start("abc1234", _utah(6, 10, 0))

@@ -116,7 +116,7 @@ SCHEMA = [
     "CREATE INDEX IF NOT EXISTS lead_contacts_by_uid ON lead_contacts (uid, at)",
     "CREATE INDEX IF NOT EXISTS lead_contacts_by_time ON lead_contacts (at)",
     # Each start of the live site, and which version it ran (awake.py: a start during
-    # Utah working hours with no new version means the site had gone to sleep).
+    # Utah working hours with no new version means a restart or sleep).
     """CREATE TABLE IF NOT EXISTS site_starts (
         id TEXT PRIMARY KEY, at DOUBLE PRECISION NOT NULL, version TEXT NOT NULL)""",
     # When each outside source (Yelp, Google, the map data, the place lookup, the alert

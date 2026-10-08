@@ -7,8 +7,8 @@ operator runbook's "Keep the site awake").
 
 If the site stops anyway, it notices: each start is recorded (when, and which version),
 and a start during working hours with the same version as the start before it (no
-deploy in between) means the site had been asleep (back on the free plan) or was
-restarted on Render. That is reported under Recent problems and to the webhook, at most
+deploy in between) means the site was restarted on Render (a setting saved, the plan
+changed) or had been asleep (back on the free plan). That is reported under Recent problems and to the webhook, at most
 once a Utah day, so the owner can check the plan.
 
 Each start also gets the site ready for its first visitor, in the background: it
@@ -33,7 +33,7 @@ WORK_DAYS = range(0, 5)           # Monday (0) to Friday (4)
 # first visit or ping is the one that wakes the site).
 FIRST_PING_MINUTES = 20
 # How the report starts (it is made at most once a Utah day).
-SLEPT = "The site had gone to sleep"
+SLEPT = "The site restarted"
 
 log = logging.getLogger(__name__)
 started_at = time.time()          # when this process started (/healthz shows it)
@@ -44,8 +44,8 @@ def check_start(version: str, at: float | None = None) -> str | None:
     return the problem it shows, reported (see above), or None."""
     at = time.time() if at is None else at
     when = utah(at)
-    # "The site had gone to sleep and started again at Oct 5, 2026, " (that Utah day's report)
-    today = f"{SLEPT} and started again at {date_time_text(at).rsplit(', ', 1)[0]}, "
+    # "The site restarted at Oct 5, 2026, " (that Utah day's report)
+    today = f"{SLEPT} at {date_time_text(at).rsplit(', ', 1)[0]}, "
     with store.connect() as db:
         last = db.one("SELECT version FROM site_starts ORDER BY at DESC LIMIT 1")
         db.run("INSERT INTO site_starts (id, at, version) VALUES (?, ?, ?)", (uuid.uuid4().hex, at, version))
@@ -57,9 +57,10 @@ def check_start(version: str, at: float | None = None) -> str | None:
         return None                   # the first start, or a new version (a deploy)
     if said and said[0]:
         return None                   # already said today
-    text = (f"{SLEPT} and started again at {date_time_text(at)} Utah time without a new version, so "
-            "whoever opened it then waited up to a minute. On Render's Starter plan it shouldn't sleep: "
-            "check the service's Instance Type in Render (operator runbook, \"Keep the site awake\").")
+    text = (f"{SLEPT} at {date_time_text(at)} Utah time without a new version. Saving a setting or "
+            "changing the plan in Render restarts it like this, and then nothing needs doing. If "
+            "nobody changed anything in Render, check that the service's Instance Type still says "
+            "Starter (operator runbook, \"Keep the site awake\").")
     alerts.report("error", text)
     return text
 
