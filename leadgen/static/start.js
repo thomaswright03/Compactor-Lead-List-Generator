@@ -6,11 +6,13 @@ if (PAUSED) setGo(false, "Searching is paused by the administrator.");
 // it says so, so nobody takes the wait for a fault, and that the leads appear by themselves.
 const wakingTimers = [
   setTimeout(() => {
-    $("starting-text").textContent = "Starting up… The Lead Finder sleeps when nobody has used it for a " +
-      "while, and the first visit can take up to a minute to wake it. Your leads appear here by themselves.";
+    $("starting-text").textContent = "Starting up… The Lead Finder sleeps when nobody has used " +
+      "it for a while, and the first visit can take up to a minute to wake it. Your leads " +
+      "appear here by themselves.";
   }, TIMING.waking),
-  setTimeout(() => $("starting").append(el("span", "Still starting. If nothing appears within two minutes, " +
-                                                   "reload the page.", "slow")), TIMING.stillWaking)];
+  setTimeout(() => $("starting").append(el("span", "Still starting. If nothing appears within " +
+                                                   "two minutes, reload the page.", "slow")),
+             TIMING.stillWaking)];
 (async () => {
   const { page, params } = parseHash();
   if (page === "leads") readLeadView(params);      // ask for the view in the address straight away

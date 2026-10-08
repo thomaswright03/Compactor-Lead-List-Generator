@@ -14,6 +14,27 @@ function leftOutNote(s) {
     (one ? "it is flagged in the list, but it isn't a prospect."
       : "they are flagged in the list, but they aren't prospects.");
 }
+// Why tier D has no numbers: true whatever minimum score the searches used.
+/** @param {StatsAnswer} s @param {TierRow | undefined} d tier D's row */
+function tierDNote(s, d) {
+  return d && d.saved
+    ? `${d.saved.toLocaleString()} saved ${d.saved === 1 ? "lead is" : "leads are"} in tier D ` +
+      `(scores below ${s.tier_floors.C}): from a search that lowered the minimum score under ` +
+      "More options, or scored lower since. None has been checked yet."
+    : `Tier D (scores below ${s.tier_floors.C}) is empty: searches leave out businesses ` +
+      `scoring below ${s.min_score} unless the minimum score is lowered under More options.`;
+}
+// Until something is marked, only the note that says how to get numbers shows.
+/** @param {StatsAnswer} s */
+function statsEmpty(s) {
+  return s.saved
+    ? emptyNote("No businesses checked yet.",
+                "Mark businesses Yes or No on the Leads page to see these numbers.",
+                "#leads", "Go to Leads")
+    : emptyNote("No saved leads yet.",
+                "Run a search on the Find leads page, then mark businesses Yes or No on the " +
+                "Leads page.", "#find", "Go to Find leads");
+}
 async function loadStats() {
   /** @type {StatsAnswer} */
   let s;
@@ -21,43 +42,36 @@ async function loadStats() {
   catch (e) {
     const err = /** @type {ApiError} */ (e);
     if (err.status === 401) return;
-    problem($("stats-problem"), "Can't show the stats right now", err.message, loadStats, loadStats);
+    problem($("stats-problem"), "Can't show the stats right now", err.message, loadStats,
+            loadStats);
     $("stats-body").hidden = true; return;
   }
   $("stats-problem").replaceChildren(); $("stats-body").hidden = false;
   const empty = $("stats-empty");
-  // Until something is marked, only the note that says how to get numbers shows.
   empty.hidden = s.checked > 0; $("stats-data").hidden = !s.checked;
   $("stats-left-out").hidden = !s.left_out;
   $("stats-left-out").textContent = leftOutNote(s);
   $("stats-closed").hidden = !s.closed;
   $("stats-closed").textContent = `${s.closed.toLocaleString()} of the businesses checked ` +
-    `${s.closed === 1 ? "has" : "have"} since closed for good. They still count: the mark says what they had ` +
-    "while they were open.";
+    `${s.closed === 1 ? "has" : "have"} since closed for good. They still count: the mark says ` +
+    "what they had while they were open.";
   if (!s.checked) {
-    empty.replaceChildren(s.saved
-      ? emptyNote("No businesses checked yet.", "Mark businesses Yes or No on the Leads page to see these numbers.",
-                  "#leads", "Go to Leads")
-      : emptyNote("No saved leads yet.",
-                  "Run a search on the Find leads page, then mark businesses Yes or No on the Leads page.",
-                  "#find", "Go to Find leads"));
+    empty.replaceChildren(statsEmpty(s));
     return;
   }
   $("s-total").textContent = s.with_equipment.toLocaleString();
   const avg = $("s-avg"); avg.replaceChildren(); avg.classList.remove("says");
   // No number yet: say why in words (a bare dash reads as broken).
-  if (s.average_score === null) { avg.textContent = "No businesses marked Yes yet."; avg.classList.add("says"); }
-  else { avg.append(String(s.average_score)); avg.append(el("small", ` / 100 · tier ${s.average_tier}`)); }
+  if (s.average_score === null) {
+    avg.textContent = "No businesses marked Yes yet."; avg.classList.add("says");
+  } else {
+    avg.append(String(s.average_score));
+    avg.append(el("small", ` / 100 · tier ${s.average_tier}`));
+  }
   drawChart(s.by_tier);
   const d = s.by_tier.find((t) => t.tier === "D");
-  // Why tier D has no numbers: true whatever minimum score the searches used.
   $("tier-d-note").hidden = !(d && !d.checked);
-  $("tier-d-note").textContent = d && d.saved
-    ? `${d.saved.toLocaleString()} saved ${d.saved === 1 ? "lead is" : "leads are"} in tier D (scores below ` +
-      `${s.tier_floors.C}): from a search that lowered the minimum score under More options, or scored lower ` +
-      "since. None has been checked yet."
-    : `Tier D (scores below ${s.tier_floors.C}) is empty: searches leave out businesses scoring below ` +
-      `${s.min_score} unless the minimum score is lowered under More options.`;
+  $("tier-d-note").textContent = tierDNote(s, d);
   const tbody = $("s-table").querySelector("tbody"); tbody.replaceChildren();
   for (const t of s.by_tier) {
     const tr = el("tr");
@@ -70,6 +84,28 @@ async function loadStats() {
 // Columns: one series (share with equipment), so one hue, no legend; the title names it.
 /** @type {TierRow[] | null} */
 let chartRows = null;
+// The drawing's height and its margins (left, right, top, bottom), in its own pixels.
+const CHART = { H: 260, L: 48, R: 12, T: 24, B: 52 };
+const SVG_NS = "http://www.w3.org/2000/svg";
+/** @type {(p: number) => number} the height of p% */
+const chartY = (p) => CHART.T + (CHART.H - CHART.T - CHART.B) * (1 - p / 100);
+/**
+ * A new SVG element in `svg`.
+ * @param {SVGElement} svg @param {string} tag @param {Record<string, string | number>} attrs
+ * @param {string} [text] @returns {SVGElement}
+ */
+function svgNode(svg, tag, attrs, text) {
+  const n = /** @type {SVGElement} */ (document.createElementNS(SVG_NS, tag));
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
+  if (text !== undefined) n.textContent = text;
+  svg.append(n); return n;
+}
+/**
+ * The chart being drawn: its drawing, its box and tip, its width, each column's band and
+ * the theme's colours.
+ * @typedef {{svg: SVGElement, box: HTMLElement, tip: HTMLElement, W: number, band: number,
+ *            c: (name: string) => string}} Chart
+ */
 /** @param {TierRow[]} rows */
 function drawChart(rows) {
   chartRows = rows;
@@ -77,64 +113,68 @@ function drawChart(rows) {
   /** @type {(name: string) => string} a colour of the theme shown */
   const c = (name) => css.getPropertyValue(name).trim();
   const box = $("chart"); box.replaceChildren();
-  const W = Math.max(300, Math.round(box.clientWidth || 560)), H = 260, L = 48, R = 12, T = 24, B = 52;
-  const NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(NS, "svg");
+  const W = Math.max(300, Math.round(box.clientWidth || 560)), { H, L, R } = CHART;
+  const svg = /** @type {SVGElement} */ (document.createElementNS(SVG_NS, "svg"));
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", "Share of checked businesses with a baler or compactor, by tier: " +
-    rows.map((r) => `${r.tier} ${r.pct === null ? "no data" : r.pct + "%"}`).join(", "));
-  /** @type {(tag: string, attrs: Record<string, string | number>, text?: string) => SVGElement} */
-  const node = (tag, attrs, text) => {
-    const n = /** @type {SVGElement} */ (document.createElementNS(NS, tag));
-    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
-    if (text !== undefined) n.textContent = text;
-    svg.append(n); return n;
-  };
-  /** @type {(p: number) => number} the height of p% */
-  const y = (p) => T + (H - T - B) * (1 - p / 100);
+  svg.setAttribute("aria-label", "Share of checked businesses with a baler or compactor, by " +
+    "tier: " + rows.map((r) => `${r.tier} ${r.pct === null ? "no data" : r.pct + "%"}`).join(", "));
   for (const p of [0, 25, 50, 75, 100]) {
-    node("line", { x1: L, x2: W - R, y1: y(p), y2: y(p), stroke: p === 0 ? c("--chart-base") : c("--chart-grid"),
-                   "stroke-width": 1 });
-    node("text", { x: L - 8, y: y(p) + 4, "text-anchor": "end", "font-size": 14, fill: c("--chart-text") }, `${p}%`);
+    svgNode(svg, "line", { x1: L, x2: W - R, y1: chartY(p), y2: chartY(p),
+                           stroke: p === 0 ? c("--chart-base") : c("--chart-grid"),
+                           "stroke-width": 1 });
+    svgNode(svg, "text", { x: L - 8, y: chartY(p) + 4, "text-anchor": "end", "font-size": 14,
+                           fill: c("--chart-text") }, `${p}%`);
   }
-  const band = (W - L - R) / rows.length, bw = 24;
   const tip = el("div", undefined, "tip"); tip.hidden = true; box.append(tip);
-  rows.forEach((r, i) => {
-    const cx = L + band * i + band / 2;
-    node("text", { x: cx, y: H - B + 20, "text-anchor": "middle", "font-size": 14, "font-weight": 700,
-                   fill: c("--ink") }, `Tier ${r.tier}`);
-    node("text", { x: cx, y: H - B + 40, "text-anchor": "middle", "font-size": 14, fill: c("--chart-text") },
-         r.checked ? `${r.yes} of ${r.checked}` : band < 90 ? "none" : "none checked");
-    if (r.pct === null) return;
-    const top = y(r.pct), h = Math.max(y(0) - top, r.pct > 0 ? 2 : 0), rad = Math.min(4, h / 2);
-    // 4px rounded data-end, square at the baseline.
-    const x0 = cx - bw / 2, x1 = cx + bw / 2, yb = y(0);
-    const path = node("path", { d: `M${x0},${yb} V${top + rad} Q${x0},${top} ${x0 + rad},${top} H${x1 - rad} ` +
-                                   `Q${x1},${top} ${x1},${top + rad} V${yb} Z`,
-                                fill: c("--chart-bar") });
-    node("text", { x: cx, y: top - 7, "text-anchor": "middle", "font-size": 14, "font-weight": 700,
-                   fill: c("--ink") }, `${r.pct}%`);
-    // The hit target is the whole column band, bigger than the mark.
-    const hit = node("rect", { x: cx - band / 2 + 4, y: T, width: band - 8, height: H - T - B, fill: "transparent",
-                               class: "col", tabindex: 0 });
-    const show = () => {
-      tip.replaceChildren(el("strong", `${r.pct}%`),
-                          document.createTextNode(` · Tier ${r.tier}: ${r.yes} of ${r.checked} have one`));
-      tip.hidden = false;
-      const rect = box.getBoundingClientRect(), scale = rect.width / W;
-      tip.style.left = `${cx * scale}px`; tip.style.top = `${(top - 20) * scale}px`;
-      path.setAttribute("opacity", ".8");
-    };
-    const hide = () => { tip.hidden = true; path.setAttribute("opacity", "1"); };
-    hit.addEventListener("pointerenter", show); hit.addEventListener("focus", show);
-    hit.addEventListener("pointerleave", hide); hit.addEventListener("blur", hide);
-  });
+  const chart = { svg, box, tip, W, band: (W - L - R) / rows.length, c };
+  rows.forEach((r, i) => drawColumn(chart, r, i));
   box.prepend(svg);
+}
+// One tier's column: its label and count under the axis, its bar with the share above it,
+// and a tip with the figures while the pointer (or keyboard focus) is on it.
+/** @param {Chart} chart @param {TierRow} r @param {number} i the column's place */
+function drawColumn(chart, r, i) {
+  const { svg, box, tip, W, band, c } = chart, { H, T, B } = CHART, bw = 24;
+  const cx = CHART.L + band * i + band / 2;
+  svgNode(svg, "text", { x: cx, y: H - B + 20, "text-anchor": "middle", "font-size": 14,
+                         "font-weight": 700, fill: c("--ink") }, `Tier ${r.tier}`);
+  svgNode(svg, "text", { x: cx, y: H - B + 40, "text-anchor": "middle", "font-size": 14,
+                         fill: c("--chart-text") },
+          r.checked ? `${r.yes} of ${r.checked}` : band < 90 ? "none" : "none checked");
+  if (r.pct === null) return;
+  const top = chartY(r.pct), h = Math.max(chartY(0) - top, r.pct > 0 ? 2 : 0);
+  const rad = Math.min(4, h / 2);
+  // 4px rounded data-end, square at the baseline.
+  const x0 = cx - bw / 2, x1 = cx + bw / 2, yb = chartY(0);
+  const path = svgNode(svg, "path", {
+    d: `M${x0},${yb} V${top + rad} Q${x0},${top} ${x0 + rad},${top} H${x1 - rad} ` +
+       `Q${x1},${top} ${x1},${top + rad} V${yb} Z`,
+    fill: c("--chart-bar") });
+  svgNode(svg, "text", { x: cx, y: top - 7, "text-anchor": "middle", "font-size": 14,
+                         "font-weight": 700, fill: c("--ink") }, `${r.pct}%`);
+  // The hit target is the whole column band, bigger than the mark.
+  const hit = svgNode(svg, "rect", { x: cx - band / 2 + 4, y: T, width: band - 8,
+                                     height: H - T - B, fill: "transparent", class: "col",
+                                     tabindex: 0 });
+  const show = () => {
+    tip.replaceChildren(el("strong", `${r.pct}%`),
+                        document.createTextNode(` · Tier ${r.tier}: ${r.yes} of ${r.checked} ` +
+                                                "have one"));
+    tip.hidden = false;
+    const rect = box.getBoundingClientRect(), scale = rect.width / W;
+    tip.style.left = `${cx * scale}px`; tip.style.top = `${(top - 20) * scale}px`;
+    path.setAttribute("opacity", ".8");
+  };
+  const hide = () => { tip.hidden = true; path.setAttribute("opacity", "1"); };
+  hit.addEventListener("pointerenter", show); hit.addEventListener("focus", show);
+  hit.addEventListener("pointerleave", hide); hit.addEventListener("blur", hide);
 }
 
 let resizeTimer = 0;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (chartRows && !$("page-stats").hidden) drawChart(chartRows); }, 150);
+  resizeTimer = setTimeout(() => {
+    if (chartRows && !$("page-stats").hidden) drawChart(chartRows);
+  }, 150);
 });

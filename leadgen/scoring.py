@@ -767,16 +767,19 @@ def keyword_hits(lead: Lead, keywords: Iterable[str]) -> list[str]:
     return [k for k in keywords if k.strip() and _contains_term(hay, k)]
 
 
-def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
-    reasons, flags = [], []
-    best, matched, rule = classify(lead)
-    score = 0
+# Points a lead earned (or lost) and the reasons that say why, as each part of score_lead adds them.
+Points = tuple[int, list[str]]
+
+
+def _category_points(lead: Lead, best: Match | None, rule: Rule) -> Points:
+    """The category's weight, with the lead's category and type set from it (or from the
+    listing's own category when none matched), and which rule decided."""
+    reasons = []
     if best:
         cat, how = best
         lead.category = cat.label
         lead.category_key = cat.key
         lead.lead_type = cat.lead_type
-        score += cat.weight
         reasons.append(f"+{cat.weight} {cat.label} (by {how}): {cat.why}")
     else:
         lead.category = lead.primary_category or "Uncategorized"
@@ -785,76 +788,117 @@ def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
     if rule is not NO_MATCH:
         # Which classifying rule decided (RULES), for anyone checking why a lead scored as it did.
         reasons.append(f"category rule ({rule.name}): {rule.says}")
+    return (best[0].weight if best else 0), reasons
 
+
+def _brand_points(lead: Lead, best: Match | None) -> Points:
+    """+20 for a known high-volume brand's store (config.BRANDS), unless the listing is
+    one of its structures."""
     # A brand's helipad, pharmacy or parking lot is not the store.
     blocked = best is None and (_is_non_prospect(lead, set(lead.raw_categories))
                                 or non_prospect_name(lead) or utility_structure(lead)
                                 or self_storage(lead) or service_plant(lead) or vehicle_wash(lead)
                                 or clinic(lead))
     brand = None if blocked else _brand_bonus(lead)
-    if brand:
-        score += 20
-        reasons.append(f"+20 known high-volume brand ({config.brand_name(brand)})")
+    if not brand:
+        return 0, []
+    return 20, [f"+20 known high-volume brand ({config.brand_name(brand)})"]
 
+
+def _busy_points(lead: Lead) -> Points:
+    """The review-count bonus (config.REVIEW_BONUS) for a busy site."""
     # Busy site: the stronger of the Google and Yelp review signals (never both).
     busy = max(((pts, count, src) for src, count in (("Google", lead.rating_count),
                                                       ("Yelp", lead.yelp_reviews)) if count
                 for threshold, pts in config.REVIEW_BONUS[src]
                 if count >= threshold), default=None)
-    if busy:
-        bonus, count, src = busy
-        score += bonus
-        reasons.append(f"+{bonus} busy site ({count:,} {src} reviews)")
+    if not busy:
+        return 0, []
+    bonus, count, src = busy
+    return bonus, [f"+{bonus} busy site ({count:,} {src} reviews)"]
 
-    if lead.footprint_sqft:
-        if lead.footprint_sqft >= 100_000:
-            bonus = 15
-        elif lead.footprint_sqft >= 40_000:
-            bonus = 10
-        elif lead.footprint_sqft >= 15_000:
-            bonus = 5
-        else:
-            bonus = 0
-        if bonus:
-            score += bonus
-            reasons.append(f"+{bonus} large footprint (~{lead.footprint_sqft:,} sq ft)")
 
+def _footprint_points(lead: Lead) -> Points:
+    """The bonus for a large building (a map outline's area)."""
+    if not lead.footprint_sqft:
+        return 0, []
+    if lead.footprint_sqft >= 100_000:
+        bonus = 15
+    elif lead.footprint_sqft >= 40_000:
+        bonus = 10
+    elif lead.footprint_sqft >= 15_000:
+        bonus = 5
+    else:
+        return 0, []
+    return bonus, [f"+{bonus} large footprint (~{lead.footprint_sqft:,} sq ft)"]
+
+
+def _keyword_points(lead: Lead, keywords: Iterable[str]) -> Points:
+    """The bonus for the search's keywords found on the lead (kept as matched_keywords)."""
     kw_hits = keyword_hits(lead, keywords)
-    if kw_hits:
-        bonus = min(10 * len(kw_hits), 20)
-        score += bonus
-        reasons.append(f"+{bonus} matches keyword(s): {', '.join(kw_hits)}")
     lead.matched_keywords = kw_hits
+    if not kw_hits:
+        return 0, []
+    bonus = min(10 * len(kw_hits), 20)
+    return bonus, [f"+{bonus} matches keyword(s): {', '.join(kw_hits)}"]
 
-    if len(matched) > 1:
-        others = [c.label for c, _ in matched if not best or c.key != best[0].key]
-        if others:
-            reasons.append("also looks like: " + "; ".join(others))
 
+def _also_like(best: Match | None, matched: list[Match]) -> list[str]:
+    """The other categories the lead also matched, as one reason line."""
+    if len(matched) <= 1:
+        return []
+    others = [c.label for c, _ in matched if not best or c.key != best[0].key]
+    return ["also looks like: " + "; ".join(others)] if others else []
+
+
+def _type_flags(lead: Lead) -> list[str]:
+    """A competitor's, AARCO's own (its parent company's) or an industry listing's flag,
+    with the lead's type set to match."""
     competitor = _competitor(lead)
     if competitor:
         lead.lead_type = "Competitor"
-        flags.append(f"COMPETITOR: {competitor}")
-    elif _is_self(lead):
+        return [f"COMPETITOR: {competitor}"]
+    if _is_self(lead):
         lead.lead_type = OWN_TYPE
-        flags.append(OWN_FLAG)
-    elif parent_company(lead):
+        return [OWN_FLAG]
+    if parent_company(lead):
         lead.lead_type = OWN_TYPE
-        flags.append(PARENT_FLAG)
-    elif lead.lead_type.startswith("Industry"):
-        flags.append(INDUSTRY_FLAG)
+        return [PARENT_FLAG]
+    if lead.lead_type.startswith("Industry"):
+        return [INDUSTRY_FLAG]
+    return []
 
+
+def _penalties(lead: Lead, flags: list[str]) -> Points:
+    """Points taken off: a map name that is only a word, and a temporary closure (flagged)."""
+    points, reasons = 0, []
     if generic_name(lead.name):
         # "Recycling" with no operator: nothing to look up or call; named places come first.
-        score -= config.GENERIC_NAME_PENALTY
+        points -= config.GENERIC_NAME_PENALTY
         reasons.append(f"-{config.GENERIC_NAME_PENALTY} no business name on the map "
                        f"(only \"{lead.name}\")")
-
     if lead.business_status in ("CLOSED_TEMPORARILY",):
         flags.append("Temporarily closed")
-        score -= 10
+        points -= 10
         reasons.append("-10 temporarily closed")
+    return points, reasons
 
+
+def score_lead(lead: Lead, keywords: Iterable[str] = ()) -> Lead:
+    """Score the lead 0-100 and set its category, type, tier, reasons and flags: its
+    category's points, the brand, busy-site, footprint and keyword bonuses, then the
+    penalties; a competitor or AARCO's own listing is typed and flagged as such."""
+    best, matched, rule = classify(lead)
+    score, reasons = _category_points(lead, best, rule)
+    for points, why in (_brand_points(lead, best), _busy_points(lead), _footprint_points(lead),
+                        _keyword_points(lead, keywords)):
+        score += points
+        reasons += why
+    reasons += _also_like(best, matched)
+    flags = _type_flags(lead)
+    points, why = _penalties(lead, flags)
+    score += points
+    reasons += why
     lead.score = max(0, min(100, score))
     lead.tier = tier_of(lead.score)
     lead.reasons = reasons

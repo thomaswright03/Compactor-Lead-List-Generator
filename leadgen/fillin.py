@@ -22,7 +22,7 @@ import re
 import threading
 import time
 from dataclasses import replace
-from typing import Any
+from typing import Any, NamedTuple
 
 from . import THREAD_PREFIX, alerts, area_map, config, daily, saved
 from .models import Lead
@@ -279,6 +279,128 @@ def _cap(text: str) -> str:
     return text[:1].upper() + text[1:]
 
 
+class _Extent(NamedTuple):
+    """How much of its area a search covered, counted and named for coverage()'s words."""
+
+    areas: int                 # the search's areas
+    left: int                  # of them, not searched in full
+    towns: str                 # the towns of the areas left, named
+    some: str                  # the partly searched areas, named ("" when not known apart)
+    none: str                  # the areas not searched at all, named
+    covered: str               # "6 of the 9 areas within 30 miles searched in full"
+    short: str                 # the same for the Details line: "6 of 9 areas searched in full"
+
+
+def _counted_extent(counted: area_map.Tally, state: str, within: str) -> _Extent:
+    """The extent as counted area by area (area_map.Tally): each area not searched in
+    full named as the Map page names its status, partly searched (some of its
+    businesses came in) or not searched at all."""
+    areas, left = counted.areas, len(counted.left)
+    if not left and state == FILLING:
+        left = 1                             # only slivers are left: still filling in
+    return _Extent(areas, left, area_map.names_text(counted.left), area_map.names_text(counted.partly),
+                   area_map.names_text(counted.missed),
+                   f"{areas - left} of the {areas} areas{within} searched in full",
+                   f"{areas - left} of {areas} areas searched in full")
+
+
+def _recorded_extent(record: dict[str, Any], fill: dict[str, Any], searched: str, within: str,
+                     area: str) -> _Extent:
+    """The extent from the record's own numbers (a record an earlier version saved, or
+    one with no parts kept): the filling in's figures, else the search's "about 2 of 9
+    areas" and the towns its reason names as missing."""
+    first = _FIRST.match(searched)
+    if fill.get("areas"):
+        areas, left = int(fill["areas"]), int(fill.get("left") or 0)
+        towns = str(fill.get("where") or "")
+    else:
+        areas = int(first.group(2)) if first else 1
+        left = areas - int(first.group(1)) if first else 1
+        said = _NOT_YET.search(str(record.get("reason") or ""))
+        towns = said.group(1) if said else ""
+    # A record an earlier version saved names only the areas missing, which the Map
+    # page reads as not searched (area_map._named_missing).
+    towns = area_map.plain_names(towns, record)
+    return _Extent(areas, left, towns, "", towns,
+                   f"about {areas - left} of the {areas} areas{within}" if areas > 1 else f"part of the {area}",
+                   f"About {areas - left} of {areas} areas" if areas > 1 else "Part of the area")
+
+
+def _extent(record: dict[str, Any], fill: dict[str, Any], searched: str, state: str, within: str,
+            area: str) -> _Extent:
+    """The search's extent: counted and named area by area, as the Map page does, from
+    the parts the record keeps as missing, else from the record's numbers."""
+    try:
+        counted = area_map.record_tally(record)
+    except Exception:
+        log.warning("Counting the search's map areas failed", exc_info=True)
+        counted = None
+    if counted is not None and counted.areas > 1:
+        return _counted_extent(counted, state, within)
+    return _recorded_extent(record, fill, searched, within, area)
+
+
+def _complete_text(ext: _Extent, fill: dict[str, Any], area: str) -> tuple[str, str]:
+    """The status and Details line once the whole area has come in."""
+    found, new = int(fill.get("found") or 0), int(fill.get("new") or 0)
+    later = f" ({found:,} more businesses, {new:,} new)" if found else ""
+    text = (f"Covered: the whole {area}. The last areas came in later, in the background{later}. "
+            "Everything found is on the Leads page, ready to call.")
+    short = (f"All {ext.areas} areas" if ext.areas > 1 else "The whole area") + \
+        (f" ({found:,} businesses came in later, in the background)" if found else ", some later in the background")
+    return text, short
+
+
+def _filling_text(so_far: str, short_so_far: str, rest: str, ready: str, record: dict[str, Any],
+                  fill: dict[str, Any], paused: bool, earlier: bool) -> tuple[str, str]:
+    """The status and Details line while the missing areas are still being filled in
+    (or that is stopping, searching having been paused)."""
+    if paused:
+        text = (f"Covered so far: {so_far}. Stopping the filling in of {rest}, because searching was paused… "
+                f"{ready}.")
+        return text, f"{short_so_far}; stopping the filling in (searching was paused)"
+    until = f" until about {fill['until_text']}" if fill.get("until_text") else ""
+    text = (f"Covered so far: {so_far}. Still filling in, in the background{until}: {rest}. {ready}; "
+            "new ones from the rest of the area will appear there on their own.")
+    short = f"{short_so_far}; filling in {rest}{until.replace(' about', '')}"
+    if earlier:
+        text = f"The search of {record.get('when') or record.get('day')} is still filling in. {text} " \
+               "It stops when today's search starts."
+    return text, short
+
+
+def _coverage_text(state: str, ext: _Extent, record: dict[str, Any], fill: dict[str, Any], area: str,
+                   paused: bool, earlier: bool) -> tuple[str, str]:
+    """The Find page's status and its Details line for a search's state and extent."""
+    leads = int(record.get("leads") or 0)
+    them = (f"The {leads:,} businesses already found are" if leads != 1 else "The business already found is")
+    ready = f"{them} on the Leads page, ready to call now"
+    rest = ext.towns or "the rest of the area"
+    # "6 of the 9 areas searched in full; partly searched: Salt Lake City", and (once the
+    # filling in has ended) "; not searched: Layton and Park City".
+    in_part = f"; partly searched: {ext.some}" if ext.some else ""
+    not_searched = f"; not searched: {ext.none}" if ext.none else ""
+    so_far, short_so_far = ext.covered + in_part, f"{ext.short} so far{in_part}"
+    named, short_named = so_far + not_searched, ext.short + in_part + not_searched
+    if state == COMPLETE:
+        return _complete_text(ext, fill, area)
+    if state == FILLING:
+        return _filling_text(so_far, short_so_far, rest, ready, record, fill, paused, earlier)
+    if state == STOPPED:
+        because = NEW_SEARCH_TEXT if fill.get("why") == NEW_SEARCH else "searching was paused"
+        text = (f"Covered: {named}. Filling in stopped because {because}, so the rest wasn't searched today. "
+                f"{ready}.")
+        return text, f"{short_named} ({because})"
+    if state == INTERRUPTED:
+        text = (f"Covered: {named}. A server restart cut the filling in short, so businesses in the rest of the "
+                f"area are missing until the next search. {ready}.")
+        return text, f"{short_named} (a server restart cut the filling in short)"
+    # Gave up, or never filled in.
+    text = (f"Covered: {named}. The rest didn't come in from the free map data today, so businesses there "
+            f"are missing until the next search. {ready}.")
+    return text, f"{short_named} (the rest didn't come in)"
+
+
 def coverage(record: dict[str, Any], paused: bool = False, earlier: bool = False) -> dict[str, Any] | None:
     """How much of its area the day's search covered, in words (see above): {"state",
     "text" (the Find page's one status), "short" (its Details line), "filling", "found"},
@@ -295,83 +417,12 @@ def coverage(record: dict[str, Any], paused: bool = False, earlier: bool = False
     radius = record.get("radius")
     area = f"{radius:g}-mile area" if isinstance(radius, (int, float)) and radius else "area"
     within = f" within {radius:g} miles" if isinstance(radius, (int, float)) and radius else ""
-    # Counted and named area by area, as the Map page does (area_map.Tally), from the parts
-    # the record keeps as missing; a record an earlier version saved has only its numbers.
-    try:
-        counted = area_map.record_tally(record)
-    except Exception:
-        log.warning("Counting the search's map areas failed", exc_info=True)
-        counted = None
-    if counted is not None and counted.areas > 1:
-        areas, left = counted.areas, len(counted.left)
-        towns = area_map.names_text(counted.left)
-        # Each area not searched in full named as the Map page names its status: partly
-        # searched (some of its businesses came in), or not searched at all.
-        some, none = area_map.names_text(counted.partly), area_map.names_text(counted.missed)
-        covered = f"{areas - left} of the {areas} areas{within} searched in full"
-        short = f"{areas - left} of {areas} areas searched in full"
-        if not left and state == FILLING:
-            left = 1                             # only slivers are left: still filling in
-    else:
-        first = _FIRST.match(searched)
-        if fill.get("areas"):
-            areas, left = int(fill["areas"]), int(fill.get("left") or 0)
-            towns = str(fill.get("where") or "")
-        else:
-            areas = int(first.group(2)) if first else 1
-            left = areas - int(first.group(1)) if first else 1
-            said = _NOT_YET.search(str(record.get("reason") or ""))
-            towns = said.group(1) if said else ""
-        # A record an earlier version saved names only the areas missing, which the Map
-        # page reads as not searched (area_map._named_missing).
-        towns = area_map.plain_names(towns, record)
-        some, none = "", towns
-        covered = f"about {areas - left} of the {areas} areas{within}" if areas > 1 else f"part of the {area}"
-        short = f"About {areas - left} of {areas} areas" if areas > 1 else "Part of the area"
-    if not left:
+    ext = _extent(record, fill, searched, state, within, area)
+    if not ext.left:
         state = COMPLETE
-    found, new, leads = int(fill.get("found") or 0), int(fill.get("new") or 0), int(record.get("leads") or 0)
-    them = (f"The {leads:,} businesses already found are" if leads != 1 else "The business already found is")
-    ready = f"{them} on the Leads page, ready to call now"
-    rest = towns or "the rest of the area"
-    # "6 of the 9 areas searched in full; partly searched: Salt Lake City", and (once the
-    # filling in has ended) "; not searched: Layton and Park City".
-    in_part = f"; partly searched: {some}" if some else ""
-    so_far, short_so_far = covered + in_part, f"{short} so far{in_part}"
-    named = so_far + (f"; not searched: {none}" if none else "")
-    short_named = short + in_part + (f"; not searched: {none}" if none else "")
-    if state == COMPLETE:
-        later = f" ({found:,} more businesses, {new:,} new)" if found else ""
-        text = (f"Covered: the whole {area}. The last areas came in later, in the background{later}. "
-                "Everything found is on the Leads page, ready to call.")
-        short = (f"All {areas} areas" if areas > 1 else "The whole area") + \
-            (f" ({found:,} businesses came in later, in the background)" if found else ", some later in the background")
-    elif state == FILLING and paused:
-        text = (f"Covered so far: {so_far}. Stopping the filling in of {rest}, because searching was paused… "
-                f"{ready}.")
-        short = f"{short_so_far}; stopping the filling in (searching was paused)"
-    elif state == FILLING:
-        until = f" until about {fill['until_text']}" if fill.get("until_text") else ""
-        text = (f"Covered so far: {so_far}. Still filling in, in the background{until}: {rest}. {ready}; "
-                "new ones from the rest of the area will appear there on their own.")
-        short = f"{short_so_far}; filling in {rest}{until.replace(' about', '')}"
-        if earlier:
-            text = f"The search of {record.get('when') or record.get('day')} is still filling in. {text} " \
-                   "It stops when today's search starts."
-    elif state == STOPPED:
-        because = NEW_SEARCH_TEXT if fill.get("why") == NEW_SEARCH else "searching was paused"
-        text = (f"Covered: {named}. Filling in stopped because {because}, so the rest wasn't searched today. "
-                f"{ready}.")
-        short = f"{short_named} ({because})"
-    elif state == INTERRUPTED:
-        text = (f"Covered: {named}. A server restart cut the filling in short, so businesses in the rest of the "
-                f"area are missing until the next search. {ready}.")
-        short = f"{short_named} (a server restart cut the filling in short)"
-    else:                                    # gave up, or never filled in
-        text = (f"Covered: {named}. The rest didn't come in from the free map data today, so businesses there "
-                f"are missing until the next search. {ready}.")
-        short = f"{short_named} (the rest didn't come in)"
-    return {"state": state, "text": text, "short": short, "filling": state == FILLING, "found": found}
+    text, short = _coverage_text(state, ext, record, fill, area, paused, earlier)
+    return {"state": state, "text": text, "short": short, "filling": state == FILLING,
+            "found": int(fill.get("found") or 0)}
 
 
 # What earlier versions stored in a search's notes about its coverage (coverage() says it

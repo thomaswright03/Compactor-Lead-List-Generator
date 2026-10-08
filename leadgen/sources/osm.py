@@ -184,28 +184,35 @@ def is_part_label(name: str) -> bool:
     return bool(_PART_LABEL.match(name.strip()))
 
 
-def parse_element(el: dict[str, Any]) -> Lead | None:
-    tags = el.get("tags", {})
-    name = tags.get("name", "").strip()
+def _not_a_business(name: str, tags: dict[str, str]) -> bool:
+    """True for a map element that is no business to call: unnamed, a label of part of
+    a complex, no longer operating, or a road, river or place label."""
     # Skip unnamed features and per-building labels like "B", "12" or "Building B"
     # inside a complex (but keep brands like "3M").
     if len(name) < 2 or not any(ch.isalpha() for ch in name) or is_part_label(name):
-        return None
+        return True
     # Places that no longer operate.
     if "(historical)" in name.lower() or _only_former_use(tags) or any(
             tags.get(k) == "yes" for k in ("disused", "abandoned", "demolished")):
-        return None
+        return True
     # Roads, rivers, place labels etc. only slip in through the name query; an
     # element a category-tag query fetched (a rail depot, an apartment node) stays.
-    if any(k in tags for k in _NOT_PLACES) and not _fetched_by_tag(tags):
-        return None
+    return any(k in tags for k in _NOT_PLACES) and not _fetched_by_tag(tags)
+
+
+def _position(el: dict[str, Any]) -> tuple[float, float] | None:
+    """The element's (lat, lon): a node's own, or the middle of a way's bounds."""
     if "lat" in el and "lon" in el:
-        lat, lon = el["lat"], el["lon"]
-    elif "bounds" in el:
+        return el["lat"], el["lon"]
+    if "bounds" in el:
         b = el["bounds"]
-        lat, lon = (b["minlat"] + b["maxlat"]) / 2, (b["minlon"] + b["maxlon"]) / 2
-    else:
-        return None
+        return (b["minlat"] + b["maxlat"]) / 2, (b["minlon"] + b["maxlon"]) / 2
+    return None
+
+
+def _categories(tags: dict[str, str]) -> tuple[list[str], str]:
+    """The element's category tags (and brand or operator) as "key=value" strings for
+    the scorer, and its first real category, prettied, as the primary one."""
     raw = [f"{k}={tags[k]}" for k in CATEGORY_KEYS if k in tags]
     for k in ("brand", "operator"):
         if k in tags:
@@ -215,15 +222,33 @@ def parse_element(el: dict[str, Any]) -> Lead | None:
         if k in tags and tags[k] not in ("yes",):
             primary = _pretty(tags[k])
             break
+    return raw, primary
+
+
+def _footprint(el: dict[str, Any], tags: dict[str, str], etype: str) -> int | None:
+    """A building's rough size from its bounds (sq ft), when it is a building."""
+    if etype not in ("way", "relation") or not ("building" in tags or "shop" in tags):
+        return None
+    footprint = _footprint_sqft(el.get("bounds"))
+    return None if footprint and footprint > MAX_BUILDING_SQFT else footprint
+
+
+def parse_element(el: dict[str, Any]) -> Lead | None:
+    """A business from one Overpass element (a node, way or relation), or None when it
+    is no business or has no position."""
+    tags = el.get("tags", {})
+    name = tags.get("name", "").strip()
+    if _not_a_business(name, tags):
+        return None
+    at = _position(el)
+    if at is None:
+        return None
+    lat, lon = at
+    raw, primary = _categories(tags)
     street = " ".join(x for x in [tags.get("addr:housenumber", ""), tags.get("addr:street", "")] if x)
     if generic_name(name):
         name = _descriptive(name, tags, street)
     etype = el.get("type", "node")
-    footprint = None
-    if etype in ("way", "relation") and ("building" in tags or "shop" in tags):
-        footprint = _footprint_sqft(el.get("bounds"))
-        if footprint and footprint > MAX_BUILDING_SQFT:
-            footprint = None
     outline = _outline(el.get("bounds")) if etype in ("way", "relation") else None
     return Lead(
         name=name,
@@ -239,7 +264,7 @@ def parse_element(el: dict[str, Any]) -> Lead | None:
         website=tags.get("website", tags.get("contact:website", "")),
         raw_categories=raw,
         primary_category=primary,
-        footprint_sqft=footprint,
+        footprint_sqft=_footprint(el, tags, etype),
         outline=outline,
         business_status="CLOSED_PERMANENTLY" if tags.get("disused") == "yes" else "",
         map_url=f"https://www.openstreetmap.org/{etype}/{el.get('id')}",
@@ -323,70 +348,103 @@ def _fetch(query: str, deadline: float, first: int = 0,
         return known, []
     endpoints = list(config.OVERPASS_ENDPOINTS)
     endpoints = endpoints[first % len(endpoints):] + endpoints[:first % len(endpoints)]
-    answers: queue.Queue[tuple[str, Any, BaseException | None]] = queue.Queue()
-    errors: list[str] = []
-    asked, waiting, next_at = 0, 0, 0.0
+    mirrors = _Mirrors(query, endpoints, said)
+    data = mirrors.answer(deadline, cancel)
+    if not data.get("remark"):
+        cache_put(_answer_key(query), data)
+    return data, mirrors.errors
 
-    def ask(endpoint: str, left: float) -> None:
+
+class _Mirrors:
+    """One query put to the Overpass mirrors in turn (_fetch): which have been asked,
+    how many are still to answer, and what the ones that failed said."""
+
+    def __init__(self, query: str, endpoints: list[str], said: Callable[[int, int], None] | None) -> None:
+        self.query, self.endpoints, self.said = query, endpoints, said
+        self.answers: queue.Queue[tuple[str, Any, BaseException | None]] = queue.Queue()
+        self.errors: list[str] = []
+        self.asked = self.waiting = 0
+        self.next_at = 0.0
+
+    def _ask(self, endpoint: str, left: float) -> None:
+        """Ask one mirror (in its own thread) and queue its answer or error."""
         try:
             # Connecting gets at most 10 s; the answer may take the rest of the time.
-            data = request_json("POST", endpoint, data={"data": query},
+            data = request_json("POST", endpoint, data={"data": self.query},
                                 timeout=(min(10.0, left), left), retries=1,
                                 cache_key_extra="overpass", cache_ttl=config.OVERPASS_CACHE_TTL_SECONDS,
                                 cacheable=lambda d: not d.get("remark"))
         except HttpError as exc:
-            answers.put((endpoint, None, exc))
+            self.answers.put((endpoint, None, exc))
         except Exception as exc:  # noqa: BLE001 - reported like a failed server
-            answers.put((endpoint, None, exc))
+            self.answers.put((endpoint, None, exc))
         else:
-            answers.put((endpoint, data, None))
+            self.answers.put((endpoint, data, None))
 
-    while True:
-        if cancel is not None and cancel.is_set():
-            raise SourceError("stopped by the administrator")
-        now = time.monotonic()
-        left = deadline - now
-        if asked < len(endpoints) and (waiting == 0 or now >= next_at):
-            endpoint = endpoints[asked]
-            if left < MIN_SECONDS_LEFT:
-                errors.append("out of time before trying " + endpoint)
-                if waiting == 0:
-                    break
-                asked = len(endpoints)            # no time for more; wait for the ones asked
-                continue
-            asked += 1
-            waiting += 1
-            next_at = now + config.OVERPASS_STAGGER_SECONDS
-            if said:
-                said(asked, len(endpoints))
-            log.info("OpenStreetMap: querying %s", endpoint.split("/")[2])
-            threading.Thread(target=ask, args=(endpoint, left), daemon=True,
-                             name=f"{THREAD_PREFIX}map server {endpoint.split('/')[2]}").start()
-            continue
-        if waiting == 0 or left <= 0:
-            if waiting:
-                errors.append("no server answered in time")
-            break
-        until = left if asked >= len(endpoints) else min(left, next_at - now)
-        if cancel is not None:
-            until = min(until, 1.0)                 # look at the stop now and then
+    def due(self, now: float) -> bool:
+        """True when it is the next mirror's turn: none asked yet, or the last one asked
+        config.OVERPASS_STAGGER_SECONDS ago and still to answer."""
+        return self.asked < len(self.endpoints) and (self.waiting == 0 or now >= self.next_at)
+
+    def ask_next(self, now: float, left: float) -> bool:
+        """Ask the next mirror, with `left` seconds to answer; False when there is no
+        time for it and none asked is still to answer (nothing more to wait for)."""
+        endpoint = self.endpoints[self.asked]
+        if left < MIN_SECONDS_LEFT:
+            self.errors.append("out of time before trying " + endpoint)
+            self.asked = len(self.endpoints)        # no time for more; wait for the ones asked
+            return self.waiting > 0
+        self.asked += 1
+        self.waiting += 1
+        self.next_at = now + config.OVERPASS_STAGGER_SECONDS
+        if self.said:
+            self.said(self.asked, len(self.endpoints))
+        log.info("OpenStreetMap: querying %s", endpoint.split("/")[2])
+        threading.Thread(target=self._ask, args=(endpoint, left), daemon=True,
+                         name=f"{THREAD_PREFIX}map server {endpoint.split('/')[2]}").start()
+        return True
+
+    def take(self, timeout: float) -> Any | None:
+        """The next answer within `timeout` seconds: its data when good, else None (no
+        answer yet, a failed mirror, or a mirror that only sent a remark)."""
         try:
-            endpoint, data, exc = answers.get(timeout=max(0.01, until))
+            endpoint, data, exc = self.answers.get(timeout=max(0.01, timeout))
         except queue.Empty:
-            continue
-        waiting -= 1
+            return None
+        self.waiting -= 1
         if exc is not None:
             log.warning("OpenStreetMap server failed: %s", exc)
-            errors.append(str(exc))
-            continue
+            self.errors.append(str(exc))
+            return None
         if data.get("remark") and not data.get("elements"):
             log.warning("OpenStreetMap server %s: %s", endpoint, data["remark"])
-            errors.append(f"{endpoint}: {data['remark']}")
-            continue
-        if not data.get("remark"):
-            cache_put(_answer_key(query), data)
-        return data, errors
-    raise SourceError(" | ".join(errors) or "no server answered")
+            self.errors.append(f"{endpoint}: {data['remark']}")
+            return None
+        return data
+
+    def answer(self, deadline: float, cancel: threading.Event | None) -> Any:
+        """The first good answer before `deadline`, asking the mirrors in turn; raises
+        SourceError when none answered, or as soon as `cancel` is set."""
+        while True:
+            if cancel is not None and cancel.is_set():
+                raise SourceError("stopped by the administrator")
+            now = time.monotonic()
+            left = deadline - now
+            if self.due(now):
+                if self.ask_next(now, left):
+                    continue
+                break
+            if self.waiting == 0 or left <= 0:
+                if self.waiting:
+                    self.errors.append("no server answered in time")
+                break
+            until = left if self.asked >= len(self.endpoints) else min(left, self.next_at - now)
+            if cancel is not None:
+                until = min(until, 1.0)                 # look at the stop now and then
+            data = self.take(until)
+            if data is not None:
+                return data
+        raise SourceError(" | ".join(self.errors) or "no server answered")
 
 
 class _Parts:

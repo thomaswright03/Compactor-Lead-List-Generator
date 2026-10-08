@@ -7,7 +7,7 @@ import math
 import threading
 import time
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, NamedTuple
 
 from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
@@ -398,6 +398,42 @@ def saved_leads() -> ResponseReturnValue:
     asks for its rows again: a refresh never sends more than one page of rows.
     """
     now = time.time()
+    asked = _asked()
+    try:
+        uids: set[str] = set()
+        if not asked.fresh:
+            uids = changed_uids(asked.since - SINCE_OVERLAP)
+            if not uids:
+                return jsonify({"leads": [], "changes": True, "removed": [], "now": now})
+        found = listing()
+        undo = undo_offers()
+        more = found.call_text() if asked.view == "called" and asked.q else {}
+        text = found.text() if asked.q else {}
+    except LoadError as exc:
+        return jsonify({"error": str(exc)}), 503
+    filtered = _filter(asked, text, more)
+    extra = {"call_counts": _call_counts(found, asked.q, more)} if asked.view == "called" else {}
+    if asked.fresh:
+        return jsonify({**_page(found, undo, asked.view, filtered, asked.narrowed), **extra, "now": now})
+    return jsonify({**_changes(found, undo, asked.view, filtered, asked.narrowed, uids), **extra, "now": now})
+
+
+class _Asked(NamedTuple):
+    """What GET /leads asked for (saved_leads): the view and its filters."""
+
+    view: str
+    q: str
+    tier: str
+    phone: bool
+    outcome: str
+    only: str                 # one business only, by its id
+    since: float              # the "now" of an earlier answer, or 0
+    fresh: bool               # the rows themselves, not what changed since
+    narrowed: bool            # a filter is on
+
+
+def _asked() -> _Asked:
+    """The request's view and filters, each checked (an unknown tab reads as "all")."""
     since = request.args.get("since", type=float)
     view = request.args.get("tab", "all")
     if view not in VIEWS:
@@ -411,23 +447,16 @@ def saved_leads() -> ResponseReturnValue:
     # One business only (the Map page's "Open on the Leads page" link), by its id.
     only = (request.args.get("lead") or "")[:64]
     fresh = since is None or not math.isfinite(since) or since <= 0
-    try:
-        uids: set[str] = set()
-        if since is not None and not fresh:
-            uids = changed_uids(since - SINCE_OVERLAP)
-            if not uids:
-                return jsonify({"leads": [], "changes": True, "removed": [], "now": now})
-        found = listing()
-        undo = undo_offers()
-        more = found.call_text() if view == "called" and q else {}
-        text = found.text() if q else {}
-    except LoadError as exc:
-        return jsonify({"error": str(exc)}), 503
+    return _Asked(view, q, tier, phone, outcome, only, since or 0.0, fresh,
+                  bool(only or outcome or q or tier or phone))
 
-    words = q.split()
+
+def _filter(asked: _Asked, text: dict[str, str], more: dict[str, str]) -> Callable[[Lead], bool]:
+    """The request's filters as one test of a lead: matches(), with each lead's filter
+    text read once (Listing.text, and on the Calls page its calls' text, `more`)."""
+    only, outcome, tier, phone, words = asked.only, asked.outcome, asked.tier, asked.phone, asked.q.split()
 
     def filtered(l: Lead) -> bool:
-        # matches(), with each lead's filter text read once (Listing.text).
         if (only and l.uid != only) or (outcome and l.call_outcome != outcome) or (tier and tier_of(l) != tier):
             return False
         if phone and not has_phone(l):
@@ -438,28 +467,30 @@ def saved_leads() -> ResponseReturnValue:
         if (said := more.get(l.uid)):
             hay += " " + said
         return all(word in hay for word in words)
-    narrowed = bool(only or outcome or q or tier or phone)
-    extra = {"call_counts": _call_counts(found, q, more)} if view == "called" else {}
-    if fresh:
-        return jsonify({**_page(found, undo, view, filtered, narrowed), **extra, "now": now})
+    return filtered
+
+
+def _changes(found: Listing, undo: Undos, view: str, filtered: Callable[[Lead], bool], narrowed: bool,
+             uids: set[str]) -> dict[str, Any]:
+    """What changed since the page last looked (`uids`, see saved_leads): the view's total
+    and counts, the changed leads (in full when shown or kept, else just their key), and
+    the ones that left the list; {"reload": True} when more changed than one page holds."""
     shown = {l.uid for l in found.views[view] if filtered(l)} if narrowed else set()
 
     def is_shown(uid: str) -> bool:
         return uid in shown if narrowed else found.in_view(uid, view)
     total = len(shown) if narrowed else len(found.views[view])
-    body = {"changes": True, "total": total, "counts": found.counts,
-            "recent": _recent(found, undo), **extra, "now": now}
+    body = {"changes": True, "total": total, "counts": found.counts, "recent": _recent(found, undo)}
     kept = uids & found.by_uid.keys()
     limit = request.args.get("limit", type=int) or PAGE_SIZE
     if len(kept) > max(1, min(limit, MAX_LIMIT)):
-        return jsonify({**body, "reload": True, "leads": [], "removed": []})
+        return {**body, "reload": True, "leads": [], "removed": []}
     changed = found.in_order(kept)
     pinned = set((request.args.get("keep") or "").split(",")[:50]) - {""}
     wanted = {uid for uid in kept if is_shown(uid) or uid in pinned}
-    return jsonify({**body, "removed": sorted(uids - kept),
-                    "leads": [{**lead_json(l, undo), "in_view": is_shown(l.uid)}
-                              if l.uid in wanted
-                              else {"key": l.uid, "in_view": False} for l in changed]})
+    return {**body, "removed": sorted(uids - kept),
+            "leads": [{**lead_json(l, undo), "in_view": is_shown(l.uid)} if l.uid in wanted
+                      else {"key": l.uid, "in_view": False} for l in changed]}
 
 
 def _call_counts(found: Listing, q: str, more: dict[str, str]) -> dict[str, Any]:

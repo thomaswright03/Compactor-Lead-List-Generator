@@ -121,35 +121,14 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
         k.lower() for k in config.DEFAULT_KEYWORDS]
     with store.connect() as db:
         rows = _read(db)
+        index = _Index(rows)
         changed: dict[str, _Row] = {}
-        by_id = {i: r for r in rows for i in r.ids}
-        buckets: dict[tuple[float, float], list[_Row]] = {}
-        for r in rows:
-            if r.lead:
-                buckets.setdefault(_bucket(r.lead), []).append(r)
-        claimed: set[str] = set()
         uids: list[str] = []
         fresh: set[str] = set()                  # rows this search added
-        sites = _SavedSites(rows)
         for lead in leads:
             parts = [{"at": now, "lead": p} for p in snapshot(lead)]
             ids = {_part_id(p) for p in parts}
-            # Two leads the search kept apart never share a row, even via a listing id.
-            # A lead with listings of two saved rows (saved apart before the search
-            # rules joined them) joins the one saved first, the row merge-sites keeps.
-            row = min((by_id[i] for i in ids if i in by_id and by_id[i].uid not in claimed),
-                      key=lambda r: (r.first_seen, r.uid), default=None)
-            if row is None:
-                bx, by = _bucket(lead)
-                near = [r for dx in (-1, 0, 1) for dy in (-1, 0, 1)
-                        for r in buckets.get((round(bx + dx * 0.01, 2), round(by + dy * 0.01, 2)), [])
-                        if r.uid not in claimed and r.lead is not None and is_duplicate(lead, r.lead)]
-                row = min(near, key=lambda r: _miles_between(lead, r.lead), default=None)
-            if row is None:
-                # A part of a site already saved ("Shoreline Ridge 830" beside the saved
-                # "Shoreline Ridge", the base's airfield inside the saved base's outline):
-                # it joins that row.
-                row = sites.find(lead, claimed)
+            row = index.find(lead, ids)
             if row is None:
                 if lead.business_status == CLOSED:
                     uids.append("")             # closed before anyone saw it: not added
@@ -157,27 +136,10 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
                 row = _Row(uuid.uuid4().hex, None, [], set(), now, now)
                 rows.append(row)
                 fresh.add(row.uid)
-            older = [p for p in row.parts if _part_id(p) not in ids]
-            row.parts = parts + older
-            row.ids |= ids
-            row.last_seen = now
-            if older:
-                row.lead = _rebuild(row.parts)
-            else:
-                row.lead = copy.deepcopy(lead)
-                if rescore:
-                    score_lead(row.lead, config.DEFAULT_KEYWORDS)
-            if lead.business_status == CLOSED:
-                row.lead.business_status = lead.business_status
-            row.lead.uid = row.uid
-            row.lead.parts = []
+            saved = _add_to_row(row, lead, parts, ids, now, rescore)
             uids.append(row.uid)
-            claimed.add(row.uid)
             changed[row.uid] = row
-            for i in row.ids:
-                by_id[i] = row
-            buckets.setdefault(_bucket(row.lead), []).append(row)
-            sites.add(row)
+            index.add(row, saved)
         # Rows saved before sites were merged are joined only on request
         # (`python -m leadgen merge-sites`): that moves marks and calls between
         # saved rows, which the owner decides on, not an automatic save.
@@ -187,6 +149,79 @@ def save_search(leads: list[Lead], keywords: Sequence[str] | None = None) -> tup
     new = len(fresh)
     shown = sum(l.business_status != CLOSED for l in leads)
     return new, max(0, shown - new)
+
+
+class _Index:
+    """The saved rows as a search's leads find the one they join (save_search): by source
+    listing id, by place (for the duplicate rules) and by site. `claimed` are the rows
+    this search's leads joined already: two leads the search kept apart never share a
+    row, even via a listing id."""
+
+    def __init__(self, rows: list[_Row]) -> None:
+        self.by_id = {i: r for r in rows for i in r.ids}
+        self.buckets: dict[tuple[float, float], list[_Row]] = {}
+        for r in rows:
+            if r.lead:
+                self.buckets.setdefault(_bucket(r.lead), []).append(r)
+        self.claimed: set[str] = set()
+        self.sites = _SavedSites(rows)
+
+    def find(self, lead: Lead, ids: set[str]) -> _Row | None:
+        """The saved row the lead (with the listing ids `ids`) joins, if any: the one
+        with one of its listings, else its nearest duplicate, else its site's."""
+        # A lead with listings of two saved rows (saved apart before the search
+        # rules joined them) joins the one saved first, the row merge-sites keeps.
+        row = min((self.by_id[i] for i in ids if i in self.by_id and self.by_id[i].uid not in self.claimed),
+                  key=lambda r: (r.first_seen, r.uid), default=None)
+        if row is None:
+            row = self._duplicate(lead)
+        if row is None:
+            # A part of a site already saved ("Shoreline Ridge 830" beside the saved
+            # "Shoreline Ridge", the base's airfield inside the saved base's outline):
+            # it joins that row.
+            row = self.sites.find(lead, self.claimed)
+        return row
+
+    def _duplicate(self, lead: Lead) -> _Row | None:
+        """The nearest saved row that is the lead's duplicate (dedupe.is_duplicate),
+        looked for in its own and the neighbouring 0.01-degree buckets."""
+        bx, by = _bucket(lead)
+        near = [r for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                for r in self.buckets.get((round(bx + dx * 0.01, 2), round(by + dy * 0.01, 2)), [])
+                if r.uid not in self.claimed and r.lead is not None and is_duplicate(lead, r.lead)]
+        return min(near, key=lambda r: _miles_between(lead, r.lead), default=None)
+
+    def add(self, row: _Row, lead: Lead) -> None:
+        """Count a row a lead joined (or was added as; `lead` is its row.lead) as claimed,
+        and index it by its listings, place and site for the leads still to come."""
+        self.claimed.add(row.uid)
+        for i in row.ids:
+            self.by_id[i] = row
+        self.buckets.setdefault(_bucket(lead), []).append(row)
+        self.sites.add(row)
+
+
+def _add_to_row(row: _Row, lead: Lead, parts: list[Part], ids: set[str], now: float, rescore: bool) -> Lead:
+    """Put a search's lead into its saved row: its listings (`parts`, with ids `ids`)
+    replace the row's listings from the same sources, and the row's lead is the search's
+    (scored with the default keywords when `rescore`), or rebuilt from every listing when
+    older ones remain. Returns the row's lead."""
+    older = [p for p in row.parts if _part_id(p) not in ids]
+    row.parts = parts + older
+    row.ids |= ids
+    row.last_seen = now
+    if older:
+        saved = _rebuild(row.parts)
+    else:
+        saved = copy.deepcopy(lead)
+        if rescore:
+            score_lead(saved, config.DEFAULT_KEYWORDS)
+    if lead.business_status == CLOSED:
+        saved.business_status = lead.business_status
+    saved.uid = row.uid
+    saved.parts = []
+    row.lead = saved
+    return saved
 
 
 def _row_site(row: _Row) -> Site | None:
@@ -291,45 +326,65 @@ def _join(db: store.Db, plan: list[tuple[_Row, list[_Row]]], now: float,
         for keep, others in plan:
             record = {r.uid: {"row": list(r.values()), "mark": marked.get(r.uid, ("", 0))[0]}
                       for r in others}
-            seen = {_part_id(p) for p in keep.parts}
+            _take_listings(keep, others, now)
             for r in others:
-                for p in r.parts:
-                    if _part_id(p) not in seen:
-                        keep.parts.append(p)
-                        seen.add(_part_id(p))
-                keep.ids |= r.ids
-                r.lead, r.parts, r.ids, r.last_seen = None, [], set(), now
                 moved[r.uid] = keep.uid
-            keep.lead = _rebuild(keep.parts)
-            keep.lead.uid = keep.uid
-            keep.last_seen = now
             changed += [keep, *others]
-            group_marks = [(marked[r.uid][1], marked[r.uid][0], r.uid) for r in [keep, *others]
-                           if r.uid in marked]
-            # One building having a baler usually means the site does: when the marks
-            # disagree the site keeps Yes (the latest Yes), and the lead says so.
-            disagreed = {value for _, value, _ in group_marks} >= {"yes", "no"}
-            if disagreed:
-                group_marks = [m for m in group_marks if m[1] == "yes"]
-                for r in others:
-                    record[r.uid]["marks_disagreed"] = True
-            latest = max(group_marks, default=None)
-            if latest and latest[2] != keep.uid:
-                db.run("INSERT INTO marks (uid, value, updated_at) VALUES (?, ?, ?) "
-                       "ON CONFLICT (uid) DO UPDATE SET value = excluded.value, "
-                       "updated_at = excluded.updated_at", (keep.uid, latest[1], latest[0]))
+            _take_mark(db, keep, others, marked, record)
             for r in others:
-                for table in ("calls", "call_undos", "mark_changes", "lead_contacts"):
-                    db.run(f"UPDATE {table} SET uid = ? WHERE uid = ?", (keep.uid, r.uid))
-                db.run("INSERT INTO merged_leads (uid, into_uid, at, row) VALUES (?, ?, ?, ?) "
-                       "ON CONFLICT (uid) DO NOTHING",
-                       (r.uid, keep.uid, now, json.dumps(record[r.uid], separators=(",", ":"))))
+                _move_history(db, keep, r, now, record[r.uid])
         for r in changed:
             db.run("INSERT INTO leads (uid, lead, parts, ids, first_seen, last_seen) "
                    "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (uid) DO UPDATE SET lead = excluded.lead, "
                    "parts = excluded.parts, ids = excluded.ids, last_seen = excluded.last_seen",
                    r.values())
     return moved, changed
+
+
+def _take_listings(keep: _Row, others: list[_Row], now: float) -> None:
+    """Move the other rows' source listings onto the kept row (they are left empty,
+    hidden) and rebuild its lead from every listing."""
+    seen = {_part_id(p) for p in keep.parts}
+    for r in others:
+        for p in r.parts:
+            if _part_id(p) not in seen:
+                keep.parts.append(p)
+                seen.add(_part_id(p))
+        keep.ids |= r.ids
+        r.lead, r.parts, r.ids, r.last_seen = None, [], set(), now
+    keep.lead = _rebuild(keep.parts)
+    keep.lead.uid = keep.uid
+    keep.last_seen = now
+
+
+def _take_mark(db: store.Db, keep: _Row, others: list[_Row], marked: dict[str, tuple[str, float]],
+               record: dict[str, dict[str, Any]]) -> None:
+    """Give the kept row the group's latest mark (`marked`: each row's mark and when);
+    the latest Yes when the marks disagreed, noted in the merged rows' `record`."""
+    group_marks = [(marked[r.uid][1], marked[r.uid][0], r.uid) for r in [keep, *others]
+                   if r.uid in marked]
+    # One building having a baler usually means the site does: when the marks
+    # disagree the site keeps Yes (the latest Yes), and the lead says so.
+    disagreed = {value for _, value, _ in group_marks} >= {"yes", "no"}
+    if disagreed:
+        group_marks = [m for m in group_marks if m[1] == "yes"]
+        for r in others:
+            record[r.uid]["marks_disagreed"] = True
+    latest = max(group_marks, default=None)
+    if latest and latest[2] != keep.uid:
+        db.run("INSERT INTO marks (uid, value, updated_at) VALUES (?, ?, ?) "
+               "ON CONFLICT (uid) DO UPDATE SET value = excluded.value, "
+               "updated_at = excluded.updated_at", (keep.uid, latest[1], latest[0]))
+
+
+def _move_history(db: store.Db, keep: _Row, r: _Row, now: float, record: dict[str, Any]) -> None:
+    """Move a merged row's calls, undos, mark history and verified contacts to the kept
+    row, and record the row as it was (merged_leads)."""
+    for table in ("calls", "call_undos", "mark_changes", "lead_contacts"):
+        db.run(f"UPDATE {table} SET uid = ? WHERE uid = ?", (keep.uid, r.uid))
+    db.run("INSERT INTO merged_leads (uid, into_uid, at, row) VALUES (?, ?, ?, ?) "
+           "ON CONFLICT (uid) DO NOTHING",
+           (r.uid, keep.uid, now, json.dumps(record, separators=(",", ":"))))
 
 
 @dataclass

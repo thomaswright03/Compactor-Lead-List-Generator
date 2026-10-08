@@ -171,69 +171,72 @@ _LATLON = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$")
 _ZIP = re.compile(r"^\s*(\d{5})(?:-\d{4})?\s*$")
 
 
-def geocode(location: str, api_key: str | None = None) -> tuple[float, float, str]:
-    """Return (lat, lon, label) for a ZIP code, city, address, or "lat,lon".
+# A place found: (lat, lon, the label the page shows for it).
+Found = tuple[float, float, str]
+# What one lookup gave: the place, or None, and whether the service answered at all (even
+# "no such place"), so a place nobody could find is told from an outage.
+Lookup = tuple[Found | None, bool]
 
-    A place that doesn't name another state is looked for in Utah first, so a bare
-    "Murray" is Murray, Utah (the Salt Lake area's towns are known offline, see
-    UTAH_PLACES); the label names the place found, for the page to show before the
-    search starts."""
-    location = (location or "").strip() or config.DEFAULT_LOCATION
+
+def _coordinates(location: str) -> Found | None:
+    """The place typed as "lat,lon", checked to be on the globe; None for anything else."""
     m = _LATLON.match(location)
-    if m:
-        lat, lon = float(m.group(1)), float(m.group(2))
-        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-            raise GeocodeError(f"The coordinates {shown(location)} are out of range: latitude "
-                               "must be between -90 and 90, longitude between -180 and 180.")
-        return lat, lon, location
+    if not m:
+        return None
+    lat, lon = float(m.group(1)), float(m.group(2))
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        raise GeocodeError(f"The coordinates {shown(location)} are out of range: latitude "
+                           "must be between -90 and 90, longitude between -180 and 180.")
+    return lat, lon, location
 
-    known = _KNOWN.get(_place_key(location))
-    if known:
-        return known
 
-    errors = []
-    answered = False          # a lookup answered (even "no such place"), so it isn't an outage
-    zm = _ZIP.match(location)
-    if zm:
-        try:
-            data = request_json("GET", f"https://api.zippopotam.us/us/{zm.group(1)}", retries=2)
-            answered = True
-            place = data["places"][0]
-            label = f"{place['place name']}, {place['state abbreviation']} {zm.group(1)}"
-            return float(place["latitude"]), float(place["longitude"]), label
-        except HttpError as exc:
-            answered = answered or exc.status == 404      # an unknown ZIP code
-            errors.append(str(exc))
-        except (KeyError, IndexError, ValueError) as exc:
-            errors.append(str(exc))
+def _zip_lookup(code: str, errors: list[str]) -> Lookup:
+    """A US ZIP code's town and position (the free zippopotam.us lookup)."""
+    try:
+        data = request_json("GET", f"https://api.zippopotam.us/us/{code}", retries=2)
+    except HttpError as exc:
+        errors.append(str(exc))
+        return None, exc.status == 404                   # an unknown ZIP code
+    try:
+        place = data["places"][0]
+        label = f"{place['place name']}, {place['state abbreviation']} {code}"
+        return (float(place["latitude"]), float(place["longitude"]), label), True
+    except (KeyError, IndexError, ValueError) as exc:
+        errors.append(str(exc))
+        return None, True
 
-    elsewhere = names_another_state(location)
-    if api_key is None:        # "" means the caller resolved that there is no Google key
-        api_key = os.environ.get("GOOGLE_PLACES_API_KEY", "")
-    if api_key:
-        try:
-            params = {"address": location, "key": api_key, "components": "country:US"}
-            if not elsewhere:
-                # Prefer Utah: Google returns the Utah place for an ambiguous name.
-                west, north, east, south = UTAH_BOX
-                params["bounds"] = f"{south},{west}|{north},{east}"
-            data = request_json("GET", "https://maps.googleapis.com/maps/api/geocode/json",
-                                params=params, retries=2,
-                                cache_key_extra="google",
-                                cacheable=lambda v: isinstance(v, dict)
-                                and v.get("status") in ("OK", "ZERO_RESULTS"))
-            status = data.get("status", "")
-            answered = answered or status in ("OK", "ZERO_RESULTS")
-            if status == "OK" and data.get("results"):
-                r = data["results"][0]
-                loc = r["geometry"]["location"]
-                return loc["lat"], loc["lng"], r.get("formatted_address", location)
-            if status not in ("OK", "ZERO_RESULTS"):
-                errors.append(f"Google geocoding: {status} {data.get('error_message', '')}".strip())
-        except (HttpError, KeyError) as exc:
-            errors.append(str(exc))
 
-    # The free lookup: in Utah first (unless another state is named), then anywhere in the US.
+def _google_lookup(location: str, api_key: str, elsewhere: bool, errors: list[str]) -> Lookup:
+    """Google's geocoder, preferring Utah unless the place names another state."""
+    try:
+        params = {"address": location, "key": api_key, "components": "country:US"}
+        if not elsewhere:
+            # Prefer Utah: Google returns the Utah place for an ambiguous name.
+            west, north, east, south = UTAH_BOX
+            params["bounds"] = f"{south},{west}|{north},{east}"
+        data = request_json("GET", "https://maps.googleapis.com/maps/api/geocode/json",
+                            params=params, retries=2,
+                            cache_key_extra="google",
+                            cacheable=lambda v: isinstance(v, dict)
+                            and v.get("status") in ("OK", "ZERO_RESULTS"))
+        status = data.get("status", "")
+        answered = status in ("OK", "ZERO_RESULTS")
+        if status == "OK" and data.get("results"):
+            r = data["results"][0]
+            loc = r["geometry"]["location"]
+            return (loc["lat"], loc["lng"], r.get("formatted_address", location)), answered
+        if not answered:
+            errors.append(f"Google geocoding: {status} {data.get('error_message', '')}".strip())
+        return None, answered
+    except (HttpError, KeyError) as exc:
+        errors.append(str(exc))
+        return None, False
+
+
+def _free_lookup(location: str, elsewhere: bool, errors: list[str]) -> Lookup:
+    """The free lookup (_nominatim): in Utah first, unless another state is named, then
+    anywhere in the US."""
+    answered = False
     for in_utah in ((False,) if elsewhere else (True, False)):
         try:
             found = _nominatim(location, in_utah)
@@ -242,10 +245,42 @@ def geocode(location: str, api_key: str | None = None) -> tuple[float, float, st
             continue
         answered = True
         if found:
+            return found, True
+    return None, answered
+
+
+def geocode(location: str, api_key: str | None = None) -> Found:
+    """Return (lat, lon, label) for a ZIP code, city, address, or "lat,lon".
+
+    A place that doesn't name another state is looked for in Utah first, so a bare
+    "Murray" is Murray, Utah (the Salt Lake area's towns are known offline, see
+    UTAH_PLACES); the label names the place found, for the page to show before the
+    search starts."""
+    location = (location or "").strip() or config.DEFAULT_LOCATION
+    found = _coordinates(location) or _KNOWN.get(_place_key(location))
+    if found:
+        return found
+    errors: list[str] = []
+    answered = False          # a lookup answered (even "no such place"), so it isn't an outage
+    zm = _ZIP.match(location)
+    if zm:
+        found, answered = _zip_lookup(zm.group(1), errors)
+        if found:
             return found
+    elsewhere = names_another_state(location)
+    if api_key is None:        # "" means the caller resolved that there is no Google key
+        api_key = os.environ.get("GOOGLE_PLACES_API_KEY", "")
+    if api_key:
+        found, said = _google_lookup(location, api_key, elsewhere, errors)
+        answered = answered or said
+        if found:
+            return found
+    found, said = _free_lookup(location, elsewhere, errors)
+    if found:
+        return found
     if errors:
         log.info("Geocoding %r failed: %s", location, "; ".join(errors))
-    if not answered:
+    if not (answered or said):
         # Every lookup failed (the services are down or unreachable): not a typo.
         raise LookupDown(f"Couldn't look up '{shown(location)}' right now: the place-lookup "
                          "services aren't answering. Nothing was spent, and today's search is "

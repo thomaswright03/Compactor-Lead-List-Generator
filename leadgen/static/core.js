@@ -2,9 +2,10 @@
    One HTML page (templates/index.html) holds Find leads, Leads, Calls, Map and Stats, switched by
    the #address; these scripts load in order and share their top-level names. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
-/* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, TIMING, S, el, link, phoneLink,
-   button, DOT, api, noAnswer, post, save, SLOW_SAVE, fmtTime, serverNow, leftOf, problem, loadingCue, themeChoice,
-   applyTheme, myName, withName, byWho, parseHash, readLeadView, route, writeHash, loggedOut */
+/* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, TIMING, S, el,
+   link, phoneLink, button, DOT, api, noAnswer, post, save, SLOW_SAVE, fmtTime, serverNow, leftOf,
+   problem, loadingCue, themeChoice, applyTheme, myName, withName, byWho, parseHash, readLeadView,
+   route, writeHash, loggedOut */
 // An element of the page by its id: an input, a dialog, a button... (typed `any`, as the page's
 // ids name every kind; the type check still catches a misspelt function or variable).
 /** @type {(id: string) => any} */
@@ -42,13 +43,13 @@ const TIMING = { waking: 4000, stillWaking: 45000, saveSlow: 10000, saveLimit: 3
 // The Calls page likewise holds the first `callLimit` called businesses of its tab and filter
 // (`called`, of `calledTotal`), and its tabs' counts (`callCounts`).
 /** @type {PageState} */
-const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false, calledError: "",
-            calledTotal: 0, callCounts: null, callLimit: PAGE, callSeq: 0, calledLoading: false,
-            sending: new Map(), failed: new Map(), loaded: false, loadError: "", refreshError: "",
-            viewLoading: false, seq: 0,
-            leadView: "", callView: "", callQ: "", q: "", lead: "", tier: "", phone: false, sort: "score", dir: "desc",
-            limit: PAGE, job: null, error: "", skew: 0, busy: 0, since: 0, pinned: new Map(), shiftedAt: 0,
-            cutOffTimer: 0 };
+const S = { leads: [], total: 0, counts: null, recent: [], called: [], calledLoaded: false,
+            calledError: "", calledTotal: 0, callCounts: null, callLimit: PAGE, callSeq: 0,
+            calledLoading: false, sending: new Map(), failed: new Map(), loaded: false,
+            loadError: "", refreshError: "", viewLoading: false, seq: 0,
+            leadView: "", callView: "", callQ: "", q: "", lead: "", tier: "", phone: false,
+            sort: "score", dir: "desc", limit: PAGE, job: null, error: "", skew: 0, busy: 0,
+            since: 0, pinned: new Map(), shiftedAt: 0, cutOffTimer: 0 };
 
 /**
  * A new element: <tag>, with its text and class names when given.
@@ -129,7 +130,9 @@ let leaving = false;
 function loggedOut(note) {
   try {
     // A click that wasn't saved is said over a list that couldn't refresh at the same moment.
-    if (note || !leaving) window.sessionStorage.setItem(LOGGED_OUT_KEY, JSON.stringify({ note, at: Date.now() }));
+    if (note || !leaving) {
+      window.sessionStorage.setItem(LOGGED_OUT_KEY, JSON.stringify({ note, at: Date.now() }));
+    }
   } catch (e) { /* the login page says it more generally */ }
   if (leaving) return;
   leaving = true;
@@ -143,10 +146,12 @@ function lostAction(path, opts) {
   if (!opts || !opts.method || opts.method.toUpperCase() === "GET") return "";
   /** @type {Record<string, any>} */
   let data = {};
-  try { data = typeof opts.body === "string" ? JSON.parse(opts.body) : {}; } catch (e) { /* not JSON */ }
+  try { data = typeof opts.body === "string" ? JSON.parse(opts.body) : {}; }
+  catch (e) { /* not JSON */ }
   // The business it was about: by its key (a Yes / No, a call, a contact) or its undo's id.
   const lead = [...S.leads, ...S.called, ...S.recent].find((l) => (data.key && l.key === data.key)
-    || (data.id && ((l.undo_mark && l.undo_mark.id === data.id) || (l.undo_call && l.undo_call.id === data.id))));
+    || (data.id && ((l.undo_mark && l.undo_mark.id === data.id)
+                    || (l.undo_call && l.undo_call.id === data.id))));
   /** @type {(word: string) => string} */
   const of = (word) => lead ? ` ${word} ${lead.name}` : "";
   const answer = data.value === "yes" ? "Yes" : data.value === "no" ? "No" : "answer";
@@ -154,7 +159,8 @@ function lostAction(path, opts) {
   const said = {
     "/mark": `Your ${answer}${of("for")} wasn't saved.`,
     "/mark/undo": `Your Undo${of("for")} wasn't saved.`,
-    "/calls": `Your call${of("to")} wasn't saved. Your notes are kept: open Just called on it again to save them.`,
+    "/calls": `Your call${of("to")} wasn't saved. Your notes are kept: open Just called on it ` +
+              "again to save them.",
     "/calls/undo": `Removing the call${of("to")} wasn't saved.`,
     "/contact": `The verified contact${of("for")} wasn't saved.`,
     "/search": "Your search didn't start, so today's search wasn't used.",
@@ -164,15 +170,18 @@ function lostAction(path, opts) {
   return said[path.split("?")[0]] || "What you did last wasn't saved.";
 }
 /** @type {(path: string, data: unknown) => Promise<any>} */
-const post =(path, data) => api(path, { method: "POST", headers: { "Content-Type": "application/json" },
+const post =(path, data) => api(path, { method: "POST",
+                                        headers: { "Content-Type": "application/json" },
                                         body: JSON.stringify(data) });
 // A save (a Yes / No, a call, a verified contact, an undo): post() that never leaves the person
 // wondering. After TIMING.saveSlow it calls `slow` (the caller says, where the person is looking,
 // that it is taking longer than usual); after TIMING.saveLimit it stops waiting and throws an
 // ApiError (status 0, timedOut) saying it may not have been saved. The request is cancelled
 // then, so a late answer never changes the page; trying again is safe, as each save is
-// recorded once (a call carries its own id, and the same Yes / No or contact again changes nothing).
-/** @param {string} path @param {unknown} data @param {() => void} [slow] @returns {Promise<any>} */
+// recorded once (a call carries its own id, and the same Yes / No or contact again changes
+// nothing).
+/** @param {string} path @param {unknown} data @param {() => void} [slow]
+    @returns {Promise<any>} */
 async function save(path, data, slow) {
   const stop = new AbortController();
   const slowTimer = slow ? setTimeout(slow, TIMING.saveSlow) : 0;
@@ -184,8 +193,9 @@ async function save(path, data, slow) {
     return body;
   } catch (err) {
     if (!stop.signal.aborted) throw err;
-    throw Object.assign(new Error(`The Lead Finder didn't answer within ${Math.round(TIMING.saveLimit / 1000)} ` +
-                                  "seconds, so it may not have been saved. Check your connection and try again."),
+    throw Object.assign(new Error(`The Lead Finder didn't answer within ` +
+                                  `${Math.round(TIMING.saveLimit / 1000)} seconds, so it may not ` +
+                                  "have been saved. Check your connection and try again."),
                         { status: 0, timedOut: true });
   } finally { clearTimeout(slowTimer); clearTimeout(limit); }
 }
@@ -197,8 +207,9 @@ const serverNow = () => Date.now() / 1000 + S.skew;
 /** @type {(undo: Undo | null | undefined) => number} */
 const leftOf = (undo) => undo ? Math.max(0, Math.floor(undo.until - serverNow())) : 0;
 // A list whose next view (a tab, filter or sort) is on its way: its old rows stay, dimmed, and
-// after LOADING_MS it says "Loading…" over them (the cue `id`, a role="status" box), after SLOW_MS
-// also that it is taking longer than usual. on=false (the view arrived, or failed) clears it.
+// after LOADING_MS it says "Loading…" over them (the cue `id`, a role="status" box), after
+// SLOW_MS also that it is taking longer than usual. on=false (the view arrived, or failed)
+// clears it.
 const LOADING_MS = 300, SLOW_MS = 5000;
 /** @type {Map<string, number[]>} */
 const cueTimers = new Map();
@@ -208,9 +219,10 @@ function loadingCue(id, on) {
   if (on) {
     if (timers) return;                                   // already on its way
     cueTimers.set(id, [
-      setTimeout(() => cue.replaceChildren(el("span", undefined, "spinner"), el("span", "Loading…")), LOADING_MS),
-      setTimeout(() => cue.append(el("span", "This is taking longer than usual. The list appears as soon as it " +
-                                            "arrives.", "slow")), SLOW_MS)]);
+      setTimeout(() => cue.replaceChildren(el("span", undefined, "spinner"),
+                                           el("span", "Loading…")), LOADING_MS),
+      setTimeout(() => cue.append(el("span", "This is taking longer than usual. The list appears " +
+                                            "as soon as it arrives.", "slow")), SLOW_MS)]);
     return;
   }
   for (const t of timers || []) clearTimeout(t);
@@ -225,8 +237,8 @@ function loadingCue(id, on) {
 /** @type {Map<HTMLElement, Retrying>} */
 const retrying = new Map();
 /**
- * @param {HTMLElement} box @param {string} title @param {string} message @param {() => unknown} [retry]
- * @param {() => unknown} [again]
+ * @param {HTMLElement} box @param {string} title @param {string} message
+ * @param {() => unknown} [retry] @param {() => unknown} [again]
  */
 function problem(box, title, message, retry, again) {
   const p = el("div", undefined, "problem");
@@ -260,7 +272,8 @@ function retryBox(box, r, now) {
   };
   if (now) go(); else r.timer = setTimeout(go, TIMING.retry);
 }
-// Another page was opened, or the tab shown (now) or hidden: each box tries again only on its own page.
+// Another page was opened, or the tab shown (now) or hidden: each box tries again only on its
+// own page.
 /** @param {boolean} [now] */
 function retryLater(now) {
   for (const [box, r] of [...retrying]) retryBox(box, r, !!now);
@@ -269,15 +282,21 @@ document.addEventListener("visibilitychange", () => retryLater(true));
 // Back online: each box on the page shown tries again straight away.
 window.addEventListener("online", () => retryLater(true));
 
-function themeChoice() { try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; } }
+function themeChoice() {
+  try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; }
+}
 /** @param {string} choice "light", "dark" or "system" */
 function applyTheme(choice) {
-  if (choice === "light" || choice === "dark") document.documentElement.setAttribute("data-theme", choice);
-  else document.documentElement.removeAttribute("data-theme");
+  if (choice === "light" || choice === "dark") {
+    document.documentElement.setAttribute("data-theme", choice);
+  } else document.documentElement.removeAttribute("data-theme");
   try {
-    if (choice === "system") localStorage.removeItem("theme"); else localStorage.setItem("theme", choice);
+    if (choice === "system") localStorage.removeItem("theme");
+    else localStorage.setItem("theme", choice);
   } catch (e) { /* not kept */ }
-  $all("[data-theme-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themePick === choice)));
+  $all("[data-theme-pick]").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.themePick === choice));
+  });
   window.setThemeColor(choice);              // the browser's bar matches (templates/_theme.html)
   if (chartRows && !$("page-stats").hidden) drawChart(chartRows);
   restyleMap();                               // the map's pins and areas take the theme's colours
@@ -302,8 +321,10 @@ function myName() {
 /** @param {string} name */
 function setMyName(name) {
   nameMemory = name.trim().replace(/\s+/g, " ").slice(0, 60);
-  try { if (nameMemory) localStorage.setItem(NAME_KEY, nameMemory); else localStorage.removeItem(NAME_KEY); }
-  catch (e) { /* kept for this visit only */ }
+  try {
+    if (nameMemory) localStorage.setItem(NAME_KEY, nameMemory);
+    else localStorage.removeItem(NAME_KEY);
+  } catch (e) { /* kept for this visit only */ }
   showMyName();
 }
 function showMyName() {
@@ -347,7 +368,8 @@ const byWho = (name) => name ? ` by ${name}` : "";
 // Phones fold the Yelp count, the colour theme and Log out into a Menu button, so the
 // navigation stays one short bar at the top.
 $("menu-btn").addEventListener("click", () => {
-  const open = /** @type {HTMLElement} */ (document.querySelector(".side")).classList.toggle("open");
+  const side = /** @type {HTMLElement} */ (document.querySelector(".side"));
+  const open = side.classList.toggle("open");
   $("menu-btn").setAttribute("aria-expanded", open);
 });
 
@@ -355,7 +377,8 @@ $("menu-btn").addEventListener("click", () => {
 $("skip").addEventListener("click", () => {
   const page = document.querySelector(".page:not([hidden])");
   if (!page) return;
-  const target = { "page-leads": $("leads-wrap"), "page-calls": $("calls-wrap") }[page.id] || page.querySelector("h1");
+  const target = { "page-leads": $("leads-wrap"), "page-calls": $("calls-wrap") }[page.id]
+    || page.querySelector("h1");
   target.setAttribute("tabindex", "-1");
   target.focus();
 });
@@ -371,11 +394,13 @@ function readLeadView(params) {
   const before = [S.leadView, S.q, S.lead, S.tier, S.phone, S.sort, S.dir].join("|");
   S.leadView = params.get("tab") || "";
   if (!LEAD_TABS.some(([v]) => v === S.leadView)) S.leadView = "";
-  S.q = params.get("q") || ""; S.tier = params.get("tier") || ""; S.phone = params.get("phone") === "1";
+  S.q = params.get("q") || ""; S.tier = params.get("tier") || "";
+  S.phone = params.get("phone") === "1";
   S.lead = (params.get("lead") || "").slice(0, 64);       // one business (the Map page's link)
   const sort = params.get("sort") || "";
   S.sort = SORTS[sort] ? sort : "score";
-  S.dir = params.get("dir") === "asc" ? "asc" : params.get("dir") === "desc" ? "desc" : SORTS[S.sort].dir;
+  S.dir = params.get("dir") === "asc" ? "asc" : params.get("dir") === "desc" ? "desc"
+    : SORTS[S.sort].dir;
   $("filter").value = S.q; $("tier").value = S.tier; $("has-phone").checked = S.phone;
   return before !== [S.leadView, S.q, S.lead, S.tier, S.phone, S.sort, S.dir].join("|");
 }
@@ -385,7 +410,9 @@ function route() {
     : (S.counts && S.counts.all ? "leads" : "find");
   // A note about one page never covers the next (leads.js may not be loaded yet).
   if (typeof hideToast === "function") hideToast();
-  if (page === "leads" && params.toString() && readLeadView(params)) { S.pinned.clear(); S.limit = PAGE; changeView(); }
+  if (page === "leads" && params.toString() && readLeadView(params)) {
+    S.pinned.clear(); S.limit = PAGE; changeView();
+  }
   if (page === "calls") {
     const tab = params.get("tab");
     S.callView = tab && OUTCOMES.includes(tab) ? tab : "";
@@ -397,7 +424,8 @@ function route() {
   document.title = `${TITLES[page]} · ${SITE}`;
   $all("nav a").forEach((a) => {
     a.classList.toggle("on", a.dataset.page === page);
-    if (a.dataset.page === page) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    if (a.dataset.page === page) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
   });
   if (page === "leads" || page === "calls") writeHash(page);
   retryLater();                               // only the page shown tries again by itself
@@ -414,7 +442,9 @@ function writeHash(page) {
     if (S.lead) params.set("lead", S.lead);
     if (S.tier) params.set("tier", S.tier);
     if (S.phone) params.set("phone", "1");
-    if (S.sort !== "score" || S.dir !== "desc") { params.set("sort", S.sort); params.set("dir", S.dir); }
+    if (S.sort !== "score" || S.dir !== "desc") {
+      params.set("sort", S.sort); params.set("dir", S.dir);
+    }
   } else if (page === "calls") {
     if (S.callView) params.set("tab", S.callView);
     if (S.callQ) params.set("q", S.callQ);
@@ -431,7 +461,9 @@ document.addEventListener("click", (e) => {
   if (eventEl(e).closest("dialog button")) dialogClickAt = Date.now();
 }, true);
 document.addEventListener("mousedown", (e) => {
-  if (e.detail > 1 && (Date.now() - dialogClickAt < 800 || eventEl(e).closest("dialog button"))) e.preventDefault();
+  if (e.detail > 1 && (Date.now() - dialogClickAt < 800 || eventEl(e).closest("dialog button"))) {
+    e.preventDefault();
+  }
 }, true);
 document.addEventListener("dblclick", () => {
   if (Date.now() - dialogClickAt < 800) window.getSelection()?.removeAllRanges();
