@@ -80,19 +80,8 @@ def run_searches(source: str, queries: Sequence[str], cells: Sequence[Cell],
     leads, chains, cached_q = _plan(queries, cells, key_of, lambda k: get(k, cache_ttl), keep,
                                     cache_partial, max_pages)
     report_found(leads)
-    warnings: list[str] = []
-    # Searches answered (or begun) from saved answers: a whole one, or an unfinished one continued.
-    reused = len(queries) * len(cells) - sum(1 for c in chains if c["pages"] == 0)
-    if reused:
-        warnings.append(reused_note(source, reused, len(queries) * len(cells), cache_ttl))
-    fresh = sum(1 for c in chains if c["pages"] == 0)
-    if fresh > max_requests and not cap_reason:
-        warnings.append(
-            f"{source} request cap ({max_requests}) is below the {fresh} searches needed "
-            f"({len(queries)} phrases x {len(cells)} areas); the last {fresh - max_requests} "
-            "searches were skipped. Raise the request cap (--max-requests) to about "
-            f"{fresh * max_pages} for full coverage.")
-
+    warnings = _plan_notes(source, len(queries), len(cells), chains, cache_ttl, max_requests, max_pages,
+                           cap_reason)
     rounds = _Rounds(source, fetch_page, keep, max_requests, progress, token_delay, key_errors,
                      stop_check)
     for page in range(max_pages):
@@ -108,6 +97,25 @@ def run_searches(source: str, queries: Sequence[str], cells: Sequence[Cell],
 
 
 Chain = dict[str, Any]      # one (phrase, cell) search: its pages so far, token, state
+
+
+def _plan_notes(source: str, phrases: int, areas: int, chains: list[Chain], cache_ttl: float | None,
+                max_requests: int, max_pages: int, cap_reason: str | None) -> list[str]:
+    """The warnings a run's plan gives before any page is fetched: how many of its
+    searches reuse saved answers, and a request cap below what the fresh ones need."""
+    warnings: list[str] = []
+    # Searches answered (or begun) from saved answers: a whole one, or an unfinished one continued.
+    fresh = sum(1 for c in chains if c["pages"] == 0)
+    reused = phrases * areas - fresh
+    if reused:
+        warnings.append(reused_note(source, reused, phrases * areas, cache_ttl))
+    if fresh > max_requests and not cap_reason:
+        warnings.append(
+            f"{source} request cap ({max_requests}) is below the {fresh} searches needed "
+            f"({phrases} phrases x {areas} areas); the last {fresh - max_requests} "
+            "searches were skipped. Raise the request cap (--max-requests) to about "
+            f"{fresh * max_pages} for full coverage.")
+    return warnings
 
 
 def _plan(queries: Sequence[str], cells: Sequence[Cell], key_of: Callable[[str, Cell], str],
