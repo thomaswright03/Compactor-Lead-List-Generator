@@ -68,8 +68,10 @@ export default [
       "eqeqeq": ["error", "always", { null: "ignore" }],
       "no-var": "error",
       "prefer-const": ["error", { destructuring: "all" }],
-      // The same limit as the Python (pyproject.toml, ruff's line-length).
-      "max-len": ["error", { code: 120, ignoreUrls: true }],
+      // Narrower than the Python's 120 (pyproject.toml): the scripts' nested callbacks and
+      // template strings read better short. tour.js keeps the old limit until its owner
+      // reflows it.
+      "max-len": ["error", { code: file === "tour.js" ? 120 : 100, ignoreUrls: true }],
     },
   })),
 ];
