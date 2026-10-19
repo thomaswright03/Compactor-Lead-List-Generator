@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lead Finder · Leads for baler and compactor service companies</title>
+<meta name="description" content="{{ pitch }}">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+{% include "_theme.html" %}
+<style>
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } }
+  body { margin:0; min-height:100vh; display:flex; flex-direction:column; color:var(--ink); background:var(--bg);
+         font:var(--fs-base)/1.6 var(--font); overflow-wrap:break-word; }
+  a { color:var(--accent); }
+  a:focus-visible, .btn:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
+  .wrap { width:min(1080px,100%); margin:0 auto; padding:0 var(--sp-4); }
+  .skip { position:absolute; left:-9999px; }
+  .skip:focus { left:var(--sp-4); top:var(--sp-2); z-index:2; background:var(--card); padding:var(--sp-2) var(--sp-3);
+                border-radius:var(--r-sm); min-height:44px; display:inline-flex; align-items:center; }
+
+  /* The top: the navy of the login page, with the brand, Log in and the trial button. */
+  .top { color:var(--side-ink);
+         background:radial-gradient(1000px 600px at 10% -10%, rgba(143,194,250,.18), transparent 60%),
+                    radial-gradient(900px 500px at 110% 110%, rgba(214,177,106,.16), transparent 60%),
+                    linear-gradient(160deg, var(--side), var(--side-2)); background-color:var(--side); }
+  .bar { display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap;
+         padding-top:var(--sp-3); padding-bottom:var(--sp-3); }
+  .brand { display:flex; align-items:center; gap:var(--sp-3); color:#fff; text-decoration:none; min-height:44px; }
+  .brand .logo { width:40px; height:40px; flex:none; border-radius:12px; box-shadow:0 0 0 1px var(--gold-soft); }
+  .brand strong { font-family:var(--serif); font-size:20px; font-weight:560; letter-spacing:-.01em; }
+  .bar nav { display:flex; align-items:center; gap:var(--sp-2); }
+  .bar nav a.login { color:#fff; font-weight:600; text-decoration:none; display:inline-flex; align-items:center;
+                     justify-content:center; min-height:44px; min-width:44px; padding:0 var(--sp-3); border-radius:var(--r-pill); }
+  .bar nav a.login:hover { background:rgba(255,255,255,.08); }
+  .hero { padding-top:var(--sp-6); padding-bottom:56px; }
+  .hero > * { max-width:760px; }
+  .kicker { color:var(--side-on); font-variant-caps:all-small-caps; letter-spacing:.1em; font-weight:600; font-size:var(--fs-md); margin:0; }
+  .hero h1 { color:#fff; font-family:var(--serif); font-weight:520; letter-spacing:-.02em; line-height:1.12;
+             font-size:clamp(32px, 7vw, 52px); margin:var(--sp-2) 0 var(--sp-4); text-wrap:balance; }
+  .hero .pitch { font-size:clamp(16px, 2.4vw, 19px); color:var(--side-ink); margin:0 0 var(--sp-5); max-width:640px; }
+  .actions { display:flex; flex-wrap:wrap; gap:var(--sp-3); align-items:center; }
+  .note { color:var(--side-ink); font-size:var(--fs-sm); margin:var(--sp-3) 0 0; opacity:.9; }
+
+  .btn { display:inline-flex; align-items:center; justify-content:center; font-weight:600; text-decoration:none; min-height:48px;
+         padding:0 var(--sp-5); border-radius:var(--r-pill); color:var(--btn-ink); background:linear-gradient(180deg, var(--btn), var(--btn-2));
+         box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 1px 2px rgba(10,20,40,.2), 0 10px 22px -8px var(--accent-glow);
+         transition:transform .2s var(--ease), filter .2s var(--ease); }
+  .btn:hover { transform:translateY(-1px); filter:brightness(1.06); }
+  .btn.gold { color:#1d2433; background:linear-gradient(180deg, #e3c27f, var(--gold)); }
+  .btn.ghost { color:#fff; background:transparent; box-shadow:inset 0 0 0 1px rgba(255,255,255,.35); }
+  .bar .btn { min-height:44px; padding:0 var(--sp-4); }
+  @media (prefers-reduced-motion: reduce) { .btn { transition:none; } .btn:hover { transform:none; } }
+
+  /* The sections below, on the page's paper colour. */
+  main { flex:1; }
+  section.wrap { padding-top:56px; }
+  section.wrap:last-child { padding-bottom:64px; }
+  h2 { font-family:var(--serif); font-weight:540; letter-spacing:-.015em; font-size:var(--fs-xl); line-height:1.2; margin:0 0 var(--sp-2); }
+  h2::after { content:""; display:block; width:56px; height:2px; margin-top:var(--sp-3); border-radius:2px;
+              background:linear-gradient(90deg, var(--accent-2), var(--gold)); }
+  .lead { color:var(--ink-2); margin:var(--sp-3) 0 var(--sp-5); max-width:680px; font-size:var(--fs-md); }
+  .grid { display:grid; gap:var(--sp-4); grid-template-columns:repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg); padding:var(--sp-5);
+          box-shadow:var(--shadow-sm), var(--highlight); }
+  .card h3 { font-family:var(--serif); font-weight:560; font-size:var(--fs-title); margin:0 0 var(--sp-2); line-height:1.25; }
+  .card p { margin:0; color:var(--ink-2); }
+  ol.steps { list-style:none; padding:0; margin:0; counter-reset:step; }
+  ol.steps li { counter-increment:step; }
+  ol.steps li h3::before { content:counter(step); display:inline-grid; place-items:center; width:32px; height:32px; margin-right:var(--sp-2);
+                           border-radius:50%; font:600 var(--fs-md)/1 var(--font); color:var(--btn-ink); background:var(--btn); vertical-align:2px; }
+  .private { border-color:var(--gold); background:linear-gradient(var(--gold-soft), var(--gold-soft)), var(--card); }
+
+  /* Pricing. */
+  .plan { display:flex; flex-direction:column; gap:var(--sp-3); }
+  .plan .price { margin:0; font-family:var(--serif); font-size:var(--fs-figure); line-height:1; font-weight:520; letter-spacing:-.02em; }
+  .plan .price.custom { font-size:var(--fs-xl); line-height:1.2; }
+  .plan .price span { font:500 var(--fs-md)/1 var(--font); color:var(--muted); letter-spacing:0; }
+  .plan ul { margin:0; padding-left:1.2em; color:var(--ink); }
+  .plan li { margin:var(--sp-1) 0; }
+  .plan .yearly { color:var(--muted); font-size:var(--fs-sm); }
+  .plan .btn { margin-top:auto; align-self:stretch; }
+  .plan.best { border:2px solid var(--accent-2); }
+  .plan .tag { align-self:flex-start; font-size:var(--fs-xs); font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+               color:var(--accent); background:var(--accent-tint); border-radius:var(--r-pill); padding:2px var(--sp-2); }
+  .terms-line { color:var(--muted); font-size:var(--fs-sm); margin:var(--sp-4) 0 0; }
+  .custom-ask a { display:inline-flex; align-items:center; min-height:44px; font-weight:600; }
+  @media (pointer: coarse) { .card p:not(.custom-ask) a, .terms-line a { padding-block:14px; } }   /* a 44px tap area; the lines don't move */
+
+  footer { text-align:center; color:var(--side-ink); font-size:var(--fs-sm); padding:var(--sp-4);
+           background:linear-gradient(160deg, var(--side), var(--side-2)); background-color:var(--side); }
+  footer a { color:var(--side-ink); display:inline-flex; align-items:center; justify-content:center; min-height:44px; min-width:44px; }
+  @media (max-width: 420px) {
+    .bar .btn { display:none; }            /* the hero's own button is just below */
+    .actions .btn { flex:1 1 100%; }
+    .card { padding:var(--sp-4); }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the details</a>
+<header class="top">
+  <div class="wrap bar">
+    <a class="brand" href="/welcome"><img class="logo" src="/static/favicon.svg" alt="" width="40" height="40"><strong>Lead Finder</strong></a>
+    <nav aria-label="Account">
+      <a class="login" href="/login">Log in</a>
+      <a class="btn gold" href="/signup">Start free trial</a>
+    </nav>
+  </div>
+  <div class="wrap hero">
+    <p class="kicker">For companies that service balers, compactors and waste equipment</p>
+    <h1>Find the businesses that need what you service.</h1>
+    <p class="pitch">{{ pitch }}</p>
+    <div class="actions">
+      <a class="btn gold" href="/signup">Start free trial</a>
+      <a class="btn ghost" href="/login">Log in</a>
+    </div>
+    <p class="note">{{ trial_days }}-day free trial · card required · cancel any time before it ends and you aren't charged.</p>
+  </div>
+</header>
+
+<main id="main">
+  <section class="wrap" aria-labelledby="how">
+    <h2 id="how">How it works</h2>
+    <p class="lead">Three steps from an empty call sheet to a list worth working.</p>
+    <ol class="steps grid">
+      <li class="card"><h3>Set your area</h3>
+        <p>Enter your shop's address and how far you go, up to {{ area_miles }} miles.</p></li>
+      <li class="card"><h3>Find leads</h3>
+        <p>Lead Finder searches map and business listings for grocery stores, warehouses, hospitals, plants and
+          every other kind of business likely to run a baler or compactor, and scores each one.</p></li>
+      <li class="card"><h3>Work the list</h3>
+        <p>Call the strongest leads first, mark who has equipment, log every call, and download the list to
+          Excel or CSV whenever you like.</p></li>
+    </ol>
+  </section>
+
+  <section class="wrap" aria-labelledby="features">
+    <h2 id="features">What you get</h2>
+    <p class="lead">One shared list for your whole sales team.</p>
+    <div class="grid">
+      <div class="card"><h3>Scored leads</h3>
+        <p>Every business gets a score from 0 to 100 for how likely it is to use a baler or compactor, with the
+          reasons written out, so your team calls the best ones first.</p></div>
+      <div class="card"><h3>A map of your area</h3>
+        <p>See every lead on a map around your shop, colored by whether it has been checked yet, to plan a day of
+          visits or calls by neighborhood.</p></div>
+      <div class="card"><h3>Yes / No checking</h3>
+        <p>Mark whether each business has a baler or compactor. Everyone on your team sees the answer, so no one
+          calls the same place twice.</p></div>
+      <div class="card"><h3>A log of every call</h3>
+        <p>Record each call's outcome and notes, verified phone numbers and contact names, and see who needs a
+          follow-up.</p></div>
+      <div class="card private"><h3>Your customers stay private</h3>
+        <p>Hide the customers you already have. Import your customer list and it is read only in your browser:
+          the list never leaves your computer, and only one-way fingerprints are sent to hide matching leads.
+          <a href="/privacy">How it works</a></p></div>
+    </div>
+  </section>
+
+  <section class="wrap" aria-labelledby="pricing">
+    <h2 id="pricing">Pricing</h2>
+    <p class="lead">Start with a {{ trial_days }}-day free trial. Pay monthly, or yearly and get {{ free_months }} months free.</p>
+    <div class="grid">
+      {% for plan in plans %}
+      <div class="card plan{% if loop.last %} best{% endif %}">
+        {% if loop.last %}<span class="tag">For sales teams</span>{% endif %}
+        <h3>{{ plan.name }}</h3>
+        <p class="price">${{ "{:,}".format(plan.monthly_price) }}<span> / month</span></p>
+        <ul>
+          <li>{{ plan.users }} {{ "user" if plan.users == 1 else "users" }}</li>
+          <li>{{ plan.areas }} {{ "area" if plan.areas == 1 else "areas" }}, each up to {{ area_miles }} miles around</li>
+          <li>{{ plan.searches_per_month }} searches a month</li>
+          <li>{{ "{:,}".format(plan.lookups_per_month) }} phone lookups a month</li>
+        </ul>
+        <p class="yearly">${{ "{:,}".format(plan.yearly) }} a year when billed yearly</p>
+        <a class="btn" href="/signup?plan={{ plan.key }}">Start free trial</a>
+      </div>
+      {% endfor %}
+      <div class="card plan">
+        <h3>Custom</h3>
+        <p class="price custom">On request</p>
+        <p>More users, more areas or more lookups, for larger and multi-branch service companies. Custom plans on
+          request.</p>
+        <p class="custom-ask">{% if contact %}{% for text, href in contact %}{% if href %}<a href="{{ href }}">{{ text }}</a>{% else %}{{ text }}{% endif %}{% endfor %}{% else %}Ask Wright AI Solutions.{% endif %}</p>
+      </div>
+    </div>
+    <p class="terms-line">The free trial lasts {{ trial_days }} days. A card is required to start it, and it is charged
+      when the trial ends unless you cancel first. Cancel any time; your plan runs to the end of the period you paid
+      for. See the <a href="/terms">Terms of service</a>.</p>
+  </section>
+</main>
+
+<footer>© {{ year }} Wright AI Solutions. All rights reserved. · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></footer>
+</body>
+</html>

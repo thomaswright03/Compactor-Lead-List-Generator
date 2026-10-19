@@ -1,0 +1,92 @@
+{% extends "_legal.html" %}
+{% block body %}
+<p>These terms cover Lead Finder (the "service"), a subscription service that Wright AI Solutions
+  ("we", "us") sells to companies that service balers, compactors and waste equipment. The company
+  that signs up is the "customer"; the people it lets log in are its "users". By starting a trial,
+  subscribing or logging in, the customer and its users agree to these terms. Questions:
+  {{ contact }}.</p>
+
+<h2>Accounts</h2>
+<ul>
+  <li>The person who signs up must be allowed to agree to these terms for the customer.</li>
+  <li>Each user gets their own login. Keep passwords private, don't share a login, and tell us
+    straight away if you think someone else has one.</li>
+  <li>The customer is responsible for what its users do in the service and for removing users who
+    should no longer have access.</li>
+</ul>
+
+<h2>Subscription, trial and cancellation</h2>
+<ul>
+  <li>Each plan sets how many users, search areas, searches and phone lookups the customer gets, as
+    shown on the pricing page when it subscribes. Unused searches and lookups don't carry over to
+    the next month.</li>
+  <li>A new customer gets a {{ trial_days }}-day free trial. A payment card is required to start it.
+    Unless the customer cancels before the trial ends, the card is charged for the chosen plan when
+    the trial ends, and again at the start of each billing period (monthly or yearly) until it
+    cancels.</li>
+  <li>The customer can cancel at any time. The plan then runs to the end of the period already paid
+    for and isn't renewed. Payments already made aren't refunded, except where the law requires.</li>
+  <li>We may change prices or plans with at least 30 days' notice by email; a change applies from the
+    next billing period. If a payment fails and isn't fixed, we may suspend the account.</li>
+</ul>
+
+<h2>Using the leads</h2>
+<ul>
+  <li>Leads come from public map and business listings data and the service's own scoring. They can
+    be out of date or wrong, and a score is an estimate, not a promise that a business has or needs
+    any equipment.</li>
+  <li>Use the leads for the customer's own sales and service outreach. Don't resell or publish the
+    service's data, share it with other companies, or try to get around the plan's limits.</li>
+  <li><strong>The customer is responsible for its own outreach</strong> and for following the laws
+    that apply to it, including the Telephone Consumer Protection Act and do-not-call rules (national
+    and state lists and its own do-not-call list), the CAN-SPAM Act for email, and any state law on
+    telemarketing or recording calls. The service doesn't check numbers against do-not-call lists.</li>
+</ul>
+
+<h2>Where the data comes from</h2>
+<ul>
+  <li>Map data is © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>
+    and available under the Open Database License. The Map page and the downloads say so; keep that
+    credit on any copy you share.</li>
+  <li>Some business details (such as phone numbers and websites) come from Google Places. Their use is
+    subject to the <a href="https://maps.google.com/help/terms_maps/">Google Maps / Google Earth
+    Additional Terms of Service</a> and the <a href="https://policies.google.com/privacy">Google
+    Privacy Policy</a>, which the customer agrees to by using those details.</li>
+</ul>
+
+<h2>Current customer import</h2>
+<ul>
+  <li>Only import a customer list the customer has the right to use. The file is read in the browser
+    and is not uploaded; only one-way fingerprints are sent, as the
+    <a href="/privacy">Privacy policy</a> explains.</li>
+  <li>Matching is automatic and may miss a customer (different phone or address on file) or, rarely,
+    hide a business that isn't one. Check before relying on it, and use <strong>Clear the customer
+    list</strong> to bring hidden leads back.</li>
+  <li>The customer stays responsible for its customer list. We never receive it and can't recover it
+    from the fingerprints.</li>
+</ul>
+
+<h2>The customer's data</h2>
+<p>The customer owns the data its users put in the service: its marks, calls, contacts, notes and
+  saved lists ("customer data"). We process customer data only on the customer's behalf, to provide,
+  secure and support the service, as the <a href="/privacy">Privacy policy</a> describes. The
+  customer can download its leads at any time, and can ask {{ contact }} to export all of its
+  customer data or delete it.</p>
+
+<h2>Availability and liability</h2>
+<p>The service is provided as it is. We work to keep it running and its data safe and backed up, but
+  don't promise it will always be available or error-free. To the extent the law allows, we aren't
+  liable for lost sales, lost profits or other indirect losses, and our total liability is limited to
+  what the customer paid us in the 12 months before the claim. A signed agreement between us and a
+  customer takes precedence over these terms.</p>
+
+<h2>Ending the service</h2>
+<p>We may suspend or close an account that breaks these terms, after notice where we reasonably can.
+  When an account closes, the customer can ask for an export of its data within 30 days; after that
+  its data is deleted, and it leaves the encrypted backups within 90 days.</p>
+
+<h2>Changes and law</h2>
+<p>We may update these terms; the new version will be posted here with a new effective date, and
+  customers will be told by email of any change that matters to them. These terms are governed by the
+  laws of the State of Utah, and any dispute goes to the state or federal courts in Utah.</p>
+{% endblock %}

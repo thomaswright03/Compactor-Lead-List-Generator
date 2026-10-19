@@ -107,7 +107,7 @@ def source_of(url: str) -> str | None:
     host = urlsplit(url).netloc.lower()
     if host in _SOURCE_HOSTS:
         return _SOURCE_HOSTS[host]
-    if any(host == urlsplit(e).netloc.lower() for e in config.OVERPASS_ENDPOINTS):
+    if any(host == urlsplit(e).netloc.lower() for e in config.overpass_endpoints()):
         return "osm"
     return None
 

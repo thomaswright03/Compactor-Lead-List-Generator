@@ -1,0 +1,75 @@
+{% extends "_legal.html" %}
+{% block body %}
+<p>This policy explains what Lead Finder (the "service") keeps and why. Wright AI Solutions ("we",
+  "us") sells the service to companies (each a "customer") and runs it for them. Questions:
+  {{ contact }}.</p>
+
+<h2>Whose data it is</h2>
+<p>Each customer owns the data its users put in the service. We process it on the customer's behalf,
+  only to provide, secure and support the service, and never sell it, use it for advertising, or
+  share it with another customer. Each customer's leads, marks, calls and notes are kept separate
+  from every other customer's, and a user sees only their own company's.</p>
+
+<h2>Your current customer list</h2>
+<p>The Current customers page lets a customer keep businesses it already services off its lead
+  lists. It is built so that neither we nor the service ever receives the list:</p>
+<ul>
+  <li>The file you pick (Excel or CSV) is read only in your own browser. It is never uploaded, and
+    its customers' names, phone numbers and addresses never leave your computer.</li>
+  <li>Your browser turns each customer's phone number, street address and business name into a
+    one-way fingerprint (a SHA-256 code salted with a value unique to your company) and sends only
+    those fingerprints.</li>
+  <li>The service stores only the fingerprints, the number of customers on the list, when it was put
+    on file, and the name of whoever did it. It compares them with fingerprints made from your
+    company's own saved leads to hide matching businesses.</li>
+  <li>A fingerprint can't be turned back into a customer's details. Someone holding the
+    fingerprints could still test a guess, for example a phone number they already suspect, so the
+    service treats the fingerprints as confidential and keeps them only in its database and its
+    encrypted backups.</li>
+  <li>Uploading a new list replaces the old fingerprints. <strong>Clear the customer list</strong>
+    deletes them from the live database at once; copies in backups expire with those backups
+    (below).</li>
+</ul>
+
+<h2>What else the service keeps</h2>
+<ul>
+  <li><strong>Your account:</strong> your company's name, and each user's name, email address and
+    password. Passwords are stored only as salted one-way hashes, never as typed.</li>
+  <li><strong>Billing:</strong> your plan, its billing period and payment history. Card payments are
+    handled by our payment processor; the service never sees or stores your full card number.</li>
+  <li><strong>Business leads:</strong> public information about businesses (name, address, phone,
+    website, category, map position) from OpenStreetMap and Google Places, with the score the
+    service gives each one.</li>
+  <li><strong>Your team's work:</strong> Yes / No answers, call summaries and outcomes, verified
+    phone numbers and contact names, and searches, each with who saved it and when.</li>
+  <li><strong>Login:</strong> a signed cookie keeps you logged in for up to {{ login_days }} days.
+    Wrong passwords are counted for a short time to stop guessing.</li>
+  <li><strong>In your browser:</strong> your light or dark choice, unsent call notes and whether you
+    have seen the tutorial are kept in this browser's local storage. The service uses no advertising
+    or tracking cookies and no analytics.</li>
+  <li><strong>Problems:</strong> errors and failed searches are recorded so they can be fixed. These
+    reports hold plain messages, not your data.</li>
+</ul>
+
+<h2>Where it is kept and who sees it</h2>
+<p>The service runs on Render, its database is on Neon (United States), and a nightly copy of the
+  database is encrypted (AES-256) and kept for 90 days. Pages and data travel only over encrypted
+  (HTTPS) connections. Only your company's users, and our staff to run and support the service, can
+  see your company's data. We share data only with the providers that host and bill for the service,
+  for that purpose, or where the law requires it.</p>
+
+<h2>Where the leads come from</h2>
+<p>Map data is © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>.
+  Business details from Google Places are used under Google's terms, and Google's own
+  <a href="https://policies.google.com/privacy">Privacy Policy</a> covers what Google receives when
+  the service asks it for them (the area searched, never your customer data).</p>
+
+<h2>How long and your choices</h2>
+<p>Your company's data is kept while it subscribes. Its account owner can download its leads at any
+  time and can ask {{ contact }} to export all of its data or delete it. When an account closes, its
+  data is deleted after 30 days. Deleted data leaves the encrypted backups within 90 days.</p>
+
+<h2>Changes</h2>
+<p>If this policy changes, the new version will be posted here with a new effective date, and
+  customers will be told by email of any change that matters to them.</p>
+{% endblock %}

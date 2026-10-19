@@ -98,7 +98,7 @@ def _fetch(query: str, deadline: float, first: int = 0,
     known = cache_get(_answer_key(query), config.OVERPASS_CACHE_TTL_SECONDS)
     if known is not None:
         return known, []
-    endpoints = list(config.OVERPASS_ENDPOINTS)
+    endpoints = config.overpass_endpoints()
     endpoints = endpoints[first % len(endpoints):] + endpoints[:first % len(endpoints)]
     mirrors = _Mirrors(query, endpoints, said)
     data = mirrors.answer(deadline, cancel)

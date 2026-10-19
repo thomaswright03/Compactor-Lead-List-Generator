@@ -166,6 +166,18 @@ OVERPASS_ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 ]
+# A self-hosted or paid Overpass server in place of the public mirrors: its interpreter
+# address (or several, comma separated, tried in that order) in this variable.
+OVERPASS_URL_ENV = "LEADGEN_OVERPASS_URL"
+
+
+def overpass_endpoints() -> list[str]:
+    """The Overpass servers to ask, in order: LEADGEN_OVERPASS_URL's when it is set,
+    else OVERPASS_ENDPOINTS (the public mirrors)."""
+    import os  # this file is otherwise settings only
+    own = [url.strip() for url in os.environ.get(OVERPASS_URL_ENV, "").split(",") if url.strip()]
+    return own or list(OVERPASS_ENDPOINTS)
+
 
 HTTP_USER_AGENT = "compactor-lead-list-generator/1.0 (+https://github.com/thomaswright03/Compactor-Lead-List-Generator)"
 

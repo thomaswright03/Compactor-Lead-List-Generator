@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from . import places
+from . import places, signup_mode
 from .localtime import date_time_text, utah
 from .models import Lead
 from .pipeline import EXEMPT_TYPES
@@ -21,6 +21,11 @@ OFFLINE_CHOICES = ("Saw a compactor", "Saw a baler", "Saw neither", "Not sure")
 
 # The sources in the downloads' words.
 SOURCE_NAMES = {"google": "Google", "yelp": "Yelp", "osm": "OpenStreetMap map data"}
+# The credit the map data's license asks for, on every download in sign-up mode (a line
+# under the CSV's rows, a row of the Excel file's Run Info sheet). AARCO's own downloads
+# are unchanged.
+OSM_CREDIT = ("Map data © OpenStreetMap contributors, available under the Open Database License: "
+              "https://www.openstreetmap.org/copyright")
 
 
 Column = tuple[str, Callable[[Lead], object], float]
@@ -170,6 +175,9 @@ def to_csv_bytes(leads: list[Lead]) -> bytes:
     w.writerow([c for c, _, _ in columns])
     for r in rows(leads, columns):
         w.writerow(["" if v is None else _safe(v) for v in r])
+    if signup_mode.on():
+        w.writerow([])
+        w.writerow([OSM_CREDIT])
     return buf.getvalue().encode("utf-8-sig")   # BOM so Excel opens it cleanly
 
 
@@ -212,6 +220,8 @@ def to_xlsx_bytes(leads: list[Lead], run_info: dict[str, Any] | None = None) -> 
     info.append(["This file only", "The last two columns are for your own notes on this "
                  "copy. Nothing typed there is saved in the website: record Yes / No and "
                  "calls on the Leads page."])
+    if signup_mode.on():
+        info.append(["Data sources", OSM_CREDIT])
     return book.save()
 
 

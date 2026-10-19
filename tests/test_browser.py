@@ -3534,3 +3534,33 @@ def test_not_called_and_its_confirm_fit_a_phone_card(browser, site, page):
     wide = phone.evaluate("document.documentElement.scrollWidth > window.innerWidth")
     context.close()
     assert all(w >= 44 and h >= 44 and right <= 320 for _, w, h, right in sizes) and not wide, sizes
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize("width", [320, 390, 1280])
+def test_the_landing_page_fits_and_its_controls_are_44px_targets(browser, site, monkeypatch, width, theme):
+    """Sign-up mode's landing page (/welcome): no sideways scroll on a small phone, every
+    button and link a 44 px target (on a touch screen the inline links too), Start free
+    trial and Log in in view at the top, and the dark theme when the system asks for it."""
+    monkeypatch.setenv("LEADGEN_SIGNUP", "1")
+    touch = width < 1000
+    context = _context(browser, viewport={"width": width, "height": 800}, has_touch=touch,
+                       is_mobile=touch, color_scheme=theme)
+    tab = context.new_page()
+    errors = []
+    tab.on("pageerror", lambda exc: errors.append(str(exc)))
+    tab.goto(site + "welcome")
+    expect(tab.locator("h1")).to_be_visible()
+    wide = tab.evaluate("document.documentElement.scrollWidth > window.innerWidth")
+    controls = ".bar a, .actions a, .plan a, footer a" + (", main a" if touch else "")
+    small = tab.evaluate(SMALL_TARGETS, controls)
+    trial = tab.get_by_role("link", name="Start free trial").first
+    expect(trial).to_be_in_viewport()
+    expect(tab.get_by_role("link", name="Log in").first).to_be_in_viewport()
+    assert trial.get_attribute("href") == "/signup"
+    plans = tab.locator(".plan h3").all_text_contents()
+    background = tab.evaluate("getComputedStyle(document.body).backgroundColor")
+    context.close()
+    assert not wide and small == [] and not errors, (small, errors)
+    assert plans == ["Starter", "Team", "Custom"]
+    assert (background == "rgb(10, 14, 22)") == (theme == "dark")      # --bg in each theme

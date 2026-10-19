@@ -8,7 +8,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from . import config
+from . import config, signup_mode
 from .dedupe import SAME_PHONE_MILES, dedupe
 from .geo import geocode, haversine_miles
 from .models import Lead
@@ -84,11 +84,15 @@ class SearchParams:
         YELP_OFF_ENV) gets no key, so it is never called.
         """
         google = (self.api_key or os.environ.get("GOOGLE_PLACES_API_KEY", "")).strip()
-        yelp_key = (self.yelp_api_key or os.environ.get("YELP_API_KEY", "")).strip()
+        # Sign-up mode (signup_mode.on()) never uses the site's own YELP_API_KEY (the
+        # owner's personal key) for the companies that sign up: Yelp is off, as if no key
+        # were set; a key passed in yelp_api_key is still used.
+        own_yelp = "" if signup_mode.on() else os.environ.get("YELP_API_KEY", "")
+        yelp_key = (self.yelp_api_key or own_yelp).strip()
         misplaced = bool(google) and yelp.looks_like_yelp_key(google) and \
             not yelp.looks_like_google_key(google)
         if misplaced:
-            yelp_key = yelp_key or google
+            yelp_key = yelp_key or ("" if signup_mode.on() else google)
             google = ""
         if config.switched_on(config.GOOGLE_OFF_ENV):
             google = ""

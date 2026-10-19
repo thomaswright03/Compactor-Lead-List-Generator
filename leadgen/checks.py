@@ -70,7 +70,7 @@ def _paid(source: str, key: str, env: str, off_env: str, call: Callable[[str], s
 
 def _osm() -> str:
     errors = []
-    for endpoint in config.OVERPASS_ENDPOINTS:
+    for endpoint in config.overpass_endpoints():
         try:
             data = request_json("POST", endpoint, data={"data": OVERPASS_QUERY}, timeout=(10, 30),
                                 retries=1, use_cache=False)

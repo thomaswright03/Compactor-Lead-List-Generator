@@ -677,6 +677,33 @@ AARCO's own show no score or tier.
   ("Your Yes for Target wasn't saved.") and, after logging in, opens the same page and
   tab again (only a path on this site is accepted as the way back).
 
+## Sign-up mode
+
+`LEADGEN_SIGNUP` = `1` turns AARCO's Lead Finder into the self-serve product any
+company can sign up for. Every change asks one helper, `leadgen/signup_mode.py`
+`on()`; with the flag off the site is AARCO's, unchanged.
+
+- **Landing page** (`leadgen/web/landing.py`, `templates/landing.html`) at `/welcome`,
+  open without logging in: the pitch, how it works, the features and the plans, with
+  **Start free trial** (`/signup`) and **Log in**. Off, `/welcome` is an unknown address.
+- **Plans**: the numbers live only in `leadgen/plans.py` (`PLANS`, `TRIAL_DAYS`,
+  `ANNUAL_FREE_MONTHS`, `AREA_MAX_MILES`, `annual_price`); the landing page reads them,
+  and billing and the plan limits are to read them too.
+- **Terms and Privacy**: `/terms` and `/privacy` show `terms_signup.html` and
+  `privacy_signup.html`, written for a subscription sold by Wright AI Solutions to many
+  companies (trial and cancellation, each company owns and can export or delete its
+  data, do-not-call and CAN-SPAM, OpenStreetMap and Google's terms, the private
+  customer import, security, Utah law). **They are a draft: have a lawyer review them
+  before the first real customer signs up.** AARCO's versions are unchanged.
+- **Data sources**: Yelp is off (as if `YELP_API_KEY` were not set), so the owner's
+  personal Yelp key is never used for other companies (`SearchParams.resolved_keys`);
+  Find leads uses OpenStreetMap, plus Google Places when `GOOGLE_PLACES_API_KEY` is set.
+  `LEADGEN_OVERPASS_URL` (any mode) points the map data at a self-hosted or paid
+  Overpass server (`config.overpass_endpoints()`).
+- **Attribution**: the Map page credits © OpenStreetMap contributors (Leaflet's
+  attribution, `map.js`); in sign-up mode the CSV ends with a credit line and the Excel
+  file's Run Info sheet has a **Data sources** row (`export.OSM_CREDIT`).
+
 ## How the pages behave (details)
 
 The [sales guide](sales-guide.md) is the short, task-based version for staff; this is
