@@ -42,9 +42,16 @@ class State:
         self.lock = threading.Lock()
 
     def running_job(self) -> str | None:
-        """The id of the search that is running now, or None."""
+        """The id of the search that is running now (in sign-up mode, this company's), or None."""
+        company = store.company_id()
         with self.lock:
-            return next((k for k, j in self.jobs.items() if j["state"] == "running"), None)
+            return next((k for k, j in self.jobs.items()
+                         if j["state"] == "running" and j.get("company") == company), None)
+
+    def job(self, job_id: str) -> dict[str, Any] | None:
+        """A search job by its id: only one this company started (sign-up mode), else None."""
+        job = self.jobs.get(job_id)
+        return job if job is not None and job.get("company") == store.company_id() else None
 
 
 def state() -> State:

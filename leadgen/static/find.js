@@ -429,10 +429,10 @@ function whereCell(s) {
   const place = s.place || s.found_near;
   if (place && place.toLowerCase() !== (s.location || "").toLowerCase()) {
     const far = typeof s.miles === "number" && s.miles > CONFIG.area_miles;
-    const miles = typeof s.miles === "number" ? `${DOT}${milesText(s.miles)} from AARCO` : "";
+    const miles = typeof s.miles === "number" ? `${DOT}${milesText(s.miles)} from ${OWN}` : "";
     td.append(el("span", `Searched around ${place}${miles}`, `sub${far ? " far" : ""}`));
   } else if (typeof s.miles === "number" && s.miles > CONFIG.area_miles) {
-    td.append(el("span", `${milesText(s.miles)} from AARCO`, "sub far"));
+    td.append(el("span", `${milesText(s.miles)} from ${OWN}`, "sub far"));
   }
   return td;
 }
@@ -665,8 +665,8 @@ function checkForm(form) {
 // second, explicit yes (farDialog) that names it again. A match that is only a road, a trail or
 // a business (place.uncertain) is asked about in the confirmation, with "Go back" in focus.
 /** @type {(p: Place) => string} */
-const farText = (p) => `“${p.label}” is ${milesText(p.miles)} from AARCO's shop, outside ` +
-  `AARCO's area (about ${p.area_miles} miles around it).`;
+const farText = (p) => `“${p.label}” is ${milesText(p.miles)} from ${OWN}'s shop, outside ` +
+  `${OWN}'s area (about ${p.area_miles} miles around it).`;
 /** @type {(p: Place) => string} */
 const doubtText = (p) => `${p.uncertain} If not, go back and type a ZIP code, a town or a ` +
   "street address.";
@@ -692,7 +692,7 @@ $("form").addEventListener("submit", async (/** @type {SubmitEvent} */ e) => {
   const dl = $("confirm-list"); dl.replaceChildren();
   const rows = searchSummary($("form"));
   rows.splice(1, 0, ["Searches around", place.label],
-              ["From AARCO's shop", milesText(place.miles)]);
+              [`From ${OWN}'s shop`, milesText(place.miles)]);
   for (const [k, v] of rows) {
     const row = el("div"); row.append(el("dt", k), el("dd", v)); dl.append(row);
   }

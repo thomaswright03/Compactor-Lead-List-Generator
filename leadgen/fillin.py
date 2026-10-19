@@ -24,7 +24,7 @@ import time
 from dataclasses import replace
 from typing import Any, NamedTuple
 
-from . import THREAD_PREFIX, alerts, area_map, config, daily, saved
+from . import THREAD_PREFIX, alerts, area_map, config, daily, saved, store
 from .models import Lead
 from .pipeline import RunResult, SearchParams, finish_leads
 from .sources import osm
@@ -41,7 +41,8 @@ NOTE = ("The map areas that didn't answer are being asked again in the backgroun
         "to an hour; their businesses join your saved leads as they arrive, and the search "
         "history below says when it's complete. This is still today's one search.")
 
-# The background threads, by day (only one search a day, so one fill-in at most).
+# The background threads, by day (only one search a day, so one fill-in at most); in
+# sign-up mode by company and day ("<company id> <day>", _key).
 running: dict[str, threading.Thread] = {}
 # Set to end a day's fill-in early (the next day's search is starting), by day.
 _ending: dict[str, threading.Event] = {}
@@ -53,6 +54,17 @@ NEW_SEARCH_TEXT = "the next day's search started"
 END_WAIT_SECONDS = 60.0
 # Off in the tests, except those about filling in (they switch it on).
 ON = True
+
+
+def _key(day: str) -> str:
+    """The day's fill-in's key in running and _ending: the day, or in sign-up mode the
+    company (store.company_id) and the day, so two companies' fill-ins never mix."""
+    company = store.company_id()
+    return day if company is None else f"{company} {day}"
+
+
+def _company_of(key: str) -> str | None:
+    return key.split(" ")[0] if " " in key else None
 
 
 def wanted(result: RunResult) -> bool:
@@ -73,15 +85,15 @@ def start(day: str, params: SearchParams, result: RunResult) -> bool:
             "until": time.time() + config.FILL_IN_SECONDS}
     try:
         daily.finish(day, {"fill": fill})
-        thread = threading.Thread(target=_run, args=(day, params, result, fill), daemon=True,
+        thread = threading.Thread(target=store.carry(_run), args=(day, params, result, fill), daemon=True,
                                   name=f"{THREAD_PREFIX}fill-in {day}")
-        _ending[day] = threading.Event()
-        running[day] = thread
+        _ending[_key(day)] = threading.Event()
+        running[_key(day)] = thread
         thread.start()
     except Exception:
         log.exception("Starting to fill in the missing map areas failed")
-        running.pop(day, None)
-        _ending.pop(day, None)
+        running.pop(_key(day), None)
+        _ending.pop(_key(day), None)
         return False
     return True
 
@@ -107,10 +119,12 @@ def end_others(day: str, wait: float | None = None) -> list[str]:
     and wait for each to finish (up to `wait` seconds, END_WAIT_SECONDS by default),
     so the two never ask the map servers at once. Returns the days ended."""
     ended = []
-    for other, thread in list(running.items()):
-        if other == day:
+    for key, thread in list(running.items()):
+        # Only this company's own (sign-up mode): another company's search is its own.
+        if key == _key(day) or _company_of(key) != store.company_id():
             continue
-        ending = _ending.get(other)
+        other = key.rsplit(" ", 1)[-1]
+        ending = _ending.get(key)
         if ending is not None:
             ending.set()
         thread.join(END_WAIT_SECONDS if wait is None else wait)
@@ -125,7 +139,7 @@ def _stop(day: str) -> str | None:
     search is starting."""
     if config.stop_reason("osm"):
         return PAUSED
-    ending = _ending.get(day)
+    ending = _ending.get(_key(day))
     return NEW_SEARCH if ending is not None and ending.is_set() else None
 
 
@@ -148,7 +162,7 @@ def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]
     lat, lon = result.center
     keywords = [k.strip() for k in params.keywords if k and k.strip()]
     unsaved: list[Lead] = []                 # found, but the database didn't answer yet
-    ending = _ending.setdefault(day, threading.Event())
+    ending = _ending.setdefault(_key(day), threading.Event())
     try:
         while parts and time.time() + config.FILL_IN_PAUSE_SECONDS < fill["until"]:
             why = _pause(day, ending)                    # let the busy servers cool down
@@ -185,8 +199,8 @@ def _run(day: str, params: SearchParams, result: RunResult, fill: dict[str, Any]
             log.warning("Counting the missing map areas failed", exc_info=True)
             counted = None
         _finish(day, fill, len(unsaved), counted)
-        running.pop(day, None)
-        _ending.pop(day, None)
+        running.pop(_key(day), None)
+        _ending.pop(_key(day), None)
 
 
 def _save(day: str, leads: list[Lead], fill: dict[str, Any]) -> list[Lead]:

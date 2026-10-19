@@ -45,7 +45,8 @@ def record(source: str, ok: bool, reason: str = "") -> None:
         _recent[source] = (now, ok)
     reason = " ".join(reason.split())[:REASON_CHARS] if not ok else ""
     try:
-        with store.connect() as db:
+        # The whole site's, in the base database (sign-up mode: whichever company asked).
+        with store.for_company(None), store.connect() as db:
             db.run("INSERT INTO source_status (source, outcome, at, reason) VALUES (?, ?, ?, ?) "
                    "ON CONFLICT (source, outcome) DO UPDATE SET at = excluded.at, "
                    "reason = excluded.reason", (source, "ok" if ok else "failed", now, reason))
@@ -124,7 +125,7 @@ def _database() -> tuple[dict[str, Any], dict[str, dict[str, tuple[float, str]]]
     times: dict[str, dict[str, tuple[float, str]]] = {}
     started = time.time()
     try:
-        with store.connect() as db:
+        with store.for_company(None), store.connect() as db:
             times = _times(db)
         entry.update(ok=True, last_ok=date_time_text(time.time()))
     except Exception as exc:  # noqa: BLE001 - the whole point: say that it is down, and why

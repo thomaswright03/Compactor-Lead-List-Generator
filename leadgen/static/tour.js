@@ -11,9 +11,9 @@ const TOUR = [
           "around: nothing is changed." },
   { page: "find", target: "nav", title: "The five pages",
     text: "Find leads runs a search. Leads is the list to check. Calls keeps every call. Map " +
-          "shows them all around AARCO. Stats sums up what you found." },
+          `shows them all around ${OWN}. Stats sums up what you found.` },
   { page: "find", target: "#form .form-grid", title: "Where to search",
-    text: "Type a ZIP code, city or address and how many miles around it to look. AARCO's " +
+    text: `Type a ZIP code, city or address and how many miles around it to look. ${OWN}'s ` +
           "address is filled in. A town name on its own means the Utah one." },
   { page: "find", target: ".go-row", title: "Find leads, once a day",
     text: "Press Find leads to start. You get one search per day (Utah time), so the site asks " +
@@ -48,7 +48,7 @@ const TOUR = [
     text: "Every business that has been called, latest call first. Each outcome has its own " +
           "tab, so Follow Up shows exactly who to call back." },
   { page: "map", target: "#map-box", title: "Map",
-    text: `AARCO's pin, its ${CONFIG.area_miles}-mile area and the areas a search looks ` +
+    text: `${OWN}'s pin, its ${CONFIG.area_miles}-mile area and the areas a search looks ` +
           "through, shaded by how the latest search went. Every saved business is a dot " +
           "coloured by its answer. Tap one for its details." },
   { page: "map", target: "#map-groups", title: "Show or hide businesses",

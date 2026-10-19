@@ -1,4 +1,8 @@
-"""Logging in and out, and who may open the site at all."""
+"""Logging in and out, and who may open the site at all.
+
+AARCO's own site has one shared login (APP_USERNAME / APP_PASSWORD). In sign-up mode
+(signup_mode.py) everyone logs in with their own email and password instead, and the
+pages for that are in accounts.py; the checks here hand over to it."""
 
 import hashlib
 import hmac
@@ -11,7 +15,8 @@ from urllib.parse import urlsplit
 from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, session
 from flask.typing import ResponseReturnValue
 
-from .. import config
+from .. import config, signup_mode
+from . import accounts
 from .common import same_origin, state, wants_page
 
 LOGIN_DAYS = 30                 # how long a login lasts on a device
@@ -83,6 +88,8 @@ def _client_address() -> str:
 
 @bp.before_app_request
 def require_login() -> ResponseReturnValue | None:
+    if signup_mode.on():
+        return accounts.require_account()   # each person's own login, and their company's data
     if request.path in ("/healthz", "/terms", "/privacy") or request.path.startswith("/static/"):
         return None           # hold no data; /healthz shows uptime checks the deployed version
     if not state().password:
@@ -126,6 +133,8 @@ def _login_page(error: str = "", name: str = "", status: int = 200, ended: bool 
 
 @bp.get("/login")
 def login_page() -> ResponseReturnValue:
+    if signup_mode.on():
+        return accounts.login_page()
     then = return_to(request.args.get("next"))
     if not state().password or session.get("login") == login_token():
         return redirect(then or "/")
@@ -134,6 +143,8 @@ def login_page() -> ResponseReturnValue:
 
 @bp.post("/login")
 def login() -> ResponseReturnValue:
+    if signup_mode.on():
+        return accounts.login()
     s = state()
     if not s.password:
         return redirect("/")
@@ -180,10 +191,11 @@ def admin_token() -> str:
 
 def admin_state() -> str:
     """"open", "locked", or "unset": a site with a login but no ADMIN_PASSWORD keeps the
-    section locked for everyone. Without any login (a local copy) it is open."""
+    section locked for everyone. Without any login (a local copy) it is open; in sign-up
+    mode there are always logins."""
     s = state()
     if not s.admin_password:
-        return "unset" if s.password else "open"
+        return "unset" if s.password or signup_mode.on() else "open"
     return "open" if hmac.compare_digest(str(session.get("admin", "")), admin_token()) else "locked"
 
 
@@ -202,7 +214,7 @@ def admin_unlock() -> ResponseReturnValue:
         abort(403)
     if not s.admin_password:
         return jsonify({"error": "No administrator password is set up. Add ADMIN_PASSWORD "
-                                 "in the server's settings." if s.password else ""}), 400
+                                 "in the server's settings." if s.password or signup_mode.on() else ""}), 400
     now, who = time.time(), _client_address()
     recent = [t for t in s.admin_failures.get(who, []) if now - t < LOGIN_WINDOW]
     if len(recent) >= LOGIN_TRIES:

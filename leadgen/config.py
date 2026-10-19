@@ -19,7 +19,6 @@ from .config_names import *  # noqa: F403
 OWN_ADDRESS = "876 Fortune Rd, Salt Lake City, UT 84104"
 OWN_COORDS = (40.742060, -111.943408)
 DEFAULT_LOCATION = OWN_ADDRESS
-DEFAULT_CENTER = OWN_COORDS
 DEFAULT_RADIUS_MILES = 30.0
 # AARCO's area: searches are meant for about this far around the shop (SERVICE_CENTER).
 # A search whose place is farther away is only started once the person confirms it,
@@ -81,6 +80,17 @@ PARENT_ALIASES = ["ACE Recycling & Disposal", "ACE Recycling and Disposal", "ACE
                   "Ace Intermountain Recycling", "Ace Recycling"]
 PARENT_DOMAINS = ["acedisposal.com"]
 PARENT_ADDRESSES = ["1240 South Wallace Road, Salt Lake City"]
+
+# Sign-up mode (signup_mode.py): what each plan allows a company. searches: how many
+# searches a calendar month (Utah time; allowance.py counts them from the company's own
+# search history, still one a day at most); users: how many people can log in;
+# phone_lookups: paid phone lookups a month (for later, when paid lookups are offered).
+# A new company is on "trial" for its first 14 days (accounts.TRIAL_DAYS).
+PLANS = {
+    "trial": {"label": "Free trial", "searches": 4, "users": 3, "phone_lookups": 0},
+    "starter": {"label": "Starter", "searches": 8, "users": 1, "phone_lookups": 500},
+    "team": {"label": "Team", "searches": 30, "users": 5, "phone_lookups": 2500},
+}
 
 
 # Search phrases used with the Google Places text search. The user's keywords

@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
 
-from . import THREAD_PREFIX, config, mail, store
+from . import THREAD_PREFIX, company, config, mail, store
 from .localtime import date_time_text
 
 WEBHOOK_ENV = "LEADGEN_ALERT_WEBHOOK"
@@ -69,7 +69,7 @@ def report(kind: str, text: str) -> None:
             for old in sorted(_last, key=_last.__getitem__)[:100]:
                 del _last[old]
     if BACKGROUND:
-        threading.Thread(target=_deliver, args=(kind, text, now), daemon=True,
+        threading.Thread(target=store.carry(_deliver), args=(kind, text, now), daemon=True,
                          name=f"{THREAD_PREFIX}alert").start()
     else:
         _deliver(kind, text, now)
@@ -78,13 +78,18 @@ def report(kind: str, text: str) -> None:
 def _deliver(kind: str, text: str, at: float) -> None:
     _reporting.on = True
     try:
+        # In sign-up mode a company's problem names the company, and every problem goes to
+        # the base database: the administrator's list is the whole site's.
+        own = company.current()
+        if own.company:
+            text = f"{own.name}: {text}"[:MAX_TEXT]
         try:
-            with store.connect() as db:
+            with store.for_company(None), store.connect() as db:
                 db.run("INSERT INTO problems (id, at, kind, text) VALUES (?, ?, ?, ?)",
                        (uuid.uuid4().hex, at, kind, text))
         except Exception as exc:  # noqa: BLE001 - often the very problem being reported
             log.warning("Recording a problem failed: %s", exc.__class__.__name__)
-        message = f"{SITE}: {text} ({date_time_text(at)}, Utah time)"
+        message = f"{SITE if not own.company else own.site_name}: {text} ({date_time_text(at)}, Utah time)"
         url = os.environ.get(WEBHOOK_ENV, "").strip()
         if url:
             try:
@@ -202,7 +207,7 @@ class Unset(RuntimeError):
 def recent(now: float | None = None) -> dict[str, Any]:
     """The last RECENT_SECONDS' problems: how many, and the latest few (newest first)."""
     since = (now or time.time()) - RECENT_SECONDS
-    with store.connect() as db:
+    with store.for_company(None), store.connect() as db:
         total = db.one("SELECT COUNT(*) FROM problems WHERE at > ?", (since,))
         rows = db.all("SELECT at, kind, text FROM problems WHERE at > ? ORDER BY at DESC LIMIT 5",
                       (since,))

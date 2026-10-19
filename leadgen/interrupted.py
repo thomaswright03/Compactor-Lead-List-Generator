@@ -83,6 +83,9 @@ class Run:
     def __init__(self, day: str, params: SearchParams) -> None:
         self.id = uuid.uuid4().hex
         self.day, self.params = day, params
+        # Whose search it is (sign-up mode): its rows go to that company's data, also when
+        # the process writes them as it shuts down (_shutting_down, no company of its own).
+        self.company = store.company_id()
         self._found: list[Lead] = []
         self._lock = threading.Lock()
         self._stop = threading.Event()
@@ -105,7 +108,7 @@ class Run:
             return
         with _live_lock:
             _live[self.id] = self
-        self._beating = threading.Thread(target=self._beat, daemon=True,
+        self._beating = threading.Thread(target=store.carry(self._beat), daemon=True,
                                          name=f"{THREAD_PREFIX}search heartbeat {self.day}")
         self._beating.start()
 
@@ -124,7 +127,7 @@ class Run:
         with self._lock:
             batch, self._found = self._found, []
         try:
-            with store.connect() as db:
+            with store.for_company(self.company), store.connect() as db:
                 if batch:
                     db.run("INSERT INTO search_found (id, run, at, leads) VALUES (?, ?, ?, ?)",
                            (uuid.uuid4().hex, self.id, time.time(),
@@ -145,7 +148,7 @@ class Run:
             if _live.pop(self.id, None) is None:
                 return
         try:
-            with store.connect() as db:
+            with store.for_company(self.company), store.connect() as db:
                 db.run("DELETE FROM search_found WHERE run = ?", (self.id,))
                 db.run("DELETE FROM search_runs WHERE id = ?", (self.id,))
         except Exception:

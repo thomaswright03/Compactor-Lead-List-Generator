@@ -5,7 +5,7 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
-from .. import config
+from .. import company, config
 from ..pipeline import GRIDS, SOURCES, SearchParams
 
 Num = int | float
@@ -43,8 +43,9 @@ def _number(form: Mapping[str, str], name: str, default: Num | None, cast: type,
 
 
 def _location(form: Mapping[str, str]) -> str:
-    # The page always sends the field; a bare POST without it (a script) searches around AARCO.
-    location = (form.get("location", config.DEFAULT_LOCATION) or "").strip()
+    # The page always sends the field; a bare POST without it (a script) searches around AARCO
+    # (in sign-up mode, around the company's shop).
+    location = (form.get("location", company.current().address or config.DEFAULT_LOCATION) or "").strip()
     if not location:
         raise FormError("Enter where to search around: a ZIP code, city or street address.",
                         "location")
@@ -77,15 +78,17 @@ def parse_form(form: Mapping[str, str]) -> SearchParams:
         if name in form and not (form.get(name) or "").strip():
             raise FormError(message, name)
     grid = _number(form, "grid", 1, int, 1, 19, "Coverage")
+    own = company.current()
+    standard = [k.lower() for k in own.keywords]
     if grid not in GRIDS:
         raise FormError("Pick a coverage from the list.", "grid")
     return SearchParams(
         location=location,
-        radius_miles=_number(form, "radius", config.DEFAULT_RADIUS_MILES, float, 1, 100,
+        radius_miles=_number(form, "radius", own.radius, float, 1, 100,
                              "How far", " miles"),
-        # The standard words are always searched; the ones typed are searched as well.
-        keywords=list(dict.fromkeys(config.DEFAULT_KEYWORDS
-                                    + [k for k in keywords if k.lower() not in config.DEFAULT_KEYWORDS])),
+        # The standard words (and in sign-up mode the company's own extra words) are always
+        # searched; the ones typed are searched as well.
+        keywords=list(dict.fromkeys(own.keywords + [k for k in keywords if k.lower() not in standard])),
         source=source,
         min_score=_number(form, "min_score", config.DEFAULT_MIN_SCORE, int, 0, 100,
                           "The score to leave out weak leads below"),
