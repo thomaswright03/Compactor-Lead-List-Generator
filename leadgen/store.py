@@ -417,9 +417,19 @@ _SECRETS = re.compile(r"(\w+://)[^@\s/]*@|(password\s*=\s*)\S+", re.IGNORECASE)
 
 def _reason(exc: BaseException) -> str:
     """Why a connection failed, for the log (e.g. "password authentication failed"),
-    on one line and with any password taken out."""
-    text = " ".join(str(exc).split())[:300]
+    on one line and with any password taken out. When several addresses were tried (an
+    IPv6 one the server can't reach, then IPv4), the last one's reason is the one kept."""
+    text = " ".join(str(exc).split())
+    if len(text) > 300:
+        text = text[:120] + " ... " + text[-175:]
     return _SECRETS.sub(lambda m: (m.group(1) or m.group(2)) + "***" + ("@" if m.group(1) else ""), text)
+
+
+def direct_url(url: str) -> str:
+    """The database's direct address for a company's connections. Neon's pooled address
+    (a host with "-pooler" in it) refuses the search_path start-up option that keeps a
+    company to its own schema, so they connect to the same database without the pool."""
+    return re.sub(r"((?:@|host=)[^/?:@\s]*?)-pooler(\.)", r"\1\2", url, count=1)
 
 
 def _new_connection(key: str, postgres: bool) -> Db:
@@ -430,7 +440,7 @@ def _new_connection(key: str, postgres: bool) -> Db:
         try:
             if schema:
                 # A company's connections see only its own schema: its tables, never the base's.
-                conn = psycopg.connect(url, autocommit=True, connect_timeout=15,
+                conn = psycopg.connect(direct_url(url), autocommit=True, connect_timeout=15,
                                        options=f"-c search_path={schema}")
             else:
                 conn = psycopg.connect(url, autocommit=True, connect_timeout=15)

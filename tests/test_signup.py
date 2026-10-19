@@ -458,3 +458,11 @@ def test_signing_up_and_the_settings_page_in_a_browser(signup, monkeypatch):
             chromium.close()
     finally:
         server.shutdown()
+
+
+def test_a_company_connects_to_neon_without_its_pool():
+    """Neon's pooled address refuses the search_path option a company's connections use."""
+    pooled = "postgresql://u:p@ep-dust-1-pooler.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require"
+    assert store.direct_url(pooled) == pooled.replace("-pooler", "")
+    assert store.direct_url("host=ep-dust-1-pooler.neon.tech dbname=x") == "host=ep-dust-1.neon.tech dbname=x"
+    assert store.direct_url("postgresql://u:p@localhost:5432/x") == "postgresql://u:p@localhost:5432/x"
