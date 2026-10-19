@@ -24,5 +24,6 @@ def test_every_page_links_to_them():
     client = _client()
     login = client.get("/login").get_data(as_text=True)
     assert 'href="/terms"' in login and 'href="/privacy"' in login
-    missing = web.create_app().test_client().get("/no-such-page", headers={"Accept": "text/html"}).get_data(as_text=True)
+    missing = web.create_app().test_client().get("/no-such-page", headers={"Accept": "text/html"})
+    missing = missing.get_data(as_text=True)
     assert 'href="/privacy"' in missing
