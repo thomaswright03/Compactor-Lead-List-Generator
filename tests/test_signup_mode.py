@@ -16,6 +16,7 @@ from leadgen.models import Lead
 from leadgen.pipeline import PipelineError, SearchParams
 from leadgen.sources import osm
 from tests.test_html_valid import html_problems
+from tests.test_signup import _sign_up
 
 PAGE = {"Accept": "text/html"}
 YELP_KEY = "y" * 128
@@ -129,7 +130,11 @@ def test_yelp_is_off_in_signup_mode_even_with_a_key(signup, monkeypatch):
     with pytest.raises(PipelineError, match="needs YELP_API_KEY"):
         pipeline.run(SearchParams(source="yelp"))
     monkeypatch.setenv("YELP_API_KEY", YELP_KEY)
-    page = web.create_app().test_client().get("/").get_data(as_text=True)
+    monkeypatch.setenv("SECRET_KEY", "tests-only-secret")
+    monkeypatch.setattr(web.accounts, "send_email", lambda *a: True)
+    client = web.create_app().test_client()
+    _sign_up(client)                                  # Find leads is behind a login
+    page = client.get("/").get_data(as_text=True)
     assert '<option value="yelp">' not in page and '<option value="google">' in page
     assert web.yelp_quota() is None
     # Without the flag the same key is used, as on AARCO's site.
