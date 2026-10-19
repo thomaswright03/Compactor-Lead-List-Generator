@@ -1,13 +1,13 @@
 """The public landing page of sign-up mode (signup_mode.on()): what Lead Finder is, how it
 works, and the plans, with Start free trial (/signup) and Log in (/login).
 
-At /welcome, open without logging in. With sign-up mode off the page doesn't exist:
+At /welcome, open without logging in (accounts.PUBLIC). With sign-up mode off the page doesn't exist:
 /welcome is handled like any other unknown address, so AARCO's site is unchanged.
 """
 
 from typing import Any
 
-from flask import Blueprint, abort, render_template, request
+from flask import Blueprint, abort, render_template
 
 from .. import plans, signup_mode
 from .auth import support_contact
@@ -16,8 +16,6 @@ bp = Blueprint("landing", __name__)
 
 PITCH = ("See every business in your area likely to need what you service, scored and on a map. "
          "Mark who has it, log every call, and hide the customers you already have.")
-# The addresses sign-up mode serves to anyone, logged in or not (public_pages).
-PUBLIC = ("/welcome",)
 
 
 def landing_context() -> dict[str, Any]:
@@ -38,11 +36,3 @@ def welcome() -> str:
         abort(404)
     return render_template("landing.html", **landing_context())
 
-
-# Registered before the login check (create_app lists this blueprint first), so the
-# landing page opens for visitors who aren't logged in and on any host name.
-@bp.before_app_request
-def public_pages() -> str | None:
-    if signup_mode.on() and request.method in ("GET", "HEAD") and request.path in PUBLIC:
-        return welcome()
-    return None

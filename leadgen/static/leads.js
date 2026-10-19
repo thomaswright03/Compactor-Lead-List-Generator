@@ -135,7 +135,7 @@ function counts() {
 // flagged); the Closed tab lists them all, and they leave Not checked.
 /** @type {[string, string][]} */
 const LEAD_TABS = [["", "Not checked"], ["yes", "Has baler or compactor"],
-                   ["no", "No baler or compactor"], ["competitors", "Competitors & AARCO"],
+                   ["no", "No baler or compactor"], ["competitors", `Competitors & ${OWN}`],
                    ["closed", "Closed"], ["all", "All"]];
 // How many businesses a tab ("" is Not checked) holds.
 /** @type {(c: Counts | null, tab: string) => number} */
@@ -555,8 +555,8 @@ function markCell(lead, withCall) {
   const td = el("td", undefined, "c-mark");
   if (!lead.prospect) {
     td.append(el("div", lead.lead_type === "Competitor" ? "Competitor: not a prospect"
-      : lead.flags.includes(CONFIG.parent_flag) ? "AARCO's parent company"
-      : "AARCO's own listing", "sub not-asked"));
+      : lead.flags.includes(CONFIG.parent_flag) ? `${OWN}'s parent company`
+      : `${OWN}'s own listing`, "sub not-asked"));
     return td;
   }
   td.append(markButtons(lead));
@@ -595,7 +595,7 @@ function scoreCell(l) {
   if (isOwn(l)) {
     const none = el("td", undefined, "score nowrap");
     none.append(el("span", "Not scored", "sub"));
-    none.title = "AARCO's own listing: not a prospect, so it has no score or tier";
+    none.title = `${OWN}'s own listing: not a prospect, so it has no score or tier`;
     return none;
   }
   const word = TIER_WORDS[l.tier] || "";
@@ -668,7 +668,7 @@ function leadRow(l, withCall) {
   tr.append(miles);
   if (own) {
     const why = el("td", undefined, "c-why");
-    why.append(el("div", "AARCO's own, so it isn't scored as a prospect.", "sub"));
+    why.append(el("div", `${OWN}'s own, so it isn't scored as a prospect.`, "sub"));
     tr.append(why);
   } else tr.append(whyCell(l.reasons));
   return tr;

@@ -1,11 +1,14 @@
-"""Sign-up mode: the self-serve product any company can sign up for.
+"""Sign-up mode: the Lead Finder as a product any company can sign up for.
 
 LEADGEN_SIGNUP = 1 (or true / yes / on) switches it on. Off (the default) the site is
-AARCO's own Lead Finder, exactly as before. Everything sign-up mode changes asks on():
-the public landing page (web/landing.py), the Terms and Privacy written for many
-companies (web/legal.py), Yelp left out (pipeline.SearchParams.resolved_keys: the
-owner's own Yelp key is never used for other companies) and the map data's credit in
-the downloads (export.py).
+AARCO's own Lead Finder, with its one shared login, exactly as before. In sign-up mode
+people sign up with their email and a password, each company gets its own saved leads,
+marks, calls and searches (store.py keeps them apart), and the site's name and the
+company's own details come from the company's settings (company.py) instead of AARCO's
+(config.py). It also brings the public landing page (web/landing.py), the Terms and
+Privacy written for many companies (web/legal.py), Yelp left out
+(pipeline.SearchParams.resolved_keys: the owner's own Yelp key is never used for other
+companies), the map data's credit in the downloads (export.py) and billing (billing.py).
 """
 
 import os

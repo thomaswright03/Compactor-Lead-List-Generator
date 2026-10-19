@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} · {{ site_name }}</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+{% include "_theme.html" %}
+{% include "_account_style.html" %}
+<style>
+  /* Sign-up mode's own pages (web/accounts.py), in the login page's look. */
+  .box.wide { width:min(560px,100%); }
+  .note { margin:var(--sp-4) 0 0; padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm); border:1px solid var(--line); }
+  .field-hint { font-weight:400; font-variant-caps:normal; letter-spacing:0; color:var(--muted); font-size:var(--fs-sm); }
+  textarea { font:inherit; font-size:var(--fs-base); padding:var(--sp-3); border:1px solid var(--line-strong);
+             border-radius:var(--r-md); color:var(--ink); background:var(--input); min-height:88px; font-variant-caps:normal;
+             letter-spacing:0; font-weight:400; }
+  .links { margin:var(--sp-4) 0 0; display:flex; flex-wrap:wrap; gap:var(--sp-2) var(--sp-4); font-size:var(--fs-sm); }
+  .links a { color:var(--accent); font-weight:600; display:inline-flex; align-items:center; min-height:44px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="box{{ ' wide' if mode == 'setup' }}">
+    <div class="brand"><img class="logo" src="/static/favicon.svg" alt="" width="44" height="44">
+      <div><strong>{{ company if mode in ('setup', 'invite') else site_name }}</strong><span>Lead Finder</span></div></div>
+    <h1>{{ title }}</h1>
+    {% if purpose %}<p class="purpose">{{ purpose }}</p>{% endif %}
+    {% if note %}<p class="note" role="status">{{ note }}</p>{% endif %}
+    {% if mode == 'signup' %}
+    <form method="post" action="/signup">
+      <label>Company name <input name="company" autocomplete="organization" maxlength="80" value="{{ form.company or '' }}" required{% if not error %} autofocus{% endif %}></label>
+      <label>Your name <input name="name" autocomplete="name" maxlength="80" value="{{ form.name or '' }}" required></label>
+      <label>Email <input name="email" type="email" autocomplete="email" maxlength="254" value="{{ form.email or '' }}" required></label>
+      <label>Password <span class="field-hint">At least {{ min_password }} characters.</span>
+        <input name="password" type="password" autocomplete="new-password" minlength="{{ min_password }}" maxlength="200" required></label>
+      {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+      <button type="submit">Start your free trial</button>
+    </form>
+    <p class="links"><span>Already signed up? <a href="/login">Log in</a></span></p>
+    {% elif mode == 'login' %}
+    <form method="post" action="/login">
+      {% if then %}<input type="hidden" name="next" value="{{ then }}">{% endif %}
+      <label>Email <input name="email" type="email" autocomplete="username" maxlength="254" value="{{ form.email or '' }}" required{% if not error %} autofocus{% endif %}></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required{% if error %} autofocus{% endif %}></label>
+      {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+      <button type="submit">Log in</button>
+    </form>
+    <p class="links"><a href="/forgot">Forgot your password?</a><a href="/signup">Sign up for a free trial</a></p>
+    {% elif mode == 'forgot' %}
+    <form method="post" action="/forgot">
+      <label>Email <input name="email" type="email" autocomplete="email" maxlength="254" value="{{ form.email or '' }}" required autofocus></label>
+      {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+      <button type="submit">Email me a link</button>
+    </form>
+    <p class="links"><a href="/login">Back to log in</a></p>
+    {% elif mode in ('reset', 'invite') %}
+    <form method="post" action="{{ action }}">
+      {% if mode == 'invite' %}<p class="purpose">You'll log in as <strong>{{ email }}</strong>.</p>
+      <label>Your name <input name="name" autocomplete="name" maxlength="80" value="{{ form.name or '' }}" required{% if not error %} autofocus{% endif %}></label>{% endif %}
+      <label>New password <span class="field-hint">At least {{ min_password }} characters.</span>
+        <input name="password" type="password" autocomplete="new-password" minlength="{{ min_password }}" maxlength="200" required{% if mode == 'reset' %} autofocus{% endif %}></label>
+      {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+      <button type="submit">{{ 'Join and log in' if mode == 'invite' else 'Save the new password' }}</button>
+    </form>
+    {% elif mode == 'setup' %}
+    <form method="post" action="/setup">
+      <label>Your shop's address <span class="field-hint">Searches and the map are centred here.</span>
+        <input name="address" autocomplete="street-address" maxlength="200" value="{{ form.address or '' }}" required{% if not error %} autofocus{% endif %}></label>
+      <label>Your area (miles around the shop)
+        <input name="radius" type="number" min="1" max="100" step="1" value="{{ form.radius or 30 }}" required></label>
+      <label>Extra search words (optional) <span class="field-hint">Separate with commas. Always searched, as well as
+        the standard words ({{ standard_words }}).</span>
+        <input name="search_words" maxlength="1200" value="{{ form.search_words or '' }}" placeholder="For example: cardboard, pallets"></label>
+      <label>Your competitors (optional) <span class="field-hint">Their business names, separated with commas.
+        Their listings are flagged, never offered as leads.</span>
+        <textarea name="competitors" maxlength="1700">{{ form.competitors or '' }}</textarea></label>
+      {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+      <button type="submit">Save and find leads</button>
+    </form>
+    <p class="links"><a href="/">Skip for now</a></p>
+    {% elif mode == 'message' %}
+    <p class="links"><a href="{{ link or '/' }}">{{ link_text or 'Open the Lead Finder' }}</a></p>
+    {% endif %}
+  </div>
+</main>
+{% include "_legal_footer.html" %}
+</body>
+</html>

@@ -5,8 +5,8 @@ today's search), place.py (where it will run), history.py (the search history) a
 switch_routes.py (the emergency switches); leads.py (the saved list, marks, calls,
 stats, downloads); mapping.py (the map); customer_routes.py (current customers, kept off
 the lists); legal.py (Terms and Privacy); landing.py (sign-up mode's public landing page);
-admin.py (the administrator's checks). The
-page's script and styles are in leadgen/static/.
+admin.py (the administrator's checks); accounts.py (sign-up mode's accounts and Settings,
+signup_mode.py). The page's script and styles are in leadgen/static/.
 """
 
 import datetime as dt
@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import logging
 import os
+import secrets
 import time  # noqa: F401 - tests patch web.time.sleep
 from typing import Any
 
@@ -21,11 +22,24 @@ from flask import Flask, jsonify, redirect, render_template, request, session
 from flask.typing import ResponseReturnValue
 from werkzeug.exceptions import HTTPException
 
-from .. import alerts, awake, calls, config, health, localtime, marks, store
+from .. import alerts, awake, calls, company, config, health, localtime, marks, signup_mode, store
 from ..localtime import date_time_text
 from ..pipeline import SearchParams
 from ..scoring import PARENT_FLAG
-from . import admin, auth, customer_routes, finding, history, landing, leads, legal, mapping, place, switch_routes
+from . import (
+    accounts,
+    admin,
+    auth,
+    customer_routes,
+    finding,
+    history,
+    landing,
+    leads,
+    legal,
+    mapping,
+    place,
+    switch_routes,
+)
 from .auth import LOGIN_DAYS, LOGIN_TRIES, LOGIN_WINDOW
 from .common import (
     DB_DOWN,
@@ -63,6 +77,8 @@ ERROR_PAGES = {
 # The pages of the app, each at its "#" address (/#leads): opening /leads in the browser
 # lands there (_register_pages page_address).
 PAGES = ("find", "leads", "calls", "map", "stats", "customers")
+# Sign-up mode's page as well (the company's Settings, accounts.py).
+SIGNUP_PAGES = (*PAGES, "settings")
 STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 
 
@@ -96,10 +112,9 @@ def _register_pages(app: Flask) -> None:
 
     @app.context_processor
     def page_globals() -> dict[str, Any]:
-        return {"year": localtime.now().year, "login_on": bool(app.extensions["leadgen"].password),
-                "user": session.get("user", ""), "asset_version": version,
-                "company": config.OWN_COMPANY, "company_short": config.OWN_COMPANY_SHORT,
-                "site_name": config.SITE_NAME}
+        return {"year": localtime.now().year,
+                "login_on": bool(app.extensions["leadgen"].password) or signup_mode.on(),
+                "user": session.get("user", ""), "asset_version": version, **company.page_names()}
 
     _register_request_scope(app)
     _register_errors(app)
@@ -132,7 +147,8 @@ def _register_request_scope(app: Flask) -> None:
     @app.before_request
     def page_address() -> ResponseReturnValue | None:
         name = request.path.strip("/")
-        return redirect(f"/#{name}") if name in PAGES and wants_page() else None
+        pages = SIGNUP_PAGES if signup_mode.on() else PAGES
+        return redirect(f"/#{name}") if name in pages and wants_page() else None
 
 
 def _register_errors(app: Flask) -> None:
@@ -173,15 +189,19 @@ def health_check() -> dict[str, Any]:
 
 def index_context() -> dict[str, Any]:
     google, yelp_key, _ = SearchParams().resolved_keys()
+    own = company.current()
+    parent = [own.parent_company] if own.parent_company else []
     return {
-        "defaults": {"location": config.DEFAULT_LOCATION, "radius": config.DEFAULT_RADIUS_MILES,
-                     "keywords": ", ".join(config.DEFAULT_KEYWORDS), "min_score": config.DEFAULT_MIN_SCORE},
+        "defaults": {"location": own.address or config.DEFAULT_LOCATION, "radius": own.radius,
+                     "keywords": ", ".join(own.keywords), "min_score": config.DEFAULT_MIN_SCORE},
         "yelp": yelp_quota(), "outcomes": list(calls.OUTCOMES), "google_on": bool(google),
         "yelp_on": bool(yelp_key), "switches": switches(), "paused_text": SEARCH_PAUSED,
         "undo_seconds": marks.UNDO_SECONDS, "admin": auth.admin_state(),
         "admin_lockable": bool(state().admin_password),
-        "flagged": [*config.COMPETITORS, config.OWN_COMPANY, config.PARENT_COMPANY], "parent_flag": PARENT_FLAG,
-        "area_miles": config.SERVICE_AREA_MILES,
+        "flagged": [*own.competitors, own.name, *parent], "parent_flag": PARENT_FLAG if parent else "",
+        "area_miles": own.area_miles,
+        # Sign-up mode: the Settings page, the email check and the search allowance.
+        "account": accounts.page_context() if signup_mode.on() else {"signup": False},
     }
 
 
@@ -203,6 +223,11 @@ def create_app(password: str | None = None, username: str | None = None,
     # derived from the login itself, so changing the password logs everyone out.
     app.secret_key = os.environ.get("SECRET_KEY") or hmac.new(
         f"{username}\n{password}".encode(), b"lead-finder-session-v1", hashlib.sha256).digest()
+    if signup_mode.on() and not os.environ.get("SECRET_KEY"):
+        # Everyone has their own login, so the cookie's key must be secret: without
+        # SECRET_KEY a random one, which logs everyone out whenever the site restarts.
+        log.warning("Sign-up mode without SECRET_KEY: logins end whenever the site restarts. Set SECRET_KEY.")
+        app.secret_key = secrets.token_bytes(32)
     app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                       SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),
                       PERMANENT_SESSION_LIFETIME=dt.timedelta(days=LOGIN_DAYS),
@@ -213,9 +238,8 @@ def create_app(password: str | None = None, username: str | None = None,
         log.warning("No login contact: config.SUPPORT_CONTACT and LEADGEN_SUPPORT_CONTACT are both empty, so "
                     "the login page names no one to ask for access or a forgotten password.")
     app.extensions["leadgen"] = State(password, username, admin_password)
-    # landing.bp first: its public page is served ahead of the login check (landing.py).
-    for blueprint in (landing.bp, auth.bp, finding.bp, place.bp, history.bp, switch_routes.bp, leads.bp, mapping.bp,
-                      customer_routes.bp, legal.bp, admin.bp):
+    for blueprint in (auth.bp, accounts.bp, landing.bp, finding.bp, place.bp, history.bp, switch_routes.bp,
+                      leads.bp, mapping.bp, customer_routes.bp, legal.bp, admin.bp):
         app.register_blueprint(blueprint)
     _register_pages(app)
     return app

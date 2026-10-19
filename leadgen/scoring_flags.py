@@ -1,18 +1,21 @@
 """AARCO's own listings, its parent company's and its competitors': how each is
 recognised (its names, website or a facility's address: config.SELF_ALIASES,
 config.PARENT_*, config.COMPETITORS) and the type and flag it gets, as a search scores
-it and as a row saved under earlier rules is shown."""
+it and as a row saved under earlier rules is shown. In sign-up mode (signup_mode.py) the
+own listing and the competitors are the company's own (company.current()); a company that
+signed up has no parent company."""
 
 import re
 from collections.abc import Sequence
 from functools import lru_cache
 
-from . import config, places
+from . import company, config, places
 from .models import Lead
 from .scoring_text import _split_hyphens, compact, normalize
 
 # The flag on AARCO's own listing and on its parent company's (config.PARENT_*); rows
-# saved under an earlier name show it as it is now (current_own_flag, saved.py).
+# saved under an earlier name show it as it is now (current_own_flag, saved.py). In
+# sign-up mode the company's own listing is flagged with its name (own_flag).
 OWN_FLAG_START = "OWN COMPANY: "
 OWN_FLAG = OWN_FLAG_START + config.OWN_COMPANY
 PARENT_FLAG = f"{OWN_FLAG_START}AARCO's parent company ({config.PARENT_COMPANY})"
@@ -21,6 +24,12 @@ PROSPECT_TYPE = "Prospect"
 # The flag on a competitor's listing (config.COMPETITORS): "COMPETITOR: Pro Baler".
 COMPETITOR_FLAG_START = "COMPETITOR: "
 INDUSTRY_FLAG = "Possible competitor or partner (equipment / hauler)"
+
+
+def own_flag() -> str:
+    """The flag on the company's own listing: OWN_FLAG on AARCO's site, else with the
+    signed-up company's name."""
+    return OWN_FLAG_START + company.current().name
 
 
 # ---- a listing's names and website against a list of names (config.SELF_ALIASES,
@@ -67,13 +76,16 @@ def _holds_alias(lead: Lead, aliases: Sequence[str]) -> bool:
 
 
 def _competitor(lead: Lead) -> str | None:
-    """The competitor (config.COMPETITORS) whose name or website the lead holds, or None."""
-    return next((name for name, aliases in config.COMPETITORS.items() if _holds_alias(lead, aliases)), None)
+    """The competitor (config.COMPETITORS, or the company's own list) whose name or website
+    the lead holds, or None."""
+    competitors = company.current().competitors
+    return next((name for name, aliases in competitors.items() if _holds_alias(lead, aliases)), None)
 
 
 def _is_self(lead: Lead) -> bool:
-    """True for AARCO's own listing: its names or website hold one of config.SELF_ALIASES."""
-    return _holds_alias(lead, config.SELF_ALIASES)
+    """True for AARCO's own listing: its names or website hold one of config.SELF_ALIASES
+    (in sign-up mode, the company's own names)."""
+    return _holds_alias(lead, company.current().self_aliases)
 
 
 def _own_or_competitor(lead: Lead) -> tuple[str, str] | None:
@@ -82,7 +94,7 @@ def _own_or_competitor(lead: Lead) -> tuple[str, str] | None:
     if competitor:
         return "Competitor", COMPETITOR_FLAG_START + competitor
     if _is_self(lead):
-        return OWN_TYPE, OWN_FLAG
+        return OWN_TYPE, own_flag()
     return None
 
 
@@ -128,20 +140,21 @@ def _parent_named(name: str) -> bool:
     """True when a name holds one of config.PARENT_ALIASES as whole words ("Ace
     Intermountain Recycling Center", "ACE-Disposal", "AceDisposal"), never inside other
     words or as a bare "Ace" ("Ace Hardware", "Grace Recycling")."""
-    return _alias_named(name, config.PARENT_ALIASES)
+    return _alias_named(name, company.current().parent_aliases)
 
 
 def _parent_site(website: str) -> bool:
-    if not any(d in website.lower() for d in config.PARENT_DOMAINS):
+    domains = company.current().parent_domains
+    if not any(d in website.lower() for d in domains):
         return False
     host = re.sub(r"^(https?://)?(www\d?\.)?", "", website.strip().lower()).split("/")[0].split(":")[0]
-    return any(host == d or host.endswith("." + d) for d in config.PARENT_DOMAINS)
+    return any(host == d or host.endswith("." + d) for d in domains)
 
 
 def _parent_address(lead: Lead) -> bool:
     """True when the lead's street address is one of config.PARENT_ADDRESSES (a suite or
     unit after it allowed) and the town it lists, if any, is that address's town."""
-    facilities = _parent_facilities(tuple(config.PARENT_ADDRESSES))
+    facilities = _parent_facilities(tuple(company.current().parent_addresses))
     if not lead.address or not any(lead.address.lstrip().lower().startswith(street[0]) for street, _ in facilities):
         return False            # not even its house number: most listings stop here
     words = _street_words(lead.address)
@@ -182,7 +195,7 @@ def current_own_flag(flag: str) -> str:
     company reads with the names config has now; any other flag is returned as it is."""
     if not flag.startswith(OWN_FLAG_START):
         return flag
-    return PARENT_FLAG if "parent company" in flag.lower() else OWN_FLAG
+    return PARENT_FLAG if "parent company" in flag.lower() else own_flag()
 
 
 def current_type_flags(lead: Lead) -> Lead:
@@ -192,7 +205,8 @@ def current_type_flags(lead: Lead) -> Lead:
     Pro Baler) is shown with the type its category gives and without the flag, as a
     search now scores it. saved.py does it after current_own_flag; the saved row is
     unchanged."""
-    old = {f for f in lead.flags if f == OWN_FLAG or f.startswith(COMPETITOR_FLAG_START)}
+    own = own_flag()
+    old = {f for f in lead.flags if f == own or f.startswith(COMPETITOR_FLAG_START)}
     if not old:
         return lead
     now = _own_or_competitor(lead)

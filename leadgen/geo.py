@@ -6,7 +6,7 @@ import os
 import re
 from typing import Any, Self
 
-from . import config
+from . import company, config
 from .http import HttpError, request_json
 
 log = logging.getLogger(__name__)
@@ -129,8 +129,10 @@ def names_another_state(text: str) -> bool:
 
 
 def miles_from_aarco(lat: float, lon: float) -> float:
-    """How far a point is from the centre of AARCO's area (config.SERVICE_CENTER)."""
-    return haversine_miles(config.SERVICE_CENTER[0], config.SERVICE_CENTER[1], lat, lon)
+    """How far a point is from the centre of AARCO's area (config.SERVICE_CENTER; in
+    sign-up mode, the company's shop)."""
+    center = company.current().center
+    return haversine_miles(center[0], center[1], lat, lon)
 
 
 def haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -366,7 +368,10 @@ def geocode(location: str, api_key: str | None = None) -> Found:
     only a road, a trail, a park or a business, not a town, ZIP code or street address.
     Text with no letter that isn't a ZIP code (a date, a bare number) is not looked up,
     and neither is a ZIP code the ZIP lookup says doesn't exist: both are not found."""
-    location = (location or "").strip() or config.DEFAULT_LOCATION
+    own = company.current()
+    location = (location or "").strip() or own.address or config.DEFAULT_LOCATION
+    if own.company and own.company.located and _place_key(location) == _place_key(own.address):
+        return Place(*own.shop, own.own_label)       # a signed-up company's shop, as set up
     found = _coordinates(location) or _KNOWN.get(_place_key(location))
     if found:
         return Place(*found)           # typed as coordinates, or known offline: no doubt

@@ -27,6 +27,10 @@ interface PageConfig {
   site: string;
   admin: string;
   area_miles: number;
+  /** The company's short name ("AARCO"; in sign-up mode the company's own). */
+  short: string;
+  /** Sign-up mode (leadgen/signup_mode.py): the Settings page is there. */
+  signup: boolean;
 }
 
 /** A mark or call that can still be undone: its id, and when that runs out (epoch seconds). */

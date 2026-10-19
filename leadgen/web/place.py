@@ -11,7 +11,7 @@ from typing import Any
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from .. import config
+from .. import company
 from ..geo import GeocodeError, LookupDown, Place, haversine_miles, miles_from_aarco
 from ..pipeline import SearchParams, locate
 from .search_form import FormError, _location
@@ -32,16 +32,17 @@ def where(params: SearchParams) -> dict[str, Any]:
     address or a place known offline). Raises GeocodeError."""
     found = locate(params)
     lat, lon, label = found
-    miles = miles_from_aarco(lat, lon)
+    miles, area = miles_from_aarco(lat, lon), company.current().area_miles
     return {"label": label, "lat": round(lat, 5), "lon": round(lon, 5),
-            "miles": round(miles, 1), "outside": miles > config.SERVICE_AREA_MILES,
-            "area_miles": config.SERVICE_AREA_MILES, "confirm": f"{lat:.5f},{lon:.5f}",
+            "miles": round(miles, 1), "outside": miles > area,
+            "area_miles": area, "confirm": f"{lat:.5f},{lon:.5f}",
             "uncertain": found.doubt if isinstance(found, Place) else ""}
 
 
 def far_message(place: dict[str, Any]) -> str:
-    return (f"“{place['label']}” is {place['miles']:,.0f} miles from AARCO's shop, outside "
-            f"AARCO's area (about {place['area_miles']:g} miles around it).")
+    own = company.current().short_name
+    return (f"“{place['label']}” is {place['miles']:,.0f} miles from {own}'s shop, outside "
+            f"{own}'s area (about {place['area_miles']:g} miles around it).")
 
 
 def doubt_message(place: dict[str, Any]) -> str:

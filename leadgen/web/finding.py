@@ -19,7 +19,7 @@ from typing import Any
 from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from .. import THREAD_PREFIX, alerts, config, daily, fillin, interrupted, saved, store
+from .. import THREAD_PREFIX, alerts, allowance, company, config, daily, fillin, interrupted, saved, store
 from ..geo import GeocodeError, LookupDown
 from ..localtime import date_time_text
 from ..pipeline import PipelineError, RunResult, SearchParams, SearchStopped, run
@@ -309,12 +309,26 @@ def _claim(params: SearchParams, place: dict[str, Any]) -> str | tuple[Response,
     return day
 
 
+def _not_allowed() -> str | None:
+    """Sign-up mode: why this company can't search now (its trial or plan, this month's
+    searches used up, or its shop not set up yet), or None. AARCO's site: None."""
+    own = company.current().company
+    if own is None:
+        return None
+    if not own.located:
+        return "Set up your shop's address in Settings first: searches and the map are centred on it."
+    return allowance.refusal(own)
+
+
 @bp.post("/search")
 def search() -> ResponseReturnValue:
     if not same_origin():
         abort(403)
     if config.switched_on(config.SEARCH_PAUSED_ENV):
         return jsonify({"error": SEARCH_PAUSED, "paused": True}), 503
+    refused = _not_allowed()
+    if refused:
+        return jsonify({"error": refused, "allowance": True}), 403
     try:
         params = parse_form(request.form)
     except FormError as exc:
@@ -346,7 +360,7 @@ def search() -> ResponseReturnValue:
     day = claimed
     job_id = uuid.uuid4().hex[:12]
     job = {"state": "running", "message": "Starting", "params": params,
-           "skipped": skipped_steps(params)}
+           "skipped": skipped_steps(params), "company": store.company_id()}
     job["progress"] = _Progress(job)
     with s.lock:
         s.jobs[job_id] = job
@@ -357,7 +371,8 @@ def search() -> ResponseReturnValue:
                 break
             del s.jobs[old]
     try:
-        threading.Thread(target=_worker, args=(job, params, day), daemon=True,
+        # With the request's company (sign-up mode): the search saves into its data only.
+        threading.Thread(target=store.carry(_worker), args=(job, params, day), daemon=True,
                          name=f"{THREAD_PREFIX}search {day}").start()
     except RuntimeError:
         log.exception("Starting the search thread failed")
@@ -370,7 +385,7 @@ def search() -> ResponseReturnValue:
 
 @bp.get("/status/<job_id>")
 def status(job_id: str) -> ResponseReturnValue:
-    job = state().jobs.get(job_id) or abort(404)
+    job = state().job(job_id) or abort(404)
     progress = job["progress"]
     body = {"state": job["state"], "message": job["message"], "steps": STEPS,
             "stopping": job["state"] == "running" and job["message"].startswith("Stopping"),

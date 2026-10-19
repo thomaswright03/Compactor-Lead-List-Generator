@@ -18,7 +18,7 @@ const ANSWERS = { yes: "Yes", no: "No", unchecked: "Not checked yet" };
 // A group's pins in a circle's description ("12 Yes, 3 No, 40 not checked yet").
 /** @type {Record<string, string>} */
 const MIX_WORDS = { yes: "Yes", no: "No", unchecked: "not checked yet",
-                    competitor: "competitors or AARCO" };
+                    competitor: `competitors or ${OWN}` };
 // The order of a pin's fields as the server sends them (area_map.FIELDS).
 const PIN_FIELDS = "key,lat,lon,group,name,tier,score,phone,verified_phone,address,outcome," +
   "called,closed,kind";
@@ -552,7 +552,7 @@ function aarcoPin(map, data) {
   aarcoMarker.bindPopup(() => {
     const box = el("div", undefined, "pin-box");
     box.append(el("strong", data.aarco.company), el("div", data.aarco.address),
-               el("div", `The ${data.miles}-mile circle is AARCO's area: searches are meant for ` +
+               el("div", `The ${data.miles}-mile circle is ${OWN}'s area: searches are meant for ` +
                          "it, and Miles on the Leads page are measured from here.", "sub"));
     return box;
   }, { ...POPUP, maxWidth: 280 });
@@ -568,7 +568,7 @@ function pinBox(row) {
   box.append(el("strong", name));
   if (group === "competitor") {
     box.append(el("div", kind === "Competitor" ? "Competitor: flagged, not a prospect"
-      : kind === "Parent company" ? "AARCO's parent company" : "AARCO's own listing", "sub"));
+      : kind === "Parent company" ? `${OWN}'s parent company` : `${OWN}'s own listing`, "sub"));
   } else {
     const word = TIER_WORDS[tier] || "";
     box.append(el("div", `Tier ${tier}${word ? ` (${word})` : ""} · score ${score}`, "sub"));

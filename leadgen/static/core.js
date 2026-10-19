@@ -5,7 +5,7 @@
 /* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, TIMING, S, el,
    emptyBox, link, phoneLink, button, DOT, api, noAnswer, post, save, SLOW_SAVE, fmtTime, serverNow,
    leftOf, problem, loadingCue, themeChoice, applyTheme, myName, withName, byWho, parseHash,
-   readLeadView, route, writeHash, loggedOut */
+   readLeadView, route, writeHash, loggedOut, OWN */
 // An element of the page by its id: an input, a dialog, a button... (typed `any`, as the page's
 // ids name every kind; the type check still catches a misspelt function or variable).
 /** @type {(id: string) => any} */
@@ -19,10 +19,14 @@ const CONFIG = /** @type {PageConfig} */ (JSON.parse($("page-config").textConten
 const OUTCOMES = CONFIG.outcomes;
 const PAUSED = CONFIG.paused;
 const SITE = CONFIG.site;
+// The company's short name, where the page says whose shop or area ("AARCO's shop").
+const OWN = CONFIG.short;
 /** @type {Record<string, string>} */
 const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", map: "Map", stats: "Stats",
-                 customers: "Current customers" };
-const PAGES = ["find", "leads", "calls", "map", "stats", "customers"];
+                 customers: "Current customers", settings: "Settings" };
+// Sign-up mode adds the company's Settings (a page of the server's own forms).
+const PAGES = ["find", "leads", "calls", "map", "stats", "customers",
+               ...(CONFIG.signup ? ["settings"] : [])];
 // A row just marked Yes or No stays where it is (showing its answer and Undo) for this long
 // after the pointer leaves the table, so a double-click can never land on the next business.
 const PIN_MS = 5000;
@@ -462,9 +466,13 @@ function route() {
   for (const p of PAGES) $(`page-${p}`).hidden = p !== page;
   if (page !== shownPage) { shownPage = page; toTop(); }
   document.title = `${TITLES[page]} · ${SITE}`;
-  $("customers-link").classList.toggle("on", page === "customers");
-  if (page === "customers") $("customers-link").setAttribute("aria-current", "page");
-  else $("customers-link").removeAttribute("aria-current");
+  for (const side of ["customers", "settings"]) {
+    const link = $(`${side}-link`);
+    if (!link) continue;
+    link.classList.toggle("on", page === side);
+    if (page === side) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
   $all("nav a").forEach((a) => {
     a.classList.toggle("on", a.dataset.page === page);
     if (a.dataset.page === page) a.setAttribute("aria-current", "page");

@@ -10,15 +10,18 @@ nothing is saved and Yelp is paused (its daily limit could not be kept).
 """
 
 import atexit
+import contextvars
+import functools
 import logging
 import os
 import re
 import sqlite3
 import threading
 import time
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any
+from pathlib import Path
+from typing import Any, ParamSpec, TypeVar
 
 # Imported here, while the site's code loads, never first inside a request or the wake-up
 # thread: two threads importing psycopg at the same moment can leave one of them with a
@@ -149,6 +152,47 @@ TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "m
           "search_failures", "call_undos", "problems", "made_by", "switches", "merged_leads",
           "removed_leads", "search_runs", "search_found", "lead_contacts", "site_starts",
           "source_status", "calls_withdrawn", "customer_list", "customer_keys")
+# Sign-up mode (signup_mode.py): the accounts, kept in the base database (the one used
+# with no company set, see _database), never inside a company's own. Apart from SCHEMA,
+# so they aren't created in every company's schema and the backup (backup.py, which
+# copies SCHEMA's tables) stays as it was; created when accounts.py first uses them
+# (with_accounts), so AARCO's own database never gets them.
+# companies: each company that signed up, its own details (company.py reads them) and
+# its plan (plan, status: trialing / active / past_due / canceled; trial_ends_at; the
+# Stripe ids for the billing to come). users: who can log in, each in one company
+# (role owner or member), the password as werkzeug.security's hash. tokens: the links
+# emailed for verifying an email address, resetting a password and joining a company
+# (an invite), each kept only as its SHA-256, used once and until it expires.
+ACCOUNT_SCHEMA = [
+    """CREATE TABLE IF NOT EXISTS companies (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, short_name TEXT NOT NULL,
+        address TEXT NOT NULL DEFAULT '', lat DOUBLE PRECISION, lon DOUBLE PRECISION,
+        radius_miles DOUBLE PRECISION NOT NULL, search_words TEXT NOT NULL DEFAULT '[]',
+        competitors TEXT NOT NULL DEFAULT '[]', created_at DOUBLE PRECISION NOT NULL,
+        plan TEXT NOT NULL, status TEXT NOT NULL, trial_ends_at DOUBLE PRECISION,
+        stripe_customer_id TEXT, stripe_subscription_id TEXT)""",
+    """CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL,
+        name TEXT NOT NULL, company_id TEXT NOT NULL, role TEXT NOT NULL,
+        created_at DOUBLE PRECISION NOT NULL, email_verified_at DOUBLE PRECISION)""",
+    "CREATE INDEX IF NOT EXISTS users_by_company ON users (company_id)",
+    """CREATE TABLE IF NOT EXISTS tokens (
+        hash TEXT PRIMARY KEY, kind TEXT NOT NULL, user_id TEXT, email TEXT NOT NULL,
+        company_id TEXT, expires_at DOUBLE PRECISION NOT NULL, used_at DOUBLE PRECISION,
+        created_at DOUBLE PRECISION NOT NULL)""",
+]
+ACCOUNT_TABLES = ("companies", "users", "tokens")
+
+# The company whose data this thread (a web request, or a search it started) works on
+# (sign-up mode): its id, or None for the base database (AARCO's own site, the command
+# line, and the accounts above). Set for each web request (web/accounts.py) and carried
+# into the background threads a request starts (carry).
+_company: contextvars.ContextVar[str | None] = contextvars.ContextVar("company", default=None)
+# A company's id: what its schema (Postgres) and file (SQLite) are named after.
+_COMPANY_ID = re.compile(r"^[a-z0-9]{6,40}$")
+# How a company's database key names its schema after the base URL (Postgres).
+_SCHEMA_MARK = " |schema="
+
 # Up to this many ids are looked up by id (in chunks); more read the whole table.
 BY_ID_LIMIT = 1000
 _CHUNK = 500
@@ -279,14 +323,75 @@ def rows_for(db: Db, select: str, column: str, ids: Iterable[str], order: str = 
     return rows
 
 
+def company_id() -> str | None:
+    """The company this thread works on (sign-up mode), or None for the base database."""
+    return _company.get()
+
+
+def schema_name(company: str) -> str:
+    """The Postgres schema of a company's data: c_ and its id."""
+    if not _COMPANY_ID.match(company):
+        raise ValueError("not a company id")
+    return f"c_{company}"
+
+
+def set_company(company: str | None) -> contextvars.Token[str | None]:
+    """Work on this company's data from now on in this thread (None: the base database);
+    give the token to reset_company to go back."""
+    if company is not None:
+        schema_name(company)            # a bad id never reaches a schema or file name
+    return _company.set(company)
+
+
+def reset_company(token: contextvars.Token[str | None]) -> None:
+    _company.reset(token)
+
+
+@contextmanager
+def for_company(company: str | None) -> Iterator[None]:
+    """Inside, connect() reaches this company's data (None: the base database, where the
+    accounts are)."""
+    token = set_company(company)
+    try:
+        yield
+    finally:
+        reset_company(token)
+
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+def carry(fn: Callable[_P, _T]) -> Callable[_P, _T]:
+    """fn, to run in another thread with this thread's company (and everything else kept
+    in context variables): a search a company starts saves into that company's data.
+    Each call takes its own copy, so one context is never entered by two threads."""
+    context = contextvars.copy_context()
+    return functools.partial(context.run, fn)
+
+
+def database_key() -> str:
+    """Which database connect() reaches now (the key of the caches kept per database, Db.key)."""
+    return _database()[0]
+
+
+def company_file(company: str) -> Path:
+    """A company's own SQLite file (no DATABASE_URL: local use and the tests)."""
+    return http.CACHE_DIR / "companies" / f"{company}.db"
+
+
 def _database() -> tuple[str, bool]:
     """(which database, is it Postgres): the DATABASE_URL, or the local SQLite file's path.
-    Raises Unavailable on Render without DATABASE_URL."""
-    url = database_url()
+    With a company set (sign-up mode), that company's own: on Postgres the same database
+    with the company's schema, on SQLite a file of its own. Raises Unavailable on Render
+    without DATABASE_URL."""
+    url, company = database_url(), _company.get()
     if url:
-        return url, True
+        return (url if company is None else f"{url}{_SCHEMA_MARK}{schema_name(company)}"), True
     if on_render():
         raise Unavailable("no database is connected yet (DATABASE_URL is not set in Render)")
+    if company is not None:
+        return str(company_file(company).resolve()), False
     return str((http.CACHE_DIR / "leadgen.db").resolve()), False
 
 
@@ -316,16 +421,22 @@ def _reason(exc: BaseException) -> str:
 def _new_connection(key: str, postgres: bool) -> Db:
     """A new connection; the first one in this process also creates any missing tables."""
     conn: Any
+    url, _, schema = key.partition(_SCHEMA_MARK)
     if postgres:
         try:
-            conn = psycopg.connect(key, autocommit=True, connect_timeout=15)
+            if schema:
+                # A company's connections see only its own schema: its tables, never the base's.
+                conn = psycopg.connect(url, autocommit=True, connect_timeout=15,
+                                       options=f"-c search_path={schema}")
+            else:
+                conn = psycopg.connect(url, autocommit=True, connect_timeout=15)
         except (psycopg.Error, OSError) as exc:
             global last_failure
             log.warning("Database connection failed: %s: %s", exc.__class__.__name__, _reason(exc))
             last_failure = (time.time(), f"{exc.__class__.__name__}: {_reason(exc)}")
             raise Unavailable("the database could not be reached") from exc
     else:
-        http.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        Path(key).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(key, timeout=30, isolation_level=None, check_same_thread=False)
     db = Db(conn, postgres, key)
     try:
@@ -333,6 +444,8 @@ def _new_connection(key: str, postgres: bool) -> Db:
             # Once per process and database; on SQLite also when the file is new (a
             # deleted cache folder), as the tables went with it.
             if key not in _ready or (not postgres and not _has_tables(db)):
+                if schema:
+                    db.run(f"CREATE SCHEMA IF NOT EXISTS {schema}")
                 _create_tables(db)
                 _ready.add(key)
     except Exception:
@@ -343,6 +456,25 @@ def _new_connection(key: str, postgres: bool) -> Db:
 
 def _has_tables(db: Db) -> bool:
     return db.one("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'search_found'") is not None
+
+
+def _has_accounts(db: Db) -> bool:
+    return db.one("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tokens'") is not None
+
+
+def with_accounts(db: Db) -> Db:
+    """The base database's connection, its account tables (ACCOUNT_SCHEMA) created if
+    missing: once per process (accounts.py asks before each use), so AARCO's own database
+    gets them only once sign-up mode uses them."""
+    if _SCHEMA_MARK in db.key or Path(db.key).parent.name == "companies":
+        raise ValueError("the accounts are kept in the base database only")
+    marker = db.key + " |accounts"
+    if marker in _ready and (db.postgres or _has_accounts(db)):
+        return db
+    with _lock:
+        _create_tables(db, ACCOUNT_SCHEMA)
+        _ready.add(marker)
+    return db
 
 
 def _idle_now(db: Db) -> bool:
@@ -420,10 +552,10 @@ def close_pool() -> None:
 atexit.register(close_pool)
 
 
-def _create_tables(db: Db) -> None:
+def _create_tables(db: Db, schema: Sequence[str] = SCHEMA) -> None:
     for attempt in range(3):
         try:
-            for statement in SCHEMA:
+            for statement in schema:
                 db.run(statement)
             return
         except Exception as exc:
@@ -436,13 +568,15 @@ def _create_tables(db: Db) -> None:
 @contextmanager
 def connect() -> Iterator[Db]:
     """A connection (autocommit) for a few statements; raises Unavailable when there
-    is no database. Inside scope() every connect() shares one connection."""
+    is no database. Inside scope() every connect() to the same database (the request's
+    company's, or the base one with the accounts) shares one connection."""
     shared = getattr(_local, "scope", None)
     if shared is not None:
-        if shared["db"] is None:
-            shared["db"] = open_db()
+        key = _database()[0]
+        if key not in shared["dbs"]:
+            shared["dbs"][key] = open_db()
             shared["opened"] += 1
-        yield shared["db"]
+        yield shared["dbs"][key]
         return
     db = open_db()
     try:
@@ -454,17 +588,18 @@ def connect() -> Iterator[Db]:
 def begin_scope() -> None:
     """From now on this thread's connect() calls share one connection (opened when
     first needed) until end_scope(): one connection per web request."""
-    _local.scope = {"db": None, "opened": 0}
+    _local.scope = {"dbs": {}, "opened": 0}
 
 
 def end_scope() -> int:
-    """Give back the shared connection; returns how many were taken (0 or 1)."""
+    """Give back the shared connections; returns how many were taken (0 or 1 for each
+    database the request used)."""
     shared = getattr(_local, "scope", None)
     _local.scope = None
     if not shared:
         return 0
-    if shared["db"] is not None:
-        release(shared["db"])
+    for db in shared["dbs"].values():
+        release(db)
     return int(shared["opened"])
 
 

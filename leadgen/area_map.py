@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-from . import config, daily, places
+from . import company, daily, places
 from .export import format_phone
 from .geo import haversine_miles
 from .localtime import date_time_text
@@ -130,11 +130,17 @@ def _area_title(name: str) -> str:
     return name[:1].upper() + name[1:]
 
 
-@lru_cache(maxsize=16)
-def areas(lat: float = config.SERVICE_CENTER[0], lon: float = config.SERVICE_CENTER[1],
-          miles: float = config.SERVICE_AREA_MILES) -> tuple[Area, ...]:
+def areas(lat: float | None = None, lon: float | None = None, miles: float | None = None) -> tuple[Area, ...]:
     """The areas a search of `miles` around (lat, lon) asks the map data in (by default
-    AARCO's area), nearest the centre first, each cut to the circle and named."""
+    AARCO's area, or in sign-up mode the company's), nearest the centre first, each cut to
+    the circle and named."""
+    own = company.current()
+    return _areas(own.center[0] if lat is None else lat, own.center[1] if lon is None else lon,
+                  own.area_miles if miles is None else miles)
+
+
+@lru_cache(maxsize=16)
+def _areas(lat: float, lon: float, miles: float) -> tuple[Area, ...]:
     circle = _circle(lat, lon, miles)
     found = []
     for n, box in enumerate(osm.area_boxes(lat, lon, miles), 1):
@@ -157,8 +163,8 @@ def search_areas(lat: float, lon: float, miles: float) -> tuple[Area, ...]:
     """The areas of a search of `miles` around (lat, lon), as the Map page draws and names
     them: a search of AARCO's area (around its shop, the service area's miles) gets the
     Map page's own areas, so the Find page counts and names exactly what the Map shows."""
-    if miles == config.SERVICE_AREA_MILES and \
-            haversine_miles(lat, lon, *config.SERVICE_CENTER) <= SAME_CENTRE_MILES:
+    own = company.current()
+    if miles == own.area_miles and haversine_miles(lat, lon, *own.center) <= SAME_CENTRE_MILES:
         return areas()
     return areas(round(lat, 5), round(lon, 5), float(miles))
 
@@ -175,14 +181,15 @@ def _of_aarcos_area(record: dict[str, Any]) -> bool:
     if "leads" not in record or record.get("source", "auto") not in ("auto", "osm", "both"):
         return False
     try:
-        if float(record.get("radius") or 0) != config.SERVICE_AREA_MILES:
+        if float(record.get("radius") or 0) != company.current().area_miles:
             return False
     except (TypeError, ValueError):
         return False
     centre = record.get("center")
     if isinstance(centre, list) and len(centre) == 2:
         try:
-            return haversine_miles(float(centre[0]), float(centre[1]), *config.SERVICE_CENTER) <= SAME_CENTRE_MILES
+            return haversine_miles(float(centre[0]), float(centre[1]),
+                                   *company.current().center) <= SAME_CENTRE_MILES
         except (TypeError, ValueError):
             return False
     miles = record.get("miles")              # recorded before the centre was kept
@@ -474,7 +481,8 @@ def page(leads: list[Lead], record: dict[str, Any] | None, unread: bool = False)
     """Everything the Map page draws: AARCO's pin, the circle, the areas and how the
     latest search of the area covered them (`unread`: the searches couldn't be read),
     and a pin for every saved lead that has a map position (with how many have none)."""
-    lat, lon = config.SERVICE_CENTER
+    own = company.current()
+    lat, lon = own.center
     drawn = areas()
     covered = coverage(record, drawn)
     if unread:
@@ -485,10 +493,10 @@ def page(leads: list[Lead], record: dict[str, Any] | None, unread: bool = False)
     for lead in shown:
         counts[group(lead)] += 1
     return {
-        "aarco": {"name": "AARCO", "company": config.OWN_COMPANY, "address": config.OWN_ADDRESS,
-                  "lat": config.OWN_COORDS[0], "lon": config.OWN_COORDS[1]},
-        "center": [lat, lon], "miles": config.SERVICE_AREA_MILES,
-        "circle": [_point(p) for p in _circle(lat, lon, config.SERVICE_AREA_MILES)],
+        "aarco": {"name": own.short_name, "company": own.name, "address": own.address,
+                  "lat": own.shop[0], "lon": own.shop[1]},
+        "center": [lat, lon], "miles": own.area_miles,
+        "circle": [_point(p) for p in _circle(lat, lon, own.area_miles)],
         "areas": [{"n": a.n, "name": a.name, "towns": list(a.towns), "outline": [_point(p) for p in a.outline],
                    "label": _point(a.label), "status": status,
                    "status_text": PARTLY_FILLING if status == PARTLY and covered.filling else STATUS_TEXT[status]}

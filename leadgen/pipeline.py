@@ -8,7 +8,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from . import config, signup_mode
+from . import company, config, signup_mode
 from .dedupe import SAME_PHONE_MILES, dedupe
 from .geo import geocode, haversine_miles
 from .models import Lead
@@ -383,7 +383,7 @@ def _ask_google(params: SearchParams, keywords: list[str], api_key: str, centre:
                 progress: Progress | None, got: _Found) -> None:
     # Most specific first, so a request cap trims generic phrases, never the user's
     # keywords or the competitor names (searched so they show up flagged).
-    queries = list(dict.fromkeys(keywords + list(config.COMPETITORS) + config.GOOGLE_QUERIES))
+    queries = list(dict.fromkeys(keywords + list(company.current().competitors) + config.GOOGLE_QUERIES))
     cap = params.max_requests or google_places.estimate_requests(queries, params.grid)
     if progress:
         progress(Step(f"Google: {len(queries)} phrases x {params.grid} area(s), up to {cap} requests",

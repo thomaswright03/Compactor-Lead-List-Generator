@@ -66,15 +66,16 @@ def not_set_up_text() -> str:
     return f"Email is not set up ({USER_ENV} and {PASSWORD_ENV} are not both set)."
 
 
-def send(subject: str, body: str) -> str:
-    """Send one plain-text email to the recipient; returns the address it went to.
-    Raises Unset when email is not set up, else a RuntimeError naming the failure's
-    class and words (never the user or the password)."""
+def send(subject: str, body: str, to: str | None = None) -> str:
+    """Send one plain-text email to the recipient (or to `to`: sign-up mode's links to
+    the people who signed up); returns the address it went to. Raises Unset when email is
+    not set up, else a RuntimeError naming the failure's class and words (never the user
+    or the password)."""
     if not set_up():
         raise Unset(not_set_up_text())
     host = _env(HOST_ENV) or DEFAULT_HOST
     user, password = _env(USER_ENV), _password(host)
-    to = recipient()
+    to = to or recipient()
     message = EmailMessage()
     message["From"] = _env(FROM_ENV) or user
     message["To"] = to

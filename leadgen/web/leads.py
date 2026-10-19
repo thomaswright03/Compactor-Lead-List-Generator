@@ -329,15 +329,24 @@ class Listing:
         return rows
 
 
-_listing: tuple[str, Listing] | None = None       # (the database, its list as last read)
+# Each database's list as last read (in sign-up mode one for each company), the most
+# recently used last; at most LISTINGS_KEPT are kept.
+_listings: dict[str, Listing] = {}
+LISTINGS_KEPT = 50
 _listing_lock = threading.Lock()
+
+
+def forget_listing() -> None:
+    """Read this database's list again next time (sign-up mode: the company's settings
+    changed, so its distances and own and competitor flags may have)."""
+    with _listing_lock:
+        _listings.pop(store.database_key(), None)
 
 
 def listing() -> Listing:
     """The saved list as it is now (Listing): as last read when nothing changed, with the
     changed leads read again after a click, or read in full. Raises LoadError with a plain
     message when it can't be read."""
-    global _listing
     read_at = time.time()             # before the fingerprint: a change after it is read again
     try:
         with store.connect() as db:
@@ -346,14 +355,17 @@ def listing() -> Listing:
         log.error("Loading the saved leads failed", exc_info=True)
         raise LoadError(db_message(exc)) from exc
     with _listing_lock:
-        kept = _listing[1] if _listing and _listing[0] == key else None
+        kept = _listings.pop(key, None)
         if kept and kept.key == fingerprint:
+            _listings[key] = kept
             return kept
         found = kept.updated(fingerprint, read_at) if kept else None
         if found is None:
             leads, _ = load_saved()
             found = Listing.read(fingerprint, read_at, leads)
-        _listing = (key, found)
+        _listings[key] = found
+        while len(_listings) > LISTINGS_KEPT:
+            del _listings[next(iter(_listings))]
         return found
 
 
@@ -738,7 +750,7 @@ def download(job_id: str, fmt: str) -> ResponseReturnValue:
             first = latest = None                  # the file is still useful without them
         info = saved_list_info(leads, first, latest, searched)
     else:
-        job = state().jobs.get(job_id)
+        job = state().job(job_id)
         if not job or job["state"] != "done":
             abort(404)
         try:

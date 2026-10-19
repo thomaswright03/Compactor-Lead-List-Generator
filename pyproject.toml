@@ -57,7 +57,8 @@ min_confidence = 60
 ignore_decorators = ["@bp.*", "@app.*"]
 ignore_names = ["quotePrefix", "font", "alignment", "hyperlink", "freeze_panes", "ref",
                 "permanent", "TABLES", "do_GET", "do_POST", "log_message",
-                "users", "searches_per_month", "lookups_per_month", "CARD_REQUIRED"]
+                "users", "searches_per_month", "lookups_per_month", "CARD_REQUIRED",
+                "ACCOUNT_TABLES", "stripe_customer_id", "stripe_subscription_id", "account_tokens"]
 
 # Type check (mypy). Run: python -m mypy   CI runs it on every push; a type error fails it.
 # Strict: every function in leadgen/ has parameter and return annotations, and mypy

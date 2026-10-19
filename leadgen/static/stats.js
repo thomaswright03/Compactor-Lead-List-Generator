@@ -8,7 +8,7 @@ function leftOutNote(s) {
   /** @type {(n: number, one: string, many: string) => string} */
   const count = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
   const parts = [rivals && count(rivals, "competitor", "competitors"),
-                 own && count(own, "AARCO listing", "AARCO listings")].filter(Boolean);
+                 own && count(own, `${OWN} listing`, `${OWN} listings`)].filter(Boolean);
   const one = s.left_out === 1;
   return `${parts.join(" and ")} ${one ? "is" : "are"} left out of these numbers: ` +
     (one ? "it is flagged in the list, but it isn't a prospect."

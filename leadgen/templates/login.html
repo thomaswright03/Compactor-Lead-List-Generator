@@ -6,59 +6,7 @@
 <title>Log in · {{ site_name }}</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 {% include "_theme.html" %}
-<style>
-  * { box-sizing:border-box; }
-  body { margin:0; min-height:100vh; display:flex; flex-direction:column; color:var(--ink);
-         font:var(--fs-base)/1.5 var(--font);
-         background:radial-gradient(1000px 600px at 10% -10%, rgba(143,194,250,.18), transparent 60%),
-                    radial-gradient(900px 500px at 110% 110%, rgba(214,177,106,.18), transparent 60%),
-                    linear-gradient(160deg, var(--side), var(--side-2)); background-color:var(--side); }
-  main { flex:1; display:grid; place-items:center; padding:var(--sp-5) var(--sp-4); }
-  .box { width:min(440px,100%); border:1px solid transparent; border-radius:var(--r-lg); padding:var(--sp-6) var(--sp-6) var(--sp-5);
-         background:radial-gradient(360px 180px at 0 0, var(--accent-tint), transparent 70%) padding-box,
-                    linear-gradient(var(--card), var(--card)) padding-box,
-                    linear-gradient(150deg, var(--gold), var(--line) 35%, var(--line) 65%, var(--accent-2)) border-box;
-         box-shadow:var(--shadow-lg), var(--highlight); animation:rise .5s var(--ease); }
-  @keyframes rise { from { transform:translateY(14px); } to { transform:none; } }
-  @media (prefers-reduced-motion: reduce) { .box { animation:none; } }
-  .brand { display:flex; flex-direction:column; align-items:flex-start; gap:var(--sp-3); }
-  .brand .logo { width:56px; height:56px; flex:none; border-radius:16px;
-                 box-shadow:0 0 0 1px var(--gold-soft), 0 10px 24px -8px var(--accent-glow); }
-  .brand strong { display:block; font-family:var(--serif); font-size:20px; font-weight:560; line-height:1.25; letter-spacing:-.01em; }
-  .brand span { color:var(--gold-text); font-variant-caps:all-small-caps; letter-spacing:.1em; font-size:var(--fs-md); font-weight:600; }
-  .box h1 { margin:var(--sp-5) 0 0; font-family:var(--serif); font-size:34px; font-weight:520; line-height:1.15; letter-spacing:-.02em; }
-  .box h1::after { content:""; display:block; width:64px; height:2px; margin-top:var(--sp-3); border-radius:2px;
-                   background:linear-gradient(90deg, var(--accent-2), var(--gold)); }
-  .purpose { margin:var(--sp-2) 0 0; color:var(--muted); }
-  form { display:flex; flex-direction:column; gap:var(--sp-4); margin-top:var(--sp-5); }
-  label { display:flex; flex-direction:column; gap:6px; font-weight:600; font-size:var(--fs-md); color:var(--ink-2);
-          font-variant-caps:all-small-caps; letter-spacing:.07em; }
-  input { font:inherit; font-size:var(--fs-base); font-variant-caps:normal; letter-spacing:0; font-weight:400; padding:var(--sp-3);
-          border:1px solid var(--line-strong); border-radius:var(--r-md);
-          color:var(--ink); background:var(--input); min-height:44px; transition:border-color .15s, box-shadow .15s; }
-  input:hover { border-color:var(--muted); }
-  input:focus { border-color:var(--accent-2); box-shadow:0 0 0 4px var(--accent-soft); outline:none; }
-  button { font:inherit; font-weight:600; border:0; border-radius:var(--r-pill); padding:var(--sp-3); color:var(--btn-ink);
-           background:linear-gradient(180deg, var(--btn), var(--btn-2)); cursor:pointer; min-height:50px; margin-top:var(--sp-2);
-           box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 1px 2px rgba(10,20,40,.2), 0 10px 22px -8px var(--accent-glow);
-           transition:transform .2s var(--ease), filter .2s var(--ease), box-shadow .25s var(--ease); }
-  button:hover { transform:translateY(-1px); filter:brightness(1.06); }
-  button:active { transform:none; filter:brightness(.97); }
-  input:focus-visible, button:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
-  /* The login ended mid-task (core.js loggedOut): what wasn't saved, above the form. */
-  .ended { margin:var(--sp-4) 0 0; padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm);
-           color:var(--warn-ink, var(--ink)); background:var(--warn-bg, transparent);
-           border:1px solid var(--warn-line, var(--line)); }
-  .error { color:var(--bad-ink); background:var(--pts-neg); border-radius:var(--r-sm); padding:var(--sp-2) var(--sp-3);
-           font-weight:600; margin:0; }
-  .help { margin:var(--sp-5) 0 0; padding-top:var(--sp-4); border-top:1px solid; border-image:linear-gradient(90deg, transparent, var(--gold), transparent) 1; font-size:var(--fs-sm); color:var(--muted); }
-  .help a { color:var(--accent); font-weight:600; white-space:nowrap; }
-  .help a:focus-visible { outline:3px solid var(--accent-2); outline-offset:1px; }
-  @media (pointer: coarse) { .help a { padding-block:14px; } }   /* a 44px tap area; the lines don't move */
-  @media (max-width: 420px) { .box { padding:var(--sp-5); } }
-  footer { text-align:center; color:var(--side-ink); font-size:var(--fs-sm); padding:var(--sp-4); }
-  footer a { color:var(--side-ink); display:inline-flex; align-items:center; justify-content:center; min-height:44px; min-width:44px; }
-</style>
+{% include "_account_style.html" %}
 </head>
 <body>
 <main>

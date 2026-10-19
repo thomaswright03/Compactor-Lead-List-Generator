@@ -18,11 +18,12 @@
       <a href="#find" data-page="find" aria-label="Find leads"><span>Find<span class="lw"> leads</span></span></a>
       <a href="#leads" data-page="leads" title="Saved businesses not yet marked Yes or No">Leads <span class="count" id="n-leads" hidden></span></a>
       <a href="#calls" data-page="calls" title="Businesses with at least one call logged">Calls <span class="count" id="n-calls" hidden></span></a>
-      <a href="#map" data-page="map" title="AARCO's area, its search areas and every saved business on a map">Map</a>
+      <a href="#map" data-page="map" title="{{ company_short }}'s area, its search areas and every saved business on a map">Map</a>
       <a href="#stats" data-page="stats">Stats</a>
     </nav>
     <div class="side-bottom" id="side-bottom">
       <a href="#customers" class="side-link" id="customers-link" title="Your current customers, kept off the lead lists">Current customers</a>
+      {% if account.signup %}<a href="#settings" class="side-link" id="settings-link" title="Your company, its shop and area, and your team">Settings</a>{% endif %}
       <button type="button" class="tour-btn" id="tour-btn">Tutorial</button>
       <div class="me" id="me">
         <span>Your name: <strong id="me-name">not set</strong></span>
@@ -45,10 +46,16 @@
          waking up after a quiet spell (start.js). Shown only after a moment (app.css). -->
     <div class="starting" id="starting" role="status"><span class="spinner"></span>
       <span id="starting-text">Loading your leads…</span></div>
+    {% if account.signup and not account.me.verified %}<!-- Sign-up mode: the email isn't confirmed yet (web/accounts.py). -->
+    <form class="card verify-note" id="verify-note" method="post" action="/verify/again" role="status">
+      <strong>Verify your email.</strong> We sent a link to {{ account.me.email }}; open it to confirm the address.
+      <button type="submit" class="link">Send it again</button></form>{% endif %}
     <!-- Find leads -->
     <section class="page" id="page-find" hidden>
       <div class="page-head"><h1>Find leads</h1>
-        <p>Search for businesses likely to run a baler or compactor. New finds are added to your saved leads.</p></div>
+        <p>Search for businesses likely to run a baler or compactor. New finds are added to your saved leads.</p>
+        {% if account.signup %}<p class="muted" id="allowance">{{ account.allowance }}{% if not account.located %}
+          Set up your shop's address in <a href="#settings">Settings</a> first.{% endif %}</p>{% endif %}</div>
       <div class="problem" id="paused-box"{% if not switches.search_paused %} hidden{% endif %}>
         <div><strong>Searching is paused</strong><span class="muted">{{ paused_text }}</span></div>
       </div>
@@ -71,7 +78,7 @@
           <summary>More about these fields</summary>
           <ul>
             <li><strong>Search around:</strong> a town name on its own means the Utah one. Before the search starts,
-              you see the place found and how far it is from AARCO's shop.</li>
+              you see the place found and how far it is from {{ company_short }}'s shop.</li>
             <li><strong>How far:</strong> 1 to 100 miles around that place.</li>
             <li><strong>Extra search words:</strong> the standard words ({{ defaults.keywords }}) are always searched,
               and anything you type here as well. Up to 20 words, each up to 60 characters.</li>
@@ -219,7 +226,7 @@
           </div>
         </div>
         <div id="leads-note"></div>
-        <p class="hint-line" id="competitor-hint" hidden>Competitors and AARCO's own listings aren't prospects, so
+        <p class="hint-line" id="competitor-hint" hidden>Competitors and {{ company_short }}'s own listings aren't prospects, so
           they aren't asked Yes / No or counted in Stats.</p>
         <p class="hint-line" id="closed-hint" hidden>A later search found these businesses closed for good.
           They keep their marks and calls, and Stats still counts them.</p>
@@ -262,13 +269,13 @@
          business (static/map.js; Leaflet is loaded the first time this page opens). -->
     <section class="page" id="page-map" hidden>
       <div class="page-head"><h1>Map</h1>
-        <p>AARCO's {{ area_miles|int }}-mile area, its search areas and every saved business. Tap a pin for its details.</p></div>
+        <p>{{ company_short }}'s {{ area_miles|int }}-mile area, its search areas and every saved business. Tap a pin for its details.</p></div>
       <div id="map-problem"></div>
       <div id="map-body">
         <div class="map-layout">
           <div class="map-main">
             <div class="card map-empty" id="map-empty" hidden></div>
-            <div class="map-box" id="map-box" role="region" aria-label="Map of AARCO's area and the saved businesses"
+            <div class="map-box" id="map-box" role="region" aria-label="Map of {{ company_short }}'s area and the saved businesses"
                  aria-describedby="map-coverage">
               <div id="map" data-js="/static/vendor/leaflet/leaflet.js?v={{ asset_version }}"
                    data-css="/static/vendor/leaflet/leaflet.css?v={{ asset_version }}"></div>
@@ -294,14 +301,14 @@
                 <span class="sym pin unchecked" aria-hidden="true"></span><span>Not checked yet
                 <span class="n" id="map-n-unchecked"></span></span></label>
               <label class="check"><input type="checkbox" data-group="competitor" checked>
-                <span class="sym comp" aria-hidden="true"></span><span>Competitors and AARCO's own listing
+                <span class="sym comp" aria-hidden="true"></span><span>Competitors and {{ company_short }}'s own listing
                 <span class="n" id="map-n-competitor"></span></span></label>
             </fieldset>
             <fieldset class="card map-legend">
               <legend>Also on the map</legend>
-              <div class="key"><span class="sym aarco" aria-hidden="true"></span><span><strong>AARCO</strong>'s shop<span
+              <div class="key"><span class="sym aarco" aria-hidden="true"></span><span><strong>{{ company_short }}</strong>'s shop<span
                 id="map-aarco-address"></span></span></div>
-              <div class="key"><span class="sym ring" aria-hidden="true"></span><span>The {{ area_miles|int }}-mile area around AARCO</span></div>
+              <div class="key"><span class="sym ring" aria-hidden="true"></span><span>The {{ area_miles|int }}-mile area around {{ company_short }}</span></div>
               <label class="check"><input type="checkbox" id="map-show-areas" checked> <span>Search areas, shaded by the latest search:</span></label>
               <div class="key sub-key"><span class="sym area searched" aria-hidden="true"></span><span>Searched</span></div>
               <div class="key sub-key"><span class="sym area partly" aria-hidden="true"></span><span>Partly searched, or not searched (dashed edge)</span></div>
@@ -392,6 +399,42 @@
         </div>
       </div>
     </section>
+    {% if account.signup %}<!-- Sign-up mode: the company's own settings and team (web/accounts.py). -->
+    <section class="page" id="page-settings" hidden>
+      <div class="page-head"><h1>Settings</h1>
+        <p>Your company, where your shop is, and who is on your team. Plan: {{ account.plan }}{% if account.trial_ends %},
+          free until {{ account.trial_ends }}{% endif %}.</p></div>
+      {% if account.settings_note %}<p class="card" id="settings-note" role="status">{{ account.settings_note }}</p>{% endif %}
+      {% if account.owner %}
+      <form class="card" id="settings-form" method="post" action="/settings">
+        <h2>Your company</h2>
+        <div class="form-grid">
+          <label>Company name <input name="name" maxlength="80" value="{{ account.settings.name }}" required></label>
+          <label>Shop address <input name="address" maxlength="200" value="{{ account.settings.address }}" required>
+            <span class="hint">Searches, distances and the map are centred here.</span></label>
+          <label>Your area (miles) <input name="radius" type="number" min="1" max="100" step="1" value="{{ account.settings.radius }}" required>
+            <span class="hint">A search farther away asks you to confirm it first.</span></label>
+          <label>Extra search words <input name="search_words" maxlength="1200" value="{{ account.settings.search_words }}">
+            <span class="hint">Separate with commas. Always searched, with the standard words ({{ account.standard_words }}).</span></label>
+          <label>Competitors <input name="competitors" maxlength="1700" value="{{ account.settings.competitors }}">
+            <span class="hint">Business names, separated with commas. Their listings are flagged, never offered as leads.</span></label>
+        </div>
+        <div class="go-row"><button type="submit">Save settings</button></div>
+      </form>
+      <div class="card" id="team">
+        <h2>Your team</h2>
+        <ul>{% for person in account.team %}<li>{{ person.name }} ({{ person.email }}){% if person.owner %}, owner{% endif %}</li>{% endfor %}
+          {% for email in account.invited %}<li>{{ email }}, invited</li>{% endfor %}</ul>
+        {% if account.seats_left %}<form method="post" action="/settings/invite" class="form-grid">
+          <label>Invite a teammate by email <input name="email" type="email" maxlength="254" required></label>
+          <div class="go-row"><button type="submit">Send the invite</button></div></form>
+        {% else %}<p class="muted">Your plan has no room for another person.</p>{% endif %}
+      </div>
+      {% else %}
+      <div class="card"><p>{{ account.settings.name }}'s settings are kept by its owner. Your shop: {{ account.settings.address or "not set up yet" }}.</p></div>
+      {% endif %}
+    </section>
+    {% endif %}
     <footer class="copy">© {{ year }} Wright AI Solutions. All rights reserved. · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></footer>
    </div>
   </main>
@@ -437,7 +480,7 @@
 <!-- A place outside AARCO's area needs a second, explicit yes (web/finding.py search). -->
 <dialog id="far-dlg" aria-labelledby="far-title" aria-describedby="far-why">
   <form class="dlg" method="dialog" id="far-form">
-    <h2 id="far-title">Search outside AARCO's area?</h2>
+    <h2 id="far-title">Search outside {{ company_short }}'s area?</h2>
     <p id="far-why"></p>
     <p><strong>This uses today's only search.</strong> Not the place you meant? Go back and type a ZIP code,
       or the town with its state (Murray, UT).</p>
@@ -525,7 +568,7 @@
   </div>
 </dialog>
 
-<script id="page-config" type="application/json">{{ {"outcomes": outcomes, "paused": switches.search_paused, "google_on": google_on, "yelp_on": yelp_on, "flagged": flagged, "parent_flag": parent_flag, "site": site_name, "admin": admin, "area_miles": area_miles}|tojson }}</script>
+<script id="page-config" type="application/json">{{ {"outcomes": outcomes, "paused": switches.search_paused, "google_on": google_on, "yelp_on": yelp_on, "flagged": flagged, "parent_flag": parent_flag, "site": site_name, "admin": admin, "area_miles": area_miles, "short": company_short, "signup": account.signup}|tojson }}</script>
 <script src="/static/core.js?v={{ asset_version }}" defer></script>
 <script src="/static/leads.js?v={{ asset_version }}" defer></script>
 <script src="/static/calls.js?v={{ asset_version }}" defer></script>

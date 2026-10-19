@@ -1349,3 +1349,41 @@ fingerprint can't be read back into the customer, though a phone number's could 
 by trying every number, so the fingerprints are treated as private data too (they are only
 in the database and its encrypted backups).
 
+
+## Sign-up mode (any company can sign up)
+
+Off unless `LEADGEN_SIGNUP=1` (`leadgen/signup_mode.py`, `on()`); without it the site is
+AARCO's own, with its one shared login, exactly as described above. With it:
+
+- **Accounts** (`leadgen/accounts.py`) live in the base database (the one with no company
+  set): `companies` (name, short name, shop address and its coordinates, area in miles,
+  extra search words, competitors, plan, status `trialing` / `active` / `past_due` /
+  `canceled`, `trial_ends_at`, the Stripe ids for later), `users` (lower-case email,
+  werkzeug password hash, name, company, role `owner` / `member`, `email_verified_at`) and
+  `tokens` (the emailed links, kept only as their SHA-256: `verify`, `reset`, `invite`).
+  They are `store.ACCOUNT_SCHEMA`, apart from `store.SCHEMA`, so the backup is unchanged.
+- **Each company's data** is its own: `store.set_company(id)` / `store.for_company(id)`
+  make `connect()` reach that company's Postgres schema `c_<id>` (same `DATABASE_URL`,
+  `search_path` set; created with its tables on first use) or its SQLite file
+  (`CACHE_DIR/companies/<id>.db`). No company set is the base database. Every web request of
+  someone logged in sets it (`web/accounts.py require_account`, called by
+  `auth.require_login`) and puts it back at the end; the threads a request starts take it
+  with them (`store.carry`: the search, its heartbeat, the map fill-in, an alert). The
+  emergency switches, the sources' status and the problem list stay site-wide (base).
+- **Whose site it is**: `leadgen/company.py current()` returns the settings every page,
+  search and scoring rule reads (name, short name, site name, shop, area, radius, standard
+  search words, competitors, own-listing names, parent company): the company's in sign-up
+  mode, `config.py`'s otherwise. The site is then called "Lead Finder".
+- **Pages**: `/signup`, `/login` (email and password), `/logout`, `/forgot`,
+  `/reset/<token>`, `/verify/<token>`, `POST /verify/again`, `/invite/<token>`, `/setup`
+  (after signing up), `POST /settings` and `POST /settings/invite` (the owner's), and
+  `#settings` in the app. Logged out, `/` goes to `/welcome`. Links are emailed with
+  `mail.py`; without email set up they are written to the log instead. Sign-ups and reset
+  emails: 5 an hour per address; wrong passwords: as the shared login.
+- **Searches**: each company keeps one search a Utah day, plus its plan's searches a month
+  (`config.PLANS`, `leadgen/allowance.py`: `allowance()`, `can_search()`, `refusal()`); a
+  canceled or past-due plan, or an ended trial, can't search. A new company is on a 14-day
+  trial.
+- Set `SECRET_KEY` in sign-up mode (without it a random one is used, which logs everyone
+  out at every restart). `python -m leadgen backup` copies the base database only, not the
+  companies' schemas or the accounts.

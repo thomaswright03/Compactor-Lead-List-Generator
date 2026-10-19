@@ -8,6 +8,7 @@ config_brands.py (high-volume brands, the busy-site bonus). Every setting is rea
 config.X, wherever it is written.
 """
 
+from . import plans as _plans
 from .config_brands import *  # noqa: F403 - read as config.X (see above)
 from .config_categories import *  # noqa: F403
 from .config_names import *  # noqa: F403
@@ -19,7 +20,6 @@ from .config_names import *  # noqa: F403
 OWN_ADDRESS = "876 Fortune Rd, Salt Lake City, UT 84104"
 OWN_COORDS = (40.742060, -111.943408)
 DEFAULT_LOCATION = OWN_ADDRESS
-DEFAULT_CENTER = OWN_COORDS
 DEFAULT_RADIUS_MILES = 30.0
 # AARCO's area: searches are meant for about this far around the shop (SERVICE_CENTER).
 # A search whose place is farther away is only started once the person confirms it,
@@ -81,6 +81,18 @@ PARENT_ALIASES = ["ACE Recycling & Disposal", "ACE Recycling and Disposal", "ACE
                   "Ace Intermountain Recycling", "Ace Recycling"]
 PARENT_DOMAINS = ["acedisposal.com"]
 PARENT_ADDRESSES = ["1240 South Wallace Road, Salt Lake City"]
+
+# Sign-up mode (signup_mode.py): what each plan allows a company, from the plans and
+# prices in plans.py. searches: how many searches a calendar month (Utah time;
+# allowance.py counts them from the company's own search history, still one a day at
+# most); users: how many people can log in; phone_lookups: paid phone lookups a month
+# (for later, when paid lookups are offered). A new company is on "trial" for its first
+# plans.TRIAL_DAYS days.
+PLANS = {
+    "trial": {"label": "Free trial", "searches": 4, "users": 3, "phone_lookups": 0},
+    **{key: {"label": plan.name, "searches": plan.searches_per_month, "users": plan.users,
+             "phone_lookups": plan.lookups_per_month} for key, plan in _plans.PLANS.items()},
+}
 
 
 # Search phrases used with the Google Places text search. The user's keywords

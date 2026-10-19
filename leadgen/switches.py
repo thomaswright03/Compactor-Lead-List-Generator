@@ -4,7 +4,8 @@ Each switch (pause searching, Google off, Yelp off) is on when its environment
 variable is set (config.SEARCH_PAUSED_ENV ...: the backup, which needs a restart)
 or when someone switched it on in the site. The site's switches live in the
 database, so they take effect on the next request in every process, with no
-restart; who flipped each one, and when, is kept with it.
+restart; who flipped each one, and when, is kept with it. In sign-up mode they are the
+whole site's, in the base database, whichever company's request reads them.
 """
 
 import logging
@@ -43,7 +44,7 @@ def _read(name: str) -> tuple[bool, str, float | None, bool]:
     """(on, who, when, read) for the site's own switch; read is False when the
     database was there but didn't answer (the switch then counts as off)."""
     try:
-        with store.connect() as db:
+        with store.for_company(None), store.connect() as db:
             row = db.one("SELECT value, by_name, at FROM switches WHERE name = ?", (name,))
     except store.Unavailable:
         return False, "", None, True    # no database (the command line on Render): env only
@@ -76,7 +77,7 @@ def set_switch(name: str, on: bool, by: str = "") -> None:
     Raises store.Unavailable or a database error when it can't be saved."""
     if name not in NAMES:
         raise ValueError(f"unknown switch {name}")
-    with store.connect() as db:
+    with store.for_company(None), store.connect() as db:
         db.run("INSERT INTO switches (name, value, by_name, at) VALUES (?, ?, ?, ?) "
                "ON CONFLICT (name) DO UPDATE SET value = excluded.value, "
                "by_name = excluded.by_name, at = excluded.at",
