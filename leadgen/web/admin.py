@@ -1,13 +1,14 @@
 """The administrator's checks (Find leads, "For the site administrator"): Check sources
-and Send a test alert. Each is a plain form POST that answers with a result page
+and Send a test alert, and in sign-up mode the list of companies (their plan, status,
+trial end and people). Each is a plain form POST that answers with a result page
 (templates/admin_check.html) and a way back; the section must be unlocked first."""
 
 import logging
 
-from flask import Blueprint, render_template, request
+from flask import Blueprint, abort, render_template, request
 from flask.typing import ResponseReturnValue
 
-from .. import alerts, checks
+from .. import accounts, alerts, checks, localtime, signup_mode
 from .auth import admin_open
 from .common import same_origin
 
@@ -58,3 +59,20 @@ def test_alert() -> ResponseReturnValue:
         said += [f"The test alert couldn't be delivered {why}" for why in sent.failed]
     return render_template("admin_check.html", title="Test alert", ok=not sent.failed,
                            text=" ".join(said) + f" The message was: {sent.message}")
+
+
+@bp.post("/admin/companies")
+def companies() -> ResponseReturnValue:
+    """Sign-up mode: every company that signed up, newest first, with its plan, status,
+    trial end and how many people log in to it."""
+    if not signup_mode.on():
+        abort(404)
+    refused = _refused()
+    if refused is not None:
+        return refused
+    rows = [{"name": c.name, "plan": c.plan, "status": c.status, "users": users,
+             "trial_ends": localtime.date_time_text(c.trial_ends_at) if c.trial_ends_at else "-",
+             "since": localtime.date_time_text(c.created_at)}
+            for c, users in accounts.all_companies()]
+    return render_template("admin_check.html", title="Companies", companies=rows,
+                           text=f"{len(rows)} {'company has' if len(rows) == 1 else 'companies have'} signed up.")

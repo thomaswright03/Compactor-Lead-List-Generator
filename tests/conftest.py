@@ -141,7 +141,10 @@ def no_real_keys(monkeypatch, tmp_path):
     daily usage counter."""
     for var in ("GOOGLE_PLACES_API_KEY", "YELP_API_KEY", "APP_PASSWORD", "DATABASE_URL", "RENDER",
                 "LEADGEN_SEARCH_PAUSED", "LEADGEN_GOOGLE_OFF", "LEADGEN_YELP_OFF",
-                "LEADGEN_SUPPORT_CONTACT", "LEADGEN_SIGNUP", "LEADGEN_OVERPASS_URL", *PROXY_VARS):
+                "LEADGEN_SUPPORT_CONTACT", "LEADGEN_SIGNUP", "LEADGEN_OVERPASS_URL",
+                # Billing (billing.py): never a real Stripe key; the tests set stand-ins.
+                "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_STARTER", "STRIPE_PRICE_TEAM",
+                "STRIPE_PRICE_STARTER_YEARLY", "STRIPE_PRICE_TEAM_YEARLY", *PROXY_VARS):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr("leadgen.http.CACHE_DIR", tmp_path / "cache")
     # The ZIP code the tests search around is found offline (the site looks the place up

@@ -159,7 +159,7 @@ TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "m
 # (with_accounts), so AARCO's own database never gets them.
 # companies: each company that signed up, its own details (company.py reads them) and
 # its plan (plan, status: trialing / active / past_due / canceled; trial_ends_at; the
-# Stripe ids for the billing to come). users: who can log in, each in one company
+# Stripe ids, set by billing.py). users: who can log in, each in one company
 # (role owner or member), the password as werkzeug.security's hash. tokens: the links
 # emailed for verifying an email address, resetting a password and joining a company
 # (an invite), each kept only as its SHA-256, used once and until it expires.
@@ -180,8 +180,12 @@ ACCOUNT_SCHEMA = [
         hash TEXT PRIMARY KEY, kind TEXT NOT NULL, user_id TEXT, email TEXT NOT NULL,
         company_id TEXT, expires_at DOUBLE PRECISION NOT NULL, used_at DOUBLE PRECISION,
         created_at DOUBLE PRECISION NOT NULL)""",
+    # The Stripe events billing.py has handled (by Stripe's event id), so a resent one
+    # changes nothing.
+    """CREATE TABLE IF NOT EXISTS stripe_events (
+        id TEXT PRIMARY KEY, type TEXT NOT NULL, received_at DOUBLE PRECISION NOT NULL)""",
 ]
-ACCOUNT_TABLES = ("companies", "users", "tokens")
+ACCOUNT_TABLES = ("companies", "users", "tokens", "stripe_events")
 
 # The company whose data this thread (a web request, or a search it started) works on
 # (sign-up mode): its id, or None for the base database (AARCO's own site, the command

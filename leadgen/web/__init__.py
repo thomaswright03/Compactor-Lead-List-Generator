@@ -6,7 +6,8 @@ switch_routes.py (the emergency switches); leads.py (the saved list, marks, call
 stats, downloads); mapping.py (the map); customer_routes.py (current customers, kept off
 the lists); legal.py (Terms and Privacy); landing.py (sign-up mode's public landing page);
 admin.py (the administrator's checks); accounts.py (sign-up mode's accounts and Settings,
-signup_mode.py). The page's script and styles are in leadgen/static/.
+signup_mode.py); billing_routes.py (sign-up mode's billing, billing.py). The page's script
+and styles are in leadgen/static/.
 """
 
 import datetime as dt
@@ -30,6 +31,7 @@ from . import (
     accounts,
     admin,
     auth,
+    billing_routes,
     customer_routes,
     finding,
     history,
@@ -239,7 +241,7 @@ def create_app(password: str | None = None, username: str | None = None,
                     "the login page names no one to ask for access or a forgotten password.")
     app.extensions["leadgen"] = State(password, username, admin_password)
     for blueprint in (auth.bp, accounts.bp, landing.bp, finding.bp, place.bp, history.bp, switch_routes.bp,
-                      leads.bp, mapping.bp, customer_routes.bp, legal.bp, admin.bp):
+                      leads.bp, mapping.bp, customer_routes.bp, legal.bp, admin.bp, billing_routes.bp):
         app.register_blueprint(blueprint)
     _register_pages(app)
     return app

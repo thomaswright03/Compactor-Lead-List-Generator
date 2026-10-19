@@ -19,7 +19,7 @@ from typing import Any
 from flask import Blueprint, abort, current_app, g, jsonify, redirect, render_template, request, session
 from flask.typing import ResponseReturnValue
 
-from .. import accounts, allowance, company, config, localtime, mail, saved, signup_mode, store
+from .. import accounts, allowance, billing, company, config, localtime, mail, saved, signup_mode, store
 from ..accounts import AccountError, User
 from ..geo import GeocodeError, LookupDown, geocode
 from .common import same_origin, state, wants_page
@@ -30,7 +30,9 @@ log = logging.getLogger("leadgen.web")
 bp = Blueprint("accounts", __name__)
 
 # Open without logging in: the public pages and the account pages themselves.
-PUBLIC = ("/healthz", "/terms", "/privacy", "/welcome", "/login", "/signup", "/forgot", "/logout")
+# Stripe's webhook too (web/billing_routes.py: its signature is its proof).
+PUBLIC = ("/healthz", "/terms", "/privacy", "/welcome", "/login", "/signup", "/forgot", "/logout",
+          "/billing/webhook")
 PUBLIC_STARTS = ("/static/", "/reset/", "/verify/", "/invite/")
 # Sign-ups and password-reset emails allowed per address in SIGNUP_WINDOW seconds (wrong
 # passwords use auth.LOGIN_TRIES, like the shared login).
@@ -399,7 +401,7 @@ def _save(form: dict[str, str]) -> company.Company:
     return updated
 
 
-def _owner() -> User:
+def require_owner() -> User:
     user = current_user()
     if user is None:
         abort(401)
@@ -416,7 +418,7 @@ def _form_of(found: company.Company) -> dict[str, Any]:
 @bp.route("/setup", methods=["GET", "POST"])
 def setup() -> ResponseReturnValue:
     _only_in_signup_mode()
-    _owner()
+    require_owner()
     found = current_company()
     assert found is not None
     standard = ", ".join(config.DEFAULT_KEYWORDS)
@@ -442,7 +444,7 @@ def settings() -> ResponseReturnValue:
     _only_in_signup_mode()
     if not same_origin():
         abort(403)
-    _owner()
+    require_owner()
     form = {k: request.form.get(k) or "" for k in ("name", "address", "radius", "search_words", "competitors")}
     try:
         _save(form)
@@ -465,7 +467,7 @@ def invite_teammate() -> ResponseReturnValue:
     _only_in_signup_mode()
     if not same_origin():
         abort(403)
-    owner = _owner()
+    owner = require_owner()
     found = current_company()
     assert found is not None
     try:
@@ -496,6 +498,29 @@ def _day(at: float) -> str:
     return f"{day:%B} {day.day}"
 
 
+STATUS_TEXT = {"trialing": "Free trial", "active": "Active", "past_due": "Payment overdue: searches are paused",
+               "canceled": "Canceled: searches are off"}
+
+
+def billing_context(found: company.Company) -> dict[str, Any]:
+    """The Settings page's Billing card (the owner's): the plan, its status and trial end,
+    and what can be done here (billing.py)."""
+    subscribed = bool(found.stripe_subscription_id) and found.status != "canceled"
+    status, trial = STATUS_TEXT.get(found.status, found.status), ""
+    if found.status == "trialing" and found.trial_ends_at:
+        if subscribed:
+            status = "Free trial; your card is charged for the plan when it ends"
+            trial = f"The trial ends on {_day(found.trial_ends_at)}."
+        elif found.trial_ends_at < time.time():
+            status = "Free trial ended: searches are off until you choose a plan"
+        else:
+            trial = f"The trial ends on {_day(found.trial_ends_at)}; the rest of it stays free when you choose a plan."
+    return {"status": status, "trial": trial, "configured": billing.configured(),
+            "choices": [] if subscribed else billing.choices(),
+            "manage": bool(found.stripe_customer_id) and bool(billing.secret_key()),
+            "not_set_up": billing.NOT_SET_UP}
+
+
 def page_context() -> dict[str, Any]:
     """What the main page shows in sign-up mode: the Settings page, the email check's
     banner and the search allowance (web/__init__.py index_context)."""
@@ -513,4 +538,5 @@ def page_context() -> dict[str, Any]:
         "seats_left": seats_left(found) if user.owner else 0,
         "settings_note": session.pop("settings_note", ""),
         "allowance": refusal or left.text(), "standard_words": ", ".join(config.DEFAULT_KEYWORDS),
+        "billing": billing_context(found) if user.owner else {},
     }

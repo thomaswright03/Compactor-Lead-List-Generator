@@ -688,7 +688,7 @@ company can sign up for. Every change asks one helper, `leadgen/signup_mode.py`
   **Start free trial** (`/signup`) and **Log in**. Off, `/welcome` is an unknown address.
 - **Plans**: the numbers live only in `leadgen/plans.py` (`PLANS`, `TRIAL_DAYS`,
   `ANNUAL_FREE_MONTHS`, `AREA_MAX_MILES`, `annual_price`); the landing page reads them,
-  and billing and the plan limits are to read them too.
+  and billing (`leadgen/billing.py`) and the plan limits (`config.PLANS`) read them too.
 - **Terms and Privacy**: `/terms` and `/privacy` show `terms_signup.html` and
   `privacy_signup.html`, written for a subscription sold by Wright AI Solutions to many
   companies (trial and cancellation, each company owns and can export or delete its
@@ -1358,7 +1358,7 @@ AARCO's own, with its one shared login, exactly as described above. With it:
 - **Accounts** (`leadgen/accounts.py`) live in the base database (the one with no company
   set): `companies` (name, short name, shop address and its coordinates, area in miles,
   extra search words, competitors, plan, status `trialing` / `active` / `past_due` /
-  `canceled`, `trial_ends_at`, the Stripe ids for later), `users` (lower-case email,
+  `canceled`, `trial_ends_at`, the Stripe customer and subscription ids), `users` (lower-case email,
   werkzeug password hash, name, company, role `owner` / `member`, `email_verified_at`) and
   `tokens` (the emailed links, kept only as their SHA-256: `verify`, `reset`, `invite`).
   They are `store.ACCOUNT_SCHEMA`, apart from `store.SCHEMA`, so the backup is unchanged.
@@ -1387,3 +1387,46 @@ AARCO's own, with its one shared login, exactly as described above. With it:
 - Set `SECRET_KEY` in sign-up mode (without it a random one is used, which logs everyone
   out at every restart). `python -m leadgen backup` copies the base database only, not the
   companies' schemas or the accounts.
+
+### Billing (Stripe)
+
+`leadgen/billing.py` talks to Stripe's REST API with plain form-encoded requests
+(`http.request_json`, no Stripe library; each POST carries an `Idempotency-Key`, so its
+retries never make a second session); the routes are `leadgen/web/billing_routes.py`. All of
+it is sign-up mode only (404 otherwise). The site keeps only Stripe's ids
+(`stripe_customer_id`, `stripe_subscription_id`), never card data: the card is typed on
+Stripe's own pages, as the subscriber Privacy page says.
+
+- **Set up** when `STRIPE_SECRET_KEY` and a plan's price id are set (`STRIPE_PRICE_STARTER`,
+  `STRIPE_PRICE_TEAM`, monthly; `STRIPE_PRICE_STARTER_YEARLY`, `STRIPE_PRICE_TEAM_YEARLY`
+  optional). Plan keys and prices come from `plans.PLANS`; a price id maps back to its plan
+  (`plan_of_price`). Without them the Settings page's **Billing** card says online payment
+  isn't set up, and the routes send the owner back to Settings with that message.
+- **Choose a plan** (`POST /billing/checkout`, `choice=starter:monthly` etc., owner only,
+  same-origin): a Checkout Session in subscription mode, `client_reference_id` and
+  `metadata[company_id]` (also on the subscription) = the company, the existing customer
+  reused, `trial_period_days` = the days left of the 14-day trial (none once it ended),
+  `payment_method_collection=always` (`plans.CARD_REQUIRED`). The answer is a 303 to
+  Stripe's page (`{"url"}` when JSON is asked). Stripe sends the owner back to
+  `/billing/return`, which goes to `#settings` with a note.
+- **Manage billing** (`POST /billing/portal`, owner only): a customer portal session (change
+  plan, card, invoices, cancel), back to `#settings`.
+- **Webhook** (`POST /billing/webhook`, public in `web/accounts.PUBLIC`, no same-origin
+  check): the `Stripe-Signature` header must be HMAC-SHA256 of `t.payload` with
+  `STRIPE_WEBHOOK_SECRET`, at most 5 minutes old, compared in constant time; otherwise 400.
+  Handled: `checkout.session.completed` (ids, plan), `customer.subscription.created` /
+  `updated` / `deleted` (ids, plan from the price, status, `trial_ends_at` from Stripe's
+  `trial_end` while trialing), `invoice.payment_failed` (`past_due`) and `invoice.paid`
+  (a paid, non-zero invoice brings `past_due` / `trialing` to `active`). Stripe statuses
+  map as `unpaid` and `paused` → `past_due`, `incomplete_expired` → `canceled`,
+  `incomplete` → no change. An event for an older subscription doesn't override the
+  current one. Each event id is noted in `stripe_events` (an account table) and a resent
+  one is skipped; any other event type gets 200 and is ignored; a failure gives 500 and
+  un-notes the id so Stripe's retry is handled.
+- **Searching** stops on `past_due` / `canceled` (`allowance.can_search`). A trial with a
+  Stripe subscription keeps searching up to `allowance.TRIAL_GRACE_SECONDS` (a day) past
+  its trial end, while Stripe charges and its webhook moves the status on; without one,
+  the trial ends on time.
+- **Administrator**: in sign-up mode **For the site administrator** has **List the
+  companies** (`POST /admin/companies`): each company's plan, status, trial end and people.
+- Tests: `tests/test_billing.py` (Stripe's HTTP call is a stand-in; no network).

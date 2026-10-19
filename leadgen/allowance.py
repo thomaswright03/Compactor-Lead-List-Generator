@@ -14,6 +14,11 @@ from dataclasses import dataclass
 from . import config, localtime, store
 from .company import Company
 
+# A company subscribed through Stripe (billing.py) whose trial ends keeps searching this
+# long while Stripe charges the card and its webhook says so (the webhook keeps the status
+# and trial end as Stripe has them); without a subscription the trial ends on the dot.
+TRIAL_GRACE_SECONDS = 24 * 3600
+
 
 @dataclass(frozen=True)
 class Allowance:
@@ -68,7 +73,9 @@ def can_search(company: Company) -> str | None:
     if company.status == "past_due":
         return ("Your last payment didn't go through, so new searches are paused until it does. "
                 "Your saved leads are still here.")
-    if company.status == "trialing" and company.trial_ends_at is not None and time.time() > company.trial_ends_at:
+    grace = TRIAL_GRACE_SECONDS if company.stripe_subscription_id else 0
+    if (company.status == "trialing" and company.trial_ends_at is not None
+            and time.time() > company.trial_ends_at + grace):
         return "Your free trial has ended, so new searches are off. Your saved leads are still here."
     return None
 

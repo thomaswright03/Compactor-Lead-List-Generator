@@ -145,6 +145,41 @@ def update_company(company_id: str, **changes: Any) -> Company:
     return company
 
 
+def company_by_stripe(customer_id: str | None = None, subscription_id: str | None = None) -> Company | None:
+    """The company with this Stripe subscription (first) or customer id, or None."""
+    with _base() as db:
+        for column, value in (("stripe_subscription_id", subscription_id), ("stripe_customer_id", customer_id)):
+            if value:
+                row = db.one(f"SELECT {_COMPANY_COLUMNS} FROM companies WHERE {column} = ? "
+                             "ORDER BY created_at LIMIT 1", (value,))
+                if row:
+                    return _company(row)
+    return None
+
+
+def all_companies() -> list[tuple[Company, int]]:
+    """Every company, newest first, each with how many people can log in to it (the
+    administrator's list, web/admin.py)."""
+    with _base() as db:
+        rows = db.all(f"SELECT {_COMPANY_COLUMNS}, (SELECT COUNT(*) FROM users u WHERE u.company_id = companies.id) "
+                      "FROM companies ORDER BY created_at DESC")
+    return [(_company(r[:-1]), int(r[-1])) for r in rows]
+
+
+def first_stripe_event(event_id: str, kind: str) -> bool:
+    """Note a Stripe event as handled: True the first time, False when it already was."""
+    with _base() as db:
+        got = db.one("INSERT INTO stripe_events (id, type, received_at) VALUES (?, ?, ?) "
+                     "ON CONFLICT (id) DO NOTHING RETURNING id", (event_id, kind, time.time()))
+    return got is not None
+
+
+def forget_stripe_event(event_id: str) -> None:
+    """Un-note an event whose handling failed, so Stripe's resend is handled again."""
+    with _base() as db:
+        db.run("DELETE FROM stripe_events WHERE id = ?", (event_id,))
+
+
 # ---- users
 
 _USER_COLUMNS = "id, email, password_hash, name, company_id, role, created_at, email_verified_at"

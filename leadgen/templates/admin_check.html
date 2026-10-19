@@ -62,6 +62,18 @@
     <p>The same check runs from a computer as <code>python -m leadgen check-sources</code>; the public
       <a href="/healthz">/healthz</a> page shows when each source last answered.</p>
     {% endif %}
+    {% if companies %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Company</th><th>Plan</th><th>Status</th><th>Trial ends</th><th>People</th><th>Signed up</th></tr></thead>
+      <tbody>
+      {% for c in companies %}
+      <tr><td>{{ c.name }}</td><td>{{ c.plan }}</td><td>{{ c.status }}</td><td>{{ c.trial_ends }}</td><td>{{ c.users }}</td><td>{{ c.since }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
     <a class="btn" href="/#find">Back to Find leads</a>
   </div>
 </main>

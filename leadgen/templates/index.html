@@ -190,6 +190,10 @@
             way the site's problem reports go, to see that it arrives. The page says where it was
             delivered, or that no alert is set up.</p>
           <form method="post" action="/admin/test-alert"><button type="submit" class="quiet">Send a test alert</button></form>
+          {% if account.signup %}<h2>Companies</h2>
+          <p class="muted">Every company that signed up, with its plan, its billing status, when its trial
+            ends and how many people log in to it. The list opens on its own page.</p>
+          <form method="post" action="/admin/companies"><button type="submit" class="quiet">List the companies</button></form>{% endif %}
           </div>
         </div>
       </details>
@@ -429,6 +433,20 @@
           <label>Invite a teammate by email <input name="email" type="email" maxlength="254" required></label>
           <div class="go-row"><button type="submit">Send the invite</button></div></form>
         {% else %}<p class="muted">Your plan has no room for another person.</p>{% endif %}
+      </div>
+      <div class="card" id="billing">
+        <h2>Billing</h2>
+        <p>Plan: {{ account.plan }}. Status: {{ account.billing.status }}.{% if account.billing.trial %}
+          {{ account.billing.trial }}{% endif %}</p>
+        {% if account.billing.manage %}<form method="post" action="/billing/portal">
+          <p class="muted">Change your plan, update your card, see your invoices or cancel, on our payment
+            processor's (Stripe's) secure page.</p>
+          <div class="go-row"><button type="submit" class="quiet">Manage billing</button></div></form>{% endif %}
+        {% if account.billing.choices %}<form method="post" action="/billing/checkout">
+          <p class="muted">Choose a plan and its billing period. You enter your card on Stripe's
+            secure page; we never see or keep the card number.</p>
+          <div class="go-row">{% for choice in account.billing.choices %}<button type="submit" name="choice" value="{{ choice.value }}">{{ choice.label }}</button>{% endfor %}</div></form>
+        {% elif not account.billing.configured %}<p class="muted" id="billing-off">{{ account.billing.not_set_up }}</p>{% endif %}
       </div>
       {% else %}
       <div class="card"><p>{{ account.settings.name }}'s settings are kept by its owner. Your shop: {{ account.settings.address or "not set up yet" }}.</p></div>
