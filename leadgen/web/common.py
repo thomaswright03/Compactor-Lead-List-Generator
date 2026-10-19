@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from flask import current_app, request
 from werkzeug.exceptions import ServiceUnavailable
 
-from .. import calls, config, contacts, marks, places, saved, store, usage
+from .. import calls, config, contacts, customers, marks, places, saved, store, usage
 from ..export import format_phone
 from ..localtime import date_time_text
 from ..models import Lead, Undo
@@ -78,15 +78,21 @@ def with_marks_and_calls(leads: list[Lead]) -> Undos:
 
 
 def load_saved(uids: Iterable[str] | None = None) -> tuple[list[Lead], Undos]:
-    """Every saved lead (or with uids just those) with its mark and latest call, plus
-    the undo offers, on one database connection. Raises LoadError with a plain
+    """Every saved lead (or with uids just those) with its mark and latest call, but
+    not the company's current customers, plus the undo offers, on one database connection. Raises LoadError with a plain
     message when any of it can't be read."""
     try:
         leads = saved.load(uids)
     except Exception as exc:
         log.error("Loading the saved leads failed", exc_info=True)
         raise LoadError(db_message(exc)) from exc
-    return leads, with_marks_and_calls(leads)
+    undo = with_marks_and_calls(leads)
+    try:
+        leads = customers.leave_out(leads)       # the company's current customers (customers.py)
+    except Exception as exc:
+        log.error("Reading the current customers failed", exc_info=True)
+        raise LoadError(db_message(exc)) from exc
+    return leads, undo
 
 
 def changed_uids(since: float) -> set[str]:

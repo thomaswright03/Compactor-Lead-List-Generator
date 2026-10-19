@@ -22,6 +22,7 @@
       <a href="#stats" data-page="stats">Stats</a>
     </nav>
     <div class="side-bottom" id="side-bottom">
+      <a href="#customers" class="side-link" id="customers-link" title="Your current customers, kept off the lead lists">Current customers</a>
       <button type="button" class="tour-btn" id="tour-btn">Tutorial</button>
       <div class="me" id="me">
         <span>Your name: <strong id="me-name">not set</strong></span>
@@ -347,6 +348,49 @@
         </div>
       </div>
     </section>
+    <!-- Current customers: the list is read in this browser only (customers.js); the site
+         gets one-way fingerprints of each customer, never the list (customers.py). -->
+    <section class="page" id="page-customers" hidden>
+      <div class="page-head"><h1>Current customers</h1>
+        <p>Upload your customer list, and the businesses you already service are taken off the
+          Leads, Calls and Map pages, the downloads and the stats, now and after every new search.</p></div>
+      <div class="card private-note" id="cust-private">
+        <h2>Your list stays on this computer</h2>
+        <p>The file is read here, in your browser. It is never uploaded, and the Lead Finder never sees
+          or keeps your customers' names, phone numbers or addresses.</p>
+        <p class="muted">Your browser turns each customer's phone number, street address and name into a
+          scrambled code (a one-way fingerprint) and sends only those codes. A code can't be turned back
+          into the customer. The site makes the same codes for each lead and hides any lead whose code
+          matches. Close or reload this page and the file is gone from it too.</p>
+      </div>
+      <div id="cust-problem"></div>
+      <div class="card" id="cust-status">
+        <h2>On file now</h2>
+        <p id="cust-summary">Checking…</p>
+        <p class="muted" id="cust-hidden" hidden></p>
+        <button type="button" class="quiet" id="cust-clear" hidden>Clear the customer list</button>
+      </div>
+      <div class="card" id="cust-upload">
+        <h2 id="cust-upload-title">Upload your customer list</h2>
+        <p class="muted">An Excel file (.xlsx) or CSV with a row per customer. Phone numbers and street
+          addresses match best; a business name matches only together with its ZIP code or city. A new
+          upload replaces the list on file.</p>
+        <label class="file-pick">Customer list file
+          <input type="file" id="cust-file" accept=".csv,.txt,.tsv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+        <div class="error" id="cust-error" role="alert" hidden></div>
+        <div id="cust-columns" hidden>
+          <p id="cust-read" role="status"></p>
+          <p class="muted">Check which column holds each detail. Leave out any your file doesn't have.</p>
+          <div class="form-grid cust-grid" id="cust-picks"></div>
+          <p class="muted" id="cust-usable"></p>
+          <div class="go-row">
+            <button type="button" id="cust-send">Hide these customers</button>
+            <button type="button" class="quiet" id="cust-cancel">Cancel</button>
+            <span id="cust-sending" role="status"></span>
+          </div>
+        </div>
+      </div>
+    </section>
     <footer class="copy">© {{ year }} Wright AI Solutions. All rights reserved.</footer>
    </div>
   </main>
@@ -460,6 +504,18 @@
   </form>
 </dialog>
 
+<dialog id="cust-clear-dlg" aria-labelledby="cust-clear-title" aria-describedby="cust-clear-why">
+  <form class="dlg" method="dialog" id="cust-clear-form">
+    <h2 id="cust-clear-title">Clear the customer list?</h2>
+    <p id="cust-clear-why">The leads it hides come back on the Leads, Calls and Map pages. Your file is
+      not affected; you can upload it again at any time.</p>
+    <div class="dlg-actions">
+      <button type="button" class="quiet" id="cust-clear-cancel">Cancel</button>
+      <button type="submit" class="danger" id="cust-clear-go">Clear the list</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="hist-dlg">
   <div class="dlg">
     <h2 id="hist-title">Call history</h2>
@@ -475,6 +531,7 @@
 <script src="/static/find.js?v={{ asset_version }}" defer></script>
 <script src="/static/stats.js?v={{ asset_version }}" defer></script>
 <script src="/static/map.js?v={{ asset_version }}" defer></script>
+<script src="/static/customers.js?v={{ asset_version }}" defer></script>
 <script src="/static/start.js?v={{ asset_version }}" defer></script>
 <script src="/static/tour.js?v={{ asset_version }}" defer></script>
 </body>

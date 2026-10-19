@@ -1474,7 +1474,7 @@ def test_the_tutorial_walks_every_page_and_stays_on_screen(browser, site, page, 
         pages.add(tab.evaluate("location.hash.slice(1).split('?')[0]"))
         tab.keyboard.press("Enter")                # Next has the focus
     expect(box).to_be_hidden()
-    assert pages == {"find", "leads", "calls", "map", "stats"}
+    assert pages == {"find", "leads", "calls", "map", "stats", "customers"}
     # Nothing was marked, called or searched along the way.
     tab.goto(site + "#leads")
     tab.wait_for_selector("table.leads")

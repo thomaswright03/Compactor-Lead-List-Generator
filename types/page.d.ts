@@ -452,3 +452,7 @@ interface PageState {
   shiftedAt: number;
   cutOffTimer: number;
 }
+
+// GET /customers (web/customer_routes.py): the list of current customers on file.
+interface CustomerState { salt: string; keys: number; customers: number; hidden: number; at: number | null;
+                          when: string; by: string }

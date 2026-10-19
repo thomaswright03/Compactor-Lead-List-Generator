@@ -1081,3 +1081,15 @@ details.explain summary { padding-block:var(--sp-3); margin-block:calc(-1 * var(
   button, .btn { border:1px solid ButtonText; }
   .page-head h1::after, .tile::before { background:CanvasText; }
 }
+
+/* Current customers (customers.js): the privacy note, the file picker and the column picks. */
+.side .side-link { color:var(--side-ink); font-weight:600; font-size:var(--fs-sm); text-decoration:underline;
+  text-underline-offset:3px; min-height:44px; display:inline-flex; align-items:center; align-self:flex-start; }
+.side .side-link.on { color:#f3e3bf; }
+.private-note { border-left:4px solid var(--good); }
+.private-note p { margin:0 0 var(--sp-2); }
+.private-note p:last-child { margin-bottom:0; }
+#cust-status p { margin:0 0 var(--sp-3); }
+.file-pick { max-width:420px; margin:var(--sp-3) 0; }
+.file-pick input[type=file] { font:inherit; font-weight:400; }
+.cust-grid { margin:var(--sp-3) 0; }

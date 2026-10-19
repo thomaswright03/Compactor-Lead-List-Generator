@@ -682,7 +682,7 @@ AARCO's own show no score or tier.
 The [sales guide](sales-guide.md) is the short, task-based version for staff; this is
 the full behaviour, for whoever changes or supports the site.
 
-The sidebar has five pages (Find leads, Leads, Calls, Map, Stats), a Light / Dark / System colour switch (System
+The sidebar has five pages (Find leads, Leads, Calls, Map, Stats) and, below them with the Tutorial button, Current customers; a Light / Dark / System colour switch (System
 follows the computer's setting; the choice is remembered in each browser), and
 every page carries the Wright AI Solutions copyright. The browser tab names the
 page ("Leads · AARCO Waste & Disposal Lead Finder") and shows the Lead Finder icon.
@@ -1302,3 +1302,23 @@ list (10,000 leads in about a second).
 ---
 
 © Wright AI Solutions. Back to the [README](../README.md).
+
+## Current customers (#customers)
+
+The company can upload its customer list so businesses it already services are left out of
+the Leads, Calls and Map pages, the downloads and Stats, now and after every later search.
+The list is private, so the site never receives it: `static/customers.js` reads the CSV or
+.xlsx in the browser (its own small CSV and .xlsx readers, no library), turns each
+customer's phone, street line and name into match keys, and posts only a SHA-256
+fingerprint of each key with the site's salt (`POST /customers`, `web/customer_routes.py`).
+`leadgen/customers.py` stores the fingerprints (`customer_keys`, and `customer_list` for
+the salt, the count and who uploaded), makes the same keys for every saved lead, and
+`web/common.py load_saved` drops each lead whose fingerprint is on file. The key rules
+(phone; street with ZIP or city; name only with ZIP or city, so one customer store never
+hides a whole chain) must stay the same in the Python and the JavaScript:
+`tests/test_customers.py` checks both against the same examples. A new upload replaces the
+list; **Clear the customer list** (`POST /customers/clear`) brings every lead back. A
+fingerprint can't be read back into the customer, though a phone number's could be found
+by trying every number, so the fingerprints are treated as private data too (they are only
+in the database and its encrypted backups).
+

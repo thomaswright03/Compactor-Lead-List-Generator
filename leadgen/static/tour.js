@@ -57,6 +57,15 @@ const TOUR = [
   { page: "stats", target: "#stats-body", title: "Stats",
     text: "How many businesses have a baler or compactor, their average score, and how often " +
           "each tier turned out right. It fills in as the team marks businesses Yes or No." },
+  { page: "customers", target: "#cust-upload", title: "Current customers",
+    text: "Open it with Current customers in the sidebar (under Menu on a phone). Upload your " +
+          "customer list (Excel or CSV) and the businesses you already service are " +
+          "hidden from Leads, Calls, Map and the downloads, after every new search too. Clear " +
+          "the list here to bring them back." },
+  { page: "customers", target: "#cust-private", title: "Your list stays private",
+    text: "The file is read in your browser and never uploaded. Only scrambled one-way codes of " +
+          "each customer's phone, address and name are sent, so the site can spot a match " +
+          "without ever seeing who your customers are." },
   { page: "stats", target: "#me", title: "Your name",
     text: "Marks and calls are saved with the name set in this browser. Change it here if " +
           "someone else uses this computer." },

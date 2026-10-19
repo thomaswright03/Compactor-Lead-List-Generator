@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 
 const DIR = "leadgen/static";
 // In the order the page loads them.
-const FILES = ["core.js", "leads.js", "calls.js", "find.js", "stats.js", "map.js", "start.js", "tour.js"];
+const FILES = ["core.js", "leads.js", "calls.js", "find.js", "stats.js", "map.js", "customers.js", "start.js", "tour.js"];
 // What a script uses from a library it loads itself: the Map page's Leaflet (vendor/leaflet,
 // loaded by map.js the first time the Map page opens; its types are in types/page.d.ts).
 const LIBRARIES = { "map.js": ["L"] };
@@ -19,7 +19,8 @@ const LIBRARIES = { "map.js": ["L"] };
 // ecmaVersion).
 const BROWSER = ["window", "document", "location", "history", "localStorage", "fetch", "AbortController", "FormData",
                  "URL", "URLSearchParams", "DOMParser", "crypto", "setTimeout", "clearTimeout",
-                 "setInterval", "getComputedStyle"];
+                 "setInterval", "getComputedStyle", "DecompressionStream", "Blob", "Response",
+                 "TextDecoder", "TextEncoder"];
 
 const exported = (file) => [...readFileSync(`${DIR}/${file}`, "utf8")
   .matchAll(/\/\* exported ([^*]+)\*\//g)].flatMap((m) => m[1].split(",").map((s) => s.trim()));

@@ -12,7 +12,7 @@ from typing import Any, NamedTuple
 from flask import Blueprint, Response, abort, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from .. import calls, config, contacts, daily, marks, places, reference, saved, stats, store
+from .. import calls, config, contacts, customers, daily, marks, places, reference, saved, stats, store
 from ..export import saved_list_info, to_csv_bytes, to_xlsx_bytes
 from ..localtime import date_time_text
 from ..models import Lead
@@ -139,15 +139,16 @@ def order(rows: list[Lead], view: str, sort: str, desc: bool) -> list[Lead]:
 
 
 # What the saved list shows depends on these tables only: any change to them changes one
-# of these figures. The first LIST_FIGURES are the saved rows and the merges; the rest the
+# of these figures. The first LIST_FIGURES are the saved rows, the merges and the current
+# customers on file (they leave leads out); the rest the
 # marks, calls and verified contacts, and who made them.
 FIGURES = (("leads", "COUNT(*)"), ("leads", "MAX(last_seen)"), ("leads", "SUM(last_seen)"),
-           ("merged_leads", "COUNT(*)"),
+           ("merged_leads", "COUNT(*)"), ("customer_keys", "COUNT(*)"), ("customer_list", "MAX(at)"),
            ("marks", "COUNT(*)"), ("mark_changes", "COUNT(*)"), ("mark_changes", "MAX(at)"),
            ("mark_changes", "COUNT(undone_at)"), ("mark_changes", "MAX(undone_at)"),
            ("calls", "COUNT(*)"), ("calls", "MAX(at)"), ("call_undos", "COUNT(*)"),
            ("lead_contacts", "COUNT(*)"), ("lead_contacts", "MAX(at)"), ("made_by", "COUNT(*)"))
-LIST_FIGURES = 4
+LIST_FIGURES = 6
 FINGERPRINT = "SELECT " + ", ".join(f"(SELECT {what} FROM {table})" for table, what in FIGURES)
 
 
@@ -742,6 +743,7 @@ def download(job_id: str, fmt: str) -> ResponseReturnValue:
             abort(404)
         try:
             leads = contacts.apply(calls.apply(marks.apply(job["result"].leads)))
+            leads = customers.leave_out(leads)    # not the company's current customers
         except Exception:
             log.error("Loading marks for a download failed", exc_info=True)
             unavailable(MARKS_DOWN)

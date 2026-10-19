@@ -263,6 +263,15 @@ Open **Map** in the sidebar (in the bar at the top on a phone).
   Nothing typed there goes back into the site: record marks and calls on the
   Leads page.
 
+## Keep current customers off the list
+
+Open **Current customers** at the bottom of the sidebar (under **Menu** on a phone), pick your customer list (Excel .xlsx or CSV), check which column holds
+the business name, phone, street address, city and ZIP, and press **Hide these customers**.
+Businesses on the list disappear from Leads, Calls, Map, the downloads and Stats, and new
+searches are checked against it too. The file is read in your browser and never uploaded:
+only scrambled one-way codes of each customer are sent. A new upload replaces the list;
+**Clear the customer list** brings the hidden leads back.
+
 ## What the scores mean
 
 Every lead has a score from 0 to 100 and a tier:

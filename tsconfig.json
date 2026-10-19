@@ -24,6 +24,7 @@
     "leadgen/static/find.js",
     "leadgen/static/stats.js",
     "leadgen/static/map.js",
+    "leadgen/static/customers.js",
     "leadgen/static/start.js",
     "leadgen/static/tour.js"
   ]

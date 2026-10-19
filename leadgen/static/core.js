@@ -1,6 +1,6 @@
 /* The Lead Finder page, part 1 of 7: shared helpers, the colour theme and page switching.
-   One HTML page (templates/index.html) holds Find leads, Leads, Calls, Map and Stats, switched by
-   the #address; these scripts load in order and share their top-level names. */
+   One HTML page (templates/index.html) holds Find leads, Leads, Calls, Map, Stats and Customers,
+   switched by the #address; these scripts load in order and share their top-level names. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, TIMING, S, el,
    emptyBox, link, phoneLink, button, DOT, api, noAnswer, post, save, SLOW_SAVE, fmtTime, serverNow,
@@ -20,8 +20,9 @@ const OUTCOMES = CONFIG.outcomes;
 const PAUSED = CONFIG.paused;
 const SITE = CONFIG.site;
 /** @type {Record<string, string>} */
-const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", map: "Map", stats: "Stats" };
-const PAGES = ["find", "leads", "calls", "map", "stats"];
+const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", map: "Map", stats: "Stats",
+                 customers: "Current customers" };
+const PAGES = ["find", "leads", "calls", "map", "stats", "customers"];
 // A row just marked Yes or No stays where it is (showing its answer and Undo) for this long
 // after the pointer leaves the table, so a double-click can never land on the next business.
 const PIN_MS = 5000;
@@ -461,6 +462,9 @@ function route() {
   for (const p of PAGES) $(`page-${p}`).hidden = p !== page;
   if (page !== shownPage) { shownPage = page; toTop(); }
   document.title = `${TITLES[page]} · ${SITE}`;
+  $("customers-link").classList.toggle("on", page === "customers");
+  if (page === "customers") $("customers-link").setAttribute("aria-current", "page");
+  else $("customers-link").removeAttribute("aria-current");
   $all("nav a").forEach((a) => {
     a.classList.toggle("on", a.dataset.page === page);
     if (a.dataset.page === page) a.setAttribute("aria-current", "page");
@@ -470,6 +474,7 @@ function route() {
   retryLater();                               // only the page shown tries again by itself
   if (page === "stats") loadStats();
   if (page === "map") loadMap();
+  if (page === "customers") loadCustomers();
   if (page === "find") loadSearches();
 }
 /** @param {string} page */
