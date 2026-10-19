@@ -1,0 +1,59 @@
+{% extends "_legal.html" %}
+{% block body %}
+<p>This policy explains what the {{ company }} Lead Finder (the "site") keeps and why. Wright AI
+  Solutions builds and runs the site for {{ company }} (the "company"). Questions:
+  {{ contact }}.</p>
+
+<h2>Your current customer list</h2>
+<p>The Current customers page lets the company keep businesses it already services off the lead
+  lists. It is built so that neither Wright AI Solutions nor the site ever receives the list:</p>
+<ul>
+  <li>The file you pick (Excel or CSV) is read only in your own browser. It is never uploaded, and
+    its customers' names, phone numbers and addresses never leave your computer.</li>
+  <li>Your browser turns each customer's phone number, street address and business name into a
+    one-way fingerprint (a SHA-256 code made with a value unique to this site) and sends only those
+    fingerprints.</li>
+  <li>The site stores only the fingerprints, the number of customers on the list, when it was put
+    on file, and the name of whoever did it. It compares them with fingerprints made from its own
+    saved leads to hide matching businesses.</li>
+  <li>A fingerprint can't be turned back into a customer's details. Someone holding the
+    fingerprints could still test a guess, for example a phone number they already suspect, so the
+    site treats the fingerprints as confidential and keeps them only in its database and its
+    encrypted backups.</li>
+  <li>Uploading a new list replaces the old fingerprints. <strong>Clear the customer list</strong>
+    deletes them from the live database at once; copies in backups expire with those backups
+    (below).</li>
+</ul>
+
+<h2>What else the site keeps</h2>
+<ul>
+  <li><strong>Business leads:</strong> public information about businesses (name, address, phone,
+    website, category, map position) from Yelp and OpenStreetMap, with the score the site gives
+    each one.</li>
+  <li><strong>Your team's work:</strong> Yes / No answers, call summaries and outcomes, verified
+    phone numbers and contact names, and searches, each with the name typed in "Your name" and
+    when it was saved.</li>
+  <li><strong>Login:</strong> a signed cookie keeps you logged in for up to {{ login_days }} days.
+    Wrong passwords are counted by network address for a short time to stop guessing; that count is
+    kept in memory only.</li>
+  <li><strong>In your browser:</strong> your name, light or dark choice, unsent call notes and
+    whether you have seen the tutorial are kept in this browser's local storage and never sent
+    anywhere else. The site uses no advertising or tracking cookies and no analytics.</li>
+  <li><strong>Problems:</strong> errors and failed searches are recorded so they can be fixed, and
+    may be emailed to Wright AI Solutions. These reports hold plain messages, not your data.</li>
+</ul>
+
+<h2>Where it is kept and who sees it</h2>
+<p>The site runs on Render, its database is on Neon (United States), and a nightly copy of the
+  database is encrypted (AES-256) and kept for 90 days as a GitHub Actions artifact. Only people
+  with the site's login, and Wright AI Solutions to run and support it, can see the data. Nothing
+  is sold or shared with anyone else, except where the law requires it.</p>
+
+<h2>How long and your choices</h2>
+<p>Saved leads and the team's work are kept while the company uses the site. The company can ask
+  {{ contact }} to export or delete its data. Deleted data leaves the encrypted backups within 90
+  days.</p>
+
+<h2>Changes</h2>
+<p>If this policy changes, the new version will be posted here with a new effective date.</p>
+{% endblock %}

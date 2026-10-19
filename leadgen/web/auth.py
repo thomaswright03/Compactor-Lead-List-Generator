@@ -83,7 +83,7 @@ def _client_address() -> str:
 
 @bp.before_app_request
 def require_login() -> ResponseReturnValue | None:
-    if request.path == "/healthz" or request.path.startswith("/static/"):
+    if request.path in ("/healthz", "/terms", "/privacy") or request.path.startswith("/static/"):
         return None           # hold no data; /healthz shows uptime checks the deployed version
     if not state().password:
         # Without a login only local/IP access is allowed (see LEADGEN_ALLOWED_HOSTS).

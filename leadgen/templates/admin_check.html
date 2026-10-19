@@ -32,6 +32,7 @@
   a.btn:hover { background:var(--btn-hover); }
   a.btn:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
   footer { text-align:center; color:var(--side-ink); font-size:var(--fs-sm); padding:var(--sp-4); }
+  footer a { color:var(--side-ink); display:inline-flex; align-items:center; justify-content:center; min-height:44px; min-width:44px; }
 </style>
 </head>
 <body>
@@ -64,6 +65,6 @@
     <a class="btn" href="/#find">Back to Find leads</a>
   </div>
 </main>
-<footer>© {{ year }} Wright AI Solutions. All rights reserved.</footer>
+{% include "_legal_footer.html" %}
 </body>
 </html>

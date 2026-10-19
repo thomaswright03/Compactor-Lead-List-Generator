@@ -57,6 +57,7 @@
   @media (pointer: coarse) { .help a { padding-block:14px; } }   /* a 44px tap area; the lines don't move */
   @media (max-width: 420px) { .box { padding:var(--sp-5); } }
   footer { text-align:center; color:var(--side-ink); font-size:var(--fs-sm); padding:var(--sp-4); }
+  footer a { color:var(--side-ink); display:inline-flex; align-items:center; justify-content:center; min-height:44px; min-width:44px; }
 </style>
 </head>
 <body>
@@ -92,6 +93,6 @@
     } catch (e) { /* the general note stays */ }
   })();
 </script>{% endif %}
-<footer>© {{ year }} Wright AI Solutions. All rights reserved.</footer>
+{% include "_legal_footer.html" %}
 </body>
 </html>

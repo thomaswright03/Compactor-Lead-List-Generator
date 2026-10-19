@@ -4,7 +4,7 @@ The routes live by page: auth.py (login); Find leads in finding.py (start and fo
 today's search), place.py (where it will run), history.py (the search history) and
 switch_routes.py (the emergency switches); leads.py (the saved list, marks, calls,
 stats, downloads); mapping.py (the map); customer_routes.py (current customers, kept off
-the lists); admin.py (the administrator's checks). The
+the lists); legal.py (Terms and Privacy); admin.py (the administrator's checks). The
 page's script and styles are in leadgen/static/.
 """
 
@@ -24,7 +24,7 @@ from .. import alerts, awake, calls, config, health, localtime, marks, store
 from ..localtime import date_time_text
 from ..pipeline import SearchParams
 from ..scoring import PARENT_FLAG
-from . import admin, auth, customer_routes, finding, history, leads, mapping, place, switch_routes
+from . import admin, auth, customer_routes, finding, history, leads, legal, mapping, place, switch_routes
 from .auth import LOGIN_DAYS, LOGIN_TRIES, LOGIN_WINDOW
 from .common import (
     DB_DOWN,
@@ -213,7 +213,7 @@ def create_app(password: str | None = None, username: str | None = None,
                     "the login page names no one to ask for access or a forgotten password.")
     app.extensions["leadgen"] = State(password, username, admin_password)
     for blueprint in (auth.bp, finding.bp, place.bp, history.bp, switch_routes.bp, leads.bp, mapping.bp,
-                      customer_routes.bp, admin.bp):
+                      customer_routes.bp, legal.bp, admin.bp):
         app.register_blueprint(blueprint)
     _register_pages(app)
     return app

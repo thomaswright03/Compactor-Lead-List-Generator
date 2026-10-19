@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} · {{ site_name }}</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+{% include "_theme.html" %}
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; flex-direction:column; background:linear-gradient(160deg, var(--side), var(--side-2)); background-color:var(--side);
+         font:var(--fs-base)/1.6 var(--font); color:var(--ink); }
+  main { flex:1; padding:var(--sp-5) var(--sp-4); }
+  .box { width:min(760px,100%); margin:0 auto; background:var(--card); border-radius:var(--r-lg); padding:var(--sp-6);
+         border:1px solid var(--line); box-shadow:var(--shadow-lg); }
+  .brand { display:flex; align-items:center; gap:var(--sp-3); }
+  .brand .logo { width:40px; height:40px; flex:none; border-radius:var(--r-sm); }
+  .brand strong { font-family:var(--serif); display:block; font-size:var(--fs-md); }
+  .brand span { color:var(--muted); font-size:var(--fs-sm); }
+  h1 { font-family:var(--serif); font-weight:540; letter-spacing:-.015em; font-size:var(--fs-lg); margin:var(--sp-5) 0 var(--sp-1); }
+  h2 { font-family:var(--serif); font-weight:560; font-size:var(--fs-md); margin:var(--sp-5) 0 var(--sp-2); }
+  p, li { color:var(--ink); }
+  p { margin:0 0 var(--sp-3); }
+  ul { margin:0 0 var(--sp-3); padding-left:1.3em; }
+  .muted { color:var(--muted); font-size:var(--fs-sm); }
+  a { color:var(--accent); }
+  a:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
+  footer { text-align:center; color:var(--side-ink); font-size:var(--fs-sm); padding:var(--sp-4); }
+  footer a { color:var(--side-ink); display:inline-flex; align-items:center; justify-content:center; min-height:44px; min-width:44px; }
+</style>
+</head>
+<body>
+<main>
+  <article class="box">
+    <div class="brand"><img class="logo" src="/static/favicon.svg" alt="" width="40" height="40">
+      <div><strong>{{ company }}</strong><span>Lead Finder</span></div></div>
+    <h1>{{ title }}</h1>
+    <p class="muted">Effective {{ effective }}</p>
+    {% block body %}{% endblock %}
+    <p class="muted"><a href="/">Back to Lead Finder</a></p>
+  </article>
+</main>
+{% include "_legal_footer.html" %}
+</body>
+</html>
