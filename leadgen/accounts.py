@@ -65,7 +65,7 @@ def _base() -> Iterator[store.Db]:
     """A connection to the base database, where the accounts are, whichever company this
     thread works on."""
     with store.for_company(None), store.connect() as db:
-        yield db
+        yield store.with_accounts(db)
 
 
 def new_id() -> str:

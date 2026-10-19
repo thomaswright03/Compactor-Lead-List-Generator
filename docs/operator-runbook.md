@@ -465,6 +465,7 @@ them in `.env` (see `.env.example`) or the shell.
 | `GOOGLE_PLACES_API_KEY` | No | none | Google Places key (paid; best phones and websites) |
 | `YELP_API_KEY` | No | none | Yelp key (at most 50 calls in any 24 hours) |
 | `SECRET_KEY` | No | derived from the login | Signs the login cookie. Changing it (or the username or password) logs everyone out |
+| `LEADGEN_SIGNUP` | No | off | `1` turns on sign-up mode: any company can sign up, each with its own data ([developer overview](developer-overview.md#sign-up-mode-any-company-can-sign-up)); set `SECRET_KEY` with it. Never on AARCO's site |
 | `LEADGEN_SEARCH_PAUSED` | No | off | Emergency stop: `1` makes Find leads refuse to start (see below) |
 | `LEADGEN_GOOGLE_OFF` | No | off | `1` stops every Google call (no Google charges); searches use the other sources |
 | `LEADGEN_YELP_OFF` | No | off | `1` stops every Yelp call; searches use the other sources |

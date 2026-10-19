@@ -176,10 +176,11 @@ def no_real_keys(monkeypatch, tmp_path):
                 db.run(f"DELETE FROM {table}")
             # Sign-up mode's accounts and every company's own schema (tests/test_signup.py).
             for table in store.ACCOUNT_TABLES:
-                db.run(f"DROP TABLE IF EXISTS {table}")
-            for (schema,) in db.all("SELECT nspname FROM pg_namespace WHERE nspname LIKE 'c\\_%%'"):
+                if db.one("SELECT to_regclass(?)::text", (table,))[0]:
+                    db.run(f"DELETE FROM {table}")
+            for (schema,) in db.all("SELECT nspname::text FROM pg_namespace WHERE nspname LIKE 'c\\_%%'"):
                 db.run(f"DROP SCHEMA {schema} CASCADE")
-        store._ready -= {key for key in store._ready if " |" in key}
+        store._ready -= {key for key in store._ready if " |schema=" in key}
     yield
     # Before the test's stand-ins are put back (this runs before monkeypatch's undo).
     finish_workers(monkeypatch)

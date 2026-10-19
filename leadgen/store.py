@@ -30,7 +30,7 @@ from typing import Any, ParamSpec, TypeVar
 import psycopg
 from psycopg.pq import TransactionStatus
 
-from . import http, signup_mode
+from . import http
 
 log = logging.getLogger(__name__)
 
@@ -155,7 +155,8 @@ TABLES = ("usage", "cache", "marks", "leads", "calls", "windows", "searches", "m
 # Sign-up mode (signup_mode.py): the accounts, kept in the base database (the one used
 # with no company set, see _database), never inside a company's own. Apart from SCHEMA,
 # so they aren't created in every company's schema and the backup (backup.py, which
-# copies SCHEMA's tables) stays as it was; created only while sign-up mode is on.
+# copies SCHEMA's tables) stays as it was; created when accounts.py first uses them
+# (with_accounts), so AARCO's own database never gets them.
 # companies: each company that signed up, its own details (company.py reads them) and
 # its plan (plan, status: trialing / active / past_due / canceled; trial_ends_at; the
 # Stripe ids for the billing to come). users: who can log in, each in one company
@@ -447,12 +448,6 @@ def _new_connection(key: str, postgres: bool) -> Db:
                     db.run(f"CREATE SCHEMA IF NOT EXISTS {schema}")
                 _create_tables(db)
                 _ready.add(key)
-            # The accounts, in the base database only, while sign-up mode is on.
-            accounts = key + " |accounts"
-            if signup_mode.on() and not _is_company_key(key) and (
-                    accounts not in _ready or (not postgres and not _has_accounts(db))):
-                _create_tables(db, ACCOUNT_SCHEMA)
-                _ready.add(accounts)
     except Exception:
         conn.close()
         raise
@@ -467,8 +462,19 @@ def _has_accounts(db: Db) -> bool:
     return db.one("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tokens'") is not None
 
 
-def _is_company_key(key: str) -> bool:
-    return _SCHEMA_MARK in key or Path(key).parent.name == "companies"
+def with_accounts(db: Db) -> Db:
+    """The base database's connection, its account tables (ACCOUNT_SCHEMA) created if
+    missing: once per process (accounts.py asks before each use), so AARCO's own database
+    gets them only once sign-up mode uses them."""
+    if _SCHEMA_MARK in db.key or Path(db.key).parent.name == "companies":
+        raise ValueError("the accounts are kept in the base database only")
+    marker = db.key + " |accounts"
+    if marker in _ready and (db.postgres or _has_accounts(db)):
+        return db
+    with _lock:
+        _create_tables(db, ACCOUNT_SCHEMA)
+        _ready.add(marker)
+    return db
 
 
 def _idle_now(db: Db) -> bool:

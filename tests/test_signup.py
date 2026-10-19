@@ -4,6 +4,7 @@ each company sees only its own data, through the web routes, on SQLite and (with
 LEADGEN_TEST_DATABASE_URL) on Postgres. Without the flag none of it is there (the rest of
 the tests are AARCO's own site, unchanged)."""
 
+import os
 import re
 import threading
 import time
@@ -366,6 +367,23 @@ def test_the_allowance_counts_this_months_searches_only(app):
     assert text.startswith("4 of 4 searches left this month; the count starts again on ")
 
 
+def test_the_sign_up_pages_are_well_formed_html(app, signup):
+    from test_html_valid import html_problems
+    client = app.test_client()
+    pages = {path: _page(client, path) for path in ("/signup", "/login", "/forgot")}
+    _sign_up(client, set_up=False)
+    pages["/setup"] = _page(client, "/setup")
+    client.post("/settings/invite", data={"email": "mate@acme.example"})
+    pages["/"] = _page(client)
+    joining = signup[-1][2].split("localhost", 1)[1]
+    pages["invite"] = _page(app.test_client(), joining)
+    pages["expired"] = _page(app.test_client(), "/reset/not-a-token")
+    for name, res in pages.items():
+        page = res.get_data(as_text=True)
+        assert page.lstrip().lower().startswith("<!doctype html>"), name
+        assert html_problems(page) == [], name
+
+
 # ---- the storage underneath
 
 def test_each_company_has_its_own_database(signup):
@@ -393,3 +411,50 @@ def test_the_accounts_are_kept_apart_from_every_company(signup):
                       if db.postgres else "SELECT name FROM sqlite_master WHERE type = 'table'")
             names = {r[0] for r in db.all(tables)}
     assert "users" not in names and "leads" in names
+
+
+# ---- in a browser
+
+def test_signing_up_and_the_settings_page_in_a_browser(signup, monkeypatch):
+    from test_browser import _context
+    from werkzeug.serving import make_server
+    sync_api = pytest.importorskip("playwright.sync_api")
+    server = make_server("127.0.0.1", 0, web.create_app(), threaded=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    site = f"http://127.0.0.1:{server.server_port}/"
+    try:
+        with sync_api.sync_playwright() as p:
+            try:
+                chromium = p.chromium.launch(executable_path=os.environ.get("LEADGEN_CHROMIUM") or None)
+            except Exception as exc:
+                pytest.skip(f"Chromium is not available: {exc}")
+            tab = _context(chromium).new_page()
+            errors = []
+            tab.on("pageerror", lambda exc: errors.append(str(exc)))
+            tab.goto(site + "signup")
+            tab.fill("input[name=company]", "Acme Balers")
+            tab.fill("input[name=name]", "Pat Owner")
+            tab.fill("input[name=email]", "owner@acme.example")
+            tab.fill("input[name=password]", PASSWORD)
+            tab.click("button[type=submit]")
+            tab.wait_for_url("**/setup")
+            tab.fill("input[name=address]", "84101")
+            tab.fill("textarea[name=competitors]", "Rival Waste")
+            tab.click("button[type=submit]")
+            tab.wait_for_selector("#page-find:not([hidden])")
+            assert "4 of 4 searches left this month" in tab.inner_text("#allowance")
+            assert tab.inner_text(".co-full") == "Acme Balers"
+            tab.click("#settings-link")
+            tab.wait_for_selector("#page-settings:not([hidden])")
+            assert tab.title() == "Settings · Lead Finder"
+            assert tab.input_value("#settings-form input[name=competitors]") == "Rival Waste"
+            tab.fill("#settings-form input[name=radius]", "25")
+            tab.click("#settings-form button[type=submit]")
+            tab.wait_for_selector("#settings-note")
+            assert "Your settings are saved." in tab.inner_text("#settings-note")
+            assert tab.is_visible("#page-settings")
+            assert errors == []
+            chromium.close()
+    finally:
+        server.shutdown()
