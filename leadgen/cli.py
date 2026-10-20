@@ -139,7 +139,7 @@ def _add_checks(sub: Commands) -> None:
                    "LEADGEN_SMTP_USER and LEADGEN_SMTP_PASSWORD; the webhook: LEADGEN_ALERT_WEBHOOK) "
                    "and say where it was delivered")
     sub.add_parser("demo", help="Make the demo account (sign-up mode): log in as \"test\" / \"test\" "
-                   "to show the site on a made-up company and leads (the live site makes it when it starts)")
+                   "to show the site on a made-up company and leads (made at the first login otherwise)")
     sr = sub.add_parser("scoring-report", help="How the scoring does on the reference set: per tier, how "
                         "many businesses, how many have equipment or are flagged, and which confirmed "
                         "businesses moved tier since the set was copied (docs/scoring-evaluation.md)")

@@ -19,7 +19,7 @@ from typing import Any
 from flask import Blueprint, abort, current_app, g, jsonify, redirect, render_template, request, session
 from flask.typing import ResponseReturnValue
 
-from .. import accounts, allowance, billing, company, config, localtime, mail, saved, signup_mode, store
+from .. import accounts, allowance, billing, company, config, demo, localtime, mail, saved, signup_mode, store
 from ..accounts import AccountError, User
 from ..geo import GeocodeError, LookupDown, geocode
 from .common import same_origin, state, wants_page
@@ -201,6 +201,8 @@ def login() -> ResponseReturnValue:
     if len(recent) >= LOGIN_TRIES:
         return _page("login", "Log in", 429, form=form, then=then,
                      error="Too many wrong tries. Wait 15 minutes and try again.")
+    if form["email"].lower() == demo.LOGIN:
+        demo.ensure_quietly()           # the demo account is made the first time someone uses it
     user = accounts.check_login(form["email"], request.form.get("password") or "")
     if user is not None:
         s.failures.pop(who, None)

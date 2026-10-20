@@ -13,8 +13,8 @@ def _client():
 
 
 def test_the_demo_account_logs_in_to_its_made_up_company(signup):  # noqa: F811
-    assert demo.ensure() and not demo.ensure()                # made once
-    client = _client()
+    client = _client()                                        # made at the first login as "test"
+    assert not demo.ensure()                                  # and only once
     assert _page(client).status_code == 200
     leads = client.get("/leads").get_json()["leads"]
     assert len(leads) == len(demo.BUSINESSES)

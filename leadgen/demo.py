@@ -3,8 +3,8 @@ site, for an ad or a sales call, on a made-up company with made-up leads, Yes / 
 calls, contacts and searches around Salt Lake City. Every business, person and phone
 number in it is invented (the numbers are 555-01xx, kept for fiction).
 
-ensure() makes it once (the live site calls it when it starts; `python -m leadgen demo`
-does it by hand) and leaves it alone after. The demo person is a member, not the owner,
+ensure() makes it once (the login page calls it the first time someone logs in as
+"test"; `python -m leadgen demo` does it by hand) and leaves it alone after. The demo person is a member, not the owner,
 so Settings, invites and billing are closed to it, and searching is off for its company
 (allowance.refusal), so the made-up list stays as it is.
 """
@@ -236,7 +236,7 @@ def ensure() -> bool:
 
 
 def ensure_quietly() -> None:
-    """ensure(), for the site's start: a failure is logged, never raised."""
+    """ensure(), for the login page: a failure is logged, never raised."""
     try:
         ensure()
     except Exception:

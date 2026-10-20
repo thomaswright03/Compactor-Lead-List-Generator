@@ -16,7 +16,6 @@ import hmac
 import logging
 import os
 import secrets
-import threading
 import time  # noqa: F401 - tests patch web.time.sleep
 from typing import Any
 
@@ -24,7 +23,7 @@ from flask import Flask, jsonify, redirect, render_template, request, session
 from flask.typing import ResponseReturnValue
 from werkzeug.exceptions import HTTPException
 
-from .. import THREAD_PREFIX, alerts, awake, calls, company, config, demo, health, localtime, marks, signup_mode, store
+from .. import alerts, awake, calls, company, config, health, localtime, marks, signup_mode, store
 from ..localtime import date_time_text
 from ..pipeline import SearchParams
 from ..scoring import PARENT_FLAG
@@ -245,7 +244,4 @@ def create_app(password: str | None = None, username: str | None = None,
                       leads.bp, mapping.bp, customer_routes.bp, legal.bp, admin.bp, billing_routes.bp):
         app.register_blueprint(blueprint)
     _register_pages(app)
-    if signup_mode.on() and store.on_render():
-        # The demo account (log in as "test"), made once, beside the start (demo.py).
-        threading.Thread(target=demo.ensure_quietly, name=f"{THREAD_PREFIX}demo-account", daemon=True).start()
     return app
