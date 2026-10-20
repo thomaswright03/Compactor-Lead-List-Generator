@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from . import config, localtime, store
 from .company import Company
 
+DEMO_COMPANY = "demo00000000"    # demo.COMPANY_ID
+
 # A company subscribed through Stripe (billing.py) whose trial ends keeps searching this
 # long while Stripe charges the card and its webhook says so (the webhook keeps the status
 # and trial end as Stripe has them); without a subscription the trial ends on the dot.
@@ -67,7 +69,10 @@ def allowance(company: Company) -> Allowance:
 
 def can_search(company: Company) -> str | None:
     """Why this company can't search now (plain words for the page), or None when it can:
-    its plan is canceled or its payment overdue, or its free trial has ended."""
+    its plan is canceled or its payment overdue, or its free trial has ended (or it is the
+    demo company, demo.py, whose made-up list stays as it is)."""
+    if company.id == DEMO_COMPANY:
+        return "Searching is off in the demo account. Sign up to search your own area."
     if company.status == "canceled":
         return "Your Lead Finder plan is canceled, so new searches are off. Your saved leads are still here."
     if company.status == "past_due":

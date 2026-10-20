@@ -27,6 +27,7 @@ MAX_PASSWORD = 200
 MAX_NAME = 80
 MAX_EMAIL = 254
 TRIAL_DAYS = plans.TRIAL_DAYS
+DEMO_LOGIN = "test"               # demo.LOGIN
 STATUSES = ("trialing", "active", "past_due", "canceled")
 # How long each kind of emailed link works.
 TOKEN_HOURS = {"verify": 7 * 24, "reset": 2, "invite": 7 * 24}
@@ -254,7 +255,8 @@ def check_login(email: str, password: str) -> User | None:
     try:
         user = user_by_email(email_of(email))
     except AccountError:
-        user = None
+        # The demo account's login is a word, not an address (demo.py).
+        user = user_by_email(DEMO_LOGIN) if str(email or "").strip().lower() == DEMO_LOGIN else None
     hashed = user.password_hash if user else _DUMMY_HASH
     ok = check_password_hash(hashed, password or "")
     return user if user and ok else None

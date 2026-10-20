@@ -41,7 +41,7 @@
     {% elif mode == 'login' %}
     <form method="post" action="/login">
       {% if then %}<input type="hidden" name="next" value="{{ then }}">{% endif %}
-      <label>Email <input name="email" type="email" autocomplete="username" maxlength="254" value="{{ form.email or '' }}" required{% if not error %} autofocus{% endif %}></label>
+      <label>Email <input name="email" type="text" inputmode="email" autocomplete="username" maxlength="254" value="{{ form.email or '' }}" required{% if not error %} autofocus{% endif %}></label>
       <label>Password <input name="password" type="password" autocomplete="current-password" required{% if error %} autofocus{% endif %}></label>
       {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
       <button type="submit">Log in</button>

@@ -138,6 +138,8 @@ def _add_checks(sub: Commands) -> None:
     sub.add_parser("test-alert", help="Send a test alert on every channel that is set up (email: "
                    "LEADGEN_SMTP_USER and LEADGEN_SMTP_PASSWORD; the webhook: LEADGEN_ALERT_WEBHOOK) "
                    "and say where it was delivered")
+    sub.add_parser("demo", help="Make the demo account (sign-up mode): log in as \"test\" / \"test\" "
+                   "to show the site on a made-up company and leads (the live site makes it when it starts)")
     sr = sub.add_parser("scoring-report", help="How the scoring does on the reference set: per tier, how "
                         "many businesses, how many have equipment or are flagged, and which confirmed "
                         "businesses moved tier since the set was copied (docs/scoring-evaluation.md)")
@@ -404,6 +406,13 @@ def cmd_scoring_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_demo(args: argparse.Namespace) -> int:
+    from . import demo
+    print("Made the demo account." if demo.ensure() else "The demo account is already there.")
+    print(f"Log in with {demo.LOGIN!r} and the password {demo.PASSWORD!r}.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     args = build_parser().parse_args(argv)
@@ -414,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
     commands = {"run": cmd_run, "reference": cmd_reference, "out-of-area": cmd_out_of_area,
                 "merge-sites": cmd_merge_sites, "backup": cmd_backup, "restore": cmd_restore,
                 "check-sources": cmd_check_sources, "test-alert": lambda a: cmd_test_alert(),
-                "scoring-report": cmd_scoring_report}
+                "scoring-report": cmd_scoring_report, "demo": cmd_demo}
     command = commands.get(args.command or "")
     if command is None:
         build_parser().print_help()
