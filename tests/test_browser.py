@@ -2483,9 +2483,9 @@ def test_the_map_shows_aarco_its_area_the_areas_and_every_saved_business(page, s
     expect(page.locator("#page-map h1")).to_have_text("Map")
     expect(page).to_have_title(re.compile(r"^Map · "))
     # AARCO's own pin, named.
-    aarco = page.locator("#map .aarco-mark")
+    aarco = page.locator("#map .own-mark")
     expect(aarco).to_be_visible()
-    expect(aarco.locator(".aarco-name")).to_have_text("AARCO")
+    expect(aarco.locator(".own-name")).to_have_text("AARCO")
     # The 30-mile circle and the nine areas, named, the one the search missed marked so.
     assert page.evaluate("M.ring !== null && M.map.hasLayer(M.ring)")
     assert page.evaluate("M.shapes.map(s => s.status)").count("missed") == 1
@@ -2580,7 +2580,7 @@ def test_the_map_takes_the_dark_theme_and_fits_a_phone(browser, site, page):
     errors = []
     phone.on("pageerror", lambda exc: errors.append(str(exc)))
     phone.goto(site + "#map")
-    expect(phone.locator("#map .aarco-mark")).to_be_visible()
+    expect(phone.locator("#map .own-mark")).to_be_visible()
     fits = phone.evaluate("""() => {
         const r = document.getElementById('map').getBoundingClientRect();
         return { page: document.documentElement.scrollWidth > window.innerWidth, left: r.left, right: r.right,
@@ -2649,8 +2649,8 @@ AREA_NAMES = """() => {
                own: inside(middle, ring), size: parseFloat(style.fontSize), halo: style.textShadow !== 'none',
                z: Number(getComputedStyle(node.parentElement).zIndex) };
     });
-    const marks = [...document.querySelectorAll('#map .pin-cluster, #map .pin-comp, #map .aarco-mark svg, ' +
-                                                '#map .aarco-name')]
+    const marks = [...document.querySelectorAll('#map .pin-cluster, #map .pin-comp, #map .own-mark svg, ' +
+                                                '#map .own-name')]
       .map((node) => ({ box: box(node), z: Number(getComputedStyle(node.closest('.leaflet-marker-icon')).zIndex),
                         cluster: node.matches('.pin-cluster') }))
       .filter((m) => m.box.right > map.left && m.box.left < map.right && m.box.bottom > map.top &&
@@ -2794,7 +2794,7 @@ def test_a_pins_details_fit_a_phones_map_and_close_with_their_button(browser, si
     context = _context(browser, viewport={"width": width, "height": 800}, has_touch=True, is_mobile=True)
     phone = context.new_page()
     phone.goto(site + "#map")
-    expect(phone.locator("#map .aarco-mark")).to_be_visible()
+    expect(phone.locator("#map .own-mark")).to_be_visible()
     x, y = _on_screen(phone, far.lat, far.lon)
     edge = phone.locator("#map").bounding_box()
     assert edge["x"] + edge["width"] - 40 < x < edge["x"] + edge["width"]          # near the right edge
@@ -2843,7 +2843,7 @@ FAILED = {"error": "The saved list can't be read right now. Try again in a minut
 
 @pytest.mark.parametrize("where,path,shown", [("leads", "**/leads?*", "table.leads"),
                                               ("calls", "**/leads?*tab=called*", "#calls-body"),
-                                              ("map", "**/map-data", "#map .aarco-mark"),
+                                              ("map", "**/map-data", "#map .own-mark"),
                                               ("stats", "**/stats", "#stats-body")])
 def test_a_page_that_could_not_load_shows_its_data_once_the_site_is_back(browser, site, page, where, path, shown):
     """The site's database was down: the page says it can't show its data, with Retry, and
@@ -2918,7 +2918,7 @@ def test_a_stopped_site_is_named_not_the_persons_internet(browser, page):
     tab = context.new_page()
     try:
         tab.goto(f"http://127.0.0.1:{server.server_port}/#map")
-        tab.wait_for_selector("#map .aarco-mark")                   # the map's library is loaded
+        tab.wait_for_selector("#map .own-mark")                   # the map's library is loaded
         tab.click("nav a[data-page=leads]")
         tab.wait_for_selector("table.leads")
     finally:

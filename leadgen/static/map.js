@@ -1,5 +1,5 @@
-/* Part 6: the Map page. AARCO's area (the circle searches are meant for), the areas a search
-   asks the free map data in (shaded by how the latest search of the area went), AARCO's own pin,
+/* Part 6: the Map page. The company's area (the circle searches are meant for), the areas a search
+   asks the free map data in (shaded by how the latest search of the area went), its own pin,
    and a pin for every saved business, coloured by its Yes / No answer, with toggles per group.
    The map is Leaflet (vendor/leaflet), loaded the first time the page opens; the street map
    comes from OpenStreetMap's tiles, and without them the rest is drawn on a plain background.
@@ -46,7 +46,7 @@ const CLUSTER_UNTIL = 15;
 const SAME_SPOT_PX = 6;
 // Only what is within this share of the map's size around the view is drawn (redrawn as it moves).
 const VIEW_PAD = 0.5;
-// How far above the pins the area names are drawn (AARCO's pin is above both).
+// How far above the pins the area names are drawn (the company's pin is above both).
 const AREA_NAME_Z = 500;
 // Where an area's name may move to when circles cover its own spot: every NAME_STEP px up to
 // NAME_REACH px each way, nearest first (placeLabels), keeping NAME_GAP px clear of what it avoids.
@@ -182,7 +182,7 @@ function areaStatusWord(status) {
     : status === "partly" ? "partly searched" : status === "asking" ? "filling in"
       : "not searched";
 }
-// The search areas under everything else, then the circle around AARCO.
+// The search areas under everything else, then the circle around the shop.
 /** @param {L.Map} map @param {MapData} data */
 function drawAreas(map, data) {
   const shapes = L.svg({ padding: 0.5 });
@@ -195,7 +195,7 @@ function drawAreas(map, data) {
     label.append(el("span", area.name));
     if (area.status !== "searched") label.append(el("small", areaStatusWord(area.status)));
     M.shapes.push({ shape, status: area.status, name: label, outline: area.outline });
-    // Above the groups' circles (a tap goes through the name to them), under AARCO's pin.
+    // Above the groups' circles (a tap goes through the name to them), under the company's pin.
     M.areas.addLayer(L.marker(area.label, {
       icon: L.divIcon({ className: "area-label", html: label, iconSize: null }),
       interactive: false, keyboard: false, zIndexOffset: AREA_NAME_Z }));
@@ -242,10 +242,10 @@ function drawMap(data) {
   M.pins = []; M.shapes = []; M.groups = {}; M.shown = new Set(); M.clustered = new Map();
   drawAreas(map, data);
   drawPins(map, data);
-  aarcoPin(map, data);
+  ownPin(map, data);
 
   $("map-coverage").textContent = data.coverage;
-  // No saved business at all: say how the map fills up (AARCO and its areas are still drawn).
+  // No saved business at all: say how the map fills up (the shop and its areas are still drawn).
   const none = !data.pins.length && !data.no_position;
   $("map-empty").hidden = !none;
   $("map-empty").replaceChildren(...(none ? [emptyNote("No saved businesses yet.",
@@ -256,7 +256,7 @@ function drawMap(data) {
     ? "1 saved business has no map position, so it isn't on the map (it is on the Leads page)."
     : `${data.no_position.toLocaleString()} saved businesses have no map position, so they ` +
       "aren't on the map (they are on the Leads page).";
-  $("map-aarco-address").textContent = `, ${data.aarco.address}`;
+  $("map-own-address").textContent = `, ${data.own.address}`;
   areaList(data.areas);
   if (first) map.fitBounds(L.latLngBounds(data.circle), { padding: [8, 8] });
   placePins();
@@ -450,7 +450,7 @@ function spotList(members, box, changed) {
 // first, each in free space inside its own area, so a circle with a count never covers a name and
 // its status. A name stays where it is drawn when that spot is clear, and otherwise moves to the
 // nearest clear spot (NAME_SPOTS) whose middle is still inside its area. Clear means whole inside
-// the map and covering no circle, competitor's square, AARCO's pin, map button or name already
+// the map and covering no circle, competitor's square, the shop's pin, map button or name already
 // placed. A name with no clear spot waits until the map is zoomed in (the list under the map
 // names every area with its status).
 function placeLabels() {
@@ -460,7 +460,7 @@ function placeLabels() {
   const zoom = map.getZoom(), origin = map.getPixelBounds().min;
   /** @type {{left: number, right: number, top: number, bottom: number}[]} */
   const taken = [...document.querySelectorAll("#map .pin-cluster, #map .pin-comp, " +
-                                              "#map .aarco-mark svg, #map .aarco-name, " +
+                                              "#map .own-mark svg, #map .own-name, " +
                                               "#map .leaflet-control")]
     .map((node) => node.getBoundingClientRect());
   for (const { name, outline } of M.shapes) {
@@ -531,32 +531,32 @@ function makeMap() {
   return map;
 }
 
-// AARCO's own pin: a larger marker of its own shape, labelled, always on top.
+// the company's own pin: a larger marker of its own shape, labelled, always on top.
 /** @type {L.Marker | null} */
-let aarcoMarker = null;
+let ownMarker = null;
 /** @param {L.Map} map @param {MapData} data */
-function aarcoPin(map, data) {
-  if (aarcoMarker) aarcoMarker.remove();
-  const html = el("div", undefined, "aarco-mark");
+function ownPin(map, data) {
+  if (ownMarker) ownMarker.remove();
+  const html = el("div", undefined, "own-mark");
   html.innerHTML = '<svg viewBox="0 0 32 42" width="32" height="42" aria-hidden="true" ' +
     'focusable="false">' +
-    '<path class="aarco-body" d="M16 1.5C7.9 1.5 1.5 7.8 1.5 15.8 1.5 26.6 16 40.5 16 40.5' +
+    '<path class="own-body" d="M16 1.5C7.9 1.5 1.5 7.8 1.5 15.8 1.5 26.6 16 40.5 16 40.5' +
     'S30.5 26.6 30.5 15.8C30.5 7.8 24.1 1.5 16 1.5z"/>' +
-    '<path class="aarco-star" d="M16 7.6l2.4 5 5.5.7-4 3.8 1 5.4L16 19.9l-4.9 2.6 1-5.4-4-3.8 ' +
+    '<path class="own-star" d="M16 7.6l2.4 5 5.5.7-4 3.8 1 5.4L16 19.9l-4.9 2.6 1-5.4-4-3.8 ' +
     '5.5-.7z"/></svg>';
-  html.append(el("span", data.aarco.name, "aarco-name"));
-  aarcoMarker = L.marker([data.aarco.lat, data.aarco.lon], {
-    icon: L.divIcon({ className: "aarco-pin", html, iconSize: [32, 42], iconAnchor: [16, 41],
+  html.append(el("span", data.own.name, "own-name"));
+  ownMarker = L.marker([data.own.lat, data.own.lon], {
+    icon: L.divIcon({ className: "own-pin", html, iconSize: [32, 42], iconAnchor: [16, 41],
                       popupAnchor: [0, -38] }),
-    title: `${data.aarco.name}: ${data.aarco.address}`, keyboard: true, zIndexOffset: 1000 });
-  aarcoMarker.bindPopup(() => {
+    title: `${data.own.name}: ${data.own.address}`, keyboard: true, zIndexOffset: 1000 });
+  ownMarker.bindPopup(() => {
     const box = el("div", undefined, "pin-box");
-    box.append(el("strong", data.aarco.company), el("div", data.aarco.address),
+    box.append(el("strong", data.own.company), el("div", data.own.address),
                el("div", `The ${data.miles}-mile circle is ${OWN}'s area: searches are meant for ` +
                          "it, and Miles on the Leads page are measured from here.", "sub"));
     return box;
   }, { ...POPUP, maxWidth: 280 });
-  aarcoMarker.addTo(map);
+  ownMarker.addTo(map);
 }
 
 // A business's details, opened from its pin.

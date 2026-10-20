@@ -1,7 +1,7 @@
 /* Part 5: the Stats page. */
 // The names this part shares with the others (eslint.config.mjs reads this list).
 /* exported loadStats, chartRows, drawChart */
-// What the numbers leave out, named apart: "1 competitor and 1 AARCO listing are left out ...".
+// What the numbers leave out, named apart: "1 competitor and 1 own listing are left out ...".
 /** @param {StatsAnswer} s */
 function leftOutNote(s) {
   const own = s.left_out_own || 0, rivals = s.left_out - own;

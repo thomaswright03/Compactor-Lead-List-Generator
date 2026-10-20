@@ -129,8 +129,8 @@ function counts() {
   show("n-calls", S.counts.called, "called");
 }
 
-// Competitors and AARCO's own listings (its parent company's too) have their own tab, named for
-// both: they are flagged, never asked Yes / No, and AARCO's own aren't scored (isOwn).
+// Competitors and the company's listings (its parent company's too) have their own tab, named for
+// both: they are flagged, never asked Yes / No, and the company's own aren't scored (isOwn).
 // Businesses a later search found closed for good keep their mark (and stay under Yes or No,
 // flagged); the Closed tab lists them all, and they leave Not checked.
 /** @type {[string, string][]} */
@@ -151,7 +151,7 @@ const TIER_WORDS = { A: "strong", B: "likely", C: "possible", D: "weak" };
 /** @type {Record<string, {dir: string}>} */
 const SORTS = { score: { dir: "desc" }, name: { dir: "asc" }, city: { dir: "asc" },
                 contact: { dir: "asc" }, miles: { dir: "asc" } };
-// AARCO's own listing, or its parent company's: not a prospect, and not given a score or tier.
+// The company's own listing, or its parent's: not a prospect, and not given a score or tier.
 /** @type {(l: Lead) => boolean} */
 const isOwn = (l) => l.lead_type === "Own company";
 
@@ -589,7 +589,7 @@ function callBox(lead) {
 }
 
 // The score and tier, with the tier's meaning written next to it (A strong, B likely, C possible,
-// D weak); AARCO's own listing has none (it is never sold to).
+// D weak); the company's own listing has none (it is never sold to).
 /** @param {Lead} l */
 function scoreCell(l) {
   if (isOwn(l)) {
@@ -722,7 +722,7 @@ function leadTable(rows, withCall) {
   return table;
 }
 
-// "Pro Baler, Action Compaction, AARCO Waste & Disposal or ACE Recycling & Disposal".
+// "Pro Baler, Action Compaction, Summit Compactor Service or its parent company".
 /** @param {string[]} names */
 function orList(names) {
   return names.length < 2 ? names.join("")

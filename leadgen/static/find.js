@@ -421,7 +421,7 @@ function renderHistory(searches, body) {
 }
 
 // What was typed, and under it the place the search actually ran around (and how far that
-// is from AARCO's shop) when it says more than the typed words.
+// is from the company's shop) when it says more than the typed words.
 /** @param {SearchRow} s */
 function whereCell(s) {
   const td = el("td", undefined, "h-where");
@@ -661,7 +661,7 @@ function checkForm(form) {
   return null;
 }
 // Before anything is spent the server finds the place typed (web/place.py place): the
-// confirmation names it and how far it is from AARCO's shop. A place outside AARCO's area needs a
+// confirmation names it and how far it is from the shop. A place outside the company's area needs a
 // second, explicit yes (farDialog) that names it again. A match that is only a road, a trail or
 // a business (place.uncertain) is asked about in the confirmation, with "Go back" in focus.
 /** @type {(p: Place) => string} */
@@ -726,7 +726,7 @@ $("far-back").addEventListener("click", () => { $("far-dlg").close(); backToPlac
 $("far-form").addEventListener("submit", (/** @type {SubmitEvent} */ e) => {
   e.preventDefault(); $("far-dlg").close(); startSearch(S.place && S.place.confirm);
 });
-/** @param {string} [confirmPlace] the place confirmed (outside AARCO's area, or doubtful) */
+/** @param {string} [confirmPlace] the place confirmed (outside the company's area, or doubtful) */
 async function startSearch(confirmPlace) {
   setGo(false, "Starting...");
   clearErrors(); $("search-failed").hidden = true;
@@ -741,7 +741,7 @@ async function startSearch(confirmPlace) {
     if (err.status === 429 && err.body && err.body.job_id) return follow(err.body.job_id);
     setGo(false, "");
     loadSearches();
-    // The place turned out to be outside AARCO's area: ask, naming it (nothing was spent).
+    // The place turned out to be outside the company's area: ask, naming it (nothing was spent).
     if (err.body && err.body.confirm_far && err.body.place) { farDialog(err.body.place); return; }
     // A doubtful place that wasn't confirmed (the lookup found another since): at the field.
     const atField = err.body && (err.status === 400 || err.body.confirm_uncertain);

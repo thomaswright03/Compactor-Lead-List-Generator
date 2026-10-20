@@ -1,6 +1,6 @@
 /* The Lead Finder page's styles, one set of rules per part of the page, each part's narrower-screen
    rules right after it. "Ivory & Navy / Midnight & Brass": Fraunces for titles, names and big
-   numbers, Inter for the rest, AARCO's navy as the one accent with brass as its highlight.
+   numbers, Inter for the rest, the brand navy as the one accent with brass as its highlight.
    Colours, spacing (--sp-1 to --sp-6), radii and every text size come from templates/_theme.html
    (--fs-xs to --fs-xl for reading text, the named display sizes for titles and figures); use
    those, not raw pixel values.
@@ -956,8 +956,8 @@ dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturat
 .sym.pin.no { background:var(--pin-no); }
 .sym.pin.unchecked { background:var(--pin-unchecked); }
 .sym.comp { width:14px; height:14px; border:3px solid var(--pin-comp); border-radius:2px; background:var(--pin-ring); }
-.sym.aarco { width:14px; height:14px; margin:0 1px 3px; border-radius:50% 50% 50% 0; transform:rotate(-45deg);
-             background:var(--aarco); box-shadow:0 0 0 1.5px var(--aarco-ink), 0 0 0 2.5px var(--line); }
+.sym.own { width:14px; height:14px; margin:0 1px 3px; border-radius:50% 50% 50% 0; transform:rotate(-45deg);
+             background:var(--own); box-shadow:0 0 0 1.5px var(--own-ink), 0 0 0 2.5px var(--line); }
 .sym.ring { width:18px; height:18px; border-radius:50%; border:2.5px solid var(--ink); }
 .sym.area { width:22px; height:14px; border-radius:3px; }
 .sym.area.searched { border:1.5px solid var(--area-done); background:color-mix(in srgb, var(--area-done) 14%, transparent); }
@@ -1007,7 +1007,7 @@ dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturat
 .area-name span { display:block; }
 .area-name small { display:block; font-size:var(--fs-xs); font-weight:700; color:var(--area-miss); }
 .area-name:is(.unknown, .never) small { color:var(--muted); }
-/* A competitor: a hollow square. AARCO: a pin of its own with its name beside it. */
+/* A competitor: a hollow square. The company: a pin of its own with its name beside it. */
 #map .pin-comp { box-sizing:border-box; border:3px solid var(--pin-comp); border-radius:2px; background:var(--pin-ring);
                  box-shadow:0 0 0 1.5px var(--pin-ring); }
 /* Pins close together at this zoom: one round group (map.js placePins), its ring split by Yes / No
@@ -1017,13 +1017,13 @@ dialog::backdrop { background:var(--backdrop); backdrop-filter:blur(6px) saturat
 .pin-cluster span { display:grid; place-items:center; border-radius:50%; padding:0 var(--sp-1); background:var(--card); color:var(--ink);
                     font-weight:800; font-size:var(--fs-xs); line-height:1; font-variant-numeric:tabular-nums; }
 #map .pin-cluster:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
-#map .aarco-pin { overflow:visible; }
-.aarco-mark { position:relative; width:32px; height:42px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
-.aarco-mark svg { display:block; }
-.aarco-body { fill:var(--aarco); stroke:var(--aarco-ink); stroke-width:1.5; }
-.aarco-star { fill:var(--aarco-ink); }
-.aarco-name { position:absolute; left:31px; top:3px; padding:1px var(--sp-2); border:1.5px solid var(--aarco-ink);
-              border-radius:var(--sp-1); background:var(--aarco); color:var(--aarco-ink); font-weight:800;
+#map .own-pin { overflow:visible; }
+.own-mark { position:relative; width:32px; height:42px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+.own-mark svg { display:block; }
+.own-body { fill:var(--own); stroke:var(--own-ink); stroke-width:1.5; }
+.own-star { fill:var(--own-ink); }
+.own-name { position:absolute; left:31px; top:3px; padding:1px var(--sp-2); border:1.5px solid var(--own-ink);
+              border-radius:var(--sp-1); background:var(--own); color:var(--own-ink); font-weight:800;
               font-size:var(--fs-sm); letter-spacing:.04em; white-space:nowrap; }
 /* A business's details, opened from its pin. The name stays clear of the close button (larger
    on a touch screen). */

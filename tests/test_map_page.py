@@ -70,7 +70,7 @@ def test_the_map_needs_the_login_like_every_page():
 
 def test_aarco_its_area_and_the_nine_search_areas():
     data = _data()
-    assert data["aarco"] == {"name": "AARCO", "company": config.OWN_COMPANY, "address": config.OWN_ADDRESS,
+    assert data["own"] == {"name": "AARCO", "company": config.OWN_COMPANY, "address": config.OWN_ADDRESS,
                              "lat": config.OWN_COORDS[0], "lon": config.OWN_COORDS[1]}
     assert data["center"] == list(AARCO) and data["miles"] == config.SERVICE_AREA_MILES == 30
     # The circle is 30 miles out all round.

@@ -240,7 +240,7 @@ def test_competitors_and_the_own_listing_are_the_companys(app):
     assert rival.lead_type == "Competitor" and rival.flags[0] == "COMPETITOR: Rival Waste"
     assert own.lead_type == "Own company" and "OWN COMPANY: Acme Balers" in own.flags
     assert aarco.lead_type != "Competitor"                  # AARCO's competitors aren't this company's
-    assert _lead("Pro Baler", "p2").lead_type == "Competitor"   # and still are AARCO's
+    assert _lead("Pro Baler", "p2").lead_type != "Competitor"   # nor anyone's outside a company
 
 
 # ---- each company's own data

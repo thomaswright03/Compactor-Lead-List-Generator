@@ -19,7 +19,7 @@ const CONFIG = /** @type {PageConfig} */ (JSON.parse($("page-config").textConten
 const OUTCOMES = CONFIG.outcomes;
 const PAUSED = CONFIG.paused;
 const SITE = CONFIG.site;
-// The company's short name, where the page says whose shop or area ("AARCO's shop").
+// The company's short name, where the page says whose shop or area ("Summit's shop").
 const OWN = CONFIG.short;
 /** @type {Record<string, string>} */
 const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", map: "Map", stats: "Stats",

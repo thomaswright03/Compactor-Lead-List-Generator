@@ -269,7 +269,7 @@
       </div>
     </section>
 
-    <!-- Map: AARCO's area, the areas a search asks the free map data in, and a pin per saved
+    <!-- Map: the company's area, the areas a search asks the free map data in, and a pin per saved
          business (static/map.js; Leaflet is loaded the first time this page opens). -->
     <section class="page" id="page-map" hidden>
       <div class="page-head"><h1>Map</h1>
@@ -310,8 +310,8 @@
             </fieldset>
             <fieldset class="card map-legend">
               <legend>Also on the map</legend>
-              <div class="key"><span class="sym aarco" aria-hidden="true"></span><span><strong>{{ company_short }}</strong>'s shop<span
-                id="map-aarco-address"></span></span></div>
+              <div class="key"><span class="sym own" aria-hidden="true"></span><span><strong>{{ company_short }}</strong>'s shop<span
+                id="map-own-address"></span></span></div>
               <div class="key"><span class="sym ring" aria-hidden="true"></span><span>The {{ area_miles|int }}-mile area around {{ company_short }}</span></div>
               <label class="check"><input type="checkbox" id="map-show-areas" checked> <span>Search areas, shaded by the latest search:</span></label>
               <div class="key sub-key"><span class="sym area searched" aria-hidden="true"></span><span>Searched</span></div>
@@ -495,7 +495,7 @@
   </form>
 </dialog>
 
-<!-- A place outside AARCO's area needs a second, explicit yes (web/finding.py search). -->
+<!-- A place outside the company's area needs a second, explicit yes (web/finding.py search). -->
 <dialog id="far-dlg" aria-labelledby="far-title" aria-describedby="far-why">
   <form class="dlg" method="dialog" id="far-form">
     <h2 id="far-title">Search outside {{ company_short }}'s area?</h2>

@@ -254,7 +254,7 @@ def _run(queries: Sequence[str], cells: Sequence[Cell], headers: dict[str, str],
 
 def check(api_key: str) -> str:
     """One Yelp call (taken from the daily budget first, and refused when the calls are
-    used up) for the businesses within a mile of AARCO's shop: what it found, for
+    used up) for the businesses within a mile of the shop: what it found, for
     `python -m leadgen check-sources`. Raises SourceError when the call wasn't made, or
     HttpError when Yelp didn't answer."""
     budget = usage.yelp_budget()
@@ -268,7 +268,7 @@ def check(api_key: str) -> str:
         if any(k in str(exc) for k in KEY_ERRORS):
             raise SourceError(f"Yelp rejected the key. {exc}") from exc
         raise
-    return (f"{len(items)} businesses within a mile of AARCO's shop; {budget.left()} of "
+    return (f"{len(items)} businesses within a mile of the shop; {budget.left()} of "
             f"{budget.limit} calls left in the last 24 hours")
 
 

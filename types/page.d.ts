@@ -314,7 +314,7 @@ type MapPinRow = [key: string, lat: number, lon: number, group: string, name: st
 
 /** GET /map-data (area_map.page). */
 interface MapData {
-  aarco: { name: string; company: string; address: string; lat: number; lon: number };
+  own: { name: string; company: string; address: string; lat: number; lon: number };
   center: [number, number];
   miles: number;
   circle: [number, number][];

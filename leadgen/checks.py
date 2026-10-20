@@ -3,7 +3,7 @@ administrator's "Check sources" on the Find leads page.
 
 Each source gets one cheapest real call: Yelp's is taken from the site's daily budget
 first (and refused when the calls are used up), Google's is its IDs-only text search,
-the map data and the place lookup are asked for one thing near AARCO's shop, and the
+the map data and the place lookup are asked for one thing near the shop, and the
 database is asked for a count. A source whose key isn't set is reported as not set up
 and never called. Each answer is noted for /healthz like any other call (health.py).
 
@@ -78,7 +78,7 @@ def _osm() -> str:
             errors.append(str(exc))
             continue
         host = endpoint.split("/")[2]
-        return f"{host} answered: {len(data.get('elements') or [])} map element near AARCO's shop"
+        return f"{host} answered: {len(data.get('elements') or [])} map element near the shop"
     raise SourceError("No map server answered: " + "; ".join(errors))
 
 

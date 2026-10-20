@@ -393,10 +393,11 @@ class Coverage:
 def coverage(record: dict[str, Any] | None, drawn: Sequence[Area]) -> Coverage:
     """How the search on record (latest_search) covered each of the areas drawn."""
     unknown = [UNKNOWN] * len(drawn)
+    whose = company.current().short_name
     if record is None:
         return Coverage([NEVER] * len(drawn),
-                        "No search of AARCO's area has been recorded yet, so the areas aren't shaded.")
-    about = f"Shaded by the latest search of AARCO's area ({record.get('when') or record.get('day')})"
+                        f"No search of {whose}'s area has been recorded yet, so the areas aren't shaded.")
+    about = f"Shaded by the latest search of {whose}'s area ({record.get('when') or record.get('day')})"
     fill = _dict(record.get("fill"))
     filling = fill.get("state") == "filling"
     missed = ASKING if filling else MISSED
@@ -493,7 +494,7 @@ def page(leads: list[Lead], record: dict[str, Any] | None, unread: bool = False)
     for lead in shown:
         counts[group(lead)] += 1
     return {
-        "aarco": {"name": own.short_name, "company": own.name, "address": own.address,
+        "own": {"name": own.short_name, "company": own.name, "address": own.address,
                   "lat": own.shop[0], "lon": own.shop[1]},
         "center": [lat, lon], "miles": own.area_miles,
         "circle": [_point(p) for p in _circle(lat, lon, own.area_miles)],

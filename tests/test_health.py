@@ -160,8 +160,8 @@ def test_with_keys_each_paid_source_gets_one_call_and_yelp_counts_it(monkeypatch
     monkeypatch.setattr(checks, "_geocoding", lambda: "answered")
     assert cli.main(["check-sources"]) == 0
     out = capsys.readouterr().out
-    assert "2 businesses within a mile of AARCO's shop; 49 of 50 calls left" in out
-    assert "1 place found near AARCO's shop" in out
+    assert "2 businesses within a mile of the shop; 49 of 50 calls left" in out
+    assert "1 place found near the shop" in out
     assert len(requests_made) == 2
     # Used up: the Yelp check refuses and spends nothing.
     budget = usage.yelp_budget()
@@ -314,7 +314,7 @@ def test_the_buttons_need_the_section_unlocked(monkeypatch):
 
 
 def test_check_sources_shows_the_table(monkeypatch):
-    rows = [checks.Check("yelp", True, True, 0.4, "2 businesses within a mile of AARCO's shop"),
+    rows = [checks.Check("yelp", True, True, 0.4, "2 businesses within a mile of the shop"),
             checks.Check("google", False, None, None, "GOOGLE_PLACES_API_KEY is not set"),
             checks.Check("osm", True, False, 9.0, "No map server answered: busy")]
     monkeypatch.setattr(checks, "run_all", lambda recorded=False: rows)

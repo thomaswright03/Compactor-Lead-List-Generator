@@ -125,11 +125,21 @@ def settings_of(company: Company) -> Settings:
 
 def current() -> Settings:
     """The settings of whose site this is: the request's (or search's) company in sign-up
-    mode, else AARCO's (config.py)."""
+    mode (the product's own name outside one), else AARCO's (config.py)."""
     company = _current.get()
-    if company is not None and signup_mode.on():
-        return settings_of(company)
+    if signup_mode.on():
+        return settings_of(company) if company is not None else _no_company()
     return _aarco()
+
+
+def _no_company() -> Settings:
+    """Sign-up mode outside any company (the public pages, a visitor not logged in): the
+    product's own name, never AARCO's."""
+    return Settings(
+        name=PRODUCT_NAME, short_name=PRODUCT_NAME, site_name=PRODUCT_NAME, address="",
+        shop=config.OWN_COORDS, center=config.SERVICE_CENTER, area_miles=config.SERVICE_AREA_MILES,
+        radius=config.DEFAULT_RADIUS_MILES, keywords=list(config.DEFAULT_KEYWORDS), competitors={},
+        self_aliases=[])
 
 
 def page_names() -> dict[str, Any]:

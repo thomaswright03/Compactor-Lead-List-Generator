@@ -100,7 +100,7 @@ def check(api_key: str) -> str:
             raise SourceError(f"Google rejected the key. {exc}") from exc
         raise
     places = data.get("places") or []
-    return f"{len(places)} place found near AARCO's shop (an IDs-only search, Google's cheapest)"
+    return f"{len(places)} place found near the shop (an IDs-only search, Google's cheapest)"
 
 
 def search(lat: float, lon: float, radius_miles: float, queries: Sequence[str], api_key: str,
