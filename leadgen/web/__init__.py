@@ -19,7 +19,7 @@ import secrets
 import time  # noqa: F401 - tests patch web.time.sleep
 from typing import Any
 
-from flask import Flask, jsonify, redirect, render_template, request, session
+from flask import Flask, Response, jsonify, redirect, render_template, request, session
 from flask.typing import ResponseReturnValue
 from werkzeug.exceptions import HTTPException
 
@@ -244,4 +244,24 @@ def create_app(password: str | None = None, username: str | None = None,
                       leads.bp, mapping.bp, customer_routes.bp, legal.bp, admin.bp, billing_routes.bp):
         app.register_blueprint(blueprint)
     _register_pages(app)
+    app.after_request(_security_headers)
     return app
+
+
+def _security_headers(response: Response) -> Response:
+    """Standard browser protections on every answer, which site scanners check for.
+
+    No other site may show these pages in a frame (stops click-jacking of the login and
+    admin pages), the browser must not guess a file's type, and links to other sites
+    don't carry the page's address. The policy limits plugins, frames and <base> only,
+    so the page's own inline scripts and the map tiles keep working.
+    """
+    headers = response.headers
+    headers.setdefault("X-Content-Type-Options", "nosniff")
+    headers.setdefault("X-Frame-Options", "DENY")
+    headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    headers.setdefault("Content-Security-Policy",
+                       "frame-ancestors 'none'; object-src 'none'; base-uri 'self'")
+    if os.environ.get("RENDER"):   # always HTTPS there (as SESSION_COOKIE_SECURE above)
+        headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return response

@@ -123,3 +123,19 @@ def test_the_backups_documented_time_is_the_one_github_keeps():
     for text in (workflow, runbook):
         assert "once a day" in text.lower() and "usually by late morning Utah time" in text
         assert "nobody is searching" not in text and "runs at about 3 AM" not in text
+
+
+def test_every_page_sends_the_browser_protections(monkeypatch):
+    """Site scanners flag a site without these: no framing, no type guessing, HTTPS only."""
+    from leadgen import web
+    for on_render in (False, True):
+        if on_render:
+            monkeypatch.setenv("RENDER", "true")
+        client = web.create_app(password="pw").test_client()
+        for path in ("/login", "/admin", "/healthz", "/static/favicon.svg", "/no-such-page"):
+            headers = client.get(path).headers
+            assert headers["X-Content-Type-Options"] == "nosniff"
+            assert headers["X-Frame-Options"] == "DENY"
+            assert "frame-ancestors 'none'" in headers["Content-Security-Policy"]
+            assert headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+            assert ("Strict-Transport-Security" in headers) == on_render
