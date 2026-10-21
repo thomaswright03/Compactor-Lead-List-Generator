@@ -865,7 +865,7 @@ def test_admin_controls_are_closed_and_switches_ask_first(page):
     page.wait_for_selector("text=Today's is available")
     assert not page.locator("#switch-list").is_visible()
     assert not page.locator("#problems").is_visible()
-    page.click("#admin-card summary")
+    page.evaluate("location.hash = 'admin'")
     row = page.locator(".switch-row", has_text="Searching:")
     expect(row).to_contain_text("Searching: Working normally")
     sent = _posts(page, "/switches")
@@ -882,6 +882,7 @@ def test_admin_controls_are_closed_and_switches_ask_first(page):
     expect(row).to_contain_text("Searching: Paused")
     expect(row.get_by_role("button", name="Resume searching")).to_be_visible()
     assert len(sent) == 1
+    page.click("nav a[data-page=find]")                     # Find leads says so
     expect(page.locator("#paused-box")).to_be_visible()
 
 
@@ -1501,8 +1502,7 @@ def test_the_administrators_section_unlocks_with_its_password(browser):
         tab.fill("input[name=username]", "Matt")
         tab.fill("input[name=password]", "pw")
         tab.locator("form button[type=submit]").click()
-        tab.goto(url + "#find")
-        tab.locator("#admin-card summary").click()
+        tab.goto(url + "admin")
         expect(tab.locator("#admin-content")).to_be_hidden()
         tab.fill("#admin-pass", "wrong")
         tab.click("#admin-unlock")
@@ -1513,7 +1513,6 @@ def test_the_administrators_section_unlocks_with_its_password(browser):
         expect(tab.locator("#admin-content")).to_be_visible()
         expect(tab.locator("#switch-list button").first).to_be_visible()
         tab.reload()
-        tab.locator("#admin-card summary").click()
         expect(tab.locator("#admin-content")).to_be_visible()             # stays unlocked
         tab.click("#admin-relock")
         expect(tab.locator("#admin-lock")).to_be_visible()
@@ -1538,8 +1537,7 @@ def test_the_administrators_section_says_when_it_cannot_read_the_saved_data(brow
         tab.fill("input[name=username]", "Matt")
         tab.fill("input[name=password]", "pw")
         tab.locator("form button[type=submit]").click()
-        tab.goto(url + "#find")
-        tab.locator("#admin-card summary").click()
+        tab.goto(url + "admin")
         tab.fill("#admin-pass", "adm1n")
         tab.keyboard.press("Enter")
         expect(tab.locator("#problems")).to_have_text("Nothing went wrong in the last 7 days.")
@@ -1550,7 +1548,6 @@ def test_the_administrators_section_says_when_it_cannot_read_the_saved_data(brow
         monkeypatch.setattr(alerts, "recent", down)
         monkeypatch.setattr(switches, "_read", lambda name: (False, "", None, False))
         tab.reload()
-        tab.locator("#admin-card summary").click()
         expect(tab.locator("#problems")).to_contain_text("Couldn't load recent problems")
         expect(tab.locator("#switch-list")).to_contain_text("LEADGEN_SEARCH_PAUSED to 1")
         assert "Nothing went wrong" not in tab.locator("#admin-content").inner_text()

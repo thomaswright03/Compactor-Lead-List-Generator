@@ -22,9 +22,6 @@ const TOUR = [
   { page: "find", target: "#history", title: "Search history",
     text: "Every search: when it ran, where it looked, and how many businesses it found and " +
           "added. A note above this list says how much of the area the latest search covered." },
-  { page: "find", target: "#admin-card", title: "For the site administrator",
-    text: "Closed and locked with its own password. It lists recent problems and can pause " +
-          "searching right away." },
   { page: "leads", target: "#lead-tabs, #tab-pick", title: "Leads: one tab per answer",
     text: "Not checked holds the businesses nobody has answered yet. Once marked, a business " +
           "moves to Has baler or compactor or No baler or compactor. Competitors have their own " +

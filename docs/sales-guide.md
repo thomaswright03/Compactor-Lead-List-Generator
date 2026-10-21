@@ -310,8 +310,8 @@ tier D, the weakest businesses; a lower number keeps more of them, and 0 keeps e
 
 ## The administrator's section
 
-At the bottom of **Find leads**, **For the site administrator** is closed until
-opened, and locked with its own administrator password. It lists the site's problems of the last 7 days and the **site
+The **Site administrator** page has its own address, `/admin` (no link in the
+menu), and is locked with its own administrator password. It lists the site's problems of the last 7 days and the **site
 switches** (pause searching, switch Google or Yelp off). Each switch asks first
 and says what it will do; **Cancel** leaves it as it was. The sales team doesn't
 need it.

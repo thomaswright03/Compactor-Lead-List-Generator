@@ -150,9 +150,13 @@
         <div id="history"><div class="muted">Loading...</div></div>
       </div>
 
-      <!-- Kept out of the sales team's way: closed until the administrator opens it. -->
-      <details class="admin" id="admin-card">
-        <summary>For the site administrator</summary>
+    </section>
+
+    <!-- Administrator (/admin): its own page, out of the team's way and locked with its own password. -->
+    <section class="page" id="page-admin" hidden>
+      <div class="page-head"><h1>Site administrator</h1>
+        <p>Recent problems, the site switches and the checks. Locked with its own password.</p></div>
+      <div id="admin-card">
         <div class="admin-body">
           <form class="admin-lock" id="admin-lock" novalidate{% if admin == "open" %} hidden{% endif %}>
             <p id="admin-lock-text">{% if admin == "unset" %}This section is locked. To use it, whoever looks
@@ -196,7 +200,7 @@
           <form method="post" action="/admin/companies"><button type="submit" class="quiet">List the companies</button></form>{% endif %}
           </div>
         </div>
-      </details>
+      </div>
     </section>
 
     <!-- Leads -->

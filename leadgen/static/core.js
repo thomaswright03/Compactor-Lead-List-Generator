@@ -23,10 +23,12 @@ const SITE = CONFIG.site;
 const OWN = CONFIG.short;
 /** @type {Record<string, string>} */
 const TITLES = { find: "Find leads", leads: "Leads", calls: "Calls", map: "Map", stats: "Stats",
-                 customers: "Current customers", settings: "Settings" };
+                 customers: "Current customers", settings: "Settings",
+                 admin: "Site administrator" };
 // Sign-up mode adds the company's Settings (a page of the server's own forms).
+// The administrator's page (/admin) has no link: whoever looks after the site opens it.
 const PAGES = ["find", "leads", "calls", "map", "stats", "customers",
-               ...(CONFIG.signup ? ["settings"] : [])];
+               ...(CONFIG.signup ? ["settings"] : []), "admin"];
 // A row just marked Yes or No stays where it is (showing its answer and Undo) for this long
 // after the pointer leaves the table, so a double-click can never land on the next business.
 const PIN_MS = 5000;
@@ -483,7 +485,7 @@ function route() {
   if (page === "stats") loadStats();
   if (page === "map") loadMap();
   if (page === "customers") loadCustomers();
-  if (page === "find") loadSearches();
+  if (page === "find" || page === "admin") loadSearches();
 }
 /** @param {string} page */
 function writeHash(page) {

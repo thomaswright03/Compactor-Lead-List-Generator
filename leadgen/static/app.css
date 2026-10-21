@@ -445,12 +445,8 @@ dl.details div.wide dd { margin:0; text-align:left; }
   .scroll-x:has(table.plain.hist) { overflow:visible; }
 }
 
-/* The administrator's section: quiet, closed by default, below everything the team uses, and
-   locked until its password is entered. */
-details.admin { margin-top:var(--sp-5); border-top:1px solid var(--line); padding-top:var(--sp-3); color:var(--muted); }
-details.admin summary { cursor:pointer; font-size:var(--fs-sm); font-weight:600; width:max-content; max-width:100%; }
-details.admin[open] { color:var(--ink); }
-.admin-body { margin-top:var(--sp-3); padding:var(--sp-4); border:1px solid var(--line); border-radius:var(--r-md);
+/* The administrator's page (/admin): one card, locked until its password is entered. */
+.admin-body { padding:var(--sp-4); border:1px solid var(--line); border-radius:var(--r-md);
               background:var(--card); box-shadow:var(--shadow-sm), var(--highlight); }
 .admin-body h2 { font-size:var(--fs-md); margin:var(--sp-4) 0 var(--sp-2); }
 .admin-body h2:first-child { margin-top:0; }

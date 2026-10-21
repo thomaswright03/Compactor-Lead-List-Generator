@@ -35,20 +35,20 @@ still do is in [Owner actions still open](#owner-actions-still-open).
 
 | To | Do this | Details |
 | --- | --- | --- |
-| **Stop all searching right now** | Site: **Find leads** → **For the site administrator** (bottom) → **Unlock** → **Pause searching** → confirm. Site won't load: Render → the service → **Environment** → `LEADGEN_SEARCH_PAUSED` = `1` → **Save Changes** | [Emergency switches](#emergency-switches-stop-searches-or-paid-calls) |
+| **Stop all searching right now** | Site: `/admin` → **Unlock** → **Pause searching** → confirm. Site won't load: Render → the service → **Environment** → `LEADGEN_SEARCH_PAUSED` = `1` → **Save Changes** | [Emergency switches](#emergency-switches-stop-searches-or-paid-calls) |
 | Stop Google or Yelp charges only | Same place: **Stop using Google** / **Stop using Yelp** (or `LEADGEN_GOOGLE_OFF` / `LEADGEN_YELP_OFF` = `1` in Render) | [Emergency switches](#emergency-switches-stop-searches-or-paid-calls) |
 | Undo a bad deploy | Render → the service → **Events** → the last good deploy → **Rollback** | [Logs and rollback](#logs-and-rolling-back-a-bad-deploy) |
-| See what went wrong | **For the site administrator** lists the last 7 days' problems; Render → **Logs** has the detail | [Logs](#logs-and-rolling-back-a-bad-deploy) · [Alerts](#problems-email-and-the-webhook) |
+| See what went wrong | the **Site administrator** page (`/admin`) lists the last 7 days' problems; Render → **Logs** has the detail | [Logs](#logs-and-rolling-back-a-bad-deploy) · [Alerts](#problems-email-and-the-webhook) |
 | Make a backup now | `python -m leadgen backup` with `DATABASE_URL` set, or GitHub → **Actions** → **Nightly backup** → **Run workflow** | [Backups](#backups-and-restoring) |
 | Get lost data back | Neon → **Branches** → **New branch** from past data (last 6 hours), or `python -m leadgen restore <copy>` (lists what it would add), then the same with `--apply` (adds only, never overwrites) | [Restoring](#restoring) |
 | Change the login password | Render → **Environment** → `APP_PASSWORD` → **Save Changes** (everyone logs in again) | [Login](#login-and-the-render-plan) |
 | Prove a nightly copy restores | GitHub → **Actions** → **Restore rehearsal** → **Run workflow** (prints only counts) | [Restore rehearsal](#restore-rehearsal) |
-| Keep the site awake while the team works | Render's **Starter** plan (since 2026-10-07) never sleeps; **For the site administrator** says "The site restarted" if it restarts without a deploy | [Keep the site awake](#keep-the-site-awake) |
+| Keep the site awake while the team works | Render's **Starter** plan (since 2026-10-07) never sleeps; the **Site administrator** page (`/admin`) says "The site restarted" if it restarts without a deploy | [Keep the site awake](#keep-the-site-awake) |
 | Change the login page's help contact | Built in: `SUPPORT_CONTACT` in `leadgen/config.py` (Thomas Wright at (801) 580-8630); or Render → **Environment** → `LEADGEN_SUPPORT_CONTACT` = a name with a phone or email, which replaces it | [Login](#login-and-the-render-plan) |
 | Merge a business saved as two rows | `python -m leadgen merge-sites` (lists, changes nothing), then `--apply` | [The database](#the-database-saved-leads-marks-calls-the-yelp-count) |
-| Send the monthly scoring check | **For the site administrator** → **Scoring check** → download, send to the developer | [Monthly](#monthly-the-scoring-check) |
-| See whether Yelp, Google, the map data and the database answer | Open `/healthz` (no login): set up, last answered, last failure per source. Or **For the site administrator** → **Check sources** (one real call each), or `python -m leadgen check-sources` | [Checking the sources](#checking-the-sources-and-the-alerts) |
-| Check that alerts arrive | **For the site administrator** → **Send a test alert**, or `python -m leadgen test-alert` | [Checking the sources](#checking-the-sources-and-the-alerts) |
+| Send the monthly scoring check | the **Site administrator** page (`/admin`) → **Scoring check** → download, send to the developer | [Monthly](#monthly-the-scoring-check) |
+| See whether Yelp, Google, the map data and the database answer | Open `/healthz` (no login): set up, last answered, last failure per source. Or the **Site administrator** page (`/admin`) → **Check sources** (one real call each), or `python -m leadgen check-sources` | [Checking the sources](#checking-the-sources-and-the-alerts) |
+| Check that alerts arrive | the **Site administrator** page (`/admin`) → **Send a test alert**, or `python -m leadgen test-alert` | [Checking the sources](#checking-the-sources-and-the-alerts) |
 
 ## Owner actions still open
 
@@ -133,7 +133,7 @@ only links here.
    (587 with STARTTLS, or 465 with SSL) to its server, and the user and password it gives.
    A chat webhook (`LEADGEN_ALERT_WEBHOOK`) can get the site's problems as well, or
    instead ([Problems: email and the webhook](#problems-email-and-the-webhook)).
-   *Check:* **For the site administrator** → **Send a test alert** says
+   *Check:* the **Site administrator** page (`/admin`) → **Send a test alert** says
    "Delivered by email to t@thomasewright.com", the email arrives, and `/healthz` shows
    `sources.alerts.set_up` `true`. Then mark this item **Done (the date)**.
 8. **Choose whether to use Google Places** (Render; **Decided (2026-10-08): no Google**). Searches
@@ -276,7 +276,7 @@ one, change its version there, run the tests, and push.
 
 ## Monthly: the scoring check
 
-Once a month the owner (Thomas) opens Find leads > **For the site administrator** >
+Once a month the owner (Thomas) opens the **Site administrator** page (`/admin`) >
 **Scoring check**, downloads the scoring check file and sends it to whoever looks
 after the code. It holds the businesses marked Yes or No (names and categories only,
 no phone numbers, addresses or notes). They replace
@@ -406,7 +406,7 @@ name) with the commit, who started it and a link to the run. It uses the reposit
 secrets `LEADGEN_SMTP_USER` and `LEADGEN_SMTP_PASSWORD`; without them it prints a notice
 and sends nothing.
 
-To see that messages arrive, send a test one: **For the site administrator** →
+To see that messages arrive, send a test one: the **Site administrator** page (`/admin`) →
 **Send a test alert**, or `python -m leadgen test-alert` from a computer with the
 settings in `.env`. Both send on every channel that is set up and say where it was
 delivered ("Delivered by email to t@thomasewright.com", "Delivered to the webhook"), and
@@ -435,7 +435,7 @@ Every call to a source (a search's, a fill-in's, a check's) notes its outcome in
 outcome is written at most once a minute), so the times are real and cost nothing to
 show. A source that has never been called since the table was added shows `null`.
 
-**Check sources** (**For the site administrator** → **Check the sources** → **Check
+**Check sources** (the **Site administrator** page (`/admin`) → **Check the sources** → **Check
 sources**) asks each source for one small answer right now and opens a page with the
 table: set up?, answered?, how long it took, and what happened in plain words. It makes
 one real call per source that is set up; the Yelp call is taken from the site's 50 for
@@ -460,7 +460,7 @@ them in `.env` (see `.env.example`) or the shell.
 | --- | --- | --- | --- |
 | `APP_USERNAME` | On a public site | none (any name works) | The name to log in with (case-sensitive) |
 | `APP_PASSWORD` | On a public site | none (no login; only `localhost`/IP access) | The password for the login page |
-| `ADMIN_PASSWORD` | On a public site | none (the administrator's section stays locked; open on a local copy with no login) | Unlocks **For the site administrator** on Find leads (problems, site switches, scoring check). Changing it locks the section again for everyone |
+| `ADMIN_PASSWORD` | On a public site | none (the administrator's section stays locked; open on a local copy with no login) | Unlocks the **Site administrator** page (`/admin`) on Find leads (problems, site switches, scoring check). Changing it locks the section again for everyone |
 | `DATABASE_URL` | On Render | SQLite file in the cache folder | The permanent Postgres database (saved leads, marks, calls, searches, the Yelp count) |
 | `GOOGLE_PLACES_API_KEY` | No | none | Google Places key (paid; best phones and websites) |
 | `YELP_API_KEY` | No | none | Yelp key (at most 50 calls in any 24 hours) |
@@ -910,7 +910,7 @@ the working day:
    `site_starts` table: when, and which version). A start on a weekday between 7:20 AM and 7 PM
    Utah time without a new version (no deploy since the start before) means Render restarted
    it (a setting saved or the plan changed in Render) or it had been asleep, and it says so
-   once a Utah day under **For the site administrator** → **Recent problems** (and by email):
+   once a Utah day under the **Site administrator** page (`/admin`) → **Recent problems** (and by email):
    "The site restarted at … Utah time without a new version. Saving a setting or changing
    the plan in Render restarts it like this, and then nothing needs doing. If nobody changed
    anything in Render, check that the service's Instance Type still says Starter …". After a
