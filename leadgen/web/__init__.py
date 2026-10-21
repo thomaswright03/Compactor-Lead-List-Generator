@@ -78,7 +78,7 @@ ERROR_PAGES = {
 }
 # The pages of the app, each at its "#" address (/#leads): opening /leads in the browser
 # lands there (_register_pages page_address).
-PAGES = ("find", "leads", "calls", "map", "stats", "customers", "admin")
+PAGES = ("find", "leads", "calls", "map", "stats", "customers")
 # Sign-up mode's page as well (the company's Settings, accounts.py).
 SIGNUP_PAGES = (*PAGES, "settings")
 STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")

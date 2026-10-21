@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Site administrator · {{ site_name }}</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+{% include "_theme.html" %}
+{% include "_box_style.html" %}
+<style>
+  h2 { font-family:var(--serif); font-weight:540; font-size:var(--fs-md); margin:var(--sp-5) 0 var(--sp-2); }
+  section { border-top:1px solid var(--line); margin-top:var(--sp-4); }
+  form { margin:0 0 var(--sp-3); }
+  label { display:block; font-weight:600; margin-bottom:var(--sp-2); }
+  input[type=password] { width:min(320px,100%); min-height:44px; padding:var(--sp-2) var(--sp-3); font:inherit;
+                         border:1px solid var(--line); border-radius:var(--r-sm); background:var(--card); color:var(--ink); }
+  button { font:inherit; font-weight:600; min-height:44px; padding:var(--sp-2) var(--sp-4); border-radius:var(--r-pill);
+           border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; }
+  button.main { background:var(--btn); color:var(--btn-ink); border-color:transparent; }
+  button:focus-visible { outline:3px solid var(--accent-2); outline-offset:2px; }
+  .row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--sp-3);
+         padding:var(--sp-2) 0; border-top:1px solid var(--line); }
+  .row form { margin:0; }
+  .muted { color:var(--muted); font-size:var(--fs-sm); }
+  ul { margin:var(--sp-2) 0; padding-left:var(--sp-5); font-size:var(--fs-sm); }
+  p.error { color:var(--bad-ink); }
+  .top { display:flex; justify-content:flex-end; }
+</style>
+</head>
+<body>
+<main>
+  <div class="box">
+    <div class="brand"><img class="logo" src="/static/favicon.svg" alt="" width="40" height="40">
+      <div><strong>{{ site_name }}</strong><span>Site administrator</span></div></div>
+    <h1>Site administrator</h1>
+    {% if state == "unset" %}
+    <p>This page is locked. To use it, whoever looks after the site adds an administrator password
+      (ADMIN_PASSWORD) in the server's settings.</p>
+    {% elif state != "open" %}
+    <p>Enter the administrator password to open this page.</p>
+    <form method="post" action="/admin">
+      <label for="password">Administrator password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" maxlength="200" required autofocus>
+      <button type="submit" class="main">Unlock</button>
+    </form>
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    {% else %}
+    <div class="top"><form method="post" action="/admin/relock"><button type="submit">Lock this page</button></form></div>
+    {% if note %}<p class="ok" role="status">{{ note }}</p>{% endif %}
+
+    <section>
+      <h2>Recent problems</h2>
+      {% if problems_error %}<p class="error">{{ problems_error }}</p>
+      {% elif not problems or not problems.count %}<p class="muted">Nothing went wrong in the last 7 days.</p>
+      {% else %}
+      <p class="muted">{{ problems.count }} in the last 7 days{% if problems.count > problems.latest|length %}; the latest {{ problems.latest|length }}{% endif %}:</p>
+      <ul>{% for p in problems.latest %}<li>{{ p.when }}: {{ p.text }}</li>{% endfor %}</ul>
+      {% endif %}
+    </section>
+
+    <section>
+      <h2>Site switches</h2>
+      <p class="muted">Stop searches (or the paid sources) straight away, for example if something goes wrong.
+        It works at once, with no restart; saved leads, marks and calls keep working.</p>
+      {% for key, s in switches.items() %}
+      <div class="row">
+        <span><strong>{{ s.label }}:</strong> {{ "Switched off" if s.on else "Working normally" }}{% if s.env %}
+          (held by the server setting){% elif s.on and s.when %} (since {{ s.when }}){% endif %}{% if s.unread %}
+          <span class="muted">(can't be read right now)</span>{% endif %}</span>
+        {% if not s.env and not s.unread %}
+        <form method="post" action="/admin/switch" class="ask" data-ask="{{ ('Turn ' ~ s.label ~ ' back on?') if s.on else ('Switch ' ~ s.label ~ ' off for everyone?') }}">
+          <input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="on" value="{{ '0' if s.on else '1' }}">
+          <button type="submit">{{ "Turn back on" if s.on else "Switch off" }}</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </section>
+
+    <section>
+      <h2>Scoring check</h2>
+      <p class="muted">Once a month, download this file and send it to whoever looks after the code: it copies the
+        businesses marked Yes or No (names and categories only) into the tests.</p>
+      <p><a class="btn" href="/download/scoring-reference.json" download>Download the scoring check file</a></p>
+    </section>
+
+    <section>
+      <h2>Check the sources</h2>
+      <p class="muted">Ask each source for one small answer and see what came back (one real call per source).</p>
+      <form method="post" action="/admin/check-sources"><button type="submit">Check sources</button></form>
+      <h2>Test the alerts</h2>
+      <p class="muted">Send a test problem report by email (and the chat webhook, if set up) to see that it arrives.</p>
+      <form method="post" action="/admin/test-alert"><button type="submit">Send a test alert</button></form>
+      {% if signup %}
+      <h2>Companies</h2>
+      <p class="muted">Every company that signed up, with its plan, billing status, trial end and people.</p>
+      <form method="post" action="/admin/companies"><button type="submit">List the companies</button></form>
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+</main>
+{% include "_legal_footer.html" %}
+<script>
+  // A switch asks first: nothing changes unless the administrator says yes.
+  for (const form of document.querySelectorAll("form.ask")) {
+    form.addEventListener("submit", (e) => { if (!window.confirm(form.dataset.ask)) e.preventDefault(); });
+  }
+</script>
+</body>
+</html>

@@ -78,12 +78,21 @@ def login_token() -> str:
     return hmac.new(key, f"{s.username}\n{s.password}".encode(), hashlib.sha256).hexdigest()[:32]
 
 
-def _client_address() -> str:
+def client_address() -> str:
     # On Render the last X-Forwarded-For entry is the one its proxy added (the visitor).
     forwarded = request.headers.get("X-Forwarded-For", "")
     if os.environ.get("RENDER") and forwarded:
         return forwarded.split(",")[-1].strip()
     return request.remote_addr or ""
+
+
+# The administrator's page (admin.py) and what it reaches open without a login (in sign-up
+# mode without an account too, accounts.require_account): its own password is the lock.
+ADMIN_PUBLIC = ("/admin", "/download/scoring-reference.json")
+
+
+def admin_public(path: str) -> bool:
+    return path in ADMIN_PUBLIC or path.startswith("/admin/")
 
 
 @bp.before_app_request
@@ -95,8 +104,8 @@ def require_login() -> ResponseReturnValue | None:
     if not state().password:
         # Without a login only local/IP access is allowed (see LEADGEN_ALLOWED_HOSTS).
         return None if _host_allowed() else abort(403)
-    if request.path == "/login":
-        return None
+    if request.path == "/login" or admin_public(request.path):
+        return None             # the administrator's page has its own password
     if session.get("login") == login_token():
         return None
     if request.method == "GET" and (wants_page() or request.path == "/"
@@ -150,7 +159,7 @@ def login() -> ResponseReturnValue:
         return redirect("/")
     if not same_origin():
         abort(403)
-    now, who = time.time(), _client_address()
+    now, who = time.time(), client_address()
     recent = [t for t in s.failures.get(who, []) if now - t < LOGIN_WINDOW]
     name = (request.form.get("username") or "").strip()
     # A wrong password keeps the note about the ended login, and where to go back to.
@@ -215,7 +224,7 @@ def admin_unlock() -> ResponseReturnValue:
     if not s.admin_password:
         return jsonify({"error": "No administrator password is set up. Add ADMIN_PASSWORD "
                                  "in the server's settings." if s.password or signup_mode.on() else ""}), 400
-    now, who = time.time(), _client_address()
+    now, who = time.time(), client_address()
     recent = [t for t in s.admin_failures.get(who, []) if now - t < LOGIN_WINDOW]
     if len(recent) >= LOGIN_TRIES:
         return jsonify({"error": "Too many wrong tries. Wait 15 minutes and try again."}), 429

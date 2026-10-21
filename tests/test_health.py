@@ -308,7 +308,7 @@ def test_the_buttons_need_the_section_unlocked(monkeypatch):
     client = _admin()
     for path in ("/admin/check-sources", "/admin/test-alert"):
         res = client.post(path)
-        assert res.status_code == 403 and "Unlock the administrator's section" in _page(res)
+        assert res.status_code == 403 and "Unlock the administrator's page" in _page(res)
         elsewhere = client.post(path, headers={"Sec-Fetch-Site": "cross-site"})
         assert elsewhere.status_code == 403 and "can't be opened from here" in _page(elsewhere)
 
@@ -323,7 +323,7 @@ def test_check_sources_shows_the_table(monkeypatch):
     page = _page(client.post("/admin/check-sources"))
     assert "Source check" in page and "1 of the sources that are set up didn't answer." in page
     assert "2 businesses within a mile" in page and "No map server answered: busy" in page
-    assert "Map data (OpenStreetMap)" in page and 'href="/#find"' in page
+    assert "Map data (OpenStreetMap)" in page and 'href="/admin"' in page
 
 
 def test_send_a_test_alert_from_the_site(hook):

@@ -85,6 +85,11 @@ def leave() -> None:
         store.reset_company(store_token)
 
 
+def _admin_public(path: str) -> bool:
+    from .auth import admin_public
+    return admin_public(path)
+
+
 def require_account() -> ResponseReturnValue | None:
     """auth.require_login in sign-up mode: someone logged in gets their company for the
     request; anyone else only the public pages (the landing page for /)."""
@@ -92,7 +97,7 @@ def require_account() -> ResponseReturnValue | None:
     if who is not None:
         enter(*who)
         return None
-    if request.path in PUBLIC or request.path.startswith(PUBLIC_STARTS):
+    if request.path in PUBLIC or request.path.startswith(PUBLIC_STARTS) or _admin_public(request.path):
         return None
     if request.method == "GET" and request.path == "/":
         return redirect("/welcome")
@@ -136,8 +141,8 @@ def _page(mode: str, title: str, status: int = 200, **extra: Any) -> ResponseRet
 
 
 def _address() -> str:
-    from .auth import _client_address
-    return _client_address()
+    from .auth import client_address
+    return client_address()
 
 
 def _too_many(kind: str) -> bool:
