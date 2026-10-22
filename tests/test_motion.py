@@ -9,9 +9,8 @@ import pytest
 
 pytest.importorskip("playwright.sync_api")
 
-from playwright.sync_api import expect
-
 import test_browser
+from playwright.sync_api import expect
 
 browser, site, page = test_browser.browser, test_browser.site, test_browser.page
 _context, _row = test_browser._context, test_browser._row
