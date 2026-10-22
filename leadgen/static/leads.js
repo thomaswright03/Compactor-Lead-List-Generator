@@ -230,10 +230,14 @@ function toast(message, undo, bad) {
   $("toast-msg").textContent = message;
   toastUndo = undo || null;
   $("toast-undo").hidden = !undo; $("toast-undo").disabled = false;
-  $("toast").classList.toggle("bad", !!bad);
-  $("toast").hidden = false;
+  const box = $("toast"), ms = bad ? 9000 : 7000;
+  box.classList.toggle("bad", !!bad);
+  // Its entrance and the line along its foot (how long it stays) start again for each note.
+  box.style.setProperty("--toast-ms", `${ms}ms`);
+  box.classList.add("again"); void box.offsetWidth; box.classList.remove("again");
+  box.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, bad ? 9000 : 7000);
+  toastTimer = setTimeout(hideToast, ms);
 }
 function hideToast() { clearTimeout(toastTimer); $("toast").hidden = true; toastUndo = null; }
 $("toast-undo").addEventListener("click", () => {
@@ -804,6 +808,8 @@ function leadsEmpty(all) {
   if (S.q || S.tier || S.phone) return noMatchBox();
   return emptyBox(S.leadView === "" ? "check" : "list", emptyTabText());
 }
+// The view whose rows last came in (renderLeads).
+let enteredView = "";
 function renderLeads() {
   const problemBox = $("leads-problem");
   if (S.loadError && !S.loaded) {
@@ -838,8 +844,15 @@ function renderLeads() {
   } else {
     // Every prospect can be called (a call is how staff find out); competitors have no buttons.
     const spot = focusSpot();
-    wrap.replaceChildren(leadTable(S.leads, true));
+    const table = leadTable(S.leads, true);
+    wrap.replaceChildren(table);
     restoreFocus(spot);
+    // A list newly opened (another tab, filter or sort) comes in row by row; a redraw after a
+    // click, or while the next view loads, keeps still.
+    const view = [S.leadView, S.q, S.lead, S.tier, S.phone, S.sort, S.dir].join("|");
+    if (!S.viewLoading && view !== enteredView) {
+      enteredView = view; enterRows(table.tBodies[0].rows);
+    }
   }
   $("sort-pick").value = `${S.sort}:${S.dir}`;
   if (!$("sort-pick").value) $("sort-pick").value = "score:desc";

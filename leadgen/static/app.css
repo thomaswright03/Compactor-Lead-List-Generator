@@ -1068,11 +1068,124 @@ details.explain summary { padding-block:var(--sp-3); margin-block:calc(-1 * var(
 }
 
 /* ==== Motion: things rise into place; text is never faded in ========================== */
+/* Everything moves with transforms and clip-path reveals (text is never faded in, so it is never
+   seen at low contrast); only backdrops, glows and other decoration change opacity. Entrances run
+   once, with `backwards` fill, so nothing keeps a transform or clip once it has landed. Quick (under
+   half a second), and none of it runs when the system asks for reduced motion (below). */
+:root { --spring:cubic-bezier(.34,1.45,.64,1); --swift:cubic-bezier(.16,1,.3,1); }
 @keyframes rise { from { transform:translateY(12px); } to { transform:none; } }
-.page:not([hidden]) .page-head { animation:rise .4s var(--ease); }
+/* A card wipes up into place: revealed from its top edge while it rises. */
+@keyframes reveal-up { from { transform:translateY(18px); clip-path:inset(0 0 100% 0 round var(--r-lg)); }
+                       to { transform:none; clip-path:inset(0 0 0 0 round var(--r-lg)); } }
+@keyframes row-in { from { transform:translateY(10px); } to { transform:none; } }
+@keyframes row-lit { from { background-color:var(--accent-tint); box-shadow:inset 3px 0 0 var(--accent-2); } }
+@keyframes pop-in { from { transform:translateY(28px); } 60% { transform:translateY(-3px); } to { transform:none; } }
+@keyframes iris { from { transform:translateY(20px); clip-path:inset(12% 8% 12% 8% round var(--r-lg)); }
+                  to { transform:none; clip-path:inset(0 0 0 0 round var(--r-lg)); } }
+@keyframes veil { from { background-color:transparent; backdrop-filter:blur(0) saturate(1); } }
+@keyframes countdown { from { transform:scaleX(1); } to { transform:scaleX(0); } }
+@keyframes sweep { from { transform:translateX(-120%) skewX(-18deg); } to { transform:translateX(320%) skewX(-18deg); } }
+@keyframes grow { from { transform:scaleY(0); } }
+@keyframes ripple { from { transform:translate(-50%,-50%) scale(0); opacity:.38; } to { transform:translate(-50%,-50%) scale(1); opacity:0; } }
+@keyframes halo { 0% { box-shadow:0 0 0 0 color-mix(in srgb, var(--gold) 55%, transparent), 0 0 0 3px var(--card); }
+                  100% { box-shadow:0 0 0 10px transparent, 0 0 0 3px var(--card); } }
+
+/* Pages: the heading rises, then each part of the page wipes up after it, one beat apart. */
+.page:not([hidden]) .page-head { animation:rise .45s var(--swift); }
+.page:not([hidden]) > :not(.page-head) { animation:reveal-up .55s var(--swift) backwards; }
+.page:not([hidden]) > :nth-child(2) { animation-delay:.05s; }
+.page:not([hidden]) > :nth-child(3) { animation-delay:.1s; }
+.page:not([hidden]) > :nth-child(4) { animation-delay:.15s; }
+.page:not([hidden]) > :nth-child(5) { animation-delay:.2s; }
+.page:not([hidden]) > :nth-child(n+6) { animation-delay:.25s; }
+/* The Stats tiles follow each other in. */
+.page:not([hidden]) .tiles > .card { animation:reveal-up .6s var(--swift) backwards; }
+.page:not([hidden]) .tiles > .card:nth-child(2) { animation-delay:.08s; }
+.page:not([hidden]) .tiles > .card:nth-child(3) { animation-delay:.16s; }
+
+/* A new list (another tab, filter, sort or page): its first rows slide in one after another, each
+   lit for a moment (core.js enterRows). Rows redrawn after a click never move. */
+tr.enter { animation:row-in .5s var(--swift) backwards; animation-delay:calc(var(--i, 0) * 28ms); }
+tr.enter > td { animation:row-lit .9s var(--ease) backwards; animation-delay:calc(var(--i, 0) * 28ms); }
+
+/* The sidebar: one raised pill glides to the page you open (core.js), its brass bar riding along. */
+.side nav { position:relative; }
+.nav-glide { position:absolute; left:0; top:0; z-index:0; pointer-events:none; border-radius:var(--r-pill);
+             background:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.07));
+             box-shadow:inset 0 1px 0 rgba(255,255,255,.12), 0 4px 12px -4px rgba(0,0,0,.4); }
+.nav-glide.moves { transition:transform .45s var(--spring), width .45s var(--spring), height .45s var(--spring); }
+.nav-glide[hidden] { display:none; }
+nav.glides a { z-index:1; }
+nav.glides a.on { background:none; box-shadow:none; }
+@media (min-width: 821px) {
+  nav.glides a.on::after { display:none; }
+  .nav-glide::after { content:""; position:absolute; left:6px; top:50%; width:3px; height:16px; margin-top:-8px;
+                      border-radius:3px; background:var(--side-on); box-shadow:0 0 10px var(--side-on); }
+  nav a::before { transition:transform .3s var(--spring), color .2s; }
+  nav a:hover::before { transform:scale(1.12) rotate(-4deg); }
+  nav a.on::before { transform:scale(1.08); }
+}
+
+/* A press sends a ripple out from under the pointer (core.js sets where). */
+:where(button:not(.link):not(.undo), .btn) { position:relative; overflow:hidden; isolation:isolate; }
+:where(button, .btn).rippling::after { content:""; position:absolute; left:var(--rx, 50%); top:var(--ry, 50%); z-index:-1;
+  width:var(--rd, 200px); height:var(--rd, 200px); border-radius:50%; pointer-events:none; background:currentColor;
+  animation:ripple .6s var(--ease) forwards; }
+/* The main buttons catch the light when the pointer arrives. */
+:where(button:not(.quiet):not(.link):not(.undo):not(.danger):not(:disabled), .btn:not(.quiet)):hover::before {
+  content:""; position:absolute; inset:0 auto 0 0; width:40%; z-index:-1; pointer-events:none;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent); animation:sweep .8s var(--ease) both; }
+.downloads .btn:hover::before { content:""; position:static; width:16px; inset:auto; z-index:auto; animation:none;
+  background:currentColor; }
+.side button:hover::before, .tabs button:hover::before, .mark button:hover::before, .outcomes button:hover::before,
+table.leads th button.sort:hover::before, .toast button:hover::before, .theme button:hover::before { content:none; }
+
+/* Dialogs open like an iris, springing into place over a backdrop that blurs in. */
+dialog[open] { animation:iris .42s var(--spring) backwards; }
+dialog[open]::backdrop { animation:veil .35s var(--ease) backwards; }
+
+/* The toast springs up (in from the side when it sits in the sidebar); a thin line along its foot
+   runs down for as long as it stays (leads.js toast). */
+.toast { overflow:hidden; }
+.toast:not([hidden]) { animation:pop-in .5s var(--spring); }
+.toast::after { content:""; position:absolute; left:0; right:0; bottom:0; height:3px; transform-origin:left;
+                background:linear-gradient(90deg, var(--accent-2), var(--gold)); opacity:.9;
+                animation:countdown var(--toast-ms, 7s) linear forwards; }
+.toast.bad::after { background:var(--bad); }
+.toast.again { animation:none; }
+.toast.again::after { animation:none; }
+@supports (anchor-name: --side-nav) {
+  @media (min-width: 821px) {
+    @keyframes pop-in-side { from { transform:translateX(-28px); } 60% { transform:translateX(3px); } to { transform:none; } }
+    .toast:not([hidden]) { animation-name:pop-in-side; }
+  }
+}
+
+/* Find leads: the form lights its frame while it is being filled in; the search's step now under
+   way sends out a brass halo; the bar's leading edge glows; the finished search gets a sweep of light. */
+#form.card { transition:box-shadow .35s var(--ease); }
+#form.card:focus-within { box-shadow:var(--shadow-md), var(--highlight), 0 0 0 4px var(--accent-tint), 0 18px 48px -18px var(--accent-glow); }
+.step.now .dot { position:relative; }
+.step.now .dot::after { content:""; position:absolute; inset:-4px; border-radius:50%; animation:halo 1.4s var(--ease) infinite; }
+.bar > div { transition:width .9s var(--swift); }
+.bar > div::before { content:""; position:absolute; top:-4px; right:-6px; width:18px; height:18px; border-radius:50%; z-index:1;
+                     background:radial-gradient(circle, rgba(255,255,255,.85), color-mix(in srgb, var(--gold) 60%, transparent) 45%, transparent 70%); }
+#done-card { position:relative; overflow:hidden; }
+#done-card:not([hidden])::after { content:""; position:absolute; inset:0 auto 0 0; width:30%; pointer-events:none;
+  background:linear-gradient(90deg, transparent, color-mix(in srgb, var(--gold) 22%, transparent), transparent);
+  animation:sweep 1.4s var(--ease) .35s both; }
+
+/* Stats: each tier's bar grows up from the axis, one after another (stats.js). */
+.viz.grow path.bar { transform-box:fill-box; transform-origin:50% 100%;
+                     animation:grow .8s var(--spring) backwards; animation-delay:calc(.15s + var(--i, 0) * 90ms); }
+
+/* Changing the colour theme: the new one spreads out in a circle from the button (core.js). */
+::view-transition-old(root), ::view-transition-new(root) { animation:none; mix-blend-mode:normal; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation:none !important; transition:none !important; }
   button:not(:disabled):active, .btn:active { transform:none; }
+  .toast::after { display:none; }
 }
 @media (forced-colors: active) {
   .card, .tabs, .toolbar, table.leads tbody td, dialog, .badge, .tile { border:1px solid CanvasText; }

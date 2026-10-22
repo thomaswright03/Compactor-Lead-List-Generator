@@ -23,9 +23,13 @@ expect = sync_api.expect
 OUTSIDE = re.compile(r"^(?!https?://(127\.0\.0\.1|localhost)[:/])[a-z]+://")
 
 
-def _context(browser, name="Tester", first_visit=False, **kw):
+def _context(browser, name="Tester", first_visit=False, motion=False, **kw):
     """A browser window whose "Your name" is already set (so a first Yes / No doesn't ask),
-    and which was offered the tutorial before (first_visit=True: it never was)."""
+    and which was offered the tutorial before (first_visit=True: it never was). It asks for
+    reduced motion, so the page's entrances (app.css, Motion) never move what a test measures
+    or clicks; motion=True keeps them (the motion tests)."""
+    if not motion:
+        kw.setdefault("reduced_motion", "reduce")
     context = browser.new_context(**kw)
     # Nothing leaves this machine: the Map page's street map (OpenStreetMap's tiles) is
     # refused, as it is offline, and the page draws the rest without it.
@@ -2589,7 +2593,8 @@ def test_the_map_takes_the_dark_theme_and_fits_a_phone(browser, site, page):
     assert phone.evaluate("M.ring.options.color") == "#e6ebf2"
     phone.click("#menu-btn")
     phone.click("[data-theme-pick=light]")
-    assert phone.evaluate("M.ring.options.color") == "#1d2433"
+    # The new colours land with the theme change's circle (a frame later than the click).
+    phone.wait_for_function("M.ring.options.color === '#1d2433'")
     # The zoom buttons are easy to tap.
     zoom = phone.locator("#map .leaflet-control-zoom-in").bounding_box()
     assert zoom["width"] >= 44 and zoom["height"] >= 44
