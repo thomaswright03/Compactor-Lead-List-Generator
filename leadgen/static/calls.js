@@ -154,7 +154,11 @@ function renderCalls() {
   for (const l of rows) tbody.append(calledRow(l));
   table.append(thead, tbody);
   wrap.replaceChildren(table);
+  const view = `${S.callView}|${S.callQ}`;
+  if (!S.calledLoading && view !== enteredCalls) { enteredCalls = view; enterRows(tbody.rows); }
 }
+// The view whose rows last came in (renderCalls).
+let enteredCalls = "";
 // The next page of called businesses, added under the ones shown.
 async function showMoreCalls() {
   const more = $("calls-more"), seq = S.callSeq;

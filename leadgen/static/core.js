@@ -5,7 +5,7 @@
 /* exported $, $all, eventEl, CONFIG, OUTCOMES, PAUSED, PIN_MS, PAGE, SHIFT_GUARD_MS, TIMING, S, el,
    emptyBox, link, phoneLink, button, DOT, api, noAnswer, post, save, SLOW_SAVE, fmtTime, serverNow,
    leftOf, problem, loadingCue, themeChoice, applyTheme, myName, withName, byWho, parseHash,
-   readLeadView, route, writeHash, loggedOut, OWN */
+   readLeadView, route, writeHash, loggedOut, OWN, enterRows, countUp */
 // An element of the page by its id: an input, a dialog, a button... (typed `any`, as the page's
 // ids name every kind; the type check still catches a misspelt function or variable).
 /** @type {(id: string) => any} */
@@ -321,10 +321,30 @@ function themeChoice() {
   try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; }
 }
 /** @param {string} choice "light", "dark" or "system" */
-function applyTheme(choice) {
+function paintTheme(choice) {
   if (choice === "light" || choice === "dark") {
     document.documentElement.setAttribute("data-theme", choice);
   } else document.documentElement.removeAttribute("data-theme");
+  if (chartRows && !$("page-stats").hidden) drawChart(chartRows);
+  restyleMap();                               // the map's pins and areas take the theme's colours
+}
+/** @param {string} choice "light", "dark" or "system" @param {{x: number, y: number}} [from] */
+function applyTheme(choice, from) {
+  // Picked with a click: the new colours spread out in a circle from the button (app.css,
+  // Motion). The browser's bar and the buttons' state change at once either way.
+  const doc = /** @type {any} */ (document);
+  if (from && doc.startViewTransition && !reducedMotion()) {
+    const shift = doc.startViewTransition(() => paintTheme(choice));
+    const at = `at ${from.x}px ${from.y}px`;
+    const r = Math.hypot(Math.max(from.x, window.innerWidth - from.x),
+                         Math.max(from.y, window.innerHeight - from.y));
+    shift.ready.then(() => {
+      document.documentElement.animate(
+        { clipPath: [`circle(0px ${at})`, `circle(${r}px ${at})`] },
+        { duration: 650, easing: "cubic-bezier(.16,1,.3,1)",
+          pseudoElement: "::view-transition-new(root)" });
+    }).catch(() => { /* skipped: the colours simply change */ });
+  } else paintTheme(choice);
   try {
     if (choice === "system") localStorage.removeItem("theme");
     else localStorage.setItem("theme", choice);
@@ -333,11 +353,15 @@ function applyTheme(choice) {
     b.setAttribute("aria-pressed", String(b.dataset.themePick === choice));
   });
   window.setThemeColor(choice);              // the browser's bar matches (templates/_theme.html)
-  if (chartRows && !$("page-stats").hidden) drawChart(chartRows);
-  restyleMap();                               // the map's pins and areas take the theme's colours
 }
 $all("[data-theme-pick]").forEach((b) => {
-  b.addEventListener("click", () => applyTheme(b.dataset.themePick || "system"));
+  b.addEventListener("click", (e) => {
+    const box = b.getBoundingClientRect();
+    // A click's own point; a key press (no point) starts from the button's middle.
+    const from = e.clientX || e.clientY ? { x: e.clientX, y: e.clientY }
+      : { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    applyTheme(b.dataset.themePick || "system", from);
+  });
 });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   if (chartRows) drawChart(chartRows);
@@ -417,6 +441,79 @@ $("skip").addEventListener("click", () => {
   target.setAttribute("tabindex", "-1");
   target.focus();
 });
+
+/* ---------- motion (app.css, Motion): the sidebar's pill, ripples, rows coming in ---------- */
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// A new list's first rows slide in one after another; `rows` are its <tr>s.
+/** @param {Iterable<Element>} rows */
+function enterRows(rows) {
+  if (reducedMotion()) return;
+  let i = 0;
+  for (const tr of rows) {
+    if (i >= 14) break;
+    /** @type {HTMLElement} */ (tr).style.setProperty("--i", String(i++));
+    tr.classList.add("enter");
+  }
+}
+// A big number counts up to its value (small ones are simply shown).
+/** @param {HTMLElement} box @param {number} n */
+function countUp(box, n) {
+  const done = n.toLocaleString();
+  if (n < 10 || reducedMotion()) { box.textContent = done; return; }
+  const start = window.performance.now(), ms = 900;
+  box.setAttribute("aria-label", done);
+  /** @param {number} now */
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / ms), eased = 1 - Math.pow(1 - t, 4);
+    box.textContent = t < 1 ? Math.round(n * eased).toLocaleString() : done;
+    if (t < 1) window.requestAnimationFrame(step); else box.removeAttribute("aria-label");
+  };
+  window.requestAnimationFrame(step);
+}
+// The sidebar's pill glides to the page opened (the links' "on" class, set by route()).
+(() => {
+  const nav = document.querySelector(".side nav");
+  if (!nav) return;
+  const glide = el("span", undefined, "nav-glide");
+  glide.setAttribute("aria-hidden", "true");
+  nav.append(glide); nav.classList.add("glides");
+  const place = () => {
+    const on = /** @type {HTMLElement | null} */ (nav.querySelector("a.on"));
+    glide.hidden = !on || !on.offsetWidth;
+    if (!on || glide.hidden) return;
+    const box = nav.getBoundingClientRect(), at = on.getBoundingClientRect();
+    glide.style.width = `${at.width}px`; glide.style.height = `${at.height}px`;
+    glide.style.transform = `translate(${at.left - box.left}px, ${at.top - box.top}px)`;
+    // It moves only once it has found its first place (no slide in from the corner on load).
+    if (!placed) {
+      placed = true;
+      const raf = window.requestAnimationFrame;
+      raf(() => raf(() => glide.classList.add("moves")));
+    }
+  };
+  let placed = false;
+  new window.MutationObserver(place).observe(nav, {
+    subtree: true, attributes: true, attributeFilter: ["class"], childList: true,
+    characterData: true });
+  new window.ResizeObserver(place).observe(nav);
+  place();
+})();
+// A press ripples out from under the pointer.
+/** @type {WeakMap<HTMLElement, number>} */
+const rippleTimers = new WeakMap();
+document.addEventListener("pointerdown", (e) => {
+  const b = /** @type {HTMLElement | null} */ (eventEl(e).closest?.("button, .btn"));
+  if (!b || b.matches(":disabled, .link, .undo") || reducedMotion()) return;
+  const box = b.getBoundingClientRect();
+  b.style.setProperty("--rx", `${e.clientX - box.left}px`);
+  b.style.setProperty("--ry", `${e.clientY - box.top}px`);
+  b.style.setProperty("--rd", `${Math.hypot(box.width, box.height) * 2}px`);
+  b.classList.remove("rippling");
+  void b.offsetWidth;                         // start again on a quick second press
+  b.classList.add("rippling");
+  clearTimeout(rippleTimers.get(b));
+  rippleTimers.set(b, setTimeout(() => b.classList.remove("rippling"), 650));
+}, true);
 
 /* ---------- pages and the address bar ---------- */
 function parseHash() {

@@ -59,7 +59,7 @@ async function loadStats() {
     empty.replaceChildren(statsEmpty(s));
     return;
   }
-  $("s-total").textContent = s.with_equipment.toLocaleString();
+  countUp($("s-total"), s.with_equipment);
   const avg = $("s-avg"); avg.replaceChildren(); avg.classList.remove("says");
   // No number yet: say why in words (a bare dash reads as broken).
   if (s.average_score === null) {
@@ -68,7 +68,7 @@ async function loadStats() {
     avg.append(String(s.average_score));
     avg.append(el("small", ` / 100 · tier ${s.average_tier}`));
   }
-  drawChart(s.by_tier);
+  growChart = true; drawChart(s.by_tier);
   const d = s.by_tier.find((t) => t.tier === "D");
   $("tier-d-note").hidden = !(d && !d.checked);
   $("tier-d-note").textContent = tierDNote(s, d);
@@ -84,6 +84,8 @@ async function loadStats() {
 // Columns: one series (share with equipment), so one hue, no legend; the title names it.
 /** @type {TierRow[] | null} */
 let chartRows = null;
+// The next drawing's bars grow up from the axis (the page opened, not a redraw for the theme).
+let growChart = false;
 // The drawing's height and its margins (left, right, top, bottom), in its own pixels.
 const CHART = { H: 260, L: 48, R: 12, T: 24, B: 52 };
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -113,6 +115,7 @@ function drawChart(rows) {
   /** @type {(name: string) => string} a colour of the theme shown */
   const c = (name) => css.getPropertyValue(name).trim();
   const box = $("chart"); box.replaceChildren();
+  box.classList.toggle("grow", growChart); growChart = false;
   const W = Math.max(300, Math.round(box.clientWidth || 560)), { H, L, R } = CHART;
   const svg = /** @type {SVGElement} */ (document.createElementNS(SVG_NS, "svg"));
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -150,7 +153,7 @@ function drawColumn(chart, r, i) {
   const path = svgNode(svg, "path", {
     d: `M${x0},${yb} V${top + rad} Q${x0},${top} ${x0 + rad},${top} H${x1 - rad} ` +
        `Q${x1},${top} ${x1},${top + rad} V${yb} Z`,
-    fill: c("--chart-bar") });
+    fill: c("--chart-bar"), class: "bar", style: `--i:${i}` });
   svgNode(svg, "text", { x: cx, y: top - 7, "text-anchor": "middle", "font-size": 14,
                          "font-weight": 700, fill: c("--ink") }, `${r.pct}%`);
   // The hit target is the whole column band, bigger than the mark.
