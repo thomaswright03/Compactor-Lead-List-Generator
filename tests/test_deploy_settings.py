@@ -104,11 +104,12 @@ def test_the_example_settings_file_has_every_setting_the_site_and_docs_rely_on()
         assert "ADMIN_PASSWORD" in _read(doc), doc
 
 
-def test_render_checks_healthz_and_nothing_expects_it_always_to_be_200():
-    """/healthz answers 503 ("ok": false) while the database is down (tests/test_health.py):
-    Render's health check reads it, the runbook says what ok means, and the keep-awake job
-    counts a 503 with "ok": false as the site answering rather than failing on it."""
-    assert re.search(r"^\s*healthCheckPath:\s*/healthz\s*$", _read("render.yaml"), re.M)
+def test_render_checks_livez_and_nothing_expects_healthz_always_to_be_200():
+    """/healthz answers 503 ("ok": false) while the database is down (tests/test_health.py),
+    so Render's health check reads /livez instead (a database outage took the site out of
+    service, 2026-10-28); the runbook says what ok means, and the keep-awake job counts a
+    503 with "ok": false as the site answering rather than failing on it."""
+    assert re.search(r"^\s*healthCheckPath:\s*/livez\s*$", _read("render.yaml"), re.M)
     runbook = " ".join(_read("docs/operator-runbook.md").split())
     assert "| `ok` | `true` (HTTP 200)" in runbook and "`false` (HTTP 503)" in runbook
     awake = _read(".github/workflows/keep-awake.yml")

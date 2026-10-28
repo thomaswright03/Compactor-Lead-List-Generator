@@ -31,7 +31,7 @@ bp = Blueprint("accounts", __name__)
 
 # Open without logging in: the public pages and the account pages themselves.
 # Stripe's webhook too (web/billing_routes.py: its signature is its proof).
-PUBLIC = ("/healthz", "/terms", "/privacy", "/welcome", "/login", "/signup", "/forgot", "/logout",
+PUBLIC = ("/healthz", "/livez", "/terms", "/privacy", "/welcome", "/login", "/signup", "/forgot", "/logout",
           "/billing/webhook")
 PUBLIC_STARTS = ("/static/", "/reset/", "/verify/", "/invite/")
 # Sign-ups and password-reset emails allowed per address in SIGNUP_WINDOW seconds (wrong

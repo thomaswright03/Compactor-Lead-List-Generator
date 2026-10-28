@@ -99,7 +99,7 @@ def admin_public(path: str) -> bool:
 def require_login() -> ResponseReturnValue | None:
     if signup_mode.on():
         return accounts.require_account()   # each person's own login, and their company's data
-    if request.path in ("/healthz", "/terms", "/privacy") or request.path.startswith("/static/"):
+    if request.path in ("/healthz", "/livez", "/terms", "/privacy") or request.path.startswith("/static/"):
         return None           # hold no data; /healthz shows uptime checks the deployed version
     if not state().password:
         # Without a login only local/IP access is allowed (see LEADGEN_ALLOWED_HOSTS).
