@@ -121,10 +121,18 @@ def _register_pages(app: Flask) -> None:
     _register_request_scope(app)
     _register_errors(app)
 
+    @app.get("/livez")
+    def livez() -> ResponseReturnValue:
+        # Render's health check (healthCheckPath in render.yaml): the site itself answers,
+        # without touching the database. When Render read /healthz instead, a database
+        # outage (2026-10-27) made it take the site out of service, and every page gave
+        # Render's 502 instead of the site saying the database is down.
+        return jsonify({"ok": True})
+
     @app.get("/healthz")
     def healthz() -> ResponseReturnValue:
-        # 503 while the database doesn't answer, so Render (healthCheckPath in render.yaml)
-        # and any uptime monitor see the outage; the body still lists every source.
+        # 503 while the database doesn't answer, so an uptime monitor sees the outage;
+        # the body still lists every source.
         body = health_check()
         return jsonify(body), 200 if body["ok"] else 503
 

@@ -421,7 +421,7 @@ no saved data and never a key) says:
 
 | Field | Meaning |
 | --- | --- |
-| `ok` | `true` (HTTP 200): the site can do its work: the database (saved leads, Yes / No marks, calls) answered just now. `false` (HTTP 503): the database didn't answer, so the team can't work; `sources.database` says why. A paid or free source that fails (Yelp, Google, the map data, the alerts) doesn't make it `false`: searches carry on without it, and its own entry shows the failure. Render's health check opens `/healthz` (`healthCheckPath` in `render.yaml`), so while `ok` is `false` the service shows as unhealthy in the Render dashboard, and a deploy whose new start can't reach the database isn't switched to (the running one keeps serving) |
+| `ok` | `true` (HTTP 200): the site can do its work: the database (saved leads, Yes / No marks, calls) answered just now. `false` (HTTP 503): the database didn't answer, so the team can't work; `sources.database` says why. A paid or free source that fails (Yelp, Google, the map data, the alerts) doesn't make it `false`: searches carry on without it, and its own entry shows the failure. Render's health check opens `/livez` instead (`healthCheckPath` in `render.yaml`), which answers 200 whenever the site runs: when it read `/healthz`, a database outage (2026-10-27) made Render take the whole site out of service, so every page showed Render's 502 instead of the site saying the database isn't answering |
 | `version` | The deployed commit (its first seven characters) |
 | `up_since` | When this start of the site began (Utah time) |
 | `scoring_version` | The scoring rules' version (`SCORING_VERSION` in `leadgen/config.py`; docs/scoring-evaluation.md) |

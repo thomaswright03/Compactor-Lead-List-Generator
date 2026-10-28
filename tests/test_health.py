@@ -117,7 +117,7 @@ def test_healthz_says_when_the_database_is_down(monkeypatch):
     res = web.create_app().test_client().get("/healthz")
     body = res.get_json()
     db = body["sources"]["database"]
-    # Not ok, and a 503 that Render's health check and any uptime monitor see; every
+    # Not ok, and a 503 that any uptime monitor sees; every
     # source is still listed with its details.
     assert res.status_code == 503 and body["ok"] is False
     assert set(body["sources"]) == set(health.SOURCES)
@@ -356,3 +356,15 @@ def test_scoring_report_counts_each_tier_and_names_moved_businesses(tmp_path, ca
     assert "A Nail Salon (marked no): B -> D" in text and "Harmons" not in text.split("Moved tier")[1]
     assert "Moved tier since the file was copied:" in text
     assert cli.main(["scoring-report", "--reference", str(tmp_path / "missing.json")]) == 2
+
+
+def test_livez_stays_200_while_the_database_is_down(monkeypatch):
+    """Render's health check reads /livez (render.yaml): a database outage must not make
+    Render take the whole site out of service (Render's 502 on every page, 2026-10-28)."""
+    def down():
+        raise store.Unavailable("the database could not be reached")
+    monkeypatch.setattr(store, "open_db", down)
+    client = web.create_app(password="secret").test_client()
+    res = client.get("/livez")
+    assert res.status_code == 200 and res.get_json() == {"ok": True}
+    assert client.get("/healthz").status_code == 503
